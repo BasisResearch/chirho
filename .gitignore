@@ -82,5 +82,6 @@ venv/
 
 # Automatically generated files
 docs/preconvert
+docs/build
 site/
 out
