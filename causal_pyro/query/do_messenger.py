@@ -9,6 +9,7 @@ class Do(pyro.poutine.messenger.Messenger):
     """
     Intervene on values in a probabilistic program.
     """
+
     def __init__(self, actions: Dict[str, Intervention]):
         self.actions = actions
         super().__init__()

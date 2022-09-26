@@ -1,8 +1,6 @@
-from lib2to3.pgen2.token import OP
+from typing import Callable, Optional, TypeVar, Union
+
 import pyro
-
-from typing import Callable, Optional, Union, TypeVar
-
 
 T = TypeVar("T")
 
@@ -14,10 +12,7 @@ Intervention = Union[
 
 @pyro.poutine.runtime.effectful
 def intervene(
-    obs: T,
-    act: Intervention[T] = None,
-    *,
-    event_dim: Optional[int] = None
+    obs: T, act: Intervention[T] = None, *, event_dim: Optional[int] = None
 ) -> T:
     """
     Intervene on a value in a probabilistic program.
