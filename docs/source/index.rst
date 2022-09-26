@@ -10,7 +10,10 @@ Welcome to causal_pyro's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-
+   query
+   primitives
+   reparam
+   counterfactual
 
 Indices and tables
 ==================
