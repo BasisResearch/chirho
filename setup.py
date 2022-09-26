@@ -28,6 +28,16 @@ setup(
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
+        "test": EXTRAS_REQUIRE + [
+            "pytest",
+            "pytest-cov",
+            "pytest-xdist",
+            "mypy",
+            "black",
+            "flake8",
+            "isort",
+            "sphinx",
+        ],
     },
     python_requires=">=3.7",
     keywords="machine learning statistics probabilistic programming bayesian modeling pytorch",
