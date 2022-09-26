@@ -20,7 +20,7 @@ class Factual(BaseCounterfactual):
     Trivial counterfactual handler that returns the observed value.
     """
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
         if not msg["done"]:
             obs, _ = msg["args"]
             msg["value"] = obs
