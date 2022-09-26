@@ -47,3 +47,4 @@ jobs:
         shell: bash
         run: |
           pytest tests/ -s --cov=causal_pyro/ --cov-report=term-missing ${@-}
+          cd docs && make html
