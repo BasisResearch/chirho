@@ -1,4 +1,4 @@
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Any, Dict
 
 import pyro
 
