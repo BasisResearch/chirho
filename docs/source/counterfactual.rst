@@ -1,7 +1,7 @@
 Counterfactual Handlers
 =======================
 
-.. automodule:: counterfactual
+.. automodule:: causal_pyro.counterfactual
     :members:
     :undoc-members:
     :show-inheritance:
