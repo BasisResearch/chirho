@@ -6,10 +6,11 @@ import torch
 import pytest
 
 from typing import Any, Dict, Optional, Callable, TypeVar, Union
+from math import isclose
 
 from causal_pyro.primitives import intervene, Intervention
 from causal_pyro.counterfactual.handlers import BaseCounterfactual, Factual, TwinWorldCounterfactual
-from causal_pyro.query.do_messenger import Do, do
+from causal_pyro.query.do_messenger import DoMessenger, do
 
 logger = logging.getLogger(__name__)
 
@@ -93,31 +94,81 @@ def linear_fs():
     
     return f_W, f_X, f_Z, f_Y
 
-
-def test_do_api():
-    # TODO: implement
-    pass
-
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_linear_mediation_conditioned(x_cf_value):
-    # TODO: implement
-    pass
+def test_do_api(x_cf_value):
+    model = make_mediation_model(*linear_fs())
+    
+    # These APIs should be equivalent
+    intervened_model_1 = DoMessenger({"X": x_cf_value})(model)
+    intervened_model_2 = do(model, {"X": x_cf_value})
+
+    W_1, X_1, Z_1, Y_1 = TwinWorldCounterfactual(-1)(intervened_model_1)()
+    W_2, X_2, Z_2, Y_2 = TwinWorldCounterfactual(-1)(intervened_model_2)()
+    
+    assert W_1.shape == W_2.shape == torch.Size([])
+    assert X_1.shape == X_2.shape == (2,)
+    assert Z_1.shape == Z_2.shape == (2,)
+    assert Y_1.shape == Y_2.shape == (2,)
+
+    assert W_1 != W_2
+    assert X_1[0] != X_2[0] # Sampled with fresh randomness each time
+    assert X_1[1] == X_2[1] # Intervention assignment
+    assert Z_1[0] != Z_2[0] # Sampled with fresh randomness each time
+    assert Z_1[1] != Z_2[1] # Counterfactual, but with different exogenous noise
+    assert Y_1[0] != Y_2[0] # Sampled with fresh randomness each time
+    assert Y_1[1] != Y_2[1] # Counterfactual, but with different exogenous noise
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 def test_linear_mediation_unconditioned(x_cf_value):
     
     model = make_mediation_model(*linear_fs())
 
-    # conditioned_model = pyro.condition(model, {"W":1., "X":0.1, "Z":2., "Y":1.1})
-
     intervened_model = do(model, {"X":x_cf_value})
     
     with TwinWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
-    print(W, X, Z, Y)
 
-    # With deterministic fs, difference between factual and counterfactual should be fully determined.
+    # Noise should be shared between factual and counterfactual outcomes
+    # Some numerical precision issues getting these exactly equal
+    assert isclose((Z-X-W)[0], (Z-X-W)[1], abs_tol=1e-6)
+    assert isclose((Y-Z-X-W)[0], (Y-Z-X-W)[1], abs_tol=1e-6)
+
+
+@pytest.mark.parametrize("x_cf_value", x_cf_values)
+def test_linear_mediation_conditioned(x_cf_value):
+    model = make_mediation_model(*linear_fs())
+    x_cond_value = 0.1
+    conditioned_model = pyro.condition(model, {"W":1., "X":x_cond_value, "Z":2., "Y":1.1})
+
+    intervened_model = do(conditioned_model, {"X":x_cf_value})
     
-    print(X - W)
+    with TwinWorldCounterfactual(-1):
+        W, X, Z, Y = intervened_model()
 
+    assert X[0] == x_cond_value
+    assert X[1] == x_cf_value
+
+def test_multiple_interventions():
+    #TODO
+    pass
+
+def test_linear_mlm():
+    #TODO
+    pass
+
+def test_bayesian_ite():
+    #TODO
+    pass
+
+def test_bayesian_ate():
+    #TODO
+    pass
+
+def test_bayesian_cate():
+    #TODO
+    pass
+
+def test_multivariate_dist():
+    #TODO
+    pass
 

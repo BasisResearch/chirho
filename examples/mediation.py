@@ -5,7 +5,7 @@ import pyro.distributions as dist
 
 from causal_pyro.primitives import intervene, Intervention
 from causal_pyro.counterfactual.handlers import BaseCounterfactual, Factual, TwinWorldCounterfactual
-from causal_pyro.query.do_messenger import Do, do
+from causal_pyro.query.do_messenger import DoMessenger, do
 
 
 T = TypeVar("T")
@@ -53,8 +53,8 @@ x_prime = 2.0
 
 conditioned_model = pyro.condition(model, {"W":1., "X":0.1, "Z":2., "Y":1.1})
 # conditioned_model = ConditionMessenger({...})(model)
-# intervened_model = Do({"X": x})(conditioned_model)
-intervened_model = do(conditioned_model, {"X": x})
+intervened_model = DoMessenger({"X": x})(conditioned_model)
+intervened_model_2 = do(conditioned_model, {"X": x})
 # intervened_model = do(conditioned_model, {"X": (x, x_prime), "Z": lambda obs: obs})
 
 test = intervened_model()

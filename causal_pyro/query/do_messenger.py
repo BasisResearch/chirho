@@ -5,7 +5,7 @@ import pyro
 from causal_pyro.primitives import Intervention, intervene
 
 
-class Do(pyro.poutine.messenger.Messenger):
+class DoMessenger(pyro.poutine.messenger.Messenger):
     """
     Intervene on values in a probabilistic program.
     """
@@ -23,4 +23,4 @@ class Do(pyro.poutine.messenger.Messenger):
             msg["value"] = intervene(msg["value"], self.actions[msg["name"]])
 
 
-do = pyro.poutine.handlers._make_handler(Do)[1]
+do = pyro.poutine.handlers._make_handler(DoMessenger)[1]
