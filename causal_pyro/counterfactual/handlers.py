@@ -33,7 +33,6 @@ class Factual(BaseCounterfactual):
 
 class TwinWorldCounterfactual(BaseCounterfactual):
 
-    # TODO: generalize to more than 2 worlds.
     def __init__(self, dim: int):
         assert dim < 0
         self.dim = dim
@@ -128,7 +127,11 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     @_is_downstream.register
     def _is_downstream_dist(self, value: pyro.distributions.Distribution):
-        return any(value.batch_shape[plate.dim] > 1 for plate in self._plates)
+        # NOTE FOR PARTIAL REVIEW
+        # This was throwing a `type index out of range` error
+        # I added in `len(value.batch_shape) >= -self.dim` because it was in the `TwinWorldCounterfactual` handler.
+        # TBH, I still don't totally understand the logical relationship between the distribution's batch_shape and whether it is downstream of an intervention.
+        return len(value.batch_shape) >= -self.dim and any(value.batch_shape[plate.dim] > 1 for plate in self._plates)
     
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
@@ -152,8 +155,13 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             obs, act = msg["args"]
             event_dim = msg["kwargs"].get("event_dim", 0)
 
+            # NOTE FOR PARTIAL REVIEW
+            # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
+            # To resolve this I tiled the (scalar) `act` to be the same dimension as `obs` before expanding dimensions for concatenation.
+
+            act = self._expand(torch.tile(torch.as_tensor(act), obs.shape), event_dim - self.dim)
             obs = self._expand(torch.as_tensor(obs), event_dim - self.dim)
-            act = self._expand(torch.as_tensor(act), event_dim - self.dim)
+            # act = self._expand(torch.as_tensor(act), event_dim - self.dim)
 
             msg["value"] = torch.cat([obs, act], dim=self.dim)
             msg["done"] = True
@@ -165,7 +173,10 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self.dim -= 1
 
     def _pyro_sample(self, msg):
-        if (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"])) and self._plates and not self._is_plate_active():
+        # NOTE FOR PARTIAL REVIEW
+        # I reordered these so that `self._plates` is evaluated first and escapes the condition if `False`.
+        # I believe this avoided some issues with `self._plates` being empty, as `self.is_downstream(msg["fn"]` throws an error if we try to index into an empty array.
+        if self._plates and not self._is_plate_active() and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"])):
             msg["stop"] = True
             with contextlib.ExitStack() as plates:
                 for plate in self._plates:  # TODO only enter plates of upstream interventions
@@ -178,7 +189,10 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     value_shape = torch.broadcast_shapes(msg["value"].shape, msg["fn"].batch_shape + msg["fn"].event_shape)
                     msg["value"] = msg["value"].expand(value_shape)
 
-                factual_world_index = [slice()] * len(batch_shape)
+
+                # NOTE FOR PARTIAL REVIEW
+                # slice() threw a syntax error. I replaced it with slice(None). Just wanted to flag this...
+                factual_world_index = [slice(None)] * len(batch_shape)
                 for plate in self._plates:
                     factual_world_index[plate.dim] = 0
                 
