@@ -110,9 +110,11 @@ def test_do_api(x_cf_value):
     assert Z_1.shape == Z_2.shape == (2,)
     assert Y_1.shape == Y_2.shape == (2,)
 
+
+    # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
     assert W_1 != W_2
     assert X_1[0] != X_2[0] # Sampled with fresh randomness each time
-    assert X_1[1] == X_2[1] # Intervention assignment
+    assert X_1[1] == X_2[1] # Intervention assignment should be equal
     assert Z_1[0] != Z_2[0] # Sampled with fresh randomness each time
     assert Z_1[1] != Z_2[1] # Counterfactual, but with different exogenous noise
     assert Y_1[0] != Y_2[0] # Sampled with fresh randomness each time
@@ -133,7 +135,6 @@ def test_linear_mediation_unconditioned(x_cf_value):
     assert isclose((Z-X-W)[0], (Z-X-W)[1], abs_tol=1e-6)
     assert isclose((Y-Z-X-W)[0], (Y-Z-X-W)[1], abs_tol=1e-6)
 
-
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 def test_linear_mediation_conditioned(x_cf_value):
     model = make_mediation_model(*linear_fs())
@@ -148,9 +149,23 @@ def test_linear_mediation_conditioned(x_cf_value):
     assert X[0] == x_cond_value
     assert X[1] == x_cf_value
 
-def test_multiple_interventions():
-    #TODO
-    pass
+@pytest.mark.parametrize("x_cf_value", x_cf_values)
+def test_multiple_interventions(x_cf_value):
+    model = make_mediation_model(*linear_fs())
+    
+    intervened_model = do(model, {"X":x_cf_value})
+    intervened_model = do(intervened_model, {"Z":x_cf_value})
+
+    with TwinWorldCounterfactual(-1):
+        W, X, Z, Y = intervened_model()
+
+    
+
+    # TODO: this fails the test. Not Implemented.
+    assert W.shape == torch.Size([])
+    assert X.shape == (2,2)
+    assert Z.shape == (2,2)
+    assert Y.shape == (2,2)
 
 def test_linear_mlm():
     #TODO
