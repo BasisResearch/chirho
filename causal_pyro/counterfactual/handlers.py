@@ -32,9 +32,9 @@ class Factual(BaseCounterfactual):
 
 class TwinWorldCounterfactual(BaseCounterfactual):
     """
-    Counterfactual handler that instantiates a new plate / tensor dimension representing a `twin world` in which
-    an intervention has been applied. Supports multiple interventions, but only a single plate is ever instantiated.
-    This covers non-nested counterfactual queries.
+    Counterfactual handler that instantiates a new plate / tensor dimension representing a
+    `twin world` in which an intervention has been applied. Supports multiple interventions,
+    but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
     """
 
     def __init__(self, dim: int):
