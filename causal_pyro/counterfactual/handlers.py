@@ -1,5 +1,8 @@
-from typing import Any, Dict
+from functools import singledispatchmethod
+from typing import Any, Dict, Optional
 
+import numbers
+import torch
 import pyro
 
 
