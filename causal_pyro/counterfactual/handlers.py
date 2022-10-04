@@ -29,6 +29,7 @@ class Factual(BaseCounterfactual):
             msg["value"] = obs
             msg["done"] = True
 
+
 class TwinWorldCounterfactual(BaseCounterfactual):
     """
     Counterfactual handler that instantiates a new plate / tensor dimension representing a `twin world` in which
@@ -41,7 +42,7 @@ class TwinWorldCounterfactual(BaseCounterfactual):
         self.dim = dim
         self._plate = pyro.plate("_worlds", size=2, dim=self.dim)
         super().__init__()
-    
+
     @singledispatchmethod
     def _is_downstream(self, value, *, event_dim: Optional[int] = 0) -> bool:
         return False
@@ -53,12 +54,12 @@ class TwinWorldCounterfactual(BaseCounterfactual):
     @_is_downstream.register
     def _is_downstream_dist(self, value: pyro.distributions.Distribution):
         return len(value.batch_shape) >= -self.dim and value.batch_shape[self.dim] > 1
-    
+
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
         dim = self.dim - event_dim
         return len(value.shape) >= -dim and value.shape[dim] > 1
-    
+
     def _is_plate_active(self) -> bool:
         return self._plate in pyro.poutine.runtime._PYRO_STACK
 
@@ -81,7 +82,7 @@ class TwinWorldCounterfactual(BaseCounterfactual):
 
             if self._is_downstream(obs):
                 obs = torch.index_select(obs, self.dim - event_dim, torch.tensor([0]))
-            
+
             if self._is_downstream(act):
                 act = torch.index_select(act, self.dim - event_dim, torch.tensor([-1]))
 
@@ -89,20 +90,32 @@ class TwinWorldCounterfactual(BaseCounterfactual):
             msg["done"] = True
 
     def _pyro_sample(self, msg):
-        if (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"])) and not self._is_plate_active():
+        if (
+            self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"])
+        ) and not self._is_plate_active():
             msg["stop"] = True
             with self._plate:
                 obs_mask = [True, self._is_downstream(msg["value"])]
                 obs_mask = torch.tensor(obs_mask).reshape((2,) + (1,) * (-self.dim - 1))
                 if msg["is_observed"]:
                     msg["value"] = torch.as_tensor(msg["value"])
-                    value_shape = torch.broadcast_shapes(msg["value"].shape, msg["fn"].batch_shape + msg["fn"].event_shape)
+                    value_shape = torch.broadcast_shapes(
+                        msg["value"].shape,
+                        msg["fn"].batch_shape + msg["fn"].event_shape,
+                    )
                     msg["value"] = msg["value"].expand(value_shape)
 
                 with pyro.poutine.mask(mask=obs_mask):
-                    obs_value = pyro.sample(msg["name"] + "_observed", msg["fn"], obs=msg["value"], infer=msg["infer"])
+                    obs_value = pyro.sample(
+                        msg["name"] + "_observed",
+                        msg["fn"],
+                        obs=msg["value"],
+                        infer=msg["infer"],
+                    )
                 with pyro.poutine.mask(mask=~obs_mask):
-                    sampled_value = pyro.sample(msg["name"] + "_unobserved", msg["fn"], infer=msg["infer"])
+                    sampled_value = pyro.sample(
+                        msg["name"] + "_unobserved", msg["fn"], infer=msg["infer"]
+                    )
 
                 value_mask = obs_mask
                 for _ in msg["fn"].event_shape:

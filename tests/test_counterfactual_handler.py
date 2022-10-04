@@ -5,14 +5,18 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (BaseCounterfactual, Factual,
-                                                 TwinWorldCounterfactual)
+from causal_pyro.counterfactual.handlers import (
+    BaseCounterfactual,
+    Factual,
+    TwinWorldCounterfactual,
+)
 from causal_pyro.primitives import intervene
 
 logger = logging.getLogger(__name__)
 
 
-x_cf_values = [-1., 0.0, 2.0, 2]
+x_cf_values = [-1.0, 0.0, 2.0, 2]
+
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 def test_counterfactual_handler_smoke(x_cf_value):
