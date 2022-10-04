@@ -42,8 +42,8 @@ def test_counterfactual_handler_smoke(x_cf_value):
         Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1))
         return Z, X, Y
 
-    intervened_model_messenger_1 = DoMessenger({"X": x_cf_value})(model)
-    intervened_model_messenger_2 = do(model, {"X": x_cf_value})
+    intervened_model_messenger_1 = DoMessenger({"x": torch.tensor(x_cf_value)})(model)
+    intervened_model_messenger_2 = do(model, {"x": torch.tensor(x_cf_value)})
 
     with Factual():
         z_factual, x_factual, y_factual = intervened_model()
@@ -61,7 +61,7 @@ def test_counterfactual_handler_smoke(x_cf_value):
     # assert all xs unique
     xs_factual = [x_factual, x_factual_messenger_1, x_factual_messenger_2]
     assert len(xs_factual) == len(set(xs_factual))
-    
+
     assert (
         z_factual.shape
         == x_factual.shape
@@ -77,13 +77,13 @@ def test_counterfactual_handler_smoke(x_cf_value):
 
     with BaseCounterfactual():
         z_cf, x_cf, y_cf = intervened_model()
-    
+
         (
             z_cf_messenger_1,
             x_cf_messenger_1,
             y_cf_messenger_1,
         ) = intervened_model_messenger_1()
-        
+
         (
             z_cf_messenger_2,
             x_cf_messenger_2,
