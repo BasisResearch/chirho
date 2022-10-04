@@ -2,11 +2,12 @@ import logging
 
 import pyro
 import pyro.distributions as dist
-import torch
 import pytest
+import torch
 
+from causal_pyro.counterfactual.handlers import (BaseCounterfactual, Factual,
+                                                 TwinWorldCounterfactual)
 from causal_pyro.primitives import intervene
-from causal_pyro.counterfactual.handlers import BaseCounterfactual, Factual, TwinWorldCounterfactual
 
 logger = logging.getLogger(__name__)
 

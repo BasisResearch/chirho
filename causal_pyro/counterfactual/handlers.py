@@ -1,9 +1,9 @@
+import numbers
 from functools import singledispatchmethod
 from typing import Any, Dict, Optional
 
-import numbers
-import torch
 import pyro
+import torch
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
