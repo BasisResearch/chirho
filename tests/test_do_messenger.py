@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 x_cf_values = [-1.0, 0.0, 2.0, 2]
 
+def all_unique(xs):
+    len(xs) == len(set(xs))
 
 def model():
     #   z
@@ -62,9 +64,7 @@ def test_do_messenger_factual(x_cf_value):
         (z_messenger_1, x_messenger_1, y_messenger_1,) = intervened_model_messenger_1()
         (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
 
-    # assert all xs unique
-    xs = [x, x_messenger_1, x_messenger_2]
-    assert len(xs) == len(set(xs))
+    assert all_unique([x, x_messenger_1, x_messenger_2])
 
     assert (
         z.shape
@@ -93,7 +93,6 @@ def test_do_messenger_base_counterfactual(x_cf_value):
 
         (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
 
-    # This test should be passing?
     assert x == x_messenger_1 == x_messenger_2 == x_cf_value
     assert (
         z.shape
@@ -121,7 +120,7 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
         (z_messenger_1, x_messenger_1, y_messenger_1,) = intervened_model_messenger_1()
         (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
 
-    assert x[0] != x_messenger_1[0] != x_messenger_2[0] != x_cf_value
+    assert all_unique([x[0], x_messenger_1[0], x_messenger_2[0], x_cf_value])
     assert x[1] == x_messenger_1[1] == x_messenger_2[1] == x_cf_value
     assert z.shape == z_messenger_1.shape == z_messenger_2.shape == torch.Size([])
     assert (
