@@ -18,8 +18,10 @@ logger = logging.getLogger(__name__)
 
 x_cf_values = [-1.0, 0.0, 2.0, 2]
 
+
 def all_unique(xs):
-    len(xs) == len(set(xs))
+    return len(xs) == len(set(xs))
+
 
 def model():
     #   z
