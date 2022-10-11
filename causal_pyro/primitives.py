@@ -5,8 +5,7 @@ import pyro
 T = TypeVar("T")
 
 Intervention = Union[
-    Optional[T],
-    Callable[[T], T],
+    Optional[T], Callable[[T], T],
 ]
 
 
