@@ -63,10 +63,9 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
             # for concatenation.
 
-            act = self._expand(
-                torch.tile(torch.as_tensor(act), obs.shape), event_dim - self.dim
-            )
-            obs = self._expand(torch.as_tensor(obs), event_dim - self.dim)
+            obs, act = torch.as_tensor(obs), torch.as_tensor(act)
+            act = self._expand(torch.tile(act, obs.shape), event_dim - self.dim)
+            obs = self._expand(obs, event_dim - self.dim)
             # act = self._expand(torch.as_tensor(act), event_dim - self.dim)
 
             msg["value"] = torch.cat([obs, act], dim=self.dim)
@@ -110,8 +109,8 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
 # TODO test this against existing implementation's unit test
 # TODO remove original implementation after all tests pass
-# class TwinWorldCounterfactual(MultiWorldCounterfactual):
-#
-#     def _add_plate(self):
-#         if len(self._plates) == 0:
-#             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
+class TwinWorldCounterfactual(MultiWorldCounterfactual):
+
+    def _add_plate(self):
+        if len(self._plates) == 0:
+            self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))

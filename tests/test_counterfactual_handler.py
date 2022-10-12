@@ -8,9 +8,9 @@ import torch
 from causal_pyro.counterfactual.handlers import (
     BaseCounterfactual,
     Factual,
-    TwinWorldCounterfactual,
+    # TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.multiworld import MultiWorldCounterfactual
+from causal_pyro.counterfactual.multiworld import MultiWorldCounterfactual, TwinWorldCounterfactual
 from causal_pyro.primitives import intervene
 
 logger = logging.getLogger(__name__)

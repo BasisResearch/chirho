@@ -7,8 +7,8 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import TwinWorldCounterfactual
-from causal_pyro.counterfactual.multiworld import MultiWorldCounterfactual
+# from causal_pyro.counterfactual.handlers import TwinWorldCounterfactual
+from causal_pyro.counterfactual.multiworld import MultiWorldCounterfactual, TwinWorldCounterfactual
 from causal_pyro.query.do_messenger import DoMessenger, do
 
 logger = logging.getLogger(__name__)
