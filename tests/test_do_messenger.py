@@ -8,9 +8,9 @@ import torch
 from causal_pyro.counterfactual.handlers import (
     BaseCounterfactual,
     Factual,
-    # TwinWorldCounterfactual,
+    MultiWorldCounterfactual,
+    TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.multiworld import MultiWorldCounterfactual, TwinWorldCounterfactual
 from causal_pyro.primitives import intervene
 from causal_pyro.query.do_messenger import DoMessenger, do
 

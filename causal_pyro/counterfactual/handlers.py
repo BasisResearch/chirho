@@ -1,6 +1,7 @@
+import contextlib
 import numbers
 from functools import singledispatchmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pyro
 import torch
@@ -134,6 +135,7 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     `twin world` in which an intervention has been applied. Supports multiple interventions,
     but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
     """
+
     def _add_plate(self):
         if len(self._plates) == 0:
             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
