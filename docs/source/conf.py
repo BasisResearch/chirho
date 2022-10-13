@@ -28,8 +28,38 @@ author = 'Basis'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
+    "nbsphinx",
+    "sphinx.ext.autodoc",
+    # "sphinx.ext.doctest",
+    "sphinx.ext.imgconverter",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "myst_parser",
+    # "sphinx_gallery.gen_gallery",
+    # "sphinx_search.extension",
 ]
+
+# Enable documentation inheritance
+
+autodoc_inherit_docstrings = True
+
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+#
+# source_suffix = ['.rst', '.md']
+# NOTE: `.rst` is the default suffix of sphinx, and nbsphinx will
+# automatically add support for `.ipynb` suffix.
+
+# do not execute cells
+nbsphinx_execute = "never"
+
+# Don't add .txt suffix to source files:
+html_sourcelink_suffix = ""
+
+# The master toctree document.
+master_doc = "index"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

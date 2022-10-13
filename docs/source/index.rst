@@ -7,8 +7,25 @@ Welcome to causal_pyro's documentation!
 =======================================
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Tutorials:
+
+   introduction_i
+   introduction_ii
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Examples:
+
+   backdoor
+   cevae
+   deepscm
+   slc
+   mediation
+
+.. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Documentation and design notes:
 
    query
    primitives
