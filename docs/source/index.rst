@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to causal_pyro's documentation!
-=======================================
+Causal Probabilistic Programming with Pyro
+==========================================
 
 Despite the tremendous progress over the last two decades in reducing
 causal inference to statistical practice, the "causal revolution"
@@ -23,6 +23,40 @@ structural causal models.
 
    introduction_i
    introduction_ii
+
+Example applications
+--------------------
+
+To illustrate the utility of this approach, we have included several
+examples from the causal inference literature expressed as probabilistic
+programs using variations on a twin-world semantics of causal inference,
+in which a model defines a joint distribution on observed and
+counterfactual outcomes conditional on a set of structural functions.
+
+We have tried to choose simple examples that would be of interest to
+both the causal inference and probabilistic programming communities:
+they collectively span Pearl’s causal hierarchy [@pearl2001bayesian],
+and most are broadly applicable, empirically validated, have an
+unconventional or limited identification result, and make use of modern
+probabilistic machine learning tools, like neural networks or stochastic
+variational inference.
+
+Our descriptions demonstrate how diverse real-world causal estimands and
+causal assumptions can be expressed in declarative code free of
+unnecessary jargon and compatible with any inference method implemented
+in the underlying PPL, especially scalable gradient-based
+approximations.
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples
+
+   backdoor
+   cevae
+   deepscm
+   slc
+   mediation
+
 
 Design notes
 ------------
@@ -66,45 +100,10 @@ operations on values within a Pyro model:
    :maxdepth: 2
    :caption: Documentation
 
-   query
    primitives
-   reparam
    counterfactual
-
-
-
-Example applications
---------------------
-
-To illustrate the utility of this approach, we have included several
-examples from the causal inference literature expressed as probabilistic
-programs using variations on a twin-world semantics of causal inference,
-in which a model defines a joint distribution on observed and
-counterfactual outcomes conditional on a set of structural functions.
-
-We have tried to choose simple examples that would be of interest to
-both the causal inference and probabilistic programming communities:
-they collectively span Pearl’s causal hierarchy [@pearl2001bayesian],
-and most are broadly applicable, empirically validated, have an
-unconventional or limited identification result, and make use of modern
-probabilistic machine learning tools, like neural networks or stochastic
-variational inference.
-
-Our descriptions demonstrate how diverse real-world causal estimands and
-causal assumptions can be expressed in declarative code free of
-unnecessary jargon and compatible with any inference method implemented
-in the underlying PPL, especially scalable gradient-based
-approximations.
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples
-
-   backdoor
-   cevae
-   deepscm
-   slc
-   mediation
+   reparam
+   query
 
 
 Additional background reading material
