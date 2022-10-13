@@ -190,6 +190,6 @@ def test_mediation_nde_smoke():
     y_obs = torch.randn(100)
 
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
-    Ys = extended_model()
+    Ys = extended_model()[-1]
 
     assert Ys.shape == (2, 2, 2)
