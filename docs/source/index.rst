@@ -23,6 +23,7 @@ structural causal models.
 
    introduction_i
    introduction_ii
+   surrogates
 
 Example applications
 --------------------
