@@ -165,3 +165,31 @@ def test_multiple_interventions(x_cf_value):
     assert X.shape == (2,)
     assert Z.shape == (2, 2)
     assert Y.shape == (2, 2)
+
+
+def test_mediation_nde_smoke():
+
+    model = make_mediation_model(*linear_fs())
+
+    # natural direct effect: DE{x,x'}(Y) = E[ Y(X=x', Z(X=x)) - E[Y(X=x)] ]
+    def direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs) -> Callable:
+        return do(actions={"X": x})(
+            do(actions={"X": x_prime})(
+                do(actions={"Z": lambda Z: Z})(
+                    pyro.condition(data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs})(
+                        MultiWorldCounterfactual(-2)(
+                            pyro.plate("data", size=y_obs.shape[-1], dim=-1)(
+                                model))))))
+
+    x = torch.full((100,), 0.5)
+    x_prime = torch.full((100,), 1.5)
+
+    w_obs = torch.randn(100)
+    x_obs = torch.randn(100)
+    z_obs = torch.randn(100)
+    y_obs = torch.randn(100)
+
+    extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
+    Ys = extended_model()
+
+    assert Ys.shape == (2, 2, 2)
