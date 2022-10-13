@@ -1,3 +1,5 @@
+from typing import Optional
+
 import pyro
 from pyro.contrib.gp.kernels import Kernel
 from pyro.distributions import Delta, MaskedDistribution
@@ -31,3 +33,16 @@ class KernelABCReparam(Reparam):
 
         new_fn = Delta(observed_value, event_dim=fn.event_dim).mask(False)
         return {"fn": new_fn, "value": observed_value, "is_observed": True}
+
+
+class AutoSoftConditioning(pyro.infer.reparam.strategy.Strategy):
+
+    def configure(self, msg: dict) -> Optional[Reparam]:
+        if msg["type"] == "sample" and \
+                msg["is_observed"] and \
+                isinstance(msg["fn"], MaskedDistribution) and \
+                isinstance(msg["fn"].base_dist, Delta):
+
+            return KernelABCReparam(kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim))
+
+        return None
