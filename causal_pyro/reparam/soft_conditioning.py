@@ -37,12 +37,17 @@ class KernelABCReparam(Reparam):
 
 class AutoSoftConditioning(pyro.infer.reparam.strategy.Strategy):
 
+    @staticmethod
+    def _is_deterministic(msg):
+        return msg["type"] == "sample" and \
+            msg["is_observed"] and \
+            isinstance(msg["fn"], MaskedDistribution) and \
+            isinstance(msg["fn"].base_dist, Delta) and \
+            msg["infer"].get("is_deteministic", False):
+
+
     def configure(self, msg: dict) -> Optional[Reparam]:
-        if msg["type"] == "sample" and \
-                msg["is_observed"] and \
-                isinstance(msg["fn"], MaskedDistribution) and \
-                isinstance(msg["fn"].base_dist, Delta):
+        if not self._is_deterministic(msg):
+            return None
 
-            return KernelABCReparam(kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim))
-
-        return None
+        return KernelABCReparam(kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim))
