@@ -5,9 +5,10 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (
+from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     BaseCounterfactual,
     Factual,
+    MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.primitives import intervene
@@ -52,3 +53,24 @@ def test_counterfactual_handler_smoke(x_cf_value):
     assert x_cf_twin[1] == x_cf_value
     assert z_cf_twin.shape == torch.Size([])
     assert x_cf_twin.shape == y_cf_twin.shape == (2,)
+
+
+@pytest.mark.parametrize("x_cf_value", x_cf_values)
+def test_multiple_interventions(x_cf_value):
+    def model():
+        #   z
+        #  /  \
+        # x --> y
+        Z = pyro.sample("z", dist.Normal(0, 1))
+        Z = intervene(Z, torch.tensor(x_cf_value - 1.0))
+        X = pyro.sample("x", dist.Normal(Z, 1))
+        X = intervene(X, torch.tensor(x_cf_value))
+        Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1))
+        return Z, X, Y
+
+    with MultiWorldCounterfactual(-1):
+        Z, X, Y = model()
+
+    assert Z.shape == (2,)
+    assert X.shape == (2, 2)
+    assert Y.shape == (2, 2)

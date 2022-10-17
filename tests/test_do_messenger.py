@@ -63,8 +63,16 @@ def test_do_messenger_factual(x_cf_value):
 
     with Factual():
         z, x, y = intervened_model()
-        (z_messenger_1, x_messenger_1, y_messenger_1,) = intervened_model_messenger_1()
-        (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
+        (
+            z_messenger_1,
+            x_messenger_1,
+            y_messenger_1,
+        ) = intervened_model_messenger_1()
+        (
+            z_messenger_2,
+            x_messenger_2,
+            y_messenger_2,
+        ) = intervened_model_messenger_2()
 
     assert all_unique([x, x_messenger_1, x_messenger_2])
 
@@ -91,9 +99,17 @@ def test_do_messenger_base_counterfactual(x_cf_value):
     with BaseCounterfactual():
         z, x, y = intervened_model()
 
-        (z_messenger_1, x_messenger_1, y_messenger_1,) = intervened_model_messenger_1()
+        (
+            z_messenger_1,
+            x_messenger_1,
+            y_messenger_1,
+        ) = intervened_model_messenger_1()
 
-        (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
+        (
+            z_messenger_2,
+            x_messenger_2,
+            y_messenger_2,
+        ) = intervened_model_messenger_2()
 
     assert x == x_messenger_1 == x_messenger_2 == x_cf_value
     assert (
@@ -119,8 +135,16 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
 
     with TwinWorldCounterfactual(-1):
         z, x, y = intervened_model()
-        (z_messenger_1, x_messenger_1, y_messenger_1,) = intervened_model_messenger_1()
-        (z_messenger_2, x_messenger_2, y_messenger_2,) = intervened_model_messenger_2()
+        (
+            z_messenger_1,
+            x_messenger_1,
+            y_messenger_1,
+        ) = intervened_model_messenger_1()
+        (
+            z_messenger_2,
+            x_messenger_2,
+            y_messenger_2,
+        ) = intervened_model_messenger_2()
 
     assert all_unique([x[0], x_messenger_1[0], x_messenger_2[0], x_cf_value])
     assert x[1] == x_messenger_1[1] == x_messenger_2[1] == x_cf_value

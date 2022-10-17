@@ -13,6 +13,7 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
+import sphinx_rtd_theme
 
 
 # -- Project information -----------------------------------------------------
@@ -28,8 +29,38 @@ author = 'Basis'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc',
+    "nbsphinx",
+    "sphinx.ext.autodoc",
+    # "sphinx.ext.doctest",
+    "sphinx.ext.imgconverter",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "myst_parser",
+    # "sphinx_gallery.gen_gallery",
+    # "sphinx_search.extension",
 ]
+
+# Enable documentation inheritance
+
+autodoc_inherit_docstrings = True
+
+# The suffix(es) of source filenames.
+# You can specify multiple suffix as a list of string:
+#
+# source_suffix = ['.rst', '.md']
+# NOTE: `.rst` is the default suffix of sphinx, and nbsphinx will
+# automatically add support for `.ipynb` suffix.
+
+# do not execute cells
+nbsphinx_execute = "never"
+
+# Don't add .txt suffix to source files:
+html_sourcelink_suffix = ""
+
+# The master toctree document.
+master_doc = "index"
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -45,9 +76,15 @@ exclude_patterns = []
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+# html_theme = 'alabaster'
+html_theme = "sphinx_rtd_theme"
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+# logo
+html_logo = "_static/img/pyro_logo_wide.png"
+
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_style = "css/pyro.css"

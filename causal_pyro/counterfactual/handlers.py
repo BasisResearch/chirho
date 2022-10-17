@@ -1,6 +1,7 @@
+import contextlib
 import numbers
 from functools import singledispatchmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import pyro
 import torch
@@ -30,17 +31,11 @@ class Factual(BaseCounterfactual):
             msg["done"] = True
 
 
-class TwinWorldCounterfactual(BaseCounterfactual):
-    """
-    Counterfactual handler that instantiates a new plate / tensor dimension representing a
-    `twin world` in which an intervention has been applied. Supports multiple interventions,
-    but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
-    """
-
+class MultiWorldCounterfactual(BaseCounterfactual):
     def __init__(self, dim: int):
-        assert dim < 0
+        self._orig_dim = dim
         self.dim = dim
-        self._plate = pyro.plate("_worlds", size=2, dim=self.dim)
+        self._plates: List[pyro.poutine.indep_messenger.IndepMessenger] = []
         super().__init__()
 
     @singledispatchmethod
@@ -52,74 +47,95 @@ class TwinWorldCounterfactual(BaseCounterfactual):
         return False
 
     @_is_downstream.register
-    def _is_downstream_dist(self, value: pyro.distributions.Distribution):
-        return len(value.batch_shape) >= -self.dim and value.batch_shape[self.dim] > 1
+    def _is_downstream_dist(self, value: pyro.distributions.TorchDistribution):
+        return len(value.batch_shape) >= -self.dim and any(
+            value.batch_shape[plate.dim] > 1 for plate in self._plates
+        )
 
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        dim = self.dim - event_dim
-        return len(value.shape) >= -dim and value.shape[dim] > 1
+        return any(value.shape[plate.dim - event_dim] > 1 for plate in self._plates)
 
     def _is_plate_active(self) -> bool:
-        return self._plate in pyro.poutine.runtime._PYRO_STACK
+        return any(plate in pyro.poutine.runtime._PYRO_STACK for plate in self._plates)
 
-    def _expand(self, value: torch.Tensor, ndim: int) -> torch.Tensor:
+    @staticmethod
+    def _expand(value: torch.Tensor, ndim: int) -> torch.Tensor:
         while len(value.shape) < ndim:
             value = value.unsqueeze(0)
         return value
+
+    def _add_plate(self):
+        self._plates.append(
+            pyro.plate(f"intervention_{-self.dim}", size=2, dim=self.dim)
+        )
+        self.dim -= 1
+
+    def __enter__(self):
+        self.dim = self._orig_dim
+        self._plates = []
+        return super().__enter__()
 
     def _pyro_intervene(self, msg):
         if not msg["done"]:
             obs, act = msg["args"]
             event_dim = msg["kwargs"].get("event_dim", 0)
 
-            obs = self._expand(torch.as_tensor(obs), event_dim - self.dim)
-            act = self._expand(torch.as_tensor(act), event_dim - self.dim)
+            # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
+            # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
+            # for concatenation.
 
-            # in case of nested interventions:
-            # intervention replaces the observed value in the counterfactual world
-            # with the intervened value in the counterfactual world
-
-            if self._is_downstream(obs):
-                obs = torch.index_select(obs, self.dim - event_dim, torch.tensor([0]))
-
-            if self._is_downstream(act):
-                act = torch.index_select(act, self.dim - event_dim, torch.tensor([-1]))
+            obs, act = torch.as_tensor(obs), torch.as_tensor(act)
+            act = self._expand(torch.tile(act, obs.shape), event_dim - self.dim)
+            obs = self._expand(obs, event_dim - self.dim)
+            # act = self._expand(torch.as_tensor(act), event_dim - self.dim)
 
             msg["value"] = torch.cat([obs, act], dim=self.dim)
             msg["done"] = True
 
+            self._add_plate()
+
     def _pyro_sample(self, msg):
         if (
-            self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"])
-        ) and not self._is_plate_active():
+            self._plates
+            and not self._is_plate_active()
+            and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"]))
+        ):
             msg["stop"] = True
-            with self._plate:
-                obs_mask = [True, self._is_downstream(msg["value"])]
-                obs_mask = torch.tensor(obs_mask).reshape((2,) + (1,) * (-self.dim - 1))
-                if msg["is_observed"]:
-                    msg["value"] = torch.as_tensor(msg["value"])
-                    value_shape = torch.broadcast_shapes(
-                        msg["value"].shape,
-                        msg["fn"].batch_shape + msg["fn"].event_shape,
-                    )
-                    msg["value"] = msg["value"].expand(value_shape)
+            with contextlib.ExitStack() as plates:
+                for (
+                    plate
+                ) in self._plates:  # TODO only enter plates of upstream interventions
+                    plates.enter_context(plate)
 
-                with pyro.poutine.mask(mask=obs_mask):
-                    obs_value = pyro.sample(
-                        msg["name"] + "_observed",
-                        msg["fn"],
-                        obs=msg["value"],
-                        infer=msg["infer"],
-                    )
-                with pyro.poutine.mask(mask=~obs_mask):
-                    sampled_value = pyro.sample(
-                        msg["name"] + "_unobserved", msg["fn"], infer=msg["infer"]
-                    )
+                batch_ndim = max(
+                    len(msg["fn"].batch_shape),
+                    max([-p.dim for p in self._plates], default=0),
+                )
+                factual_world_index: List[Any] = [slice(None)] * batch_ndim
+                batch_shape = [1] * batch_ndim
+                for plate in self._plates:
+                    factual_world_index[plate.dim] = 0
+                    batch_shape[plate.dim] = plate.size
 
-                value_mask = obs_mask
-                for _ in msg["fn"].event_shape:
-                    value_mask = value_mask[..., None]
+                obs_mask = torch.full(batch_shape, False, dtype=torch.bool)
+                obs_mask[tuple(factual_world_index)] = True
 
-                msg["value"] = torch.where(value_mask, obs_value, sampled_value)
+                with pyro.poutine.block(hide=[msg["name"]]):
+                    msg["value"] = pyro.sample(
+                        msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
+                    )
+                assert len(msg["value"].shape) <= len(self._plates) <= 2
                 msg["done"] = True
+
+
+class TwinWorldCounterfactual(MultiWorldCounterfactual):
+    """
+    Counterfactual handler that instantiates a new plate / tensor dimension representing a
+    `twin world` in which an intervention has been applied. Supports multiple interventions,
+    but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
+    """
+
+    def _add_plate(self):
+        if len(self._plates) == 0:
+            self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))

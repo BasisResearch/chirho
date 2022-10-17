@@ -5,3 +5,8 @@ Counterfactual Handlers
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: causal_pyro.counterfactual.handlers
+    :members:
+    :undoc-members:
+    :show-inheritance:
