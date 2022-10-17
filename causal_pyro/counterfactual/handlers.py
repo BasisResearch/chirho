@@ -1,7 +1,7 @@
 import contextlib
 import numbers
 from functools import singledispatchmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 import pyro
 import torch
@@ -139,3 +139,20 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     def _add_plate(self):
         if len(self._plates) == 0:
             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
+
+
+class Predictive(pyro.poutine.messenger.Messenger):
+
+    def __init__(self, plates: Set[str]):
+        self.plates = plates
+        super().__init__()
+
+    def _pyro_sample(self, msg):
+        if any(f.name in self.plates for f in msg["cond_indep_stack"]):
+            with block_plates(self.plates):
+                extra_value = pyro.sample(
+                    msg["name"],
+                    msg["fn"],
+                    obs=msg["value"] if msg["is_observed"] else None,
+                    infer=msg["infer"].copy()
+                )
