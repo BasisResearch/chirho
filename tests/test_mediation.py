@@ -101,8 +101,8 @@ def test_linear_mediation_unconditioned(x_cf_value):
 
     # Noise should be shared between factual and counterfactual outcomes
     # Some numerical precision issues getting these exactly equal
-    assert isclose((Z - X - W)[0], (Z - X - W)[1], abs_tol=1e-6)
-    assert isclose((Y - Z - X - W)[0], (Y - Z - X - W)[1], abs_tol=1e-6)
+    assert isclose((Z - X - W)[0], (Z - X - W)[1], abs_tol=1e-5)
+    assert isclose((Y - Z - X - W)[0], (Y - Z - X - W)[1], abs_tol=1e-5)
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
