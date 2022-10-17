@@ -1,6 +1,6 @@
 import logging
 from math import isclose
-from typing import Any, Callable, Dict, Optional, TypeVar, Union
+from typing import Callable, TypeVar
 
 import pyro
 import pyro.distributions as dist

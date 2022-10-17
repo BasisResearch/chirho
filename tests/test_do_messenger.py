@@ -8,7 +8,6 @@ import torch
 from causal_pyro.counterfactual.handlers import (
     BaseCounterfactual,
     Factual,
-    MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.primitives import intervene

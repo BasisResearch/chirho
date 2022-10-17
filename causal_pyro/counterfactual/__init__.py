@@ -35,7 +35,7 @@ query interface defined above:
 .. code:: python
 
    class Interventional(BaseCounterfactual):
-     
+
      def _pyro_sample(self, msg):
        if msg.get("is_intervened", False):
          msg["stop"] = True
