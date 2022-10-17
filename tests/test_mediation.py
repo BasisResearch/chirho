@@ -177,10 +177,16 @@ def test_mediation_nde_smoke():
         return do(actions={"X": x})(
             do(actions={"X": x_prime})(
                 do(actions={"Z": lambda Z: Z})(
-                    pyro.condition(data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs})(
+                    pyro.condition(
+                        data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs}
+                    )(
                         MultiWorldCounterfactual(-2)(
-                            pyro.plate("data", size=y_obs.shape[-1], dim=-1)(
-                                model))))))
+                            pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
+                        )
+                    )
+                )
+            )
+        )
 
     x = torch.full((100,), 0.5)
     x_prime = torch.full((100,), 1.5)

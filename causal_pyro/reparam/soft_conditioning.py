@@ -10,6 +10,7 @@ class KernelABCReparam(Reparam):
     """
     Reparametrizer that allows approximate conditioning on a ``pyro.deterministic`` site.
     """
+
     def __init__(self, kernel: Kernel):
         self.kernel = kernel
         super().__init__()
@@ -36,18 +37,20 @@ class KernelABCReparam(Reparam):
 
 
 class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
-
     @staticmethod
     def _is_deterministic(msg):
-        return msg["type"] == "sample" and \
-            msg["is_observed"] and \
-            isinstance(msg["fn"], MaskedDistribution) and \
-            isinstance(msg["fn"].base_dist, Delta) and \
-            msg["infer"].get("is_deteministic", False)
-
+        return (
+            msg["type"] == "sample"
+            and msg["is_observed"]
+            and isinstance(msg["fn"], MaskedDistribution)
+            and isinstance(msg["fn"].base_dist, Delta)
+            and msg["infer"].get("is_deteministic", False)
+        )
 
     def configure(self, msg: dict) -> Optional[Reparam]:
         if not self._is_deterministic(msg):
             return None
 
-        return KernelABCReparam(kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim))
+        return KernelABCReparam(
+            kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim)
+        )
