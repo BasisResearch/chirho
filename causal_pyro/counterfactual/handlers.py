@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Set
 import pyro
 import torch
 
+from ..primitives import intervene
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
     """
@@ -65,6 +66,37 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             value = value.unsqueeze(0)
         return value
 
+    @singledispatchmethod
+    def _stack_intervene(self, obs, act, **kwargs):
+        raise NotImplementedError
+
+    @_stack_intervene.register
+    def _stack_intervene_number(self, obs: numbers.Number, act, **kwargs):
+        obs, act = torch.as_tensor(obs), torch.as_tensor(act)
+        return self._stack_intervene(obs, act, **kwargs)
+    
+    @_stack_intervene.register
+    def _stack_intervene_tensor(self, obs: torch.Tensor, act, *, new_dim=-1, event_dim=0):
+        # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
+        # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
+        # for concatenation.
+        act = torch.tile(torch.as_tensor(act), obs.shape)
+        act = self._expand(act, event_dim - new_dim)
+        obs = self._expand(obs, event_dim - new_dim)
+        return torch.stack([obs, act], dim=new_dim)
+    
+    @_stack_intervene.register
+    def _stack_intervene_dist(
+        self,
+        obs: pyro.distributions.TorchDistribution,
+        act: pyro.distributions.TorchDistribution,
+        *, event_dim=0, new_dim=-1
+    ) -> pyro.distributions.TorchDistribution:
+        if obs is act:
+            batch_shape = torch.broadcast_shapes(obs.batch_shape, act.batch_shape)
+            return obs.expand(batch_shape)
+        raise NotImplementedError("Stacking distributions not yet implemented")
+
     def _add_plate(self):
         self._plates.append(
             pyro.plate(f"intervention_{-self.dim}", size=2, dim=self.dim)
@@ -80,19 +112,8 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         if not msg["done"]:
             obs, act = msg["args"]
             event_dim = msg["kwargs"].get("event_dim", 0)
-
-            # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
-            # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
-            # for concatenation.
-
-            obs, act = torch.as_tensor(obs), torch.as_tensor(act)
-            act = self._expand(torch.tile(act, obs.shape), event_dim - self.dim)
-            obs = self._expand(obs, event_dim - self.dim)
-            # act = self._expand(torch.as_tensor(act), event_dim - self.dim)
-
-            msg["value"] = torch.cat([obs, act], dim=self.dim)
+            msg["value"] = self._stack_intervene(obs, act, event_dim=event_dim, new_dim=self.dim)
             msg["done"] = True
-
             self._add_plate()
 
     def _pyro_sample(self, msg):
@@ -139,20 +160,11 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     def _add_plate(self):
         if len(self._plates) == 0:
             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
+        return self.dim
 
 
 class Predictive(pyro.poutine.messenger.Messenger):
 
-    def __init__(self, plates: Set[str]):
-        self.plates = plates
-        super().__init__()
-
     def _pyro_sample(self, msg):
-        if any(f.name in self.plates for f in msg["cond_indep_stack"]):
-            with block_plates(self.plates):
-                extra_value = pyro.sample(
-                    msg["name"],
-                    msg["fn"],
-                    obs=msg["value"] if msg["is_observed"] else None,
-                    infer=msg["infer"].copy()
-                )
+        if msg["is_observed"]:
+            msg["fn"] = intervene(msg["fn"], msg["fn"])
