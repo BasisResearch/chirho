@@ -201,3 +201,22 @@ def test_mediation_nde_smoke():
         W, X, Z, Y = extended_model()
 
     assert Y.shape == (2, 2, 2, y_obs.shape[0])
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_value", [0.0, 1.0])
+def test_mediation_dependent_intervention(cf_dim, cf_value):
+    
+    model = make_mediation_model(*linear_fs())
+
+    intervened_model = do(model, {"Z": lambda Z: Z + cf_value})
+
+    with MultiWorldCounterfactual(cf_dim):
+        W, X, Z, Y = intervened_model()
+
+    assert W.shape == ()
+    assert X.shape == ()
+    assert Z.shape == (2,) + (1,) * (-cf_dim - 1)
+    assert Y.shape == (2,) + (1,) * (-cf_dim - 1)
+
+    assert torch.all(Z[1] == (Z[0] + cf_value))
