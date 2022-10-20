@@ -1,14 +1,13 @@
-from typing import Dict, Optional, Union
-
 import pyro
 
-from causal_pyro.primitives import Intervention, intervene
+from causal_pyro.primitives import intervene
 
 
 class PredictiveMessenger(pyro.poutine.messenger.Messenger):
     """
     Effect handler to create a joint distribution over observations and predictive samples.
     """
+
     def _pyro_sample(self, msg):
         if msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
             msg["stop"] = True
@@ -20,5 +19,5 @@ class PredictiveMessenger(pyro.poutine.messenger.Messenger):
                     msg["name"],
                     duplicate_fn,
                     obs=msg["value"],
-                    infer=msg["infer"].copy()
+                    infer=msg["infer"].copy(),
                 )

@@ -162,14 +162,17 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
     )
 
 
-@pytest.mark.parametrize("observed_vars,expected_shapes", [
-    (("x",), ((2,), (2,), (2,))),
-    (("y",), ((), (2,), (2,))),
-    (("z",), ((), (), (2,))),
-    (("x", "y"), ((2,), (2, 2), (2, 2))),
-    (("y", "z"), ((), (2,), (2, 2))),
-    (("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
-])
+@pytest.mark.parametrize(
+    "observed_vars,expected_shapes",
+    [
+        (("x",), ((2,), (2,), (2,))),
+        (("y",), ((), (2,), (2,))),
+        (("z",), ((), (), (2,))),
+        (("x", "y"), ((2,), (2, 2), (2, 2))),
+        (("y", "z"), ((), (2,), (2, 2))),
+        (("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
+    ],
+)
 @pytest.mark.parametrize("cf_dim", [-2, -3])
 def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
 
@@ -193,9 +196,15 @@ def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
     with MultiWorldCounterfactual(cf_dim):
         x, y, z = predictive_model()
 
-    expected_x_shape = expected_shapes[0] + ((1,) * (-cf_dim - 1) if expected_shapes[0] else ())
-    expected_y_shape = expected_shapes[1] + ((1,) * (-cf_dim - 2) if expected_shapes[1] else ()) + (3,)
-    expected_z_shape = expected_shapes[2] + ((1,) * (-cf_dim - 2) if expected_shapes[2] else ()) + (3,)
+    expected_x_shape = expected_shapes[0] + (
+        (1,) * (-cf_dim - 1) if expected_shapes[0] else ()
+    )
+    expected_y_shape = (
+        expected_shapes[1] + ((1,) * (-cf_dim - 2) if expected_shapes[1] else ()) + (3,)
+    )
+    expected_z_shape = (
+        expected_shapes[2] + ((1,) * (-cf_dim - 2) if expected_shapes[2] else ()) + (3,)
+    )
 
     assert x.shape == expected_x_shape
     assert y.shape == expected_y_shape

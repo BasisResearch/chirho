@@ -1,12 +1,11 @@
 import contextlib
 import numbers
 from functools import singledispatchmethod
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
 import pyro
 import torch
 
-from ..primitives import intervene
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
     """
@@ -56,8 +55,9 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        return value.shape[:len(value.shape) - event_dim] and \
-            any(value.shape[plate.dim - event_dim] > 1 for plate in self._plates)
+        return value.shape[: len(value.shape) - event_dim] and any(
+            value.shape[plate.dim - event_dim] > 1 for plate in self._plates
+        )
 
     def _is_plate_active(self) -> bool:
         return any(plate in pyro.poutine.runtime._PYRO_STACK for plate in self._plates)
@@ -76,9 +76,11 @@ class MultiWorldCounterfactual(BaseCounterfactual):
     def _stack_intervene_number(self, obs: numbers.Number, act, **kwargs):
         obs_, act = torch.as_tensor(obs), torch.as_tensor(act)
         return self._stack_intervene(obs_, act, **kwargs)
-    
+
     @_stack_intervene.register
-    def _stack_intervene_tensor(self, obs: torch.Tensor, act, *, new_dim=-1, event_dim=0):
+    def _stack_intervene_tensor(
+        self, obs: torch.Tensor, act, *, new_dim=-1, event_dim=0
+    ):
         # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
         # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
         # for concatenation.
@@ -92,10 +94,14 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self,
         obs: pyro.distributions.Distribution,
         act: pyro.distributions.Distribution,
-        *, event_dim=0, new_dim=-1
+        *,
+        event_dim=0,
+        new_dim=-1,
     ) -> pyro.distributions.TorchDistribution:
         if obs is act:
-            batch_shape = torch.broadcast_shapes(obs.batch_shape, (2,) + (1,) * (-new_dim - 1))
+            batch_shape = torch.broadcast_shapes(
+                obs.batch_shape, (2,) + (1,) * (-new_dim - 1)
+            )
             return obs.expand(batch_shape)
         raise NotImplementedError("Stacking distributions not yet implemented")
 
@@ -114,7 +120,9 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         if not msg["done"]:
             obs, act = msg["args"]
             event_dim = msg["kwargs"].get("event_dim", 0)
-            msg["value"] = self._stack_intervene(obs, act, event_dim=event_dim, new_dim=self.dim)
+            msg["value"] = self._stack_intervene(
+                obs, act, event_dim=event_dim, new_dim=self.dim
+            )
             msg["done"] = True
             self._add_plate()
 
