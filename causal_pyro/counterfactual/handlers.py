@@ -161,10 +161,3 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
         if len(self._plates) == 0:
             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
         return self.dim
-
-
-class Predictive(pyro.poutine.messenger.Messenger):
-
-    def _pyro_sample(self, msg):
-        if msg["is_observed"]:
-            msg["fn"] = intervene(msg["fn"], msg["fn"])
