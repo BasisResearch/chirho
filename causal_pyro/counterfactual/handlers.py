@@ -76,24 +76,25 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self._plates = []
         return super().__enter__()
 
-    def _pyro_intervene(self, msg):
-        if not msg["done"]:
-            obs, act = msg["args"]
-            event_dim = msg["kwargs"].get("event_dim", 0)
+    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
+        msg["stop"] = True
 
-            # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
-            # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
-            # for concatenation.
+    def _pyro_post_intervene(self, msg):
+        obs, act = msg["args"][0], msg["value"]
+        event_dim = msg["kwargs"].get("event_dim", 0)
 
-            obs, act = torch.as_tensor(obs), torch.as_tensor(act)
-            act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
-            act = self._expand(act, event_dim - self.dim)
-            obs = self._expand(obs, event_dim - self.dim)
+        # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
+        # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
+        # for concatenation.
 
-            msg["value"] = torch.cat([obs, act], dim=self.dim - event_dim)
-            msg["done"] = True
+        obs, act = torch.as_tensor(obs), torch.as_tensor(act)
+        act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
+        act = self._expand(act, event_dim - self.dim)
+        obs = self._expand(obs, event_dim - self.dim)
 
-            self._add_plate()
+        msg["value"] = torch.cat([obs, act], dim=self.dim - event_dim)
+
+        self._add_plate()
 
     def _pyro_sample(self, msg):
         if (
