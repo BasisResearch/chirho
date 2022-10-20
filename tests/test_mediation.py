@@ -187,20 +187,24 @@ def test_mediation_nde_smoke():
             )
         )
 
-    x = torch.full((100,), 0.5)
-    x_prime = torch.full((100,), 1.5)
+    N = 5
+    x = torch.full((5,), 0.5)
+    x_prime = torch.full((N,), 1.5)
 
-    w_obs = torch.randn(100)
-    x_obs = torch.randn(100)
-    z_obs = torch.randn(100)
-    y_obs = torch.randn(100)
+    w_obs = torch.randn(N)
+    x_obs = torch.randn(N)
+    z_obs = torch.randn(N)
+    y_obs = torch.randn(N)
 
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
 
     with MultiWorldCounterfactual(-2):
         W, X, Z, Y = extended_model()
 
-    assert Y.shape == (2, 2, 2, y_obs.shape[0])
+    assert W.shape == (N,)
+    assert X.shape == (2, 2, N)
+    assert Z.shape == (2, 2, 2, N)
+    assert Y.shape == (2, 2, 2, N)
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
