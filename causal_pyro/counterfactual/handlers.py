@@ -54,7 +54,10 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        return any(value.shape[plate.dim - event_dim] > 1 for plate in self._plates)
+        return any(
+            len(value.shape) >= -plate.dim and value.shape[plate.dim - event_dim] > 1
+            for plate in self._plates
+        )
 
     def _is_plate_active(self) -> bool:
         return any(plate in pyro.poutine.runtime._PYRO_STACK for plate in self._plates)
