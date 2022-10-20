@@ -97,7 +97,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         *,
         event_dim=0,
         new_dim=-1,
-    ) -> pyro.distributions.TorchDistribution:
+    ) -> pyro.distributions.Distribution:
         if obs is act:
             batch_shape = torch.broadcast_shapes(
                 obs.batch_shape, (2,) + (1,) * (-new_dim - 1)
