@@ -209,3 +209,12 @@ def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
     assert x.shape == expected_x_shape
     assert y.shape == expected_y_shape
     assert z.shape == expected_z_shape
+
+    if "x" in observed_vars:
+        assert torch.all(x[0] != x[1])
+
+    if "y" in observed_vars:
+        assert torch.all(y[0] != y[1])
+
+    if "z" in observed_vars:
+        assert torch.all(z[0] != z[1])
