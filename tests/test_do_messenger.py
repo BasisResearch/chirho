@@ -210,11 +210,20 @@ def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
     assert y.shape == expected_y_shape
     assert z.shape == expected_z_shape
 
+    with MultiWorldCounterfactual(cf_dim):
+        x2, y2, z2 = predictive_model()
+
     if "x" in observed_vars:
         assert torch.all(x[0] != x[1])
+        assert torch.any(x[0] == x2[0])
+        assert torch.all(x[1] != x2[1])
 
     if "y" in observed_vars:
         assert torch.all(y[0] != y[1])
+        assert torch.any(y[0] == y2[0])
+        assert torch.all(y[1] != y2[1])
 
     if "z" in observed_vars:
         assert torch.all(z[0] != z[1])
+        assert torch.any(z[0] == z2[0])
+        assert torch.all(z[1] != z2[1])

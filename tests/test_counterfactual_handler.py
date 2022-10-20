@@ -75,3 +75,8 @@ def test_multiple_interventions(x_cf_value):
     assert Z.shape == (2,)
     assert X.shape == (2, 2)
     assert Y.shape == (2, 2)
+
+
+def test_intervene_distribution_same():
+    d = dist.Normal(0, 1)
+    assert intervene(dist.Normal(1, 1), d) is d
