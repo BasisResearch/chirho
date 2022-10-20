@@ -123,10 +123,12 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                 obs_mask[tuple(factual_world_index)] = True
 
                 with pyro.poutine.block(hide=[msg["name"]]):
-                    msg["value"] = pyro.sample(
+                    new_value = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
-                msg["value"] = pyro.deterministic(msg["name"], msg["value"], event_dim=len(msg["fn"].event_shape))
+                msg["value"] = pyro.deterministic(
+                    msg["name"], new_value, event_dim=len(msg["fn"].event_shape)
+                )
                 msg["done"] = True
 
 

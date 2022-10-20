@@ -177,7 +177,7 @@ def test_mediation_nde_smoke():
             do(actions={"X": x_prime})(
                 do(actions={"Z": lambda Z: Z})(
                     pyro.condition(
-                        data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs}
+                        data={"W": w_obs, "X": x_obs}  # , "Z": z_obs, "Y": y_obs}
                     )(
                         MultiWorldCounterfactual(-2)(
                             pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
@@ -198,8 +198,7 @@ def test_mediation_nde_smoke():
 
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
 
-    with MultiWorldCounterfactual(-2):
-        W, X, Z, Y = extended_model()
+    W, X, Z, Y = extended_model()
 
     assert W.shape == (N,)
     assert X.shape == (2, 2, N)
