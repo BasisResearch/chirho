@@ -163,18 +163,28 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
 
 
 @pytest.mark.parametrize(
-    "observed_vars,expected_shapes",
+    "cf_handler,observed_vars,expected_shapes",
     [
-        (("x",), ((2,), (2,), (2,))),
-        (("y",), ((), (2,), (2,))),
-        (("z",), ((), (), (2,))),
-        (("x", "y"), ((2,), (2, 2), (2, 2))),
-        (("y", "z"), ((), (2,), (2, 2))),
-        (("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
+        (MultiWorldCounterfactual, ("x",), ((2,), (2,), (2,))),
+        (MultiWorldCounterfactual, ("y",), ((), (2,), (2,))),
+        (MultiWorldCounterfactual, ("z",), ((), (), (2,))),
+        (MultiWorldCounterfactual, ("x", "y"), ((2,), (2, 2), (2, 2))),
+        (MultiWorldCounterfactual, ("x", "z"), ((2,), (2,), (2, 2))),
+        (MultiWorldCounterfactual, ("y", "z"), ((), (2,), (2, 2))),
+        (MultiWorldCounterfactual, ("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
+        (TwinWorldCounterfactual, ("x",), ((2,), (2,), (2,))),
+        (TwinWorldCounterfactual, ("y",), ((), (2,), (2,))),
+        (TwinWorldCounterfactual, ("z",), ((), (), (2,))),
+        (TwinWorldCounterfactual, ("x", "y"), ((2,), (2,), (2,))),
+        (TwinWorldCounterfactual, ("x", "z"), ((2,), (2,), (2,))),
+        (TwinWorldCounterfactual, ("y", "z"), ((), (2,), (2,))),
+        (TwinWorldCounterfactual, ("x", "y", "z"), ((2,), (2,), (2,))),
     ],
 )
 @pytest.mark.parametrize("cf_dim", [-2, -3])
-def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
+def test_predictive_shapes_plate_multiworld(
+    cf_handler, observed_vars, expected_shapes, cf_dim
+):
 
     data = {
         "x": torch.tensor(0.5),
@@ -193,7 +203,7 @@ def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
     conditioned_model = pyro.condition(model, data=data)
     predictive_model = PredictiveMessenger()(conditioned_model)
 
-    with MultiWorldCounterfactual(cf_dim):
+    with cf_handler(cf_dim):
         x, y, z = predictive_model()
 
     expected_x_shape = expected_shapes[0] + (
@@ -210,7 +220,7 @@ def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
     assert y.shape == expected_y_shape
     assert z.shape == expected_z_shape
 
-    with MultiWorldCounterfactual(cf_dim):
+    with cf_handler(cf_dim):
         x2, y2, z2 = predictive_model()
 
     if "x" in observed_vars:
