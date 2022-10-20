@@ -8,10 +8,12 @@ import torch
 from causal_pyro.counterfactual.handlers import (
     BaseCounterfactual,
     Factual,
+    MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.primitives import intervene
 from causal_pyro.query.do_messenger import DoMessenger, do
+from causal_pyro.query.predictive import PredictiveMessenger
 
 logger = logging.getLogger(__name__)
 
@@ -158,3 +160,43 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
         == y_messenger_2.shape
         == (2,)
     )
+
+
+@pytest.mark.parametrize("observed_vars,expected_shapes", [
+    (("x",), ((2,), (2,), (2,))),
+    (("y",), ((), (2,), (2,))),
+    (("z",), ((), (), (2,))),
+    (("x", "y"), ((2,), (2, 2), (2, 2))),
+    (("y", "z"), ((), (2,), (2, 2))),
+    (("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
+])
+@pytest.mark.parametrize("cf_dim", [-2, -3])
+def test_predictive_shapes_plate(observed_vars, expected_shapes, cf_dim):
+
+    data = {
+        "x": torch.tensor(0.5),
+        "y": torch.tensor([1.0, 2.0, 3.0]),
+        "z": torch.tensor([1.7, 0.6, 0.3]),
+    }
+    data = {k: v for k, v in data.items() if k in observed_vars}
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        with pyro.plate("data", 3, dim=-1):
+            y = pyro.sample("y", dist.Normal(x, 1))
+            z = pyro.sample("z", dist.Normal(y, 1))
+            return x, y, z
+
+    conditioned_model = pyro.condition(model, data=data)
+    predictive_model = PredictiveMessenger()(conditioned_model)
+
+    with MultiWorldCounterfactual(cf_dim):
+        x, y, z = predictive_model()
+
+    expected_x_shape = expected_shapes[0] + ((1,) * (-cf_dim - 1) if expected_shapes[0] else ())
+    expected_y_shape = expected_shapes[1] + ((1,) * (-cf_dim - 2) if expected_shapes[1] else ()) + (3,)
+    expected_z_shape = expected_shapes[2] + ((1,) * (-cf_dim - 2) if expected_shapes[2] else ()) + (3,)
+
+    assert x.shape == expected_x_shape
+    assert y.shape == expected_y_shape
+    assert z.shape == expected_z_shape

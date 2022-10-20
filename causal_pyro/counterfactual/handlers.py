@@ -48,14 +48,16 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         return False
 
     @_is_downstream.register
-    def _is_downstream_dist(self, value: pyro.distributions.TorchDistribution):
-        return len(value.batch_shape) >= -self.dim and any(
-            value.batch_shape[plate.dim] > 1 for plate in self._plates
+    def _is_downstream_dist(self, value: pyro.distributions.Distribution):
+        return any(
+            len(value.batch_shape) >= -plate.dim and value.batch_shape[plate.dim] > 1
+            for plate in self._plates
         )
 
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        return any(value.shape[plate.dim - event_dim] > 1 for plate in self._plates)
+        return value.shape[:len(value.shape) - event_dim] and \
+            any(value.shape[plate.dim - event_dim] > 1 for plate in self._plates)
 
     def _is_plate_active(self) -> bool:
         return any(plate in pyro.poutine.runtime._PYRO_STACK for plate in self._plates)
@@ -72,8 +74,8 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     @_stack_intervene.register
     def _stack_intervene_number(self, obs: numbers.Number, act, **kwargs):
-        obs, act = torch.as_tensor(obs), torch.as_tensor(act)
-        return self._stack_intervene(obs, act, **kwargs)
+        obs_, act = torch.as_tensor(obs), torch.as_tensor(act)
+        return self._stack_intervene(obs_, act, **kwargs)
     
     @_stack_intervene.register
     def _stack_intervene_tensor(self, obs: torch.Tensor, act, *, new_dim=-1, event_dim=0):
@@ -83,17 +85,17 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         act = torch.tile(torch.as_tensor(act), obs.shape)
         act = self._expand(act, event_dim - new_dim)
         obs = self._expand(obs, event_dim - new_dim)
-        return torch.stack([obs, act], dim=new_dim)
-    
+        return torch.cat([obs, act], dim=new_dim)
+
     @_stack_intervene.register
     def _stack_intervene_dist(
         self,
-        obs: pyro.distributions.TorchDistribution,
-        act: pyro.distributions.TorchDistribution,
+        obs: pyro.distributions.Distribution,
+        act: pyro.distributions.Distribution,
         *, event_dim=0, new_dim=-1
     ) -> pyro.distributions.TorchDistribution:
         if obs is act:
-            batch_shape = torch.broadcast_shapes(obs.batch_shape, act.batch_shape)
+            batch_shape = torch.broadcast_shapes(obs.batch_shape, (2,) + (1,) * (-new_dim - 1))
             return obs.expand(batch_shape)
         raise NotImplementedError("Stacking distributions not yet implemented")
 
@@ -117,8 +119,10 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             self._add_plate()
 
     def _pyro_sample(self, msg):
+
         if (
             self._plates
+            and not pyro.poutine.util.site_is_subsample(msg)
             and not self._is_plate_active()
             and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"]))
         ):
@@ -146,7 +150,6 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     msg["value"] = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
-                assert len(msg["value"].shape) <= len(self._plates) <= 2
                 msg["done"] = True
 
 
@@ -160,4 +163,3 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     def _add_plate(self):
         if len(self._plates) == 0:
             self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
-        return self.dim
