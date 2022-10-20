@@ -199,3 +199,22 @@ def test_mediation_nde_smoke():
     Ys = extended_model()[-1]
 
     assert Ys.shape == (2, 2, 2, y_obs.shape[0])
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+def test_nested_interventions_same_variable(cf_dim):
+    def model():
+        x = pyro.sample("x", dist.Normal(0, 1))
+        y = pyro.sample("y", dist.Normal(x, 1))
+        return x, y
+
+    intervened_model = do(model, {"x": 2.0})
+    intervened_model = do(intervened_model, {"x": 1.0})
+
+    with MultiWorldCounterfactual(cf_dim):
+        x, y = intervened_model()
+
+    assert y.shape == x.shape == (2, 2) + (1,) * (-cf_dim - 1)
+    assert torch.all(x[0, 0, ...] != 2.0 and x[0, 0] != 1.0)
+    assert torch.all(x[0, 1, ...] == 1.0)
+    assert torch.all(x[1, 0, ...] == 2.0 and x[1, 1, ...] == 2.0)
