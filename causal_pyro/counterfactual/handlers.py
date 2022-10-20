@@ -86,9 +86,9 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             # for concatenation.
 
             obs, act = torch.as_tensor(obs), torch.as_tensor(act)
-            act = self._expand(torch.tile(act, obs.shape), event_dim - self.dim)
+            act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
+            act = self._expand(act, event_dim - self.dim)
             obs = self._expand(obs, event_dim - self.dim)
-            # act = self._expand(torch.as_tensor(act), event_dim - self.dim)
 
             msg["value"] = torch.cat([obs, act], dim=self.dim)
             msg["done"] = True
@@ -125,7 +125,6 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     msg["value"] = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
-                assert len(msg["value"].shape) <= len(self._plates) <= 2
                 msg["done"] = True
 
 

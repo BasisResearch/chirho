@@ -167,7 +167,6 @@ def test_multiple_interventions(x_cf_value):
     assert Y.shape == (2, 2)
 
 
-@pytest.mark.xfail(reason="TODO: implement this")
 def test_mediation_nde_smoke():
 
     model = make_mediation_model(*linear_fs())
@@ -199,4 +198,4 @@ def test_mediation_nde_smoke():
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
     Ys = extended_model()[-1]
 
-    assert Ys.shape == (2, 2, 2)
+    assert Ys.shape == (2, 2, 2, y_obs.shape[0])
