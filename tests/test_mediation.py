@@ -206,7 +206,7 @@ def test_mediation_nde_smoke():
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 @pytest.mark.parametrize("cf_value", [0.0, 1.0])
 def test_mediation_dependent_intervention(cf_dim, cf_value):
-    
+
     model = make_mediation_model(*linear_fs())
 
     intervened_model = do(model, {"Z": lambda Z: Z + cf_value})
