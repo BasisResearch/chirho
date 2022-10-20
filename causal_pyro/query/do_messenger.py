@@ -20,7 +20,11 @@ class DoMessenger(pyro.poutine.messenger.Messenger):
 
     def _pyro_post_sample(self, msg):
         if msg["name"] in self.actions:
-            msg["value"] = intervene(msg["value"], self.actions[msg["name"]])
+            msg["value"] = intervene(
+                msg["value"],
+                self.actions[msg["name"]],
+                event_dim=len(msg["fn"].event_shape),
+            )
 
 
 do = pyro.poutine.handlers._make_handler(DoMessenger)[1]

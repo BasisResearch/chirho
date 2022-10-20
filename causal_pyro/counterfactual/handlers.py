@@ -90,7 +90,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             act = self._expand(act, event_dim - self.dim)
             obs = self._expand(obs, event_dim - self.dim)
 
-            msg["value"] = torch.cat([obs, act], dim=self.dim)
+            msg["value"] = torch.cat([obs, act], dim=self.dim - event_dim)
             msg["done"] = True
 
             self._add_plate()
