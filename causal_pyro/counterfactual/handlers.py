@@ -133,6 +133,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     msg["name"], new_value, event_dim=len(msg["fn"].event_shape)
                 )
                 msg["done"] = True
+                msg["no_intervene"] = True
 
 
 class TwinWorldCounterfactual(MultiWorldCounterfactual):
