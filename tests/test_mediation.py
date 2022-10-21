@@ -167,7 +167,6 @@ def test_multiple_interventions(x_cf_value):
     assert Y.shape == (2, 2)
 
 
-@pytest.mark.xfail(reason="TODO: implement this")
 def test_mediation_nde_smoke():
 
     model = make_mediation_model(*linear_fs())
@@ -178,7 +177,7 @@ def test_mediation_nde_smoke():
             do(actions={"X": x_prime})(
                 do(actions={"Z": lambda Z: Z})(
                     pyro.condition(
-                        data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs}
+                        data={"W": w_obs, "X": x_obs}  # , "Z": z_obs, "Y": y_obs}
                     )(
                         MultiWorldCounterfactual(-2)(
                             pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
@@ -188,15 +187,39 @@ def test_mediation_nde_smoke():
             )
         )
 
-    x = torch.full((100,), 0.5)
-    x_prime = torch.full((100,), 1.5)
+    N = 5
+    x = torch.full((5,), 0.5)
+    x_prime = torch.full((N,), 1.5)
 
-    w_obs = torch.randn(100)
-    x_obs = torch.randn(100)
-    z_obs = torch.randn(100)
-    y_obs = torch.randn(100)
+    w_obs = torch.randn(N)
+    x_obs = torch.randn(N)
+    z_obs = torch.randn(N)
+    y_obs = torch.randn(N)
 
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
-    Ys = extended_model()[-1]
 
-    assert Ys.shape == (2, 2, 2)
+    W, X, Z, Y = extended_model()
+
+    assert W.shape == (N,)
+    assert X.shape == (2, 2, N)
+    assert Z.shape == (2, 2, 2, N)
+    assert Y.shape == (2, 2, 2, N)
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_value", [0.0, 1.0])
+def test_mediation_dependent_intervention(cf_dim, cf_value):
+
+    model = make_mediation_model(*linear_fs())
+
+    intervened_model = do(model, {"Z": lambda Z: Z + cf_value})
+
+    with MultiWorldCounterfactual(cf_dim):
+        W, X, Z, Y = intervened_model()
+
+    assert W.shape == ()
+    assert X.shape == ()
+    assert Z.shape == (2,) + (1,) * (-cf_dim - 1)
+    assert Y.shape == (2,) + (1,) * (-cf_dim - 1)
+
+    assert torch.all(Z[1] == (Z[0] + cf_value))
