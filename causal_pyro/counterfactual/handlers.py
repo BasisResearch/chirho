@@ -90,7 +90,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
         act = self._expand(act, event_dim - new_dim)
         obs = self._expand(obs, event_dim - new_dim)
-        return torch.cat([obs, act], dim=new_dim)
+        return torch.cat([obs, act], dim=new_dim - event_dim)
 
     @_stack_intervene.register
     def _stack_intervene_dist(
@@ -140,6 +140,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"]))
         ):
             msg["stop"] = True
+            msg["done"] = True
             with contextlib.ExitStack() as plates:
                 for (
                     plate
@@ -163,11 +164,13 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     new_value = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
-                msg["value"] = pyro.deterministic(
-                    msg["name"], new_value, event_dim=len(msg["fn"].event_shape)
-                )
-                msg["done"] = True
-                msg["no_intervene"] = True
+
+                # emulate a deterministic statement
+                msg["fn"] = pyro.distributions.Delta(
+                    new_value, event_dim=len(msg["fn"].event_shape)
+                ).mask(False)
+                msg["value"] = new_value
+                msg["infer"] = {"_deterministic": True}
 
 
 class TwinWorldCounterfactual(MultiWorldCounterfactual):
