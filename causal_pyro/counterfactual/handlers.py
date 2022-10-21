@@ -56,7 +56,9 @@ class MultiWorldCounterfactual(BaseCounterfactual):
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
         return value.shape[: len(value.shape) - event_dim] and any(
-            value.shape[plate.dim - event_dim] > 1 for plate in self._plates
+            len(value.shape) - event_dim >= -plate.dim
+            and value.shape[plate.dim - event_dim] > 1
+            for plate in self._plates
         )
 
     def _is_plate_active(self) -> bool:
@@ -116,15 +118,19 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self._plates = []
         return super().__enter__()
 
-    def _pyro_intervene(self, msg):
-        if not msg["done"]:
-            obs, act = msg["args"]
-            event_dim = msg["kwargs"].get("event_dim", 0)
-            msg["value"] = self._stack_intervene(
-                obs, act, event_dim=event_dim, new_dim=self.dim
-            )
-            msg["done"] = True
-            self._add_plate()
+    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
+        msg["stop"] = True
+
+    def _pyro_post_intervene(self, msg):
+        obs, act = msg["args"][0], msg["value"]
+        event_dim = msg["kwargs"].get("event_dim", 0)
+        obs, act = msg["args"]
+        event_dim = msg["kwargs"].get("event_dim", 0)
+        msg["value"] = self._stack_intervene(
+            obs, act, event_dim=event_dim, new_dim=self.dim
+        )
+        msg["done"] = True
+        self._add_plate()
 
     def _pyro_sample(self, msg):
 
@@ -155,10 +161,14 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                 obs_mask[tuple(factual_world_index)] = True
 
                 with pyro.poutine.block(hide=[msg["name"]]):
-                    msg["value"] = pyro.sample(
+                    new_value = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
+                msg["value"] = pyro.deterministic(
+                    msg["name"], new_value, event_dim=len(msg["fn"].event_shape)
+                )
                 msg["done"] = True
+                msg["no_intervene"] = True
 
 
 class TwinWorldCounterfactual(MultiWorldCounterfactual):
