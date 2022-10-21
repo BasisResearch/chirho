@@ -86,7 +86,8 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
         # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
         # for concatenation.
-        act = torch.tile(torch.as_tensor(act), obs.shape)
+        act = torch.as_tensor(act)
+        act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
         act = self._expand(act, event_dim - new_dim)
         obs = self._expand(obs, event_dim - new_dim)
         return torch.cat([obs, act], dim=new_dim)
@@ -123,8 +124,6 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
-        event_dim = msg["kwargs"].get("event_dim", 0)
-        obs, act = msg["args"]
         event_dim = msg["kwargs"].get("event_dim", 0)
         msg["value"] = self._stack_intervene(
             obs, act, event_dim=event_dim, new_dim=self.dim
