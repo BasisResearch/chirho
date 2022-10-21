@@ -201,7 +201,7 @@ def test_predictive_shapes_plate_multiworld(
             return x, y, z
 
     conditioned_model = pyro.condition(model, data=data)
-    predictive_model = PredictiveMessenger()(conditioned_model)
+    predictive_model = PredictiveMessenger(names=observed_vars)(conditioned_model)
 
     with cf_handler(cf_dim):
         x, y, z = predictive_model()
