@@ -12,11 +12,8 @@ class BaseCounterfactual(pyro.poutine.messenger.Messenger):
     Base class for counterfactual handlers.
     """
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
-        pass
-
     def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        pass
+        msg["stop"] = True
 
 
 class Factual(BaseCounterfactual):
@@ -24,11 +21,9 @@ class Factual(BaseCounterfactual):
     Trivial counterfactual handler that returns the observed value.
     """
 
-    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        if not msg["done"]:
-            obs, _ = msg["args"]
-            msg["value"] = obs
-            msg["done"] = True
+    def _pyro_post_intervene(self, msg: Dict[str, Any]) -> None:
+        obs, _ = msg["args"]
+        msg["value"] = obs
 
 
 class MultiWorldCounterfactual(BaseCounterfactual):
@@ -118,9 +113,6 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self.dim = self._orig_dim
         self._plates = []
         return super().__enter__()
-
-    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        msg["stop"] = True
 
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
