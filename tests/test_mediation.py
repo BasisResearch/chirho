@@ -177,7 +177,7 @@ def test_mediation_nde_smoke():
             do(actions={"X": x_prime})(
                 do(actions={"Z": lambda Z: Z})(
                     pyro.condition(
-                        data={"W": w_obs, "X": x_obs}  # , "Z": z_obs, "Y": y_obs}
+                        data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs}
                     )(pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model))
                 )
             )
