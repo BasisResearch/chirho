@@ -122,16 +122,17 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     def _pyro_sample(self, msg):
 
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+
         upstream_plates = [
             plate
             for plate in self._plates
             if self._is_downstream(msg["fn"], plate)
             or self._is_downstream(msg["value"], plate)
         ]
-        if (
-            upstream_plates
-            and not pyro.poutine.util.site_is_subsample(msg)
-            and not any(self._is_plate_active(plate) for plate in self._plates)
+        if upstream_plates and not any(
+            self._is_plate_active(plate) for plate in self._plates
         ):
             msg["stop"] = True
             msg["done"] = True
