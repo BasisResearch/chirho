@@ -40,7 +40,7 @@ setup(
             "sphinx_rtd_theme",
             "myst_parser",
             "nbsphinx",
-            "jupyter-book",
+            "sphinxcontrib.bibtex",
         ],
     },
     python_requires=">=3.8",

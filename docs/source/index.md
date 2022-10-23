@@ -97,10 +97,10 @@ operations on values within a Pyro model:
 :maxdepth: 2
 :caption: Documentation
 
-primitives.rst
-counterfactual.rst
-reparam.rst
-query.rst
+primitives.md
+counterfactual.md
+reparam.md
+query.md
 ```
 
 

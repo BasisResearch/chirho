@@ -1,6 +1,6 @@
-Counterfactual Handlers
-=======================
+# Counterfactual Handlers
 
+```{eval-rst}
 .. automodule:: causal_pyro.counterfactual
     :members:
     :undoc-members:
@@ -10,3 +10,4 @@ Counterfactual Handlers
     :members:
     :undoc-members:
     :show-inheritance:
+```

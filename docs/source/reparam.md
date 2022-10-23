@@ -1,6 +1,6 @@
-Reparameterizers
-==================
+# Reparameterizers
 
+```{eval-rst}
 .. automodule:: causal_pyro.reparam
     :members:
     :undoc-members:
@@ -10,3 +10,4 @@ Reparameterizers
     :members:
     :undoc-members:
     :show-inheritance:
+```

@@ -1,6 +1,6 @@
-Causal Query Operations
-=======================
+# Causal Query Operations
 
+```{eval-rst}
 .. automodule:: causal_pyro.query
     :members:
     :undoc-members:
@@ -10,3 +10,4 @@ Causal Query Operations
     :members:
     :undoc-members:
     :show-inheritance:
+```
