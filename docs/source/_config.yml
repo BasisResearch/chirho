@@ -3,7 +3,7 @@
 
 title: causal_pyro
 author: Basis
-logo: logo.png
+logo: _static/img/pyro_logo_wide.png
 
 # Force re-execution of notebooks on each build.
 # See https://jupyterbook.org/content/execute.html
@@ -30,3 +30,10 @@ repository:
 html:
   use_issues_button: true
   use_repository_button: true
+
+sphinx:
+  extra_extensions:
+  - 'sphinx.ext.autodoc'
+  - 'sphinx.ext.autosummary'
+  config:
+    autosummary_generate: True
