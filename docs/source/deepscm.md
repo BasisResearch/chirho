@@ -115,12 +115,9 @@ compute it anyway, such as explanation or expert evaluation.
 
 +++
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames
 ```
 
-```{code-cell} ipython3
-
-```

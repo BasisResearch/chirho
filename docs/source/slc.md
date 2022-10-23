@@ -123,12 +123,8 @@ over objects $o$ and instances $i$.
 
 +++
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames
-```
-
-```{code-cell} ipython3
-
 ```

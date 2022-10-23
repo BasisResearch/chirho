@@ -182,7 +182,7 @@ non-monotonicity is plausible.
 
 +++
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames

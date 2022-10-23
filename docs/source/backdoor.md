@@ -166,7 +166,7 @@ pyro.render_model(bayesian_backdoor_ate, model_args=(x_obs, t_obs, y_obs))
 # pyro.render_model(bayesian_backdoor_ate_scm, model_args=(x_obs, t_obs, y_obs))
 ```
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames

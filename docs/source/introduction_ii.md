@@ -225,7 +225,7 @@ could also be applied. The result is a posterior over models.
 
 +++
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames

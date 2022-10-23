@@ -119,7 +119,7 @@ could be used to estimate it, including amortized variational inference
 
 +++
 
-# References
+## References
 
 ```{bibliography}
 :filter: docname in docnames
