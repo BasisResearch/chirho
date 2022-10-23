@@ -37,9 +37,14 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "myst_parser",
+    "sphinxcontrib.bibtex"
     # "sphinx_gallery.gen_gallery",
     # "sphinx_search.extension",
 ]
+
+# Enable bibtex rendering
+
+bibtex_bibfiles = ['refs.bib']
 
 # Enable documentation inheritance
 
@@ -48,7 +53,7 @@ autodoc_inherit_docstrings = True
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
 #
-# source_suffix = ['.rst', '.md']
+source_suffix = ['.rst', '.md']
 # NOTE: `.rst` is the default suffix of sphinx, and nbsphinx will
 # automatically add support for `.ipynb` suffix.
 

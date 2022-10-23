@@ -1,0 +1,11 @@
+myst_parser==0.18.1
+nbsphinx==0.8.9
+sphinx==5.2.3
+sphinx-click==4.3.0
+sphinx_autodoc_typehints==1.19.4
+sphinx_copybutton==0.5.0
+sphinx-click==4.3.0
+sphinxcontrib_bibtex==2.5.0
+jupyter-book
+matplotlib
+numpy
