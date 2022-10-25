@@ -12,11 +12,8 @@ class BaseCounterfactual(pyro.poutine.messenger.Messenger):
     Base class for counterfactual handlers.
     """
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
-        pass
-
     def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        pass
+        msg["stop"] = True
 
 
 class Factual(BaseCounterfactual):
@@ -24,11 +21,9 @@ class Factual(BaseCounterfactual):
     Trivial counterfactual handler that returns the observed value.
     """
 
-    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        if not msg["done"]:
-            obs, _ = msg["args"]
-            msg["value"] = obs
-            msg["done"] = True
+    def _pyro_post_intervene(self, msg: Dict[str, Any]) -> None:
+        obs, _ = msg["args"]
+        msg["value"] = obs
 
 
 class MultiWorldCounterfactual(BaseCounterfactual):
@@ -47,15 +42,17 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         return False
 
     @_is_downstream.register
-    def _is_downstream_dist(self, value: pyro.distributions.TorchDistribution):
-        return len(value.batch_shape) >= -self.dim and any(
-            value.batch_shape[plate.dim] > 1 for plate in self._plates
+    def _is_downstream_dist(self, value: pyro.distributions.Distribution):
+        return any(
+            len(value.batch_shape) >= -plate.dim and value.batch_shape[plate.dim] > 1
+            for plate in self._plates
         )
 
     @_is_downstream.register
     def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        return any(
-            len(value.shape) >= -plate.dim and value.shape[plate.dim - event_dim] > 1
+        return value.shape[: len(value.shape) - event_dim] and any(
+            len(value.shape) - event_dim >= -plate.dim
+            and value.shape[plate.dim - event_dim] > 1
             for plate in self._plates
         )
 
@@ -68,6 +65,44 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             value = value.unsqueeze(0)
         return value
 
+    @singledispatchmethod
+    def _stack_intervene(self, obs, act, **kwargs):
+        raise NotImplementedError
+
+    @_stack_intervene.register
+    def _stack_intervene_number(self, obs: numbers.Number, act, **kwargs):
+        obs_, act = torch.as_tensor(obs), torch.as_tensor(act)
+        return self._stack_intervene(obs_, act, **kwargs)
+
+    @_stack_intervene.register
+    def _stack_intervene_tensor(
+        self, obs: torch.Tensor, act, *, new_dim=-1, event_dim=0
+    ):
+        # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
+        # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
+        # for concatenation.
+        act = torch.as_tensor(act)
+        act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
+        act = self._expand(act, event_dim - new_dim)
+        obs = self._expand(obs, event_dim - new_dim)
+        return torch.cat([obs, act], dim=new_dim - event_dim)
+
+    @_stack_intervene.register
+    def _stack_intervene_dist(
+        self,
+        obs: pyro.distributions.Distribution,
+        act: pyro.distributions.Distribution,
+        *,
+        event_dim=0,
+        new_dim=-1,
+    ) -> pyro.distributions.Distribution:
+        if obs is act:
+            batch_shape = torch.broadcast_shapes(
+                obs.batch_shape, (2,) + (1,) * (-new_dim - 1)
+            )
+            return obs.expand(batch_shape)
+        raise NotImplementedError("Stacking distributions not yet implemented")
+
     def _add_plate(self):
         self._plates.append(
             pyro.plate(f"intervention_{-self.dim}", size=2, dim=self.dim)
@@ -79,33 +114,25 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         self._plates = []
         return super().__enter__()
 
-    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        msg["stop"] = True
-
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].get("event_dim", 0)
-
-        # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
-        # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
-        # for concatenation.
-
-        obs, act = torch.as_tensor(obs), torch.as_tensor(act)
-        act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
-        act = self._expand(act, event_dim - self.dim)
-        obs = self._expand(obs, event_dim - self.dim)
-
-        msg["value"] = torch.cat([obs, act], dim=self.dim - event_dim)
-
+        msg["value"] = self._stack_intervene(
+            obs, act, event_dim=event_dim, new_dim=self.dim
+        )
+        msg["done"] = True
         self._add_plate()
 
     def _pyro_sample(self, msg):
+
         if (
             self._plates
+            and not pyro.poutine.util.site_is_subsample(msg)
             and not self._is_plate_active()
             and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"]))
         ):
             msg["stop"] = True
+            msg["done"] = True
             with contextlib.ExitStack() as plates:
                 for (
                     plate
@@ -129,11 +156,13 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     new_value = pyro.sample(
                         msg["name"], msg["fn"], obs=msg["value"], obs_mask=obs_mask
                     )
-                msg["value"] = pyro.deterministic(
-                    msg["name"], new_value, event_dim=len(msg["fn"].event_shape)
-                )
-                msg["done"] = True
-                msg["no_intervene"] = True
+
+                # emulate a deterministic statement
+                msg["fn"] = pyro.distributions.Delta(
+                    new_value, event_dim=len(msg["fn"].event_shape)
+                ).mask(False)
+                msg["value"] = new_value
+                msg["infer"] = {"_deterministic": True}
 
 
 class TwinWorldCounterfactual(MultiWorldCounterfactual):

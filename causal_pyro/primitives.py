@@ -71,7 +71,7 @@ def intervene(
     """
     Intervene on a value in a probabilistic program.
     """
-    if callable(act):
+    if callable(act) and not isinstance(act, pyro.distributions.Distribution):
         return act(obs)
     elif act is None:
         return obs

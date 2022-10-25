@@ -20,7 +20,8 @@ x_cf_values = [-1.0, 0.0, 2.0, 2]
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_counterfactual_handler_smoke(x_cf_value):
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
 
     # estimand: p(y | do(x)) = \int p(y | z, x) p(x' | z) p(z) dz dx'
 
@@ -46,13 +47,13 @@ def test_counterfactual_handler_smoke(x_cf_value):
     assert x_cf == x_cf_value
     assert z_cf.shape == x_cf.shape == y_cf.shape == torch.Size([])
 
-    with TwinWorldCounterfactual(-1):
+    with TwinWorldCounterfactual(cf_dim):
         z_cf_twin, x_cf_twin, y_cf_twin = model()
 
-    assert x_cf_twin[0] != x_cf_value
-    assert x_cf_twin[1] == x_cf_value
+    assert torch.all(x_cf_twin[0] != x_cf_value)
+    assert torch.all(x_cf_twin[1] == x_cf_value)
     assert z_cf_twin.shape == torch.Size([])
-    assert x_cf_twin.shape == y_cf_twin.shape == (2,)
+    assert x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (-cf_dim - 1)
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -74,3 +75,8 @@ def test_multiple_interventions(x_cf_value):
     assert Z.shape == (2,)
     assert X.shape == (2, 2)
     assert Y.shape == (2, 2)
+
+
+def test_intervene_distribution_same():
+    d = dist.Normal(0, 1)
+    assert intervene(dist.Normal(1, 1), d) is d
