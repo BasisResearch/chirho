@@ -5,14 +5,15 @@ from .dispatched_strategy import DispatchedStrategy
 
 
 class AutoSoftConditioning(DispatchedStrategy):
-    
     def __init__(self, kernel: pyro.contrib.gp.kernels.Kernel):
         self.kernel = kernel
         super().__init__()
 
-   
+
 @AutoSoftConditioning.register
-def _auto_soft_conditioning_delta(self, fn: pyro.distributions.Delta, value=None, is_observed=False, name=""):
+def _auto_soft_conditioning_delta(
+    self, fn: pyro.distributions.Delta, value=None, is_observed=False, name=""
+):
     if not is_observed or value is fn.v:
         return None
     pyro.factor(name + "_factor", self.kernel(fn.v, value))
