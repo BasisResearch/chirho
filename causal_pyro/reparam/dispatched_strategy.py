@@ -62,6 +62,10 @@ class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
     def register(cls, *args):
         return cls.reparam.register(*args)
 
+    @staticmethod
+    def deterministic(value: torch.Tensor, event_dim: int = 0) -> pyro.distributions.MaskedDistribution:
+        return pyro.distributions.Delta(value, event_dim=event_dim).mask(False)
+
     def configure(self, msg: dict) -> Optional[Reparam]:
         if msg["type"] == "sample" and not pyro.poutine.util.site_is_subsample(msg):
             return _WrappedReparam(self.reparam)
