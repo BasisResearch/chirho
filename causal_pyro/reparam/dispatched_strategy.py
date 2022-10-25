@@ -1,6 +1,6 @@
 import functools
 from abc import abstractmethod
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import pyro
 import torch
@@ -18,6 +18,9 @@ class _WrappedReparam(Reparam):
             is_observed=msg["is_observed"],
             name=msg["name"],
         )
+        if isinstance(result, Reparam):
+            return result.apply(msg)
+
         if result is None:
             result = msg["fn"], msg["value"], msg["is_observed"]
         return dict(fn=result[0], value=result[1], is_observed=result[2])
@@ -50,7 +53,9 @@ class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
         value: Optional[torch.Tensor] = None,
         is_observed: bool = False,
         name: str = "",
-    ) -> Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]:
+    ) -> Union[
+        Reparam, Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]
+    ]:
         raise NotImplementedError
 
     @classmethod
