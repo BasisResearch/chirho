@@ -1,5 +1,4 @@
 import pyro
-import torch
 
 from .dispatched_strategy import DispatchedStrategy
 

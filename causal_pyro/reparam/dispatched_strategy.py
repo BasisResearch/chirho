@@ -1,12 +1,9 @@
 import functools
-import inspect
-from abc import abstractclassmethod, abstractmethod
-from typing import Callable, Optional, Tuple, Type, Union
+from abc import abstractmethod
+from typing import Callable, Optional, Tuple
 
 import pyro
 import torch
-from pyro.contrib.gp.kernels import Kernel
-from pyro.distributions import Delta, Distribution, MaskedDistribution
 from pyro.infer.reparam.reparam import Reparam, ReparamMessage, ReparamResult
 
 
@@ -22,11 +19,7 @@ class _WrappedReparam(Reparam):
             name=msg["name"],
         )
         if result is None:
-            return {
-                "fn": msg["fn"],
-                "value": msg["value"],
-                "is_observed": msg["is_observed"],
-            }
+            result = msg["fn"], msg["value"], msg["is_observed"]
         return dict(fn=result[0], value=result[1], is_observed=result[2])
 
 
@@ -35,7 +28,9 @@ class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
         @functools.singledispatchmethod
         def _reparam(
             self, fn, value, is_observed, name
-        ) -> Optional[Tuple[Distribution, Optional[torch.Tensor], bool]]:
+        ) -> Optional[
+            Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]
+        ]:
             return super().reparam(fn, value, is_observed, name)
 
         setattr(cls, "reparam", _reparam)
@@ -51,11 +46,11 @@ class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
     @abstractmethod
     def reparam(
         self,
-        dist: Distribution,
+        dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor] = None,
         is_observed: bool = False,
         name: str = "",
-    ) -> Tuple[Distribution, Optional[torch.Tensor], bool]:
+    ) -> Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]:
         raise NotImplementedError
 
     @classmethod
