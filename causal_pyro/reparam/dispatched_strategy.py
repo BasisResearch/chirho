@@ -4,10 +4,15 @@ from typing import Callable, Optional, Tuple, Union
 
 import pyro
 import torch
+
 from pyro.infer.reparam.reparam import Reparam, ReparamMessage, ReparamResult
+from pyro.infer.reparam.strategies import Strategy
 
 
-class _WrappedReparam(Reparam):
+class CallableReparam(Reparam):
+    """
+    Syntactic sugar for registering a callable as a reparameterizer.
+    """
     def __init__(self, fn: Callable):
         self._fn = fn
 
@@ -26,7 +31,10 @@ class _WrappedReparam(Reparam):
         return dict(fn=result[0], value=result[1], is_observed=result[2])
 
 
-class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
+class DispatchedStrategy(Strategy):
+    """
+    Syntactic sugar for extensible type-directed reparameterization strategies.
+    """
     def __init_subclass__(cls) -> None:
         @functools.singledispatchmethod
         def _reparam(
@@ -68,7 +76,7 @@ class DispatchedStrategy(pyro.infer.reparam.strategies.Strategy):
 
     def configure(self, msg: dict) -> Optional[Reparam]:
         if msg["type"] == "sample" and not pyro.poutine.util.site_is_subsample(msg):
-            return _WrappedReparam(self.reparam)
+            return CallableReparam(self.reparam)
         return None
 
     def _unpack_masked(
