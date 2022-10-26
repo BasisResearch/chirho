@@ -17,12 +17,12 @@ class CallableReparam(Reparam):
         self._fn = fn
 
     def apply(self, msg: ReparamMessage) -> ReparamResult:
-        result = self._fn(
-            msg["fn"],
-            value=msg["value"],
-            is_observed=msg["is_observed"],
-            name=msg["name"],
-        )
+        with pyro.contrib.autoname.scope(name=msg["name"]):
+            result = self._fn(
+                msg["fn"],
+                value=msg["value"],
+                is_observed=msg["is_observed"],
+            )
         if isinstance(result, Reparam):
             return result.apply(msg)
 
@@ -39,11 +39,11 @@ class DispatchedStrategy(Strategy):
     def __init_subclass__(cls) -> None:
         @functools.singledispatchmethod
         def _reparam(
-            self, fn, value, is_observed, name
+            self, fn, value, is_observed
         ) -> Optional[
             Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]
         ]:
-            return super().reparam(fn, value, is_observed, name)
+            return super().reparam(fn, value, is_observed)
 
         setattr(cls, "reparam", _reparam)
 
@@ -61,7 +61,6 @@ class DispatchedStrategy(Strategy):
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor] = None,
         is_observed: bool = False,
-        name: str = "",
     ) -> Union[
         Reparam, Tuple[pyro.distributions.Distribution, Optional[torch.Tensor], bool]
     ]:
@@ -83,26 +82,26 @@ class DispatchedStrategy(Strategy):
         return None
 
     def _unpack_masked(
-        self, dist: pyro.distributions.MaskedDistribution, value, is_observed, name
+        self, dist: pyro.distributions.MaskedDistribution, value, is_observed
     ):
         base_dist, value, is_observed = self.reparam(
-            dist.base_dist, value, is_observed, name
+            dist.base_dist, value, is_observed
         )
         return base_dist.mask(dist.mask), value, is_observed
 
     def _unpack_indep(
-        self, dist: pyro.distributions.Independent, value, is_observed, name
+        self, dist: pyro.distributions.Independent, value, is_observed
     ):
         base_dist, value, is_observed = self.reparam(
-            dist.base_dist, value, is_observed, name
+            dist.base_dist, value, is_observed
         )
         return base_dist.to_event(dist.reinterpreted_batch_ndims), value, is_observed
 
     def _unpack_transformed(
-        self, dist: pyro.distributions.TransformedDistribution, value, is_observed, name
+        self, dist: pyro.distributions.TransformedDistribution, value, is_observed
     ):
         base_dist, value, is_observed = self.reparam(
-            dist.base_dist, value, is_observed, name
+            dist.base_dist, value, is_observed
         )
         dist = pyro.distributions.TransformedDistribution(
             base_dist, base_dist.transforms
