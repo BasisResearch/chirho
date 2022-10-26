@@ -89,11 +89,14 @@ class DispatchedStrategy(Strategy):
         return base_dist.mask(dist._mask), value, is_observed
 
     def _unpack_indep(self, dist: pyro.distributions.Independent, value, is_observed):
-        with pyro.poutine.reparam(config=EventDimStrategy(dist.reinterpreted_batch_ndims)):
+        with pyro.poutine.reparam(
+            config=EventDimStrategy(dist.reinterpreted_batch_ndims)
+        ):
             result = self.reparam(dist.base_dist, value, is_observed)
         if isinstance(result, tuple):
-            new_dist, value, is_observed = \
-                EventDimStrategy(dist.reinterpreted_batch_ndims).reparam(*result)
+            new_dist, value, is_observed = EventDimStrategy(
+                dist.reinterpreted_batch_ndims
+            ).reparam(*result)
             assert new_dist.event_shape == dist.event_shape
             return new_dist, value, is_observed
         return result
@@ -114,20 +117,26 @@ class EventDimStrategy(DispatchedStrategy):
         super().__init__()
 
 
-@EventDimStrategy.register(pyro.distributions.Distribution)
-def _eventdim_reparam_default(self, dist, value, is_observed):
+@EventDimStrategy.register
+def _eventdim_reparam_default(
+    self, dist: pyro.distributions.Distribution, value, is_observed
+):
     return dist.to_event(self.event_dim), value, is_observed
 
 
-@EventDimStrategy.register(pyro.distributions.MaskedDistribution)
-def _eventdim_reparam_maskeddelta(self, dist, value, is_observed):
+@EventDimStrategy.register
+def _eventdim_reparam_maskeddelta(
+    self, dist: pyro.distributions.MaskedDistribution, value, is_observed
+):
     if isinstance(dist.base_dist, pyro.distributions.Delta):
         base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
         return base_dist.mask(dist._mask), value, is_observed
     return dist.to_event(self.event_dim), value, is_observed
 
 
-@EventDimStrategy.register(pyro.distributions.Delta)
-def _eventdim_reparam_delta(self, dist, value, is_observed):
-    dist = pyro.distributions.Delta(dist.v, dist.log_density, event_dim=self.event_dim + dist.event_dim)
+@EventDimStrategy.register
+def _eventdim_reparam_delta(self, dist: pyro.distributions.Delta, value, is_observed):
+    dist = pyro.distributions.Delta(
+        dist.v, dist.log_density, event_dim=self.event_dim + dist.event_dim
+    )
     return dist, value, is_observed

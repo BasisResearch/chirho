@@ -1,12 +1,9 @@
-from causal_pyro.reparam.dispatched_strategy import DispatchedStrategy
-import pytest
-import torch
-
 import pyro
 import pyro.distributions as dist
 import pyro.poutine as poutine
+import pytest
+import torch
 from pyro.distributions.transforms import AffineTransform, ExpTransform
-from pyro.infer.reparam import TransformReparam
 
 from causal_pyro.reparam.dispatched_strategy import DispatchedStrategy
 
@@ -55,7 +52,9 @@ def _reparam_transform(self, fn: dist.TransformedDistribution, value, is_observe
     base_event_dim = 0
     for t in reversed(fn.transforms):
         base_event_dim += t.domain.event_dim - t.codomain.event_dim
-    value_base = pyro.sample("base", fn.base_dist.to_event(base_event_dim), obs=value_base)
+    value_base = pyro.sample(
+        "base", fn.base_dist.to_event(base_event_dim), obs=value_base
+    )
 
     # Differentiably transform.
     if value is None:
