@@ -34,30 +34,27 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         super().__init__()
 
     @singledispatchmethod
-    def _is_downstream(self, value, *, event_dim: Optional[int] = 0) -> bool:
+    def _is_downstream(self, value, plate, *, event_dim: Optional[int] = 0) -> bool:
         return False
 
     @_is_downstream.register
-    def _is_downstream_number(self, value: numbers.Number) -> bool:
+    def _is_downstream_number(self, value: numbers.Number, plate) -> bool:
         return False
 
     @_is_downstream.register
-    def _is_downstream_dist(self, value: pyro.distributions.Distribution):
-        return any(
-            len(value.batch_shape) >= -plate.dim and value.batch_shape[plate.dim] > 1
-            for plate in self._plates
-        )
+    def _is_downstream_dist(self, value: pyro.distributions.Distribution, plate):
+        return len(value.batch_shape) >= -plate.dim and value.batch_shape[plate.dim] > 1
 
     @_is_downstream.register
-    def _is_downstream_tensor(self, value: torch.Tensor, event_dim=0):
-        return value.shape[: len(value.shape) - event_dim] and any(
+    def _is_downstream_tensor(self, value: torch.Tensor, plate, event_dim=0):
+        return (
             len(value.shape) - event_dim >= -plate.dim
             and value.shape[plate.dim - event_dim] > 1
-            for plate in self._plates
         )
 
-    def _is_plate_active(self) -> bool:
-        return any(plate in pyro.poutine.runtime._PYRO_STACK for plate in self._plates)
+    @staticmethod
+    def _is_plate_active(plate) -> bool:
+        return plate in pyro.poutine.runtime._PYRO_STACK
 
     @staticmethod
     def _expand(value: torch.Tensor, ndim: int) -> torch.Tensor:
@@ -125,23 +122,27 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
     def _pyro_sample(self, msg):
 
-        if (
-            self._plates
-            and not pyro.poutine.util.site_is_subsample(msg)
-            and not self._is_plate_active()
-            and (self._is_downstream(msg["fn"]) or self._is_downstream(msg["value"]))
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+
+        upstream_plates = [
+            plate
+            for plate in self._plates
+            if self._is_downstream(msg["fn"], plate)
+            or self._is_downstream(msg["value"], plate)
+        ]
+        if upstream_plates and not any(
+            self._is_plate_active(plate) for plate in self._plates
         ):
             msg["stop"] = True
             msg["done"] = True
             with contextlib.ExitStack() as plates:
-                for (
-                    plate
-                ) in self._plates:  # TODO only enter plates of upstream interventions
+                for plate in upstream_plates:
                     plates.enter_context(plate)
 
                 batch_ndim = max(
                     len(msg["fn"].batch_shape),
-                    max([-p.dim for p in self._plates], default=0),
+                    max([-p.dim for p in upstream_plates], default=0),
                 )
                 factual_world_index: List[Any] = [slice(None)] * batch_ndim
                 batch_shape = [1] * batch_ndim
