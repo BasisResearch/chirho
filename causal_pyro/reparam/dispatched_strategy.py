@@ -4,6 +4,7 @@ from typing import Callable, Optional, Tuple, Union
 
 import pyro
 import torch
+from pyro.contrib.autoname import scope
 from pyro.infer.reparam.reparam import Reparam, ReparamMessage, ReparamResult
 from pyro.infer.reparam.strategies import Strategy
 
@@ -17,7 +18,7 @@ class CallableReparam(Reparam):
         self._fn = fn
 
     def apply(self, msg: ReparamMessage) -> ReparamResult:
-        with pyro.contrib.autoname.scope(prefix=msg["name"]):
+        with scope(prefix=msg["name"]):
             result = self._fn(
                 msg["fn"],
                 value=msg["value"],
@@ -85,11 +86,17 @@ class DispatchedStrategy(Strategy):
         self, dist: pyro.distributions.MaskedDistribution, value, is_observed
     ):
         base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
-        return base_dist.mask(dist.mask), value, is_observed
+        return base_dist.mask(dist._mask), value, is_observed
 
     def _unpack_indep(self, dist: pyro.distributions.Independent, value, is_observed):
-        base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
-        return base_dist.to_event(dist.reinterpreted_batch_ndims), value, is_observed
+        with pyro.poutine.reparam(config=EventDimStrategy(dist.reinterpreted_batch_ndims)):
+            result = self.reparam(dist.base_dist, value, is_observed)
+        if isinstance(result, tuple):
+            new_dist, value, is_observed = \
+                EventDimStrategy(dist.reinterpreted_batch_ndims).reparam(*result)
+            assert new_dist.event_shape == dist.event_shape
+            return new_dist, value, is_observed
+        return result
 
     def _unpack_transformed(
         self, dist: pyro.distributions.TransformedDistribution, value, is_observed
@@ -99,3 +106,28 @@ class DispatchedStrategy(Strategy):
             base_dist, base_dist.transforms
         )
         return dist, value, is_observed
+
+
+class EventDimStrategy(DispatchedStrategy):
+    def __init__(self, event_dim: int = 0):
+        self.event_dim = event_dim
+        super().__init__()
+
+
+@EventDimStrategy.register(pyro.distributions.Distribution)
+def _eventdim_reparam_default(self, dist, value, is_observed):
+    return dist.to_event(self.event_dim), value, is_observed
+
+
+@EventDimStrategy.register(pyro.distributions.MaskedDistribution)
+def _eventdim_reparam_maskeddelta(self, dist, value, is_observed):
+    if isinstance(dist.base_dist, pyro.distributions.Delta):
+        base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
+        return base_dist.mask(dist._mask), value, is_observed
+    return dist.to_event(self.event_dim), value, is_observed
+
+
+@EventDimStrategy.register(pyro.distributions.Delta)
+def _eventdim_reparam_delta(self, dist, value, is_observed):
+    dist = pyro.distributions.Delta(dist.v, dist.log_density, event_dim=self.event_dim + dist.event_dim)
+    return dist, value, is_observed
