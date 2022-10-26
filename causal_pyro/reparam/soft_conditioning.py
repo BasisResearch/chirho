@@ -1,32 +1,56 @@
-from typing import Literal, Optional, Tuple
+from typing import Optional
 
 import pyro
-import torch
+from pyro.contrib.gp.kernels import Kernel
+from pyro.distributions import Delta, MaskedDistribution
+from pyro.infer.reparam.reparam import Reparam
 
-from .dispatched_strategy import DispatchedStrategy
 
+class KernelABCReparam(Reparam):
+    """
+    Reparametrizer that allows approximate conditioning on a ``pyro.deterministic`` site.
+    """
 
-class AutoSoftConditioning(DispatchedStrategy):
-    def __init__(self, kernel: pyro.contrib.gp.kernels.Kernel, alpha: float = 1.0):
+    def __init__(self, kernel: Kernel):
         self.kernel = kernel
-        self.alpha = alpha
         super().__init__()
 
+    def apply(self, msg):
+        name = msg["name"]
+        fn = msg["fn"]
+        observed_value = msg["value"]
+        is_observed = msg["is_observed"]
 
-@AutoSoftConditioning.register
-def _auto_soft_conditioning_delta(
-    self, fn: pyro.distributions.Delta, value=None, is_observed=False
-) -> Optional[Tuple[pyro.distributions.Delta, torch.Tensor, Literal[True]]]:
+        # TODO fail gracefully if applied to the wrong site
+        # TODO disambiguate names with multi world counterfacutals...
+        assert is_observed
+        assert isinstance(fn, MaskedDistribution)
+        fn = fn.base_dist
+        assert isinstance(fn, Delta)
+        assert fn.event_dim == self.kernel.input_dim
 
-    if not is_observed or value is fn.v:
-        return None
+        computed_value = fn.v
+        pyro.factor(name + "_factor", self.kernel(computed_value, observed_value))
 
-    if fn.v.is_floating_point():
-        approx_log_prob = self.kernel(fn.v, value)
-    elif fn.v.dtype in (torch.bool, torch.int8, torch.int16, torch.int32, torch.int64):
-        approx_log_prob = torch.where(fn.v == value, self.alpha, 1 - self.alpha)
-    else:
-        return None
+        new_fn = Delta(observed_value, event_dim=fn.event_dim).mask(False)
+        return {"fn": new_fn, "value": observed_value, "is_observed": True}
 
-    pyro.factor("approx_log_prob", approx_log_prob)
-    return self.deterministic(value, fn.event_dim), value, True
+
+class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
+    @staticmethod
+    def _is_deterministic(msg):
+        return (
+            msg["type"] == "sample"
+            and msg["is_observed"]
+            and isinstance(msg["fn"], MaskedDistribution)
+            and isinstance(msg["fn"].base_dist, Delta)
+            and msg["infer"].get("is_deteministic", False)
+        )
+
+    def configure(self, msg: dict) -> Optional[Reparam]:
+        if not self._is_deterministic(msg):
+            return None
+
+        return KernelABCReparam(
+            kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim)
+        )
