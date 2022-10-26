@@ -23,7 +23,7 @@ def _auto_soft_conditioning_delta(
 
     if fn.v.is_floating_point():
         approx_log_prob = self.kernel(fn.v, value)
-    elif fn.v.dtype in (torch.int8, torch.int16, torch.int32, torch.int64):
+    elif fn.v.dtype in (torch.bool, torch.int8, torch.int16, torch.int32, torch.int64):
         approx_log_prob = torch.where(fn.v == value, self.alpha, 1 - self.alpha)
     else:
         return None
