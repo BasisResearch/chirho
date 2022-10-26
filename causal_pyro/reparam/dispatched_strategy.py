@@ -4,7 +4,6 @@ from typing import Callable, Optional, Tuple, Union
 
 import pyro
 import torch
-
 from pyro.infer.reparam.reparam import Reparam, ReparamMessage, ReparamResult
 from pyro.infer.reparam.strategies import Strategy
 
@@ -13,6 +12,7 @@ class CallableReparam(Reparam):
     """
     Syntactic sugar for registering a callable as a reparameterizer.
     """
+
     def __init__(self, fn: Callable):
         self._fn = fn
 
@@ -35,6 +35,7 @@ class DispatchedStrategy(Strategy):
     """
     Syntactic sugar for extensible type-directed reparameterization strategies.
     """
+
     def __init_subclass__(cls) -> None:
         @functools.singledispatchmethod
         def _reparam(
@@ -71,7 +72,9 @@ class DispatchedStrategy(Strategy):
         return cls.reparam.register(*args)
 
     @staticmethod
-    def deterministic(value: torch.Tensor, event_dim: int = 0) -> pyro.distributions.MaskedDistribution:
+    def deterministic(
+        value: torch.Tensor, event_dim: int = 0
+    ) -> pyro.distributions.MaskedDistribution:
         return pyro.distributions.Delta(value, event_dim=event_dim).mask(False)
 
     def configure(self, msg: dict) -> Optional[Reparam]:
