@@ -1,8 +1,5 @@
-<<<<<<< HEAD
 from typing import Optional
 
-=======
->>>>>>> 7e08979 (added KernelABCReparam and simple test)
 import pyro
 from pyro.contrib.gp.kernels import Kernel
 from pyro.distributions import Delta, MaskedDistribution
@@ -10,13 +7,10 @@ from pyro.infer.reparam.reparam import Reparam
 
 
 class KernelABCReparam(Reparam):
-<<<<<<< HEAD
     """
     Reparametrizer that allows approximate conditioning on a ``pyro.deterministic`` site.
     """
 
-=======
->>>>>>> 7e08979 (added KernelABCReparam and simple test)
     def __init__(self, kernel: Kernel):
         self.kernel = kernel
         super().__init__()
@@ -40,7 +34,6 @@ class KernelABCReparam(Reparam):
 
         new_fn = Delta(observed_value, event_dim=fn.event_dim).mask(False)
         return {"fn": new_fn, "value": observed_value, "is_observed": True}
-<<<<<<< HEAD
 
 
 class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
@@ -61,5 +54,3 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         return KernelABCReparam(
             kernel=pyro.contrib.gp.kernels.RBF(input_dim=msg["fn"].event_dim)
         )
-=======
->>>>>>> 7e08979 (added KernelABCReparam and simple test)
