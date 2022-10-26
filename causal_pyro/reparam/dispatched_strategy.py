@@ -17,7 +17,7 @@ class CallableReparam(Reparam):
         self._fn = fn
 
     def apply(self, msg: ReparamMessage) -> ReparamResult:
-        with pyro.contrib.autoname.scope(name=msg["name"]):
+        with pyro.contrib.autoname.scope(prefix=msg["name"]):
             result = self._fn(
                 msg["fn"],
                 value=msg["value"],
