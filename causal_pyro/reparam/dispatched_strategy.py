@@ -125,6 +125,13 @@ def _eventdim_reparam_default(
 
 
 @EventDimStrategy.register
+def _eventdim_reparam_indep(
+    self, dist: pyro.distributions.Independent, value, is_observed
+):
+    return dist.to_event(self.event_dim), value, is_observed
+
+
+@EventDimStrategy.register
 def _eventdim_reparam_maskeddelta(
     self, dist: pyro.distributions.MaskedDistribution, value, is_observed
 ):

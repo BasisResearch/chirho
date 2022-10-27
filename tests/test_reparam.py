@@ -17,13 +17,13 @@ def _default_to_none(self, fn: dist.Distribution, value, is_observed):
     return None
 
 
-# @DummyStrategy.register
-# def _reparam_normal(self, fn: dist.Normal, value, is_observed):
-#     if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
-#         return None
-#     noise = pyro.sample("noise", dist.Normal(0, 1))
-#     computed_value = fn.loc + fn.scale * noise
-#     return self.deterministic(computed_value, 0), value, is_observed
+@DummyStrategy.register
+def _reparam_normal(self, fn: dist.Normal, value, is_observed):
+    if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
+        return None
+    noise = pyro.sample("noise", dist.Normal(0, 1))
+    computed_value = fn.loc + fn.scale * noise
+    return self.deterministic(computed_value, 0), value, is_observed
 
 
 @DummyStrategy.register
@@ -40,9 +40,6 @@ def _reparam_transform(self, fn: dist.TransformedDistribution, value, is_observe
 
     base_dist = fn.base_dist.to_event(base_event_dim)
 
-    import pdb
-
-    pdb.set_trace()
     value_base = pyro.sample("base", base_dist, obs=value_base)
 
     # Differentiably transform.
@@ -55,8 +52,8 @@ def _reparam_transform(self, fn: dist.TransformedDistribution, value, is_observe
 
 
 @pytest.mark.parametrize("batch_shape", [(), (2,), (2, 3)], ids=str)
-@pytest.mark.parametrize("inner_event_shape", [(5,), (4, 5)], ids=str)
-@pytest.mark.parametrize("outer_event_shape", [(4,), (4, 6)], ids=str)
+@pytest.mark.parametrize("inner_event_shape", [(5,), (4, 5), ()], ids=str)
+@pytest.mark.parametrize("outer_event_shape", [(4,), (4, 6), ()], ids=str)
 @pytest.mark.parametrize("strategy", [DummyStrategy])
 def test_log_normal(batch_shape, outer_event_shape, inner_event_shape, strategy):
     num_particles = 7
