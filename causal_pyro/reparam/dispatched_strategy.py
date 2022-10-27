@@ -90,8 +90,9 @@ class DispatchedStrategy(Strategy):
 
     def _unpack_indep(self, dist: pyro.distributions.Independent, value, is_observed):
         with pyro.poutine.reparam(
-            config=EventDimStrategy(dist.reinterpreted_batch_ndims)
+            config=EventDimStrategy(dist.reinterpreted_batch_ndims, dist.event_shape)
         ):
+            import pdb; pdb.set_trace()
             result = self.reparam(dist.base_dist, value, is_observed)
         if isinstance(result, tuple):
             new_dist, value, is_observed = result
@@ -112,8 +113,9 @@ class DispatchedStrategy(Strategy):
 
 
 class EventDimStrategy(DispatchedStrategy):
-    def __init__(self, event_dim: int = 0):
-        self.event_dim = event_dim
+    def __init__(self, indep_dim: int = 0, event_shape: tuple = ()):
+        self.indep_dim = indep_dim
+        self.event_shape = event_shape
         super().__init__()
 
 
@@ -121,14 +123,14 @@ class EventDimStrategy(DispatchedStrategy):
 def _eventdim_reparam_default(
     self, dist: pyro.distributions.Distribution, value, is_observed
 ):
-    return dist.to_event(self.event_dim), value, is_observed
+    return dist.to_event(self.indep_dim), value, is_observed
 
 
 @EventDimStrategy.register
 def _eventdim_reparam_indep(
     self, dist: pyro.distributions.Independent, value, is_observed
 ):
-    return dist.to_event(self.event_dim), value, is_observed
+    return dist.to_event(self.indep_dim), value, is_observed
 
 
 @EventDimStrategy.register
@@ -138,12 +140,12 @@ def _eventdim_reparam_maskeddelta(
     if isinstance(dist.base_dist, pyro.distributions.Delta):
         base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
         return base_dist.mask(dist._mask), value, is_observed
-    return dist.to_event(self.event_dim), value, is_observed
+    return dist.to_event(self.indep_dim), value, is_observed
 
 
 @EventDimStrategy.register
 def _eventdim_reparam_delta(self, dist: pyro.distributions.Delta, value, is_observed):
     dist = pyro.distributions.Delta(
-        dist.v, dist.log_density, event_dim=self.event_dim + dist.event_dim
+        dist.v, dist.log_density, event_dim=self.indep_dim + dist.event_dim
     )
     return dist, value, is_observed

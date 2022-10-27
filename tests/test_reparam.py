@@ -21,7 +21,7 @@ def _default_to_none(self, fn: dist.Distribution, value, is_observed):
 def _reparam_normal(self, fn: dist.Normal, value, is_observed):
     if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
         return None
-    noise = pyro.sample("noise", dist.Normal(0, 1))
+    noise = pyro.sample("noise", dist.Normal(torch.zeros_like(fn.loc), torch.ones_like(fn.scale)))
     computed_value = fn.loc + fn.scale * noise
     return self.deterministic(computed_value, 0), value, is_observed
 
@@ -63,7 +63,7 @@ def test_log_normal(batch_shape, outer_event_shape, inner_event_shape, strategy)
     scale = torch.empty(shape).uniform_(0.5, 1.5)
 
     def model():
-        inner_fn = dist.Normal(torch.zeros_like(loc), torch.ones_like(scale))
+        inner_fn = dist.Normal(torch.ones_like(loc), torch.ones_like(scale))
         inner_fn = inner_fn.to_event(len(inner_event_shape))
         outer_fn = dist.TransformedDistribution(
             inner_fn,
@@ -92,6 +92,10 @@ def test_log_normal(batch_shape, outer_event_shape, inner_event_shape, strategy)
         actual_tr.trace.nodes["x"]["fn"],
         (dist.Delta, dist.MaskedDistribution, dist.Independent),
     )
+
+    noise_site = actual_tr.trace.nodes["x/base/noise"]
+    assert noise_site["fn"].batch_shape == (num_particles,) + batch_shape
+    assert noise_site["fn"].event_shape == event_shape
 
     assert actual_value.shape == expected_value.shape
     assert (
