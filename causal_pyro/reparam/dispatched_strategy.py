@@ -94,9 +94,9 @@ class DispatchedStrategy(Strategy):
         ):
             result = self.reparam(dist.base_dist, value, is_observed)
         if isinstance(result, tuple):
-            new_dist, value, is_observed = EventDimStrategy(
-                dist.reinterpreted_batch_ndims
-            ).reparam(*result)
+            new_dist, value, is_observed = result
+            event_diff = len(dist.event_shape) - len(new_dist.event_shape)
+            new_dist = new_dist.to_event(max(event_diff, 0))
             assert new_dist.event_shape == dist.event_shape
             return new_dist, value, is_observed
         return result

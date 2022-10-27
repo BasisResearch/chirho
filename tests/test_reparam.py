@@ -8,21 +8,6 @@ from pyro.distributions.transforms import AffineTransform, ExpTransform
 from causal_pyro.reparam.dispatched_strategy import DispatchedStrategy
 
 
-# Test helper to extract a few log central moments from samples.
-def get_moments(x):
-    assert (x > 0).all()
-    x = x.log()
-    m1 = x.mean(0)
-    x = x - m1
-    xx = x * x
-    xxx = x * xx
-    xxxx = xx * xx
-    m2 = xx.mean(0)
-    m3 = xxx.mean(0) / m2**1.5
-    m4 = xxxx.mean(0) / m2**2
-    return torch.stack([m1, m2, m3, m4])
-
-
 class DummyStrategy(DispatchedStrategy):
     pass
 
@@ -32,13 +17,13 @@ def _default_to_none(self, fn: dist.Distribution, value, is_observed):
     return None
 
 
-@DummyStrategy.register
-def _reparam_normal(self, fn: dist.Normal, value, is_observed):
-    if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
-        return None
-    noise = pyro.sample("noise", dist.Normal(0, 1))
-    computed_value = fn.loc + fn.scale * noise
-    return self.deterministic(computed_value, 0), value, is_observed
+# @DummyStrategy.register
+# def _reparam_normal(self, fn: dist.Normal, value, is_observed):
+#     if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
+#         return None
+#     noise = pyro.sample("noise", dist.Normal(0, 1))
+#     computed_value = fn.loc + fn.scale * noise
+#     return self.deterministic(computed_value, 0), value, is_observed
 
 
 @DummyStrategy.register
@@ -52,9 +37,13 @@ def _reparam_transform(self, fn: dist.TransformedDistribution, value, is_observe
     base_event_dim = 0
     for t in reversed(fn.transforms):
         base_event_dim += t.domain.event_dim - t.codomain.event_dim
-    value_base = pyro.sample(
-        "base", fn.base_dist.to_event(base_event_dim), obs=value_base
-    )
+
+    base_dist = fn.base_dist.to_event(base_event_dim)
+
+    import pdb
+
+    pdb.set_trace()
+    value_base = pyro.sample("base", base_dist, obs=value_base)
 
     # Differentiably transform.
     if value is None:
@@ -65,36 +54,58 @@ def _reparam_transform(self, fn: dist.TransformedDistribution, value, is_observe
     return self.deterministic(value, fn.event_dim), value, is_observed
 
 
-@pytest.mark.parametrize("batch_shape", [(), (4,), (2, 3)], ids=str)
-@pytest.mark.parametrize("event_shape", [(), (5,)], ids=str)
-@pytest.mark.parametrize("strategy", [DummyStrategy])  # TODO
-def test_log_normal(batch_shape, event_shape, strategy):
+@pytest.mark.parametrize("batch_shape", [(), (2,), (2, 3)], ids=str)
+@pytest.mark.parametrize("inner_event_shape", [(5,), (4, 5)], ids=str)
+@pytest.mark.parametrize("outer_event_shape", [(4,), (4, 6)], ids=str)
+@pytest.mark.parametrize("strategy", [DummyStrategy])
+def test_log_normal(batch_shape, outer_event_shape, inner_event_shape, strategy):
+    num_particles = 7
+    event_shape = outer_event_shape + inner_event_shape
     shape = batch_shape + event_shape
     loc = torch.empty(shape).uniform_(-1, 1)
     scale = torch.empty(shape).uniform_(0.5, 1.5)
 
     def model():
-        fn = dist.TransformedDistribution(
-            dist.Normal(torch.zeros_like(loc), torch.ones_like(scale)),
-            [AffineTransform(loc, scale), ExpTransform()],
+        inner_fn = dist.Normal(torch.zeros_like(loc), torch.ones_like(scale))
+        inner_fn = inner_fn.to_event(len(inner_event_shape))
+        outer_fn = dist.TransformedDistribution(
+            inner_fn,
+            [
+                AffineTransform(loc, scale),  # , event_dim=len(inner_event_shape)),
+                ExpTransform(),
+            ],
         )
-        if event_shape:
-            fn = fn.to_event(len(event_shape))
+        outer_fn = outer_fn.to_event(len(outer_event_shape))
         with pyro.plate_stack("plates", batch_shape):
             pyro.sample("z", dist.Normal(1, 1))
-            with pyro.plate("particles", 300000):
-                return pyro.sample("x", fn)
+            with pyro.plate("particles", num_particles):
+                return pyro.sample("x", outer_fn)
 
-    with poutine.trace() as tr:
-        value = model()
+    with poutine.trace() as expected_tr:
+        expected_value = model()
     assert isinstance(
-        tr.trace.nodes["x"]["fn"], (dist.TransformedDistribution, dist.Independent)
+        expected_tr.trace.nodes["x"]["fn"],
+        (dist.TransformedDistribution, dist.Independent),
     )
-    expected_moments = get_moments(value)
 
     with poutine.reparam(config=strategy()):
-        with poutine.trace() as tr:
-            value = model()
-    assert isinstance(tr.trace.nodes["x"]["fn"], (dist.Delta, dist.MaskedDistribution))
-    actual_moments = get_moments(value)
-    assert torch.allclose(actual_moments, expected_moments, atol=0.05)
+        with poutine.trace() as actual_tr:
+            actual_value = model()
+    assert isinstance(
+        actual_tr.trace.nodes["x"]["fn"],
+        (dist.Delta, dist.MaskedDistribution, dist.Independent),
+    )
+
+    assert actual_value.shape == expected_value.shape
+    assert (
+        actual_tr.trace.nodes["x"]["value"].shape
+        == expected_tr.trace.nodes["x"]["value"].shape
+    )
+    assert (
+        actual_tr.trace.nodes["x"]["fn"].batch_shape
+        == expected_tr.trace.nodes["x"]["fn"].batch_shape
+    )
+    assert (
+        actual_tr.trace.nodes["x"]["fn"].event_shape
+        == expected_tr.trace.nodes["x"]["fn"].event_shape
+    )
