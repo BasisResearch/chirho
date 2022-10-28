@@ -123,6 +123,9 @@ class EventDimStrategy(DispatchedStrategy):
 def _eventdim_reparam_default(
     self, dist: pyro.distributions.Distribution, value, is_observed
 ):
+    # how to make use of self.indep_dim and self.event_shape?
+    # event_shape is global - kind of corresponds to the DimAllocator
+    # indep_dim is local - corresponds to plate(s)
     return dist.to_event(self.indep_dim), value, is_observed
 
 
