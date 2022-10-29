@@ -129,14 +129,11 @@ class EventDimStrategy(DispatchedStrategy):
 def _eventdim_reparam_default(
     self, dist: pyro.distributions.Distribution, value, is_observed
 ):
-    event_ndim = self._get_event_ndim(dist)
-    new_dist = dist.to_event(event_ndim)
-    return new_dist, value, is_observed
+    return dist.to_event(self._get_event_ndim(dist)), value, is_observed
 
 
 @EventDimStrategy.register
 def _eventdim_reparam_delta(self, dist: pyro.distributions.Delta, value, is_observed):
-    dist = pyro.distributions.Delta(
-        dist.v, dist.log_density, event_dim=self._get_event_ndim(dist) + dist.event_dim
-    )
+    event_dim = self._get_event_ndim(dist) + dist.event_dim
+    dist = pyro.distributions.Delta(dist.v, dist.log_density, event_dim=event_dim)
     return dist, value, is_observed
