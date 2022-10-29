@@ -21,7 +21,9 @@ def _default_to_none(self, fn: dist.Distribution, value, is_observed):
 def _reparam_normal(self, fn: dist.Normal, value, is_observed):
     if torch.all(fn.loc == 0) and torch.all(fn.scale == 1):
         return None
-    noise = pyro.sample("noise", dist.Normal(torch.zeros_like(fn.loc), torch.ones_like(fn.scale)))
+    noise = pyro.sample(
+        "noise", dist.Normal(torch.zeros_like(fn.loc), torch.ones_like(fn.scale))
+    )
     computed_value = fn.loc + fn.scale * noise
     return self.deterministic(computed_value, 0), value, is_observed
 

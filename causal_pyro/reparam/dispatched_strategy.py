@@ -89,16 +89,11 @@ class DispatchedStrategy(Strategy):
         return base_dist.mask(dist._mask), value, is_observed
 
     def _unpack_indep(self, dist: pyro.distributions.Independent, value, is_observed):
-        with pyro.poutine.reparam(
-            config=EventDimStrategy(dist.reinterpreted_batch_ndims, dist.event_shape)
-        ):
-            import pdb; pdb.set_trace()
+        strategy = EventDimStrategy(dist.reinterpreted_batch_ndims, dist.event_shape)
+        with pyro.poutine.reparam(config=strategy):
             result = self.reparam(dist.base_dist, value, is_observed)
         if isinstance(result, tuple):
-            new_dist, value, is_observed = result
-            event_diff = len(dist.event_shape) - len(new_dist.event_shape)
-            new_dist = new_dist.to_event(max(event_diff, 0))
-            assert new_dist.event_shape == dist.event_shape
+            new_dist, value, is_observed = strategy.reparam(*result)
             return new_dist, value, is_observed
         return result
 
@@ -118,22 +113,34 @@ class EventDimStrategy(DispatchedStrategy):
         self.event_shape = event_shape
         super().__init__()
 
+    def _get_event_ndim(self, dist: pyro.distributions.Distribution) -> int:
+        # how to make use of self.indep_dim and self.event_shape?
+        # event_shape is global - kind of corresponds to the DimAllocator
+        # indep_dim is local - corresponds to plate(s)
+        # algorithm: at a new distribution, check if its event shape is lower rank
+        # than the current event shape. If so, reinterpret enough dims as independent
+        # to make the event shape match (or at least broadcast).
+        event_diff = len(self.event_shape) - len(dist.event_shape)
+        assert event_diff >= 0, "event shape should not decrease"
+        return min(event_diff, self.indep_dim)
+
 
 @EventDimStrategy.register
 def _eventdim_reparam_default(
     self, dist: pyro.distributions.Distribution, value, is_observed
 ):
-    # how to make use of self.indep_dim and self.event_shape?
-    # event_shape is global - kind of corresponds to the DimAllocator
-    # indep_dim is local - corresponds to plate(s)
-    return dist.to_event(self.indep_dim), value, is_observed
+    event_ndim = self._get_event_ndim(dist)
+    new_dist = dist.to_event(event_ndim)
+    return new_dist, value, is_observed
 
 
 @EventDimStrategy.register
 def _eventdim_reparam_indep(
     self, dist: pyro.distributions.Independent, value, is_observed
 ):
-    return dist.to_event(self.indep_dim), value, is_observed
+    event_ndim = self._get_event_ndim(dist)
+    new_dist = dist.to_event(event_ndim)
+    return new_dist, value, is_observed
 
 
 @EventDimStrategy.register
@@ -143,12 +150,12 @@ def _eventdim_reparam_maskeddelta(
     if isinstance(dist.base_dist, pyro.distributions.Delta):
         base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
         return base_dist.mask(dist._mask), value, is_observed
-    return dist.to_event(self.indep_dim), value, is_observed
+    return dist.to_event(self._get_event_ndim(dist)), value, is_observed
 
 
 @EventDimStrategy.register
 def _eventdim_reparam_delta(self, dist: pyro.distributions.Delta, value, is_observed):
     dist = pyro.distributions.Delta(
-        dist.v, dist.log_density, event_dim=self.indep_dim + dist.event_dim
+        dist.v, dist.log_density, event_dim=self._get_event_ndim(dist) + dist.event_dim
     )
     return dist, value, is_observed
