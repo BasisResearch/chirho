@@ -85,7 +85,10 @@ class DispatchedStrategy(Strategy):
     def _unpack_masked(
         self, dist: pyro.distributions.MaskedDistribution, value, is_observed
     ):
-        base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
+        result = self.reparam(dist.base_dist, value, is_observed)
+        if result is None:
+            return None
+        base_dist, value, is_observed = result
         return base_dist.mask(dist._mask), value, is_observed
 
     def _unpack_indep(self, dist: pyro.distributions.Independent, value, is_observed):
@@ -99,7 +102,10 @@ class DispatchedStrategy(Strategy):
     def _unpack_transformed(
         self, dist: pyro.distributions.TransformedDistribution, value, is_observed
     ):
-        base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
+        result = self.reparam(dist.base_dist, value, is_observed)
+        if result is None:
+            return None
+        base_dist, value, is_observed = result
         dist = pyro.distributions.TransformedDistribution(
             base_dist, base_dist.transforms
         )
