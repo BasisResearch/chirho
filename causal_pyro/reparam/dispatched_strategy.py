@@ -93,8 +93,7 @@ class DispatchedStrategy(Strategy):
         with pyro.poutine.reparam(config=strategy):
             result = self.reparam(dist.base_dist, value, is_observed)
         if isinstance(result, tuple):
-            new_dist, value, is_observed = strategy.reparam(*result)
-            return new_dist, value, is_observed
+            result = strategy.reparam(*result)
         return result
 
     def _unpack_transformed(
@@ -125,32 +124,14 @@ class EventDimStrategy(DispatchedStrategy):
         return min(event_diff, self.indep_dim)
 
 
-@EventDimStrategy.register
+@EventDimStrategy.register(pyro.distributions.Independent)
+@EventDimStrategy.register(pyro.distributions.Distribution)
 def _eventdim_reparam_default(
     self, dist: pyro.distributions.Distribution, value, is_observed
 ):
     event_ndim = self._get_event_ndim(dist)
     new_dist = dist.to_event(event_ndim)
     return new_dist, value, is_observed
-
-
-@EventDimStrategy.register
-def _eventdim_reparam_indep(
-    self, dist: pyro.distributions.Independent, value, is_observed
-):
-    event_ndim = self._get_event_ndim(dist)
-    new_dist = dist.to_event(event_ndim)
-    return new_dist, value, is_observed
-
-
-@EventDimStrategy.register
-def _eventdim_reparam_maskeddelta(
-    self, dist: pyro.distributions.MaskedDistribution, value, is_observed
-):
-    if isinstance(dist.base_dist, pyro.distributions.Delta):
-        base_dist, value, is_observed = self.reparam(dist.base_dist, value, is_observed)
-        return base_dist.mask(dist._mask), value, is_observed
-    return dist.to_event(self._get_event_ndim(dist)), value, is_observed
 
 
 @EventDimStrategy.register
