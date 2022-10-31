@@ -86,8 +86,8 @@ class DispatchedStrategy(Strategy):
         self, dist: pyro.distributions.MaskedDistribution, value, is_observed
     ):
         result = self.reparam(dist.base_dist, value, is_observed)
-        if result is None:
-            return None
+        if not isinstance(result, tuple):
+            return result
         base_dist, value, is_observed = result
         return base_dist.mask(dist._mask), value, is_observed
 
@@ -103,8 +103,8 @@ class DispatchedStrategy(Strategy):
         self, dist: pyro.distributions.TransformedDistribution, value, is_observed
     ):
         result = self.reparam(dist.base_dist, value, is_observed)
-        if result is None:
-            return None
+        if not isinstance(result, tuple):
+            return result
         base_dist, value, is_observed = result
         dist = pyro.distributions.TransformedDistribution(
             base_dist, base_dist.transforms
