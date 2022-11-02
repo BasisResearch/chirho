@@ -18,9 +18,9 @@ class Exogenize(DispatchedStrategy):
 @Exogenize.register(pyro.distributions.Normal)
 @block_messengers(is_intervention_plate)
 def _exogenize_normal(
-    self, fn: pyro.distributions.Normal, value=None, is_observed=False, name=""
+    self, fn: pyro.distributions.Normal, value=None, is_observed=False
 ):
-    noise = pyro.sample(name + "_noise", pyro.distributions.Normal(0, 1))
+    noise = pyro.sample("noise", pyro.distributions.Normal(0, 1))
     computed_value = fn.loc + fn.scale * noise
     return self.deterministic(computed_value, 0), value, is_observed
 
@@ -32,10 +32,9 @@ def _exogenize_mvn(
     fn: pyro.distributions.MultivariateNormal,
     value=None,
     is_observed=False,
-    name="",
 ):
     noise = pyro.sample(
-        name + "_noise",
+        "noise",
         pyro.distributions.Normal(0, 1).expand(fn.event_shape).to_event(1),
     )
     computed_value = fn.loc + fn.scale_tril @ noise
@@ -45,10 +44,10 @@ def _exogenize_mvn(
 @Exogenize.register(pyro.distributions.Categorical)
 @block_messengers(is_intervention_plate)
 def _exogenize_logits(
-    self, fn: pyro.distributions.Categorical, value=None, is_observed=False, name=""
+    self, fn: pyro.distributions.Categorical, value=None, is_observed=False
 ):
     noise = pyro.sample(
-        name + "_noise",
+        "noise",
         pyro.distributions.Uniform(0, 1).expand(fn.logits.shape[-1:]).to_event(1),
     )
     logits = fn.logits - torch.log(-torch.log(noise))
@@ -63,11 +62,10 @@ def _exogenize_transformed(
     fn: pyro.distributions.TransformedDistribution,
     value=None,
     is_observed=False,
-    name="",
 ):
     # TODO this is not quite right for non-exogenous base_dist
     #   (cant just block intervention plates above if not exogenous)
-    noise = pyro.sample(name + "_noise", fn.base_dist)
+    noise = pyro.sample("noise", fn.base_dist)
     computed_value = noise
     for t in fn.transforms:
         computed_value = t(computed_value)
