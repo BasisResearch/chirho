@@ -1,0 +1,2 @@
+Generated data for:
+ {'data_dir': 'original2', 'out_dir': 'out', 'digit_class': None, 'scale': 0.5, 'invert': False}
