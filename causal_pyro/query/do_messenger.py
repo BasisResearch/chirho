@@ -12,7 +12,7 @@ class DoMessenger(pyro.poutine.messenger.Messenger):
 
     def __init__(self, actions: Dict[str, Intervention]):
         self.actions = actions
-        super().__init__()
+        super().__init__()  
 
     def _pyro_post_sample(self, msg):
         if msg["name"] in self.actions:

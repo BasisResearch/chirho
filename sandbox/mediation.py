@@ -13,6 +13,66 @@ from causal_pyro.counterfactual.handlers import (Factual,
                                                  MultiWorldCounterfactual,
                                                  TwinWorldCounterfactual)
 from causal_pyro.query.do_messenger import do
+from pyro.infer import SVI, Trace_ELBO
+from pyro.infer.autoguide import AutoDiagonalNormal
+
+## Queries 
+def direct_effect(model, X, x, x_prime, Z, dim = -1) -> Callable:
+    "# natural direct effect: DE{x,x'}(Y) = E[ Y(X=x', Z(X=x)) - E[Y(X=x)] ]"
+    return do(actions={X: x})(
+        do(actions={X: x_prime})(
+            do(actions={Z: lambda Z: Z})(
+                MultiWorldCounterfactual(-1)(
+                  model))))
+
+def direct_effect_manual(model, X, x, x_prime, Z, dim = -1) -> Callable:
+    "# natural direct effect: DE{x,x'}(Y) = E[ Y(X=x', Z(X=x)) - E[Y(X=x)] ]"
+    # Sample value of intermediate variable Z in model from trace
+    def odd_model():
+      # t = pyro.poutine.trace(health_model).get_trace()
+
+      # Value of z in intervention mode where X = x_prime
+      m1 = do(actions={X: x_prime})(model)
+      t = pyro.poutine.trace(m1).get_trace()
+      z_ = t.nodes[Z]["value"]
+      print("z_: ", z_) 
+      return do(actions={X: x})(
+        do(actions={X: x_prime})(
+            do(actions={Z: z_})(
+                MultiWorldCounterfactual(-1)(
+                  model))))()
+    return odd_model
+
+def average_natural_direct_effect(model, X, x, x_prime, Z, dim = -1, nsamples = 1000):
+  # Let's draw nsamples using a plate
+  def draw_samples(model, nsamples):
+    with pyro.plate("data", nsamples, dim = -2) as ind:
+      return model()
+  
+
+## Toy Example 
+def health_model():
+  taken_med = pyro.sample("taken_med", dist.Bernoulli(0.5))
+  print("taken_med: ", taken_med)
+  nsleep_mean = torch.where(taken_med == 1, torch.tensor(8.), torch.tensor(6.))
+  nsleep = pyro.sample("nsleep", dist.Normal(nsleep_mean, 1))
+  a = 3 * (nsleep - 2)
+
+  a2 = torch.clamp(a, 0.1, 10)
+  rested = pyro.sample("rested", dist.Beta(a2, 9))
+  med_effective = pyro.sample("med_effective", dist.Bernoulli(rested))
+  beta_a = torch.where(taken_med == 1, torch.tensor(8.), torch.tensor(2.))
+  beta_b = torch.where(taken_med == 1, torch.tensor(2.), torch.tensor(8.))
+  health = pyro.sample("health", dist.Beta(beta_a, beta_b))
+
+  well_being = pyro.deterministic("well_being", health * med_effective, event_dim=0)
+  return well_being
+
+def test_health_model():
+  de_toy = direct_effect_manual(health_model, "taken_med", torch.tensor(1), torch.tensor(0), "nsleep")
+  return de_toy
+
+test_health_model()()
 
 # The csv data is stored at http://data.mxnet.io/data/personality.csv
 # Let's load the data from the url
@@ -137,13 +197,11 @@ def conditioned_model():
 
 # Inference
 def train(cm, *args):
-  from pyro.infer import SVI, Trace_ELBO
-  from pyro.infer.autoguide import AutoDiagonalNormal
   guide = pyro.infer.autoguide.AutoDelta(cm)
   # guide = pyro.infer.autoguide.AutoDiagonalNormal(cm)
   adam = pyro.optim.Adam({"lr": 0.03})
   svi = SVI(cm, guide, adam, loss=Trace_ELBO())
-  num_iterations = 10000
+  num_iterations = 100
   for j in range(num_iterations):
     # calculate the loss and take a gradient step
     loss = svi.step(*args)
@@ -162,18 +220,25 @@ cm = pyro.condition(m, data={"fam_int": p_t(ddata["fam_int"]), \
 result = train(cm)
 
 
-# cm2 = CausalModel2()
-# result = train(cm2, p_t(ddata["fam_int"]), p_t(ddata["dev_peer"]), p_t(ddata["sub_exp"]), p_t(ddata["sub_disorder"]))
+def test():
+  return direct_effect(m, "fam_int", torch.zeros(1), torch.zeros(1), "dev_peer")
 
-
-# num_iterations = 1000
-# pyro.clear_param_store()
-# svi.step()
-# for j in range(num_iterations):
-#     # calculate the loss and take a gradient step
-#     loss = svi.step(x_data, y_data)
-#     if j % 100 == 0:
-#         print("[iteration %04d] loss: %.4f" % (j + 1, loss / len(data)))
-
+test()()
 
 # Ok now for the mediation
+
+# Very simple test of mutliworld counterfactual
+def simple_test():
+  def model():
+    x = pyro.sample("x", dist.Normal(0., 1.))
+    y = pyro.sample("y", dist.Normal(x, 1.))
+    return x + y
+  
+  return do(actions={"x": torch.tensor([50.])})(
+           do(actions={"y": torch.tensor([99.])})(
+              MultiWorldCounterfactual(-2)(model)))
+
+  def counterfactual():
+    return do(actions={"x": lambda x: x})(model)
+
+  return MultiWorldCounterfactual(-3)(counterfactual)
