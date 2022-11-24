@@ -150,13 +150,25 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     factual_world_index[plate.dim] = 0
                     batch_shape[plate.dim] = plate.size
 
-                if msg["is_observed"]:
-                    obs_mask = torch.full(
-                        batch_shape, False, dtype=torch.bool, device=msg["value"].device
-                    )
-                    obs_mask[tuple(factual_world_index)] = True
+                # some gross code to infer the device of the obs_mask tensor
+                #   because distributions are hard to introspect
+                if isinstance(msg["value"], torch.Tensor):
+                    mask_device = msg["value"].device
                 else:
-                    obs_mask = False  # fastpath in pyro.sample
+                    fn_ = msg["fn"]
+                    while hasattr(fn_, "base_dist"):
+                        fn_ = fn_.base_dist
+                    mask_device = None
+                    for param_name in fn_.arg_constraints.keys():
+                        p = getattr(fn_, param_name)
+                        if isinstance(p, torch.Tensor):
+                            mask_device = p.device
+                            break
+
+                obs_mask = torch.full(
+                    batch_shape, False, dtype=torch.bool, device=mask_device
+                )
+                obs_mask[tuple(factual_world_index)] = msg["is_observed"]
 
                 with pyro.poutine.block(hide=[msg["name"]]):
                     new_value = pyro.sample(
