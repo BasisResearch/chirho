@@ -1,25 +1,9 @@
 from typing import Optional, List, Union
 
-import torch
-
 import pyro
 from pyro.contrib.gp.kernels import Kernel
 from pyro.distributions import Delta, MaskedDistribution, TransformedDistribution, transforms
 from pyro.infer.reparam.reparam import Reparam
-
-
-class ConditionalComposeTransformModule(transforms.ConditionalTransformModule):
-    def __init__(self, transforms: List[Union[transforms.TransformModule, transforms.ConditionalTransformModule]]):
-        self.transforms = [
-            transforms.ConstantConditionalTransform(t)
-            if not isinstance(t, transforms.ConditionalTransform)
-            else t
-            for t in transforms
-        ]
-        super().__init__(event_dim=transforms[0].event_dim)
-
-    def condition(self, context: torch.Tensor):
-        return transforms.ComposeTransformModule([t.condition(context) for t in self.transforms])
 
 
 class TransformInferReparam(Reparam):
