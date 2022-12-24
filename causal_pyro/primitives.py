@@ -71,10 +71,7 @@ def intervene(
     """
     Intervene on a value in a probabilistic program.
     """
-    print("Type of obs: ", type(obs))
-    print("Type of act: ", type(act))
     if callable(act) and not isinstance(act, pyro.distributions.Distribution):
-        print("WARNING: intervention is a callable but not a Distribution")
         return act(obs)
     elif act is None:
         return obs
