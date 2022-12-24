@@ -78,7 +78,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         # torch.cat requires that all tensors be the same size (except in the concatenating dimension).
         # this tiles the (scalar) `act` to be the same dimension as `obs` before expanding dimensions
         # for concatenation.
-        act = torch.as_tensor(act)
+        act = torch.as_tensor(act, device=obs.device, dtype=obs.dtype)
         act = act.expand(torch.broadcast_shapes(act.shape, obs.shape))
         act = self._expand(act, event_dim - new_dim)
         obs = self._expand(obs, event_dim - new_dim)
@@ -150,8 +150,25 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                     factual_world_index[plate.dim] = 0
                     batch_shape[plate.dim] = plate.size
 
-                obs_mask = torch.full(batch_shape, False, dtype=torch.bool)
-                obs_mask[tuple(factual_world_index)] = True
+                # some gross code to infer the device of the obs_mask tensor
+                #   because distributions are hard to introspect
+                if isinstance(msg["value"], torch.Tensor):
+                    mask_device = msg["value"].device
+                else:
+                    fn_ = msg["fn"]
+                    while hasattr(fn_, "base_dist"):
+                        fn_ = fn_.base_dist
+                    mask_device = None
+                    for param_name in fn_.arg_constraints.keys():
+                        p = getattr(fn_, param_name)
+                        if isinstance(p, torch.Tensor):
+                            mask_device = p.device
+                            break
+
+                obs_mask = torch.full(
+                    batch_shape, False, dtype=torch.bool, device=mask_device
+                )
+                obs_mask[tuple(factual_world_index)] = msg["is_observed"]
 
                 with pyro.poutine.block(hide=[msg["name"]]):
                     new_value = pyro.sample(
