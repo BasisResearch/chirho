@@ -32,6 +32,9 @@ provides a substrate for writing causal assumptions as probabilistic programs,
 and for writing causal questions in terms of program transformations. To understand this in a bit more detail,
 see the following in-depth tutorials describes Causal Pyro's underlying machinery.
 
+Note: These tutorials assume some familiarity with Pyro and probabilistic programming. 
+For introductory Pyro tutorials please see "Additional background reading material" below.
+
 .. toctree::
    :maxdepth: 2
    :caption: Tutorials
