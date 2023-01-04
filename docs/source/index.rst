@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 Causal Probabilistic Programming with Causal Pyro
-==========================================
+=================================================
 
 Welcome! On this page you'll find a collection of tutorials and examples 
 on Causal Pyro, a causal extension to the Pyro probabilistic programming language. 
