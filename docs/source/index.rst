@@ -39,9 +39,9 @@ For introductory Pyro tutorials please see "Additional background reading materi
    :maxdepth: 2
    :caption: Tutorials
 
-   introduction_i
-   introduction_ii
-   surrogates
+   tutorial_i
+   tutorial_ii
+   tutorial_iii
 
 Example applications
 --------------------
