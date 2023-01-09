@@ -2,7 +2,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-# Adapted from https://github.com/BasisResearch/causal_pyro/blob/master/docs/source/conf.py
+# Adapted from https://github.com/pyro-ppl/numpyro/blob/master/docs/source/conf.py
 
 
 import glob
