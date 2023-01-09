@@ -2,7 +2,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-# Adapted from https://github.com/pyro-ppl/causal_pyro/blob/master/docs/source/conf.py
+# Adapted from https://github.com/BasisResearch/causal_pyro/blob/master/docs/source/conf.py
 
 
 import glob
@@ -140,14 +140,14 @@ add_module_names = False
 # This is processed by Jinja2 and inserted before each notebook
 nbsphinx_prolog = r"""
 {% set docname = 'notebooks/source/' + env.doc2path(env.docname, base=None).split('/')[-1] %}
-:github_url: https://github.com/pyro-ppl/causal_pyro/blob/master/{{ docname }}
+:github_url: https://github.com/BasisResearch/causal_pyro/blob/master/{{ docname }}
 
 .. raw:: html
 
     <div class="admonition note">
       Interactive online version:
       <span style="white-space: nowrap;">
-        <a href="https://colab.research.google.com/github/pyro-ppl/causal_pyro/blob/{{ env.config.html_context.github_version }}/{{ docname }}">
+        <a href="https://colab.research.google.com/github/BasisResearch/causal_pyro/blob/{{ env.config.html_context.github_version }}/{{ docname }}">
           <img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg"
             style="vertical-align:text-bottom">
         </a>
