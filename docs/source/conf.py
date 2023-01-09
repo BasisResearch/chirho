@@ -2,7 +2,7 @@
 # Copyright Contributors to the Pyro project.
 # SPDX-License-Identifier: Apache-2.0
 
-# Adapted from https://github.com/pyro-ppl/numpyro/blob/master/docs/source/conf.py
+# Adapted from https://github.com/pyro-ppl/causal_pyro/blob/master/docs/source/conf.py
 
 
 import glob
@@ -35,21 +35,21 @@ sys.path.insert(0, os.path.abspath("../.."))
 os.environ["SPHINX_BUILD"] = "1"
 
 # HACK: This is to ensure that local functions are documented by sphinx.
-from numpyro.infer.hmc import hmc  # noqa: E402
+from causal_pyro.infer.hmc import hmc  # noqa: E402
 
-hmc(None, None)
+# hmc(None, None)
 
 # -- Project information -----------------------------------------------------
 
-project = "NumPyro"
-copyright = "2019, Uber Technologies, Inc"
-author = "Uber AI Labs"
+project = "Causal Pyro"
+copyright = "2023, Basis Research Institute"
+author = "Basis Research Institute"
 
 version = ""
 
 if "READTHEDOCS" not in os.environ:
-    # if developing locally, use numpyro.__version__ as version
-    from numpyro import __version__  # noqaE402
+    # if developing locally, use causal_pyro.__version__ as version
+    from causal_pyro import __version__  # noqaE402
 
     version = __version__
 
@@ -124,7 +124,7 @@ language = None
 # This pattern also affects html_static_path and html_extra_path .
 exclude_patterns = [
     ".ipynb_checkpoints",
-    "tutorials/logistic_regression.ipynb",
+    # "tutorials/logistic_regression.ipynb",
     "examples/*ipynb",
     "examples/*py",
 ]
@@ -140,14 +140,14 @@ add_module_names = False
 # This is processed by Jinja2 and inserted before each notebook
 nbsphinx_prolog = r"""
 {% set docname = 'notebooks/source/' + env.doc2path(env.docname, base=None).split('/')[-1] %}
-:github_url: https://github.com/pyro-ppl/numpyro/blob/master/{{ docname }}
+:github_url: https://github.com/pyro-ppl/causal_pyro/blob/master/{{ docname }}
 
 .. raw:: html
 
     <div class="admonition note">
       Interactive online version:
       <span style="white-space: nowrap;">
-        <a href="https://colab.research.google.com/github/pyro-ppl/numpyro/blob/{{ env.config.html_context.github_version }}/{{ docname }}">
+        <a href="https://colab.research.google.com/github/pyro-ppl/causal_pyro/blob/{{ env.config.html_context.github_version }}/{{ docname }}">
           <img alt="Open In Colab" src="https://colab.research.google.com/assets/colab-badge.svg"
             style="vertical-align:text-bottom">
         </a>
@@ -158,14 +158,14 @@ nbsphinx_prolog = r"""
 
 # -- Copy README files
 
-# replace "# NumPyro" by "# Getting Started with NumPyro"
+# replace "# causal_pyro" by "# Getting Started with causal_pyro"
 with open("../../README.md", "rt") as f:
     lines = f.readlines()
     for i, line in enumerate(lines):
-        if "# NumPyro" == line.rstrip():
+        if "# causal_pyro" == line.rstrip():
             break
     lines = lines[i:]
-    lines[0] = "# Getting Started with NumPyro\n"
+    lines[0] = "# Getting Started with Causal Pyro\n"
     text = "\n".join(lines)
 
 with open("getting_started.rst", "wt") as f:
@@ -196,7 +196,7 @@ sphinx_gallery_conf = {
     "gallery_dirs": ["examples"],
     # only execute files beginning with plot_
     "filename_pattern": "/plot_",
-    "ignore_pattern": "(minipyro|__init__)",
+    # "ignore_pattern": "(minipyro|__init__)",
     # not display Total running time of the script because we do not execute it
     "min_reported_time": 1,
 }
@@ -258,7 +258,7 @@ html_style = "css/pyro.css"
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "numpyrodoc"
+htmlhelp_basename = "causal_pyrodoc"
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -285,14 +285,14 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "NumPyro.tex", "NumPyro Documentation", "Uber AI Labs", "manual")
+    (master_doc, "causal_pyro.tex", "causal_pyro Documentation", "Uber AI Labs", "manual")
 ]
 
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "NumPyro", "NumPyro Documentation", [author], 1)]
+man_pages = [(master_doc, "causal_pyro", "causal_pyro Documentation", [author], 1)]
 
 # -- Options for Texinfo output ----------------------------------------------
 
@@ -302,11 +302,11 @@ man_pages = [(master_doc, "NumPyro", "NumPyro Documentation", [author], 1)]
 texinfo_documents = [
     (
         master_doc,
-        "NumPyro",
-        "NumPyro Documentation",
+        "causal_pyro",
+        "causal_pyro Documentation",
         author,
-        "NumPyro",
-        "Pyro PPL on Numpy",
+        "causal_pyro",
+        "Pyro extension for causal inference",
         "Miscellaneous",
     )
 ]
