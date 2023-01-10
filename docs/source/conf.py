@@ -78,7 +78,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx_gallery.gen_gallery",
-    "sphinx_search.extension",
+    # "sphinx_search.extension",
 ]
 
 # Enable documentation inheritance
@@ -117,7 +117,7 @@ master_doc = "index"
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -183,7 +183,7 @@ for src_file in glob.glob("../../notebooks/source/*.ipynb"):
 
 # add index file to `tutorials` path, `:orphan:` is used to
 # tell sphinx that this rst file needs not to be appeared in toctree
-with open("../../notebooks/source/index.rst", "rt") as f1:
+with open("index.rst", "rt") as f1:
     with open("tutorials/index.rst", "wt") as f2:
         f2.write(":orphan:\n\n")
         f2.write(f1.read())
