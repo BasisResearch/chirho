@@ -10,14 +10,14 @@ Welcome to Causal Pyro Tutorials!
    :maxdepth: 2
    :caption: Tutorials:
 
-   bayesian_regression
-   time_series_forecasting
-   bayesian_imputation
-   ordinal_regression
-   bayesian_hierarchical_linear_regression
-   discrete_imputation
-   model_rendering
-   truncated_distributions
+   introduction_i
+   introduction_ii
+   mediation
+   surrogates
+   cevae
+   backdoor
+   deepscm
+   slc
 
 
 Indices
