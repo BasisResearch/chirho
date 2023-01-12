@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # Adapted from https://github.com/pyro-ppl/numpyro/blob/master/docs/source/conf.py
-
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
 
 import glob
 import os
@@ -35,7 +36,7 @@ sys.path.insert(0, os.path.abspath("../.."))
 os.environ["SPHINX_BUILD"] = "1"
 
 # HACK: This is to ensure that local functions are documented by sphinx.
-# from causal_pyro.infer.hmc import hmc  # noqa: E402
+# from numpyro.infer.hmc import hmc  # noqa: E402
 
 # hmc(None, None)
 
@@ -124,7 +125,7 @@ language = "en"
 # This pattern also affects html_static_path and html_extra_path .
 exclude_patterns = [
     ".ipynb_checkpoints",
-    # "tutorials/logistic_regression.ipynb",
+    "tutorials/logistic_regression.ipynb",
     "examples/*ipynb",
     "examples/*py",
 ]
@@ -140,7 +141,7 @@ add_module_names = False
 # This is processed by Jinja2 and inserted before each notebook
 nbsphinx_prolog = r"""
 {% set docname = 'notebooks/source/' + env.doc2path(env.docname, base=None).split('/')[-1] %}
-:github_url: https://github.com/BasisResearch/causal_pyro/blob/master/{{ docname }}
+:github_url: https://github.com/pyro-ppl/numpyro/blob/master/{{ docname }}
 
 .. raw:: html
 
@@ -158,7 +159,7 @@ nbsphinx_prolog = r"""
 
 # -- Copy README files
 
-# replace "# causal_pyro" by "# Getting Started with causal_pyro"
+# replace "# causal_pyro" by "# Getting Started with Causal Pyro"
 with open("../../README.md", "rt") as f:
     lines = f.readlines()
     for i, line in enumerate(lines):
@@ -183,7 +184,7 @@ for src_file in glob.glob("../../notebooks/source/*.ipynb"):
 
 # add index file to `tutorials` path, `:orphan:` is used to
 # tell sphinx that this rst file needs not to be appeared in toctree
-with open("index.rst", "rt") as f1:
+with open("../../notebooks/source/index.rst", "rt") as f1:
     with open("tutorials/index.rst", "wt") as f2:
         f2.write(":orphan:\n\n")
         f2.write(f1.read())
@@ -196,7 +197,7 @@ sphinx_gallery_conf = {
     "gallery_dirs": ["examples"],
     # only execute files beginning with plot_
     "filename_pattern": "/plot_",
-    # "ignore_pattern": "(minipyro|__init__)",
+    "ignore_pattern": "(minipyro|__init__)",
     # not display Total running time of the script because we do not execute it
     "min_reported_time": 1,
 }
@@ -285,14 +286,14 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "causal_pyro.tex", "causal_pyro Documentation", "Uber AI Labs", "manual")
+    (master_doc, "causal_pyro.tex", "Causal Pyro Documentation", "Basis Research Institute", "manual")
 ]
 
 # -- Options for manual page output ------------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "causal_pyro", "causal_pyro Documentation", [author], 1)]
+man_pages = [(master_doc, "causal_pyro", "Causal Pyro Documentation", [author], 1)]
 
 # -- Options for Texinfo output ----------------------------------------------
 
@@ -303,7 +304,7 @@ texinfo_documents = [
     (
         master_doc,
         "causal_pyro",
-        "causal_pyro Documentation",
+        "Causal Pyro Documentation",
         author,
         "causal_pyro",
         "Pyro extension for causal inference",
