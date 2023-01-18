@@ -66,7 +66,12 @@ Intervention = Union[
 
 @pyro.poutine.runtime.effectful(type="intervene")
 def intervene(
-    obs: T, act: Intervention[T] = None, *, event_dim: Optional[int] = None
+    obs: T,
+    act: Intervention[T] = None,
+    *,
+    event_dim: Optional[int] = None,
+    name: Optional[str] = None,
+    **kwargs,
 ) -> T:
     """
     Intervene on a value in a probabilistic program.

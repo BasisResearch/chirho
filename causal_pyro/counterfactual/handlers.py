@@ -30,7 +30,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
     def __init__(self, dim: int):
         self._orig_dim = dim
         self.dim = dim
-        self._plates: List[pyro.poutine.indep_messenger.IndepMessenger] = []
+        self._plates: Dict[str, pyro.poutine.indep_messenger.IndepMessenger] = {}
         super().__init__()
 
     @singledispatchmethod
@@ -100,25 +100,26 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             return obs.expand(batch_shape)
         raise NotImplementedError("Stacking distributions not yet implemented")
 
-    def _add_plate(self):
-        self._plates.append(
-            pyro.plate(f"intervention_{-self.dim}", size=2, dim=self.dim)
-        )
-        self.dim -= 1
-
     def __enter__(self):
         self.dim = self._orig_dim
-        self._plates = []
+        self._plates = {}
         return super().__enter__()
 
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].get("event_dim", 0)
+        name = msg["kwargs"].get("name", None)
         msg["value"] = self._stack_intervene(
             obs, act, event_dim=event_dim, new_dim=self.dim
         )
-        msg["done"] = True
-        self._add_plate()
+        self._add_plate(name)
+
+    def _add_plate(self, name: Optional[str]):
+        if name is None:
+            name = f"intervention_{-self.dim}"
+        if name not in self._plates:
+            self._plates[name] = pyro.plate(name, size=2, dim=self.dim)
+            self.dim -= 1
 
     def _pyro_sample(self, msg):
 
@@ -127,12 +128,12 @@ class MultiWorldCounterfactual(BaseCounterfactual):
 
         upstream_plates = [
             plate
-            for plate in self._plates
+            for plate in self._plates.values()
             if self._is_downstream(msg["fn"], plate)
             or self._is_downstream(msg["value"], plate)
         ]
         if upstream_plates and not any(
-            self._is_plate_active(plate) for plate in self._plates
+            self._is_plate_active(plate) for plate in self._plates.values()
         ):
             msg["stop"] = True
             msg["done"] = True
@@ -190,6 +191,7 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
     """
 
-    def _add_plate(self):
-        if len(self._plates) == 0:
-            self._plates.append(pyro.plate("intervention", size=2, dim=self.dim))
+    def _add_plate(self, name: Optional[str]):
+        name = "intervention"  # ignore input name
+        if name not in self._plates:
+            self._plates[name] = pyro.plate(name, size=2, dim=self.dim)
