@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional
 
 import pyro
 import torch
+from pyro.poutine.indep_messenger import IndepMessenger
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
@@ -26,11 +27,15 @@ class Factual(BaseCounterfactual):
         msg["value"] = obs
 
 
+class CFPlateMessenger(IndepMessenger):
+    pass
+
+
 class MultiWorldCounterfactual(BaseCounterfactual):
     def __init__(self, dim: int):
         self._orig_dim = dim
         self.dim = dim
-        self._plates: Dict[str, pyro.poutine.indep_messenger.IndepMessenger] = {}
+        self._plates: Dict[str, CFPlateMessenger] = {}
         super().__init__()
 
     @singledispatchmethod
@@ -108,18 +113,19 @@ class MultiWorldCounterfactual(BaseCounterfactual):
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].get("event_dim", 0)
-        name = msg["kwargs"].get("name", None)
+        name = msg["name"] if msg["name"] is not None else "__INTERVENTION"
         msg["value"] = self._stack_intervene(
             obs, act, event_dim=event_dim, new_dim=self.dim
         )
         self._add_plate(name)
 
-    def _add_plate(self, name: Optional[str]):
-        if name is None:
-            name = f"intervention_{-self.dim}"
-        if name not in self._plates:
-            self._plates[name] = pyro.plate(name, size=2, dim=self.dim)
-            self.dim -= 1
+    def _add_plate(self, name: str):
+        if name in self._plates:
+            name = name + f"__{-self.dim}"
+        assert name not in self._plates, "Duplicate intervention name"
+        assert name is not None
+        self._plates[name] = CFPlateMessenger(name=name, size=2, dim=self.dim)
+        self.dim -= 1
 
     def _pyro_sample(self, msg):
         if pyro.poutine.util.site_is_subsample(msg):
@@ -190,7 +196,7 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     but only a single plate is ever instantiated. This covers non-nested counterfactual queries.
     """
 
-    def _add_plate(self, name: Optional[str]):
-        name = "intervention"  # ignore input name
+    def _add_plate(self, name: str):
+        name = "__INTERVENTION"
         if name not in self._plates:
-            self._plates[name] = pyro.plate(name, size=2, dim=self.dim)
+            self._plates[name] = CFPlateMessenger(name=name, size=2, dim=self.dim)
