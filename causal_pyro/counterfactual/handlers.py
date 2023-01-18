@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 
 import pyro
 import torch
-from pyro.poutine.indep_messenger import IndepMessenger
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
@@ -27,7 +26,7 @@ class Factual(BaseCounterfactual):
         msg["value"] = obs
 
 
-class CFPlateMessenger(IndepMessenger):
+class CFPlateMessenger(pyro.poutine.indep_messenger.IndepMessenger):
     pass
 
 
