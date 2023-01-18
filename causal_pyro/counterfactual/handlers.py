@@ -122,7 +122,6 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             self.dim -= 1
 
     def _pyro_sample(self, msg):
-
         if pyro.poutine.util.site_is_subsample(msg):
             return
 
@@ -147,7 +146,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
                 )
                 factual_world_index: List[Any] = [slice(None)] * batch_ndim
                 batch_shape = [1] * batch_ndim
-                for plate in self._plates:
+                for plate in self._plates.values():
                     factual_world_index[plate.dim] = 0
                     batch_shape[plate.dim] = plate.size
 

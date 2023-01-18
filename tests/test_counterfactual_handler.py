@@ -22,7 +22,6 @@ x_cf_values = [-1.0, 0.0, 2.0, 2]
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
-
     # estimand: p(y | do(x)) = \int p(y | z, x) p(x' | z) p(z) dz dx'
 
     def model():
