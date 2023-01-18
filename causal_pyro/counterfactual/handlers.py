@@ -26,7 +26,7 @@ class Factual(BaseCounterfactual):
         msg["value"] = obs
 
 
-class CFPlateMessenger(pyro.poutine.indep_messenger.IndepMessenger):
+class _CFPlateMessenger(pyro.poutine.indep_messenger.IndepMessenger):
     pass
 
 
@@ -34,7 +34,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
     def __init__(self, dim: int):
         self._orig_dim = dim
         self.dim = dim
-        self._plates: Dict[str, CFPlateMessenger] = {}
+        self._plates: Dict[str, _CFPlateMessenger] = {}
         super().__init__()
 
     @singledispatchmethod
@@ -123,7 +123,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
             name = name + f"__{-self.dim}"
         assert name not in self._plates, "Duplicate intervention name"
         assert name is not None
-        self._plates[name] = CFPlateMessenger(name=name, size=2, dim=self.dim)
+        self._plates[name] = _CFPlateMessenger(name=name, size=2, dim=self.dim)
         self.dim -= 1
 
     def _pyro_sample(self, msg):
@@ -198,4 +198,4 @@ class TwinWorldCounterfactual(MultiWorldCounterfactual):
     def _add_plate(self, name: str):
         name = "__INTERVENTION"
         if name not in self._plates:
-            self._plates[name] = CFPlateMessenger(name=name, size=2, dim=self.dim)
+            self._plates[name] = _CFPlateMessenger(name=name, size=2, dim=self.dim)
