@@ -135,18 +135,6 @@ def test_indices_of_distribution(
 
 @pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-def test_indexset_as_mask(batch_shape, event_shape):
-    world = IndexSet(X={0, 1}, Y={0, 1}, Z={0, 1})
-    mask = indexset_as_mask(world, event_dim=len(event_shape))
-    assert mask.shape == (2, 2, 2)
-    assert mask[0, 1, :].all()
-    assert mask[1, 1, :].all()
-    assert not mask[0, 0, :].any()
-    assert not mask[1, 0, :].any()
-
-
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
 def test_gather_tensor(batch_shape, event_shape):
     value = torch.randn(batch_shape + event_shape)
     world = IndexSet(...)  # TODO
@@ -177,3 +165,15 @@ def test_scatter_gather_tensor(batch_shape, event_shape):
         event_dim=len(event_shape),
     )
     assert (orig_value == value).all()
+
+
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
+def test_indexset_as_mask(batch_shape, event_shape):
+    world = IndexSet(X={0, 1}, Y={0, 1}, Z={0, 1})
+    mask = indexset_as_mask(world, event_dim=len(event_shape))
+    assert mask.shape == (2, 2, 2)
+    assert mask[0, 1, :].all()
+    assert mask[1, 1, :].all()
+    assert not mask[0, 0, :].any()
+    assert not mask[1, 0, :].any()
