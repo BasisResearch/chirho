@@ -1,29 +1,6 @@
-import collections
-import functools
-import numbers
-from typing import (
-    Callable,
-    Container,
-    Dict,
-    FrozenSet,
-    Generic,
-    Hashable,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Optional, TypeVar
 
 import pyro
-import torch
-from pyro.infer.reparam.reparam import Reparam
-from pyro.infer.reparam.strategies import Strategy
-from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from .index_set import IndexSet, gather, indices_of, scatter
 from .worlds import (
@@ -31,9 +8,7 @@ from .worlds import (
     add_indices,
     complement,
     get_full_index,
-    get_index_plates,
     indexset_as_mask,
-    mask_as_indexset,
 )
 
 T, I = TypeVar("T"), TypeVar("I")
