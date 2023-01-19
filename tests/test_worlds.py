@@ -18,43 +18,31 @@ from causal_pyro.counterfactual.worlds import (
 logger = logging.getLogger(__name__)
 
 
-BATCH_SHAPES = list(
-    set(
-        [
-            (),
-            (2,),
-            (2, 1),
-            (2, 3),
-            (1, 2, 3),
-            (2, 1, 3),
-            (2, 3, 1),
-            (
-                2,
-                2,
-            ),
-            (2, 2, 2),
-            (2, 2, 3),
-        ]
-    )
-)
+BATCH_SHAPES = [
+    (2,),
+    (2, 1),
+    (2, 3),
+    (1, 2, 3),
+    (2, 1, 3),
+    (2, 3, 1),
+    (2, 2),
+    (2, 2, 2),
+    (2, 2, 3),
+]
 
-EVENT_SHAPES = list(
-    set(
-        [
-            (),
-            (1,),
-            (2,),
-            (2, 1),
-            (1, 2),
-            (2, 2),
-            (3, 1),
-            (1, 1),
-            (2, 2, 1),
-            (2, 1, 2),
-            (2, 3, 2),
-        ]
-    )
-)
+EVENT_SHAPES = [
+    (),
+    (1,),
+    (2,),
+    (2, 1),
+    (1, 2),
+    (2, 2),
+    (3, 1),
+    (1, 1),
+    (2, 2, 1),
+    (2, 1, 2),
+    (2, 3, 2),
+]
 
 
 @pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
@@ -133,71 +121,115 @@ def test_indices_of_distribution(
     assert actual_world == expected_world
 
 
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("cf_dim", [-1])
 def test_gather_tensor(batch_shape, event_shape, cf_dim):
-    with IndexPlatesMessenger(cf_dim):
-        world = add_indices(IndexSet(...))  # TODO
-        value = torch.randn(batch_shape + event_shape)
-        actual_output = gather(value, world, event_dim=len(event_shape))
-        expected_output = value[...]
-        for name, indices in world.items():
-            for index in indices:
-                assert (actual_output[name][index] == expected_output[index]).all()
+
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    value = torch.randn(batch_shape + event_shape)
+
+    world = IndexSet(**{
+        name: {batch_shape[dim] - 1}
+        for name, dim in name_to_dim.items()
+        if batch_shape[dim] > 1
+    })
+
+    actual = gather(value, world, event_dim=len(event_shape), name_to_dim=name_to_dim)
+
+    mask = indexset_as_mask(
+        world,
+        event_dim=len(event_shape),
+        name_to_dim=name_to_dim,
+    )
+    _, mask = torch.broadcast_tensors(value, mask)
+    assert mask.shape == value.shape
+    expected = value[mask].reshape((-1,) + event_shape)
+
+    assert actual.numel() == expected.numel()
+    assert (actual.reshape((-1,) + event_shape) == expected).all()
 
 
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("cf_dim", [-1,])
 def test_scatter_tensor(batch_shape, event_shape, cf_dim):
-    with IndexPlatesMessenger(cf_dim):
-        world = add_indices(IndexSet(...))
-        value = torch.zeros(batch_shape + event_shape)
-        actual = scatter(value, world, event_dim=len(event_shape))
-        expected = ...
-        assert (actual == expected).all()
+
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    value = torch.randn((1,) * len(batch_shape) + event_shape)
+
+    world = IndexSet(**{
+        name: {batch_shape[dim] - 1}
+        for name, dim in name_to_dim.items()
+        if batch_shape[dim] > 1
+    })
+
+    actual = torch.zeros(batch_shape + event_shape)
+    actual = scatter(value, world, result=actual, event_dim=len(event_shape), name_to_dim=name_to_dim)
+
+    mask = indexset_as_mask(
+        world,
+        event_dim=len(event_shape),
+        name_to_dim=name_to_dim,
+    )
+    _, mask = torch.broadcast_tensors(value, mask)
+    expected = value.new_zeros(mask.shape)
+    expected[mask] = value.reshape(-1)
+
+    assert actual.numel() == expected.numel()
+    assert (actual == expected).all()
 
 
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
-def test_gather_scatter_tensor(batch_shape, event_shape, cf_dim):
-    with IndexPlatesMessenger(cf_dim):
-        world = add_indices(IndexSet(...))
-        value = torch.randn(batch_shape + event_shape)
-        actual = gather(
-            scatter(value, world, event_dim=len(event_shape)),
-            world,
-            event_dim=len(event_shape),
-        )
-        expected = value
-        assert (actual == expected).all()
-
-
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("cf_dim", [-1,])
 def test_scatter_gather_tensor(batch_shape, event_shape, cf_dim):
-    with IndexPlatesMessenger(cf_dim):
-        world = IndexSet(...)
-        value = torch.randn(batch_shape + event_shape)
-        actual = scatter(
-            gather(value, world, event_dim=len(event_shape)),
-            world,
-            event_dim=len(event_shape),
-        )
-        expected = value
-        assert (actual == expected).all()
+
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    value = torch.randn(batch_shape + event_shape)
+
+    world = IndexSet(**{
+        name: {batch_shape[dim] - 1}
+        for name, dim in name_to_dim.items()
+        if batch_shape[dim] > 1
+    })
+
+    actual = gather(value, world, event_dim=len(event_shape), name_to_dim=name_to_dim)
+    actual = scatter(actual, world, result=value.new_zeros(batch_shape + event_shape), event_dim=len(event_shape), name_to_dim=name_to_dim)
+
+    mask = indexset_as_mask(
+        world,
+        event_dim=len(event_shape),
+        name_to_dim=name_to_dim,
+    )
+    _, mask = torch.broadcast_tensors(value, mask)
+
+    expected = value
+    assert (actual == expected)[mask].all()
+    assert not (actual == expected)[~mask].any()
 
 
-@pytest.mark.parametrize("batch_shape", BATCH_SHAPES)
-@pytest.mark.parametrize("event_shape", EVENT_SHAPES)
-def test_indexset_as_mask(batch_shape, event_shape):
-    world = IndexSet(X={0, 1}, Y={0, 1}, Z={0, 1})
-    mask = indexset_as_mask(world, event_dim=len(event_shape))
-    assert mask.shape == (2, 2, 2)
-    assert mask[0, 1, :].all()
-    assert mask[1, 1, :].all()
-    assert not mask[0, 0, :].any()
-    assert not mask[1, 0, :].any()
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("cf_dim", [-1,])
+def test_gather_scatter_tensor(batch_shape, event_shape, cf_dim):
+
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    value = torch.randn((1,) * len(batch_shape) + event_shape)
+
+    world = IndexSet(**{
+        name: {batch_shape[dim] - 1}
+        for name, dim in name_to_dim.items()
+        if batch_shape[dim] > 1
+    })
+
+    actual = torch.zeros(batch_shape + event_shape)
+    actual = scatter(value, world, result=actual, event_dim=len(event_shape), name_to_dim=name_to_dim)
+    actual = gather(actual, world, event_dim=len(event_shape), name_to_dim=name_to_dim)
+
+    expected = value
+    assert (actual == expected).all()

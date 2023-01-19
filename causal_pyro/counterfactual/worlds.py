@@ -59,11 +59,17 @@ def add_indices(world: IndexSet) -> IndexSet:
     return world
 
 
-def indexset_as_mask(world: IndexSet, *, event_dim: int = 0) -> torch.Tensor:
+def indexset_as_mask(
+    world: IndexSet,
+    *,
+    event_dim: int = 0,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
+) -> torch.Tensor:
     """
     Get a mask for indexing into a world.
     """
-    name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+    if name_to_dim is None:
+        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
     batch_shape = [1] * -min(name_to_dim.values())
     inds = [slice(None)] * len(batch_shape)
     for name, values in world.items():
@@ -74,12 +80,18 @@ def indexset_as_mask(world: IndexSet, *, event_dim: int = 0) -> torch.Tensor:
     return mask[(...,) + (None,) * event_dim]
 
 
-def mask_as_indexset(mask: torch.Tensor, *, event_dim: int = 0) -> IndexSet:
+def mask_as_indexset(
+    mask: torch.Tensor,
+    *,
+    event_dim: int = 0,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
+) -> IndexSet:
     """
     Get a sparse index set from a dense mask.
     """
     assert mask.dtype == torch.bool
-    name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+    if name_to_dim is None:
+        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
     raise NotImplementedError("TODO")
 
 
@@ -155,13 +167,25 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
 
 @gather.register
 def _gather_tensor(
-    value: torch.Tensor, world: IndexSet, *, event_dim: Optional[int] = None
+    value: torch.Tensor,
+    world: IndexSet,
+    *,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
-    mask = indexset_as_mask(world, event_dim=event_dim).to(device=value.device)
-    _, mask = torch.broadcast_tensors(value, mask)
-    return value[mask]
+
+    if name_to_dim is None:
+        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+
+    result = value
+    for name, indices in world.items():
+        result = result.index_select(
+            name_to_dim[name] - event_dim,
+            torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
+        )
+    return result
 
 
 @scatter.register
@@ -171,17 +195,28 @@ def _scatter_tensor(
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
 
-    mask = indexset_as_mask(world, event_dim=event_dim).to(device=value.device)
-    if result is None:
-        result = value.new_zeros(
-            mask.shape + value.shape[len(value.shape) - event_dim :]
+    if name_to_dim is None:
+        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+
+    index = [slice(None)] * len(value.shape)
+    for name, indices in world.items():
+        index[name_to_dim[name] - event_dim] = torch.tensor(
+            list(sorted(indices)), device=value.device, dtype=torch.long
         )
-    _, mask = torch.broadcast_tensors(result, mask)
-    result[mask] = value
+
+    if result is None:
+        index_plates = get_index_plates()
+        result_shape = list(value.shape[:len(value.shape) - event_dim])
+        for name, indices in world.items():
+            result_shape[name_to_dim[name] - event_dim] = index_plates[name].size
+        result = value.new_zeros(result_shape)
+
+    result[tuple(index)] = value
     return result
 
 
