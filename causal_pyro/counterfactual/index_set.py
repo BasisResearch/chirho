@@ -9,6 +9,8 @@ from typing import Callable, Container, Dict, FrozenSet, Generic, Hashable, List
 import pyro
 import torch
 
+T = TypeVar("T")
+
 
 class IndexSet(dict[Hashable, Set[int]]):
     """

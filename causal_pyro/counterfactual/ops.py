@@ -46,12 +46,7 @@ class InWorlds(pyro.poutine.mask_messenger.MaskMessenger):
         raise NotImplementedError
 
     def _pyro_sample(self, msg):
-        msg["fn"] = gather(msg["fn"], self.world, event_dim=0)
-        if msg["value"] is not None:
-            msg["value"] = gather(msg["value"], self.world, event_dim=len(msg["fn"].event_shape))
-
-    def _pyro_post_sample(self, msg):
-        msg["value"] = scatter(msg["value"], self.world, event_dim=len(msg["fn"].event_shape))
+        msg["fn"] = msg["fn"].mask(indexset_as_mask(self.world, event_dim=0))
 
 
 class Factual(InWorlds):
