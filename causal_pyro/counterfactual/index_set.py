@@ -38,6 +38,45 @@ class IndexSet(dict[Hashable, Set[int]]):
         })
 
     @classmethod
+    def as_mask(
+        cls,
+        mapping: Dict[Hashable, Set[int]],
+        *,
+        event_dim: int = 0,
+        name_to_dim: Dict[Hashable, int] = {},
+    ) -> torch.Tensor:
+        """
+        Get a mask for indexing into a world.
+        """
+        return torch.stack([
+            torch.tensor([
+                v in mapping.get(name, set())
+                for v in range(max(mapping.get(name, set()) or {0}) + 1)
+            ])
+            for name in sorted(mapping.keys())
+        ], dim=event_dim)
+
+    @classmethod
+    def from_mask(
+        cls,
+        mask: torch.Tensor,
+        *,
+        event_dim: int = 0,
+        name_to_dim: Dict[Hashable, int] = {}
+    ) -> "IndexSet":
+        """
+        Get a world from a mask.
+        """
+        return cls(**{
+            name: set(indices)
+            for name, indices in zip(
+                sorted(mask.shape[event_dim:]),
+                mask.unbind(event_dim)
+            )
+            if indices.any()
+        })
+
+    @classmethod
     def meet(cls, *worlds: "IndexSet") -> "IndexSet":
         """
         Compute the intersection of multiple worlds.

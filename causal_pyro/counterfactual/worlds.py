@@ -39,7 +39,11 @@ def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
 
 
 @pyro.poutine.runtime.effectful(type="add_indices")
-def add_indices(world: IndexSet) -> IndexSet:
+def add_indices(
+    world: IndexSet,
+    *,
+    sizes: Optional[Dict[Hashable, int]] = None
+) -> IndexSet:
     return world
 
 
@@ -48,7 +52,7 @@ def indexset_as_mask(world: IndexSet, *, event_dim: int = 0) -> torch.Tensor:
     Get a mask for indexing into a world.
     """
     name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    raise NotImplementedError("TODO")
+    return world.as_mask(world, name_to_dim=name_to_dim, event_dim=event_dim)
 
 
 def mask_as_indexset(mask: torch.Tensor, *, event_dim: int = 0) -> IndexSet:
@@ -56,7 +60,7 @@ def mask_as_indexset(mask: torch.Tensor, *, event_dim: int = 0) -> IndexSet:
     Get a sparse index set from a dense mask.
     """
     name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    raise NotImplementedError("TODO")
+    return IndexSet.from_mask(mask, name_to_dim=name_to_dim, event_dim=event_dim)
 
 
 class _LazyPlateMessenger(IndepMessenger):

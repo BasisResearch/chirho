@@ -27,6 +27,9 @@ class MultiWorldInterventions(IndexPlatesMessenger):
 
         obs_indices = IndexSet(**{name: {0}})
         act_indices = IndexSet.difference(indices_of(act, event_dim=event_dim), obs_indices)
+
+        add_indices(IndexSet(**{name: set(range(0, len(act_indices)))}))
+
         obs = gather(obs, obs_indices, event_dim=event_dim)
         act = gather(act, act_indices, event_dim=event_dim)
 
@@ -46,7 +49,7 @@ class InWorlds(pyro.poutine.mask_messenger.MaskMessenger):
         raise NotImplementedError
 
     def _pyro_sample(self, msg):
-        msg["fn"] = msg["fn"].mask(indexset_as_mask(self.world, event_dim=0))
+        msg["mask"] = msg["mask"] & indexset_as_mask(self.world, event_dim=0)
 
 
 class Factual(InWorlds):
