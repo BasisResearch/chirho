@@ -23,7 +23,7 @@ class MultiWorldInterventions(IndexPlatesMessenger):
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].setdefault("event_dim", 0)
-        name = msg["kwargs"].setdefault("name", f"intervention_{self.first_available_dim}")
+        name = msg.setdefault("name", f"intervention_{self.first_available_dim}")
 
         obs_indices = IndexSet(**{name: {0}})
         act_indices = IndexSet.difference(indices_of(act, event_dim=event_dim), obs_indices)

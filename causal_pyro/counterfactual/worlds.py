@@ -52,15 +52,23 @@ def indexset_as_mask(world: IndexSet, *, event_dim: int = 0) -> torch.Tensor:
     Get a mask for indexing into a world.
     """
     name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    return world.as_mask(world, name_to_dim=name_to_dim, event_dim=event_dim)
+    batch_shape = [1] * -min(name_to_dim.values())
+    inds = [slice(None)] * len(batch_shape)
+    for name, values in world.items():
+        inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
+        batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
+    mask = torch.zeros(tuple(batch_shape), dtype=torch.bool)
+    mask[tuple(inds)] = True
+    return mask[(...,) + (None,) * event_dim]
 
 
 def mask_as_indexset(mask: torch.Tensor, *, event_dim: int = 0) -> IndexSet:
     """
     Get a sparse index set from a dense mask.
     """
+    assert mask.dtype == torch.bool
     name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    return IndexSet.from_mask(mask, name_to_dim=name_to_dim, event_dim=event_dim)
+    raise NotImplementedError("TODO")
 
 
 class _LazyPlateMessenger(IndepMessenger):
@@ -100,19 +108,17 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
 
     def _pyro_get_full_index(self, msg):
         msg["value"] = IndexSet(**{name: set(range(plate.size)) for name, plate in self.plates.items()})
-        msg["stop"] = True
-        msg["done"] = True
+        msg["stop"], msg["done"] = True, True
 
     def _pyro_get_index_plates(self, msg):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
-        msg["done"] = True
-        msg["stop"] = True
+        msg["done"], msg["stop"] = True, True
 
     def _pyro_add_indices(self, msg):
         world = msg["args"][0]
         for name, indices in world.items():
             if name not in self.plates:
-                new_size = max(max(indices), len(indices))
+                new_size = max(max(indices) + 1, len(indices))
                 self.plates[name] = _LazyPlateMessenger(name=name, dim=self.first_available_dim, size=new_size)
                 self.plates[name].__enter__()
                 self.first_available_dim -= 1
@@ -125,7 +131,8 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
 def _gather_tensor(value: torch.Tensor, world: IndexSet, *, event_dim: Optional[int] = None):
     if event_dim is None:
         event_dim = 0
-    mask = indexset_as_mask(world, event_dim=event_dim)
+    mask = indexset_as_mask(world, event_dim=event_dim).to(device=value.device)
+    _, mask = torch.broadcast_tensors(value, mask)
     return value[mask]
 
 
@@ -140,10 +147,10 @@ def _scatter_tensor(
     if event_dim is None:
         event_dim = 0
 
-    mask = indexset_as_mask(world, event_dim=event_dim)
+    mask = indexset_as_mask(world, event_dim=event_dim).to(device=value.device)
     if result is None:
         result = value.new_zeros(mask.shape + value.shape[len(value.shape) - event_dim:])
-    result, mask = torch.broadcast_tensors(result, mask)
+    _, mask = torch.broadcast_tensors(result, mask)
     result[mask] = value
     return result
 
