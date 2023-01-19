@@ -1,15 +1,9 @@
-import contextlib
-import functools
-import itertools
-import numbers
-from typing import Any, Dict, List, Optional, Set, TypeVar, Union
+from typing import Any, Dict, Optional, TypeVar
 
 import pyro
-import torch
 
-from .index_set import IndexSet, gather, indices_of, scatter
-from .worlds import (add_indices, get_full_index, get_index_plates,
-                     indexset_as_mask)
+from .index_set import IndexSet
+from .worlds import get_index_plates, indexset_as_mask
 
 T = TypeVar("T")
 
