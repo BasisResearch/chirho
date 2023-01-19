@@ -161,6 +161,11 @@ def _indices_of_number(value: numbers.Number, **kwargs) -> IndexSet:
 
 
 @indices_of.register
+def _indices_of_bool(value: bool, **kwargs) -> IndexSet:
+    return IndexSet()
+
+
+@indices_of.register
 def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
     if not value:
         return IndexSet()
@@ -188,3 +193,8 @@ def _indices_of_tensor(value: torch.Tensor, *, event_dim: int = 0) -> IndexSet:
 def _indices_of_distribution(value: pyro.distributions.Distribution, **kwargs) -> IndexSet:
     batch_shape = value.batch_shape
     return indices_of(batch_shape)
+
+
+@indices_of.register
+def _indices_of_maskeddist(value: pyro.distributions.MaskedDistribution, **kwargs) -> IndexSet:
+    return indices_of(value._mask)
