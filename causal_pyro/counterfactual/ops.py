@@ -13,7 +13,7 @@ class MultiWorldInterventions(IndexPlatesMessenger):
             indices_of(act, event_dim=event_dim), obs_indices
         )
 
-        add_indices(IndexSet(**{name: set(range(0, len(act_indices)))}))
+        add_indices(IndexSet(**{name: set(range(max(act_indices[name])))}))
 
         obs = gather(obs, obs_indices, event_dim=event_dim)
         act = gather(act, act_indices, event_dim=event_dim)
