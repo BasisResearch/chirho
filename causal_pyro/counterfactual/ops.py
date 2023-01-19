@@ -1,17 +1,5 @@
-from typing import Optional, TypeVar
-
-import pyro
-
 from .index_set import IndexSet, gather, indices_of, scatter
-from .worlds import (
-    IndexPlatesMessenger,
-    add_indices,
-    complement,
-    get_full_index,
-    indexset_as_mask,
-)
-
-T, I = TypeVar("T"), TypeVar("I")
+from .worlds import IndexPlatesMessenger, add_indices
 
 
 class MultiWorldInterventions(IndexPlatesMessenger):
@@ -31,35 +19,3 @@ class MultiWorldInterventions(IndexPlatesMessenger):
         act = gather(act, act_indices, event_dim=event_dim)
 
         msg["value"] = scatter(obs, obs_indices, result=act, event_dim=event_dim)
-
-
-class InWorlds(pyro.poutine.mask_messenger.MaskMessenger):
-    prefix: Optional[str]
-
-    def __init__(self, prefix: Optional[str] = None):
-        if prefix is not None:
-            self.prefix = prefix
-        super().__init__()
-
-    @property
-    def world(self) -> IndexSet:
-        raise NotImplementedError
-
-    def _pyro_sample(self, msg):
-        msg["mask"] = msg["mask"] & indexset_as_mask(self.world, event_dim=0)
-
-
-class Factual(InWorlds):
-    prefix: str = "factual"
-
-    @property
-    def world(self):
-        return IndexSet(**{name: {0} for name in get_full_index()})
-
-
-class Counterfactual(InWorlds):
-    prefix: str = "counterfactual"
-
-    @property
-    def world(self):
-        return complement(IndexSet(**{name: {0} for name in get_full_index()}))
