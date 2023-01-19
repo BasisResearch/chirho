@@ -3,7 +3,7 @@ import contextlib
 import functools
 import itertools
 import numbers
-from typing import Callable, Container, Dict, FrozenSet, Generic, Hashable, List, Mapping, \
+from typing import Callable, Container, Dict, FrozenSet, Generic, Hashable, Iterable, List, Mapping, \
     NamedTuple, Optional, Sequence, Set, Tuple, TypeVar, Union
 
 import pyro
@@ -17,7 +17,7 @@ class IndexSet(dict[Hashable, Set[int]]):
     A mapping from names to sets of indices.
     """
 
-    def __init__(self, **mapping: Union[int, Sequence[int]]):
+    def __init__(self, **mapping: Union[int, Iterable[int]]):
         super().__init__(**{
             k: {vs} if isinstance(vs, int) else set(vs)
             for k, vs in mapping.items() if vs

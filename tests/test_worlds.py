@@ -8,103 +8,13 @@ import torch
 from causal_pyro.counterfactual.handlers import MultiWorldCounterfactual
 from causal_pyro.primitives import intervene
 
-from causal_pyro.counterfactual.index_set import (
-    IndexSet, meet_indices, join_indices, difference_indices, complement_indices, get_full_index,
-)
+from causal_pyro.counterfactual.index_set import IndexSet, scatter, gather
 from causal_pyro.counterfactual.worlds import (
     MultiWorld, get_mask, get_value_world, add_world_plates, get_world_plates,
-)
-from causal_pyro.counterfactual.worlds import (
-    MultiWorldInterventions,
-    InWorlds, Factual, Counterfactual,
-    gather, scatter, merge,
 )
 
 
 logger = logging.getLogger(__name__)
-
-
-# generating some example IndexSets for use in the unit tests below
-INDEXSET_CASES = [
-    IndexSet(),
-    IndexSet(X={0, 1}),
-    IndexSet(X={0, 1}),
-    IndexSet(X={0, 1}, Y={0, 1}),
-    IndexSet(X={0}, Y={1}),
-    IndexSet(X={1}, Y={1}),
-    IndexSet(X={0, 1}, Y={0, 1}, Z={0, 1}),
-    IndexSet(X={0, 1}, Y={0, 1}, Z={0, 1}, W={0, 1}),
-]
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-def test_meet_indexset_commutes(wa, wb):
-    assert meet_indices(wa, wb) == meet_indices(wb, wa)
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-@pytest.mark.parametrize("wc", INDEXSET_CASES)
-def test_meet_indexset_assoc(wa, wb, wc):
-    assert meet_indices(wa, meet_indices(wb, wc)) == \
-        meet_indices(meet_indices(wa, wb), wc) == \
-        meet_indices(wa, wb, wc)
-
-
-@pytest.mark.parametrize("w", INDEXSET_CASES)
-def test_meet_indexset_idempotent(w):
-    assert meet_indices(w, w) == w
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-def test_meet_indexset_absorbs(wa, wb):
-    assert meet_indices(wa, join_indices(wa, wb)) == wa
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-def test_join_indexset_commutes(wa, wb):
-    assert join_indices(wa, wb) == join_indices(wb, wa)
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-@pytest.mark.parametrize("wc", INDEXSET_CASES)
-def test_join_indexset_assoc(wa, wb, wc):
-    assert join_indices(wa, join_indices(wb, wc)) == \
-        join_indices(join_indices(wa, wb), wc) == \
-        join_indices(wa, wb, wc)
-
-
-@pytest.mark.parametrize("w", INDEXSET_CASES)
-def test_join_indexset_idempotent(w):
-    assert join_indices(w, w) == w
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("wb", INDEXSET_CASES)
-@pytest.mark.parametrize("wc", INDEXSET_CASES)
-def test_join_indexset_distributive(wa, wb, wc):
-    assert meet_indices(wa, join_indices(wb, wc)) == \
-        join_indices(meet_indices(wa, wb), meet_indices(wa, wc))
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
-def test_complement_indexset_disjoint(wa, first_available_dim):
-    with MultiWorld(first_available_dim):
-        add_world_plates(IndexSet(**{k: set(range(max(2, len(v)))) for k, v in wa.items()}))
-        assert meet_indices(wa, complement_indices(wa)) == IndexSet()
-
-
-@pytest.mark.parametrize("wa", INDEXSET_CASES)
-@pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
-def test_complement_indexset_idempotent(wa, first_available_dim):
-    with MultiWorld(first_available_dim):
-        add_world_plates(IndexSet(**{k: set(range(max(2, len(v)))) for k, v in wa.items()}))
-        assert complement_indices(complement_indices(wa)) == wa
 
 
 BATCH_SHAPES = list(set([
@@ -233,17 +143,6 @@ def test_scatter_gather_tensor(batch_shape, event_shape):
     world = IndexSet(...)
     gather(scatter(value, world, event_dim=len(event_shape)), world, event_dim=len(event_shape))
     assert (orig_value == value).all()
-
-
-@pytest.mark.xfail(reason="TODO finish implementing this test")
-def test_merge_tensors_cat():
-    wa = IndexSet(...)
-    wb = IndexSet(...)
-    a = torch.randn(...)
-    b = torch.randn(...)
-    actual_output = merge({wa: a, wb: b}, event_dim=len(event_shape))
-    expected_output = torch.cat([a, b], dim=-1)
-    assert (actual_output == expected_output).all()
 
 
 @pytest.mark.xfail(reason="not yet implemented")
