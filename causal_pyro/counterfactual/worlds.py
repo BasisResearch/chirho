@@ -39,11 +39,7 @@ def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
 
 
 @pyro.poutine.runtime.effectful(type="add_indices")
-def add_indices(
-    world: IndexSet,
-    *,
-    sizes: Optional[Dict[Hashable, int]] = None
-) -> IndexSet:
+def add_indices(world: IndexSet) -> IndexSet:
     return world
 
 
@@ -115,7 +111,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         msg["done"], msg["stop"] = True, True
 
     def _pyro_add_indices(self, msg):
-        world = msg["args"][0]
+        world, = msg["args"]
         for name, indices in world.items():
             if name not in self.plates:
                 new_size = max(max(indices) + 1, len(indices))
