@@ -3,8 +3,23 @@ import contextlib
 import functools
 import itertools
 import numbers
-from typing import Callable, Container, Dict, FrozenSet, Generic, Hashable, Iterable, List, Mapping, \
-    NamedTuple, Optional, Sequence, Set, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Container,
+    Dict,
+    FrozenSet,
+    Generic,
+    Iterable,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch
@@ -12,37 +27,44 @@ import torch
 T = TypeVar("T")
 
 
-class IndexSet(dict[Hashable, Set[int]]):
+class IndexSet(dict[str, Set[int]]):
     """
     A mapping from names to sets of indices.
     """
 
     def __init__(self, **mapping: Union[int, Iterable[int]]):
-        super().__init__(**{
-            k: {vs} if isinstance(vs, int) else set(vs)
-            for k, vs in mapping.items() if vs
-        })
+        super().__init__(
+            **{
+                k: {vs} if isinstance(vs, int) else set(vs)
+                for k, vs in mapping.items()
+                if vs
+            }
+        )
 
     def __hash__(self):
         return hash(self.as_relation(self))
 
     @classmethod
-    def as_relation(cls, mapping: Dict[Hashable, Set[int]]) -> FrozenSet[Tuple[Hashable, int]]:
+    def as_relation(cls, mapping: Dict[str, Set[int]]) -> FrozenSet[Tuple[str, int]]:
         return frozenset((k, v) for k, vs in mapping.items() for v in vs)
 
     @classmethod
-    def from_relation(cls, relation: FrozenSet[Tuple[Hashable, int]]) -> "IndexSet":
-        return cls(**{
-            k: {v for _, v in vs}
-            for k, vs in itertools.groupby(sorted(relation), key=lambda x: x[0])
-        })
+    def from_relation(cls, relation: FrozenSet[Tuple[str, int]]) -> "IndexSet":
+        return cls(
+            **{
+                k: {v for _, v in vs}
+                for k, vs in itertools.groupby(sorted(relation), key=lambda x: x[0])
+            }
+        )
 
     @classmethod
     def meet(cls, *worlds: "IndexSet") -> "IndexSet":
         """
         Compute the intersection of multiple worlds.
         """
-        return cls.from_relation(frozenset.intersection(*(map(cls.as_relation, worlds))))
+        return cls.from_relation(
+            frozenset.intersection(*(map(cls.as_relation, worlds)))
+        )
 
     @classmethod
     def join(cls, *worlds: "IndexSet") -> "IndexSet":
@@ -70,7 +92,7 @@ def indices_of(value, **kwargs) -> IndexSet:
 
 
 @functools.singledispatch
-def gather(value: T, world: IndexSet, *, event_dim: Optional[int] = None) -> T:
+def gather(value, world: IndexSet, **kwargs):
     """
     Gather values from a single world in a multi-world object.
     """
@@ -78,7 +100,7 @@ def gather(value: T, world: IndexSet, *, event_dim: Optional[int] = None) -> T:
 
 
 @functools.singledispatch
-def scatter(value: T, world: IndexSet, *, result: Optional[T] = None, event_dim: Optional[int] = None) -> T:
+def scatter(value, world: IndexSet, *, result: Optional[T] = None, **kwargs):
     """
     Scatter values from multiple worlds into a single shared object.
     """

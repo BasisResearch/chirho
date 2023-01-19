@@ -1,32 +1,54 @@
 import collections
 import functools
 import numbers
-from typing import Callable, Container, Dict, FrozenSet, Generic, Hashable, List, Mapping, \
-    NamedTuple, Optional, Sequence, Set, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Container,
+    Dict,
+    FrozenSet,
+    Generic,
+    Hashable,
+    List,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch
-
 from pyro.infer.reparam.reparam import Reparam
 from pyro.infer.reparam.strategies import Strategy
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from .index_set import IndexSet, indices_of, scatter, gather, merge
-from .worlds import IndexPlatesMessenger, complement, get_full_index, get_index_plates, add_indices, \
-    indexset_as_mask, mask_as_indexset
+from .index_set import IndexSet, gather, indices_of, scatter
+from .worlds import (
+    IndexPlatesMessenger,
+    add_indices,
+    complement,
+    get_full_index,
+    get_index_plates,
+    indexset_as_mask,
+    mask_as_indexset,
+)
 
 T, I = TypeVar("T"), TypeVar("I")
 
 
 class MultiWorldInterventions(IndexPlatesMessenger):
-
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].setdefault("event_dim", 0)
         name = msg.setdefault("name", f"intervention_{self.first_available_dim}")
 
         obs_indices = IndexSet(**{name: {0}})
-        act_indices = IndexSet.difference(indices_of(act, event_dim=event_dim), obs_indices)
+        act_indices = IndexSet.difference(
+            indices_of(act, event_dim=event_dim), obs_indices
+        )
 
         add_indices(IndexSet(**{name: set(range(0, len(act_indices)))}))
 

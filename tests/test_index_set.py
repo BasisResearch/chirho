@@ -4,7 +4,6 @@ import pytest
 
 from causal_pyro.counterfactual.index_set import IndexSet
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -31,9 +30,11 @@ def test_meet_indexset_commutes(wa, wb):
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
 @pytest.mark.parametrize("wc", INDEXSET_CASES)
 def test_meet_indexset_assoc(wa, wb, wc):
-    assert IndexSet.meet(wa, IndexSet.meet(wb, wc)) == \
-        IndexSet.meet(IndexSet.meet(wa, wb), wc) == \
-        IndexSet.meet(wa, wb, wc)
+    assert (
+        IndexSet.meet(wa, IndexSet.meet(wb, wc))
+        == IndexSet.meet(IndexSet.meet(wa, wb), wc)
+        == IndexSet.meet(wa, wb, wc)
+    )
 
 
 @pytest.mark.parametrize("w", INDEXSET_CASES)
@@ -57,9 +58,11 @@ def test_join_indexset_commutes(wa, wb):
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
 @pytest.mark.parametrize("wc", INDEXSET_CASES)
 def test_join_indexset_assoc(wa, wb, wc):
-    assert IndexSet.join(wa, IndexSet.join(wb, wc)) == \
-        IndexSet.join(IndexSet.join(wa, wb), wc) == \
-        IndexSet.join(wa, wb, wc)
+    assert (
+        IndexSet.join(wa, IndexSet.join(wb, wc))
+        == IndexSet.join(IndexSet.join(wa, wb), wc)
+        == IndexSet.join(wa, wb, wc)
+    )
 
 
 @pytest.mark.parametrize("w", INDEXSET_CASES)
@@ -71,19 +74,24 @@ def test_join_indexset_idempotent(w):
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
 @pytest.mark.parametrize("wc", INDEXSET_CASES)
 def test_join_indexset_distributive(wa, wb, wc):
-    assert IndexSet.meet(wa, IndexSet.join(wb, wc)) == \
-        IndexSet.join(IndexSet.meet(wa, wb), IndexSet.meet(wa, wc))
+    assert IndexSet.meet(wa, IndexSet.join(wb, wc)) == IndexSet.join(
+        IndexSet.meet(wa, wb), IndexSet.meet(wa, wc)
+    )
 
 
 @pytest.mark.parametrize("wa", INDEXSET_CASES)
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
 def test_complement_indexset_disjoint(wa, first_available_dim):
-    full = IndexSet(**{name: set(range(max(len(vs), max(vs) + 1))) for name, vs in wa.items()})
+    full = IndexSet(
+        **{name: set(range(max(len(vs), max(vs) + 1))) for name, vs in wa.items()}
+    )
     assert IndexSet.meet(wa, IndexSet.difference(full, wa)) == IndexSet()
 
 
 @pytest.mark.parametrize("wa", INDEXSET_CASES)
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
 def test_complement_indexset_idempotent(wa, first_available_dim):
-    full = IndexSet(**{name: set(range(max(len(vs), max(vs) + 1))) for name, vs in wa.items()})
+    full = IndexSet(
+        **{name: set(range(max(len(vs), max(vs) + 1))) for name, vs in wa.items()}
+    )
     assert IndexSet.difference(full, IndexSet.difference(full, wa)) == wa

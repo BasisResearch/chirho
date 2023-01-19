@@ -5,10 +5,15 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.index_set import IndexSet, indices_of, scatter, gather
-from causal_pyro.counterfactual.worlds import IndexPlatesMessenger, \
-    indexset_as_mask, mask_as_indexset, add_indices, get_full_index, get_index_plates
-
+from causal_pyro.counterfactual.index_set import IndexSet, gather, indices_of, scatter
+from causal_pyro.counterfactual.worlds import (
+    IndexPlatesMessenger,
+    add_indices,
+    get_full_index,
+    get_index_plates,
+    indexset_as_mask,
+    mask_as_indexset,
+)
 
 logger = logging.getLogger(__name__)
 
