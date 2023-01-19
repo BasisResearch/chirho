@@ -40,7 +40,7 @@ class IndexSet(dict[Hashable, Set[int]]):
     @classmethod
     def as_mask(
         cls,
-        mapping: Dict[Hashable, Set[int]],
+        mapping: "IndexSet",
         *,
         event_dim: int = 0,
         name_to_dim: Dict[Hashable, int] = {},
@@ -48,13 +48,14 @@ class IndexSet(dict[Hashable, Set[int]]):
         """
         Get a mask for indexing into a world.
         """
-        return torch.stack([
-            torch.tensor([
-                v in mapping.get(name, set())
-                for v in range(max(mapping.get(name, set()) or {0}) + 1)
-            ])
-            for name in sorted(mapping.keys())
-        ], dim=event_dim)
+        batch_shape = [1] * -min(name_to_dim.values())
+        inds = [slice(None)] * len(batch_shape)
+        for name, values in mapping.items():
+            inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
+            batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
+        mask = torch.zeros(tuple(batch_shape), dtype=torch.bool)
+        mask[tuple(inds)] = True
+        return mask[(...,) + (None,) * event_dim]
 
     @classmethod
     def from_mask(
@@ -67,14 +68,8 @@ class IndexSet(dict[Hashable, Set[int]]):
         """
         Get a world from a mask.
         """
-        return cls(**{
-            name: set(indices)
-            for name, indices in zip(
-                sorted(mask.shape[event_dim:]),
-                mask.unbind(event_dim)
-            )
-            if indices.any()
-        })
+        assert mask.dtype == torch.bool
+        raise NotImplementedError("TODO")
 
     @classmethod
     def meet(cls, *worlds: "IndexSet") -> "IndexSet":
