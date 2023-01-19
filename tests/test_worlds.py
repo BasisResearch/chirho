@@ -18,32 +18,43 @@ from causal_pyro.counterfactual.worlds import (
 logger = logging.getLogger(__name__)
 
 
-BATCH_SHAPES = list(set([
-    (),
-    (2,),
-    (2, 1),
-    (2, 3),
-    (1, 2, 3),
-    (2, 1, 3),
-    (2, 3, 1),
-    (2, 2,),
-    (2, 2, 2),
-    (2, 2, 3),
-]))
+BATCH_SHAPES = list(
+    set(
+        [
+            (),
+            (2,),
+            (2, 1),
+            (2, 3),
+            (1, 2, 3),
+            (2, 1, 3),
+            (2, 3, 1),
+            (
+                2,
+                2,
+            ),
+            (2, 2, 2),
+            (2, 2, 3),
+        ]
+    )
+)
 
-EVENT_SHAPES = list(set([
-    (),
-    (1,),
-    (2,),
-    (2, 1),
-    (1, 2),
-    (2, 2),
-    (3, 1),
-    (1, 1),
-    (2, 2, 1),
-    (2, 1, 2),
-    (2, 3, 2),
-]))
+EVENT_SHAPES = list(
+    set(
+        [
+            (),
+            (1,),
+            (2,),
+            (2, 1),
+            (1, 2),
+            (2, 2),
+            (3, 1),
+            (1, 1),
+            (2, 2, 1),
+            (2, 1, 2),
+            (2, 3, 2),
+        ]
+    )
+)
 
 
 @pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
@@ -59,18 +70,24 @@ def test_indices_of_tensor(batch_shape, event_shape, num_named, first_available_
 
     with IndexPlatesMessenger(first_available_dim):
         # overapproximate
-        add_indices(IndexSet(**{
-            name: set(range(max(2, batch_shape[dim])))
-            for dim, name in batch_dim_names.items()
-        }))
+        add_indices(
+            IndexSet(
+                **{
+                    name: set(range(max(2, batch_shape[dim])))
+                    for dim, name in batch_dim_names.items()
+                }
+            )
+        )
         value = torch.randn(batch_shape + event_shape)
         actual_world = indices_of(value, event_dim=len(event_shape))
 
-    expected_world = IndexSet(**{
-        name: set(range(batch_shape[dim]))
-        for dim, name in batch_dim_names.items()
-        if batch_shape[dim] > 1
-    })
+    expected_world = IndexSet(
+        **{
+            name: set(range(batch_shape[dim]))
+            for dim, name in batch_dim_names.items()
+            if batch_shape[dim] > 1
+        }
+    )
 
     assert actual_world == expected_world
 
@@ -79,7 +96,9 @@ def test_indices_of_tensor(batch_shape, event_shape, num_named, first_available_
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
 @pytest.mark.parametrize("num_named", [0, 1, 2, 3])
 @pytest.mark.parametrize("first_available_dim", [-1, -2, -3])
-def test_indices_of_distribution(batch_shape, event_shape, num_named, first_available_dim):
+def test_indices_of_distribution(
+    batch_shape, event_shape, num_named, first_available_dim
+):
     batch_dim_names = {
         first_available_dim - i: f"b{i}"
         for i in range(min(num_named, len(batch_shape)))
@@ -88,18 +107,28 @@ def test_indices_of_distribution(batch_shape, event_shape, num_named, first_avai
 
     with IndexPlatesMessenger(first_available_dim):
         # overapproximate
-        add_indices(IndexSet(**{
-            name: set(range(max(2, batch_shape[dim])))
-            for dim, name in batch_dim_names.items()
-        }))
-        value = dist.Normal(0, 1).expand(batch_shape + event_shape).to_event(len(event_shape))
+        add_indices(
+            IndexSet(
+                **{
+                    name: set(range(max(2, batch_shape[dim])))
+                    for dim, name in batch_dim_names.items()
+                }
+            )
+        )
+        value = (
+            dist.Normal(0, 1)
+            .expand(batch_shape + event_shape)
+            .to_event(len(event_shape))
+        )
         actual_world = indices_of(value, event_dim=len(event_shape))
 
-    expected_world = IndexSet(**{
-        name: set(range(batch_shape[dim]))
-        for dim, name in batch_dim_names.items()
-        if batch_shape[dim] > 1
-    })
+    expected_world = IndexSet(
+        **{
+            name: set(range(batch_shape[dim]))
+            for dim, name in batch_dim_names.items()
+            if batch_shape[dim] > 1
+        }
+    )
 
     assert actual_world == expected_world
 
@@ -142,5 +171,9 @@ def test_scatter_tensor(batch_shape, event_shape):
 def test_scatter_gather_tensor(batch_shape, event_shape):
     value = torch.randn(batch_shape + event_shape)
     world = IndexSet(...)
-    gather(scatter(value, world, event_dim=len(event_shape)), world, event_dim=len(event_shape))
+    gather(
+        scatter(value, world, event_dim=len(event_shape)),
+        world,
+        event_dim=len(event_shape),
+    )
     assert (orig_value == value).all()
