@@ -105,3 +105,19 @@ def scatter(value, world: IndexSet, *, result: Optional[T] = None, **kwargs):
     Scatter values from multiple worlds into a single shared object.
     """
     raise NotImplementedError
+
+
+def merge(partitioned_values: Dict[IndexSet, T], **kwargs) -> T:
+    """
+    Merges a dictionary of dense values into a single value.
+
+    :param dense_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    assert not functools.reduce(IndexSet.meet, partitioned_values.keys(), IndexSet()), \
+        "keys must be disjoint"
+    sparse_values = {k: gather(v, k, **kwargs) for k, v in partitioned_values.items()}
+    result = None
+    for indices, value in sparse_values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result

@@ -27,7 +27,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from .index_set import IndexSet, gather, indices_of, scatter
 
-T, I = TypeVar("T"), TypeVar("I")
+T = TypeVar("T")
 
 
 def complement(world: IndexSet) -> IndexSet:
