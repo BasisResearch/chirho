@@ -1,4 +1,4 @@
-from .index_set import IndexSet, gather, indices_of, scatter, merge
+from .index_set import IndexSet, indices_of, merge
 from .worlds import IndexPlatesMessenger, add_indices
 
 

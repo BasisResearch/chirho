@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional, TypeVar
 
 import pyro
 
-from .index_set import IndexSet
+from .index_set import IndexSet, merge
 from .worlds import get_index_plates, indexset_as_mask
 
 T = TypeVar("T")
@@ -55,7 +55,6 @@ class OnlyFactual(SelectWorldsMessenger):
 class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
 
     def apply(self, msg):
-        name = msg
         if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
             return
 
