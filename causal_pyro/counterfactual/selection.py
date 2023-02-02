@@ -12,6 +12,7 @@ class SelectWorldsMessenger(pyro.contrib.autoname.scoping.ScopeMessenger):
     """
     Effect handler to select a subset of worlds.
     """
+
     @property
     def indices(self) -> IndexSet:
         raise NotImplementedError
@@ -25,6 +26,7 @@ class OnlySelected(SelectWorldsMessenger):
     """
     Effect handler to select a subset of worlds.
     """
+
     def __init__(self, worlds: IndexSet, prefix: Optional[str] = None):
         self._worlds = worlds
         super().__init__(prefix=prefix)
@@ -38,6 +40,7 @@ class OnlyCounterfactual(SelectWorldsMessenger):
     """
     Effect handler to select only counterfactual worlds.
     """
+
     @property
     def indices(self) -> IndexSet:
         return IndexSet(**{f.name: set(range(1, f.size)) for f in get_index_plates()})
@@ -47,13 +50,13 @@ class OnlyFactual(SelectWorldsMessenger):
     """
     Effect handler to select only factual world.
     """
+
     @property
     def indices(self) -> IndexSet:
         return IndexSet(**{f.name: {0} for f in get_index_plates()})
 
 
 class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
-
     def apply(self, msg):
         if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
             return
@@ -74,7 +77,6 @@ class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
 
 
 class OnlyFactualConditioning(pyro.infer.reparam.strategies.Strategy):
-
     def configure(self, msg) -> Optional[OnlyFactualConditioningReparam]:
         if not msg["is_observed"]:
             return None

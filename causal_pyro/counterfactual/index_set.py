@@ -114,10 +114,11 @@ def merge(partitioned_values: Dict[IndexSet, T], **kwargs) -> Optional[T]:
     :param dense_values: A dictionary mapping index sets to values.
     :return: A single value.
     """
-    assert not functools.reduce(IndexSet.meet, partitioned_values.keys(), IndexSet()), \
-        "keys must be disjoint"
+    assert not functools.reduce(
+        IndexSet.meet, partitioned_values.keys(), IndexSet()
+    ), "keys must be disjoint"
     sparse_values = {k: gather(v, k, **kwargs) for k, v in partitioned_values.items()}
     result = None
     for indices, value in sparse_values.items():
-        result  = scatter(value, indices, result=result, **kwargs)
+        result = scatter(value, indices, result=result, **kwargs)
     return result

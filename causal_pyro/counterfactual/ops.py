@@ -10,8 +10,12 @@ class MultiWorldInterventions(IndexPlatesMessenger):
             msg["name"] = f"intervention_{self.first_available_dim}"
         name = msg["name"]
 
-        obs_indices = IndexSet.join(IndexSet(**{name: {0}}), indices_of(obs, event_dim=event_dim))
-        act_indices = IndexSet.join(IndexSet(**{name: {1}}), indices_of(act, event_dim=event_dim))
+        obs_indices = IndexSet.join(
+            IndexSet(**{name: {0}}), indices_of(obs, event_dim=event_dim)
+        )
+        act_indices = IndexSet.join(
+            IndexSet(**{name: {1}}), indices_of(act, event_dim=event_dim)
+        )
 
         add_indices(IndexSet.join(obs_indices, act_indices))
 

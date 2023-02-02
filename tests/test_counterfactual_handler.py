@@ -24,7 +24,6 @@ x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
-
     # estimand: p(y | do(x)) = \int p(y | z, x) p(x' | z) p(z) dz dx'
 
     def model():
@@ -130,13 +129,22 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
             "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
         Z = intervene(
-            Z, torch.full(event_shape, x_cf_value - 1.0), event_dim=len(event_shape), name="Z"
+            Z,
+            torch.full(event_shape, x_cf_value - 1.0),
+            event_dim=len(event_shape),
+            name="Z",
         )
         X = pyro.sample(
-            "x", dist.Normal(Z if nested else 0., 1).expand(Z.shape if nested else event_shape).to_event(len(event_shape))
+            "x",
+            dist.Normal(Z if nested else 0.0, 1)
+            .expand(Z.shape if nested else event_shape)
+            .to_event(len(event_shape)),
         )
         X = intervene(
-            X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape), name="X",
+            X,
+            torch.full(event_shape, x_cf_value),
+            event_dim=len(event_shape),
+            name="X",
         )
         Y = pyro.sample(
             "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
@@ -147,6 +155,9 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
         Z, X, Y = model()
 
         assert indices_of(Z, event_dim=len(event_shape)) == IndexSet(Z={0, 1})
-        assert indices_of(X, event_dim=len(event_shape)) == \
-            IndexSet(X={0, 1}, Z={0, 1}) if nested else IndexSet(X={0, 1})
+        assert (
+            indices_of(X, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
+            if nested
+            else IndexSet(X={0, 1})
+        )
         assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})

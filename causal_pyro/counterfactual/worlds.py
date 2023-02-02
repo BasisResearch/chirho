@@ -189,10 +189,12 @@ def _scatter_tensor(
 
     if result is None:
         index_plates = get_index_plates()
-        result_shape = list(torch.broadcast_shapes(
-            value.shape,
-            (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
-        ))
+        result_shape = list(
+            torch.broadcast_shapes(
+                value.shape,
+                (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
+            )
+        )
         for name, indices in world.items():
             result_shape[name_to_dim[name] - event_dim] = index_plates[name].size
         result = value.new_zeros(result_shape)
