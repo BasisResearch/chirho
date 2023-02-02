@@ -42,43 +42,43 @@ class IndexSet(dict[str, Set[int]]):
         )
 
     def __hash__(self):
-        return hash(self.as_relation(self))
+        return hash(indexset_as_relation(self))
 
-    @classmethod
-    def as_relation(cls, mapping: Dict[str, Set[int]]) -> FrozenSet[Tuple[str, int]]:
-        return frozenset((k, v) for k, vs in mapping.items() for v in vs)
 
-    @classmethod
-    def from_relation(cls, relation: FrozenSet[Tuple[str, int]]) -> "IndexSet":
-        return cls(
-            **{
-                k: {v for _, v in vs}
-                for k, vs in itertools.groupby(sorted(relation), key=lambda x: x[0])
-            }
-        )
+def indexset_as_relation(mapping: Dict[str, Set[int]]) -> FrozenSet[Tuple[str, int]]:
+    return frozenset((k, v) for k, vs in mapping.items() for v in vs)
 
-    @classmethod
-    def meet(cls, *worlds: "IndexSet") -> "IndexSet":
-        """
-        Compute the intersection of multiple worlds.
-        """
-        return cls.from_relation(
-            frozenset.intersection(*(map(cls.as_relation, worlds)))
-        )
 
-    @classmethod
-    def join(cls, *worlds: "IndexSet") -> "IndexSet":
-        """
-        Compute the union of multiple worlds.
-        """
-        return cls.from_relation(frozenset.union(*map(cls.as_relation, worlds)))
+def relation_as_indexset(relation: FrozenSet[Tuple[str, int]]) -> "IndexSet":
+    return IndexSet(
+        **{
+            k: {v for _, v in vs}
+            for k, vs in itertools.groupby(sorted(relation), key=lambda x: x[0])
+        }
+    )
 
-    @classmethod
-    def difference(cls, lhs: "IndexSet", rhs: "IndexSet") -> "IndexSet":
-        """
-        Compute the difference of two worlds.
-        """
-        return cls.from_relation(cls.as_relation(lhs) - cls.as_relation(rhs))
+
+def meet(*worlds: IndexSet) -> IndexSet:
+    """
+    Compute the intersection of multiple worlds.
+    """
+    return relation_as_indexset(
+        frozenset.intersection(*(map(indexset_as_relation, worlds)))
+    )
+
+
+def join(*worlds: IndexSet) -> IndexSet:
+    """
+    Compute the union of multiple worlds.
+    """
+    return relation_as_indexset(frozenset.union(*map(indexset_as_relation, worlds)))
+
+
+def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
+    """
+    Compute the difference of two worlds.
+    """
+    return relation_as_indexset(indexset_as_relation(lhs) - indexset_as_relation(rhs))
 
 
 @functools.singledispatch
@@ -115,7 +115,7 @@ def merge(partitioned_values: Dict[IndexSet, T], **kwargs) -> Optional[T]:
     :return: A single value.
     """
     assert not functools.reduce(
-        IndexSet.meet, partitioned_values.keys(), IndexSet()
+        meet, partitioned_values.keys(), IndexSet()
     ), "keys must be disjoint"
     sparse_values = {k: gather(v, k, **kwargs) for k, v in partitioned_values.items()}
     result = None

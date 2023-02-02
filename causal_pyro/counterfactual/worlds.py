@@ -6,7 +6,7 @@ import pyro
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from .index_set import IndexSet, gather, indices_of, scatter
+from .index_set import IndexSet, difference, gather, indices_of, join, meet, scatter
 
 T = TypeVar("T")
 
@@ -78,9 +78,7 @@ class _LazyPlateMessenger(IndepMessenger):
             "param",
         ) or pyro.poutine.util.site_is_subsample(msg):
             return
-        if self.frame.name in IndexSet.join(
-            indices_of(msg["value"]), indices_of(msg["fn"])
-        ):
+        if self.frame.name in join(indices_of(msg["value"]), indices_of(msg["fn"])):
             super()._process_message(msg)
 
 
@@ -215,7 +213,7 @@ def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
         return IndexSet()
     if all(isinstance(v, int) for v in value):
         return indices_of(torch.Size(value))
-    return IndexSet.join(*map(indices_of, value))
+    return join(*map(indices_of, value))
 
 
 @indices_of.register

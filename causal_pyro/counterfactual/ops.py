@@ -1,4 +1,4 @@
-from .index_set import IndexSet, indices_of, merge
+from .index_set import IndexSet, indices_of, join, merge
 from .worlds import IndexPlatesMessenger, add_indices
 
 
@@ -10,13 +10,13 @@ class MultiWorldInterventions(IndexPlatesMessenger):
             msg["name"] = f"intervention_{self.first_available_dim}"
         name = msg["name"]
 
-        obs_indices = IndexSet.join(
+        obs_indices = join(
             IndexSet(**{name: {0}}), indices_of(obs, event_dim=event_dim)
         )
-        act_indices = IndexSet.join(
+        act_indices = join(
             IndexSet(**{name: {1}}), indices_of(act, event_dim=event_dim)
         )
 
-        add_indices(IndexSet.join(obs_indices, act_indices))
+        add_indices(join(obs_indices, act_indices))
 
         msg["value"] = merge({obs_indices: obs, act_indices: act}, event_dim=event_dim)
