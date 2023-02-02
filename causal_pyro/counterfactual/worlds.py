@@ -11,17 +11,6 @@ from .index_set import IndexSet, gather, indices_of, scatter
 T = TypeVar("T")
 
 
-def complement(world: IndexSet) -> IndexSet:
-    """
-    Compute the complement of a world.
-    """
-    diff = IndexSet.difference(get_full_index(), world)
-    # drop any axes that are still full, i.e. were not in world
-    return IndexSet(
-        **{name: indices for name, indices in diff.items() if name in world}
-    )
-
-
 @pyro.poutine.runtime.effectful(type="get_full_index")
 def get_full_index() -> IndexSet:
     """
