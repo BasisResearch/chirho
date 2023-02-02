@@ -71,3 +71,11 @@ class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
         msg["fn"] = pyro.distributions.Delta(
             msg["value"], event_dim=len(msg["fn"].event_shape)
         ).mask(False)
+
+
+class OnlyFactualConditioning(pyro.infer.reparam.strategies.Strategy):
+
+    def configure(self, msg) -> Optional[OnlyFactualConditioningReparam]:
+        if not msg["is_observed"]:
+            return None
+        return OnlyFactualConditioningReparam()
