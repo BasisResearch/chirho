@@ -1,28 +1,9 @@
 import collections
-import functools
 import numbers
-from typing import (
-    Callable,
-    Container,
-    Dict,
-    FrozenSet,
-    Generic,
-    Hashable,
-    List,
-    Mapping,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Dict, Hashable, List, Optional, TypeVar, Union
 
 import pyro
 import torch
-from pyro.infer.reparam.reparam import Reparam
-from pyro.infer.reparam.strategies import Strategy
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from .index_set import IndexSet, gather, indices_of, scatter
@@ -71,7 +52,7 @@ def indexset_as_mask(
     if name_to_dim is None:
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
     batch_shape = [1] * -min(name_to_dim.values())
-    inds = [slice(None)] * len(batch_shape)
+    inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
     for name, values in world.items():
         inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
         batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
@@ -159,9 +140,9 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 assert (
                     0
                     <= min(indices)
-                    <= len(indices)
+                    <= len(indices) - 1
                     <= max(indices)
-                    <= self.plates[name].size
+                    < self.plates[name].size
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
 
 
@@ -181,6 +162,9 @@ def _gather_tensor(
 
     result = value
     for name, indices in world.items():
+        dim = name_to_dim[name] - event_dim
+        if len(result.shape) < -dim or result.shape[dim] == 1:
+            continue
         result = result.index_select(
             name_to_dim[name] - event_dim,
             torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
@@ -203,18 +187,22 @@ def _scatter_tensor(
     if name_to_dim is None:
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
 
-    index = [slice(None)] * len(value.shape)
-    for name, indices in world.items():
-        index[name_to_dim[name] - event_dim] = torch.tensor(
-            list(sorted(indices)), device=value.device, dtype=torch.long
-        )
-
     if result is None:
         index_plates = get_index_plates()
-        result_shape = list(value.shape[:len(value.shape) - event_dim])
+        result_shape = list(torch.broadcast_shapes(
+            value.shape,
+            (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
+        ))
         for name, indices in world.items():
             result_shape[name_to_dim[name] - event_dim] = index_plates[name].size
         result = value.new_zeros(result_shape)
+
+    index: List[Union[slice, torch.Tensor]] = [slice(None)] * len(result.shape)
+    for name, indices in world.items():
+        if result.shape[name_to_dim[name] - event_dim] > 1:
+            index[name_to_dim[name] - event_dim] = torch.tensor(
+                list(sorted(indices)), device=value.device, dtype=torch.long
+            )
 
     result[tuple(index)] = value
     return result
@@ -245,7 +233,7 @@ def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
         **{
             f.name: set(range(value[f.dim]))
             for f in get_index_plates().values()
-            if value[f.dim] > 1
+            if -f.dim <= len(value) and value[f.dim] > 1
         }
     )
 
