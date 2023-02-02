@@ -16,25 +16,3 @@ class MultiWorldInterventions(IndexPlatesMessenger):
         add_indices(IndexSet(**{name: set(range(max(act_indices[name])))}))
 
         msg["value"] = merge({obs_indices: obs, act_indices: act}, event_dim=event_dim)
-
-
-class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
-
-    def apply(self, msg):
-        name = msg
-        if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
-            return
-
-        with OnlyFactual(prefix="factual") as fw:
-            # TODO prevent unbounded recursion here
-            fv = pyro.sample(msg["name"], msg["fn"], obs=msg["value"])
-
-        with OnlyCounterfactual(prefix="counterfactual") as cw:
-            cv = pyro.sample(msg["name"], msg["fn"])
-
-        msg["value"] = merge({fw: fv, cw: cv}, event_dim=len(msg["fn"].event_shape))
-
-        # emulate a deterministic statement
-        msg["fn"] = pyro.distributions.Delta(
-            msg["value"], event_dim=len(msg["fn"].event_shape)
-        ).mask(False)

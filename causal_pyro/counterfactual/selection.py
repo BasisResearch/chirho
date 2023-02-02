@@ -50,3 +50,25 @@ class OnlyFactual(SelectWorldsMessenger):
     @property
     def indices(self) -> IndexSet:
         return IndexSet(**{f.name: {0} for f in get_index_plates()})
+
+
+class OnlyFactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
+
+    def apply(self, msg):
+        name = msg
+        if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
+            return
+
+        with OnlyFactual(prefix="factual") as fw:
+            # TODO prevent unbounded recursion here
+            fv = pyro.sample(msg["name"], msg["fn"], obs=msg["value"])
+
+        with OnlyCounterfactual(prefix="counterfactual") as cw:
+            cv = pyro.sample(msg["name"], msg["fn"])
+
+        msg["value"] = merge({fw: fv, cw: cv}, event_dim=len(msg["fn"].event_shape))
+
+        # emulate a deterministic statement
+        msg["fn"] = pyro.distributions.Delta(
+            msg["value"], event_dim=len(msg["fn"].event_shape)
+        ).mask(False)
