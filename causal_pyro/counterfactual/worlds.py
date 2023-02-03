@@ -14,7 +14,7 @@ T = TypeVar("T")
 @pyro.poutine.runtime.effectful(type="get_full_index")
 def get_full_index() -> IndexSet:
     """
-    Compute the full world.
+    Compute the full indexset.
     """
     raise NotImplementedError
 
@@ -25,24 +25,24 @@ def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
 
 
 @pyro.poutine.runtime.effectful(type="add_indices")
-def add_indices(world: IndexSet) -> IndexSet:
-    return world
+def add_indices(indexset: IndexSet) -> IndexSet:
+    return indexset
 
 
 def indexset_as_mask(
-    world: IndexSet,
+    indexset: IndexSet,
     *,
     event_dim: int = 0,
     name_to_dim: Optional[Dict[Hashable, int]] = None,
 ) -> torch.Tensor:
     """
-    Get a mask for indexing into a world.
+    Get a mask for indexing into a indexset.
     """
     if name_to_dim is None:
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
     batch_shape = [1] * -min(name_to_dim.values())
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
-    for name, values in world.items():
+    for name, values in indexset.items():
         inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
         batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
     mask = torch.zeros(tuple(batch_shape), dtype=torch.bool)
@@ -114,8 +114,8 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         msg["done"], msg["stop"] = True, True
 
     def _pyro_add_indices(self, msg):
-        (world,) = msg["args"]
-        for name, indices in world.items():
+        (indexset,) = msg["args"]
+        for name, indices in indexset.items():
             if name not in self.plates:
                 new_size = max(max(indices) + 1, len(indices))
                 self.plates[name] = _LazyPlateMessenger(
@@ -136,7 +136,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
 @gather.register
 def _gather_tensor(
     value: torch.Tensor,
-    world: IndexSet,
+    indexset: IndexSet,
     *,
     event_dim: Optional[int] = None,
     name_to_dim: Optional[Dict[Hashable, int]] = None,
@@ -148,7 +148,7 @@ def _gather_tensor(
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
 
     result = value
-    for name, indices in world.items():
+    for name, indices in indexset.items():
         dim = name_to_dim[name] - event_dim
         if len(result.shape) < -dim or result.shape[dim] == 1:
             continue
@@ -162,7 +162,7 @@ def _gather_tensor(
 @scatter.register
 def _scatter_tensor(
     value: torch.Tensor,
-    world: IndexSet,
+    indexset: IndexSet,
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
@@ -182,12 +182,12 @@ def _scatter_tensor(
                 (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
             )
         )
-        for name, indices in world.items():
+        for name, indices in indexset.items():
             result_shape[name_to_dim[name] - event_dim] = index_plates[name].size
         result = value.new_zeros(result_shape)
 
     index: List[Union[slice, torch.Tensor]] = [slice(None)] * len(result.shape)
-    for name, indices in world.items():
+    for name, indices in indexset.items():
         if result.shape[name_to_dim[name] - event_dim] > 1:
             index[name_to_dim[name] - event_dim] = torch.tensor(
                 list(sorted(indices)), device=value.device, dtype=torch.long
