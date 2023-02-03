@@ -3,16 +3,7 @@ Module for working with index sets.
 """
 import functools
 import itertools
-from typing import (
-    Dict,
-    FrozenSet,
-    Iterable,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Dict, FrozenSet, Iterable, Optional, Set, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 
@@ -22,6 +13,7 @@ class IndexSet(dict[str, Set[int]]):
     This class is used to store sets of integers, where the integers
     represent the indices of the elements present in a list or array.
     """
+
     def __init__(self, **mapping: Union[int, Iterable[int]]):
         super().__init__(
             **{
