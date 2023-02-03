@@ -1,43 +1,27 @@
 """
 Module for working with index sets.
 """
-import collections
-import contextlib
 import functools
 import itertools
-import numbers
 from typing import (
-    Callable,
-    Container,
     Dict,
     FrozenSet,
-    Generic,
     Iterable,
-    List,
-    Mapping,
-    NamedTuple,
     Optional,
-    Sequence,
     Set,
     Tuple,
     TypeVar,
     Union,
 )
 
-import pyro
-import torch
-
 T = TypeVar("T")
 
 
 class IndexSet(dict[str, Set[int]]):
     """
-    A dict mapping string keys to sets of integers.
-
     This class is used to store sets of integers, where the integers
-    represent the indices of the elements in a list or array.
+    represent the indices of the elements present in a list or array.
     """
-
     def __init__(self, **mapping: Union[int, Iterable[int]]):
         super().__init__(
             **{
@@ -51,7 +35,7 @@ class IndexSet(dict[str, Set[int]]):
         return hash(indexset_as_relation(self))
 
 
-def indexset_as_relation(mapping: Dict[str, Set[int]]) -> FrozenSet[Tuple[str, int]]:
+def indexset_as_relation(mapping: IndexSet) -> FrozenSet[Tuple[str, int]]:
     """
     Convert an :class:``IndexSet`` to a relation.
 
@@ -63,7 +47,7 @@ def indexset_as_relation(mapping: Dict[str, Set[int]]) -> FrozenSet[Tuple[str, i
     return frozenset((k, v) for k, vs in mapping.items() for v in vs)
 
 
-def relation_as_indexset(relation: FrozenSet[Tuple[str, int]]) -> "IndexSet":
+def relation_as_indexset(relation: FrozenSet[Tuple[str, int]]) -> IndexSet:
     """
     Converts a relation into an IndexSet.
 
@@ -91,6 +75,24 @@ def meet(*indexsets: IndexSet) -> IndexSet:
 
     For example, the meet of the indexsets ``{"a": {0, 1}}`` and ``{"a": {1, 2}}``
     is ``{"a": {1}}``.
+
+    Note::
+
+        meet is associative and commutative:
+
+        .. code-block:: python
+
+            meet(a, meet(b, c)) == meet(meet(a, b), c)
+            meet(a, b) == meet(b, a)
+
+    Note::
+
+        meet is idempotent:
+
+        .. code-block:: python
+
+            meet(a, a) == a
+            meet(a, meet(a, b)) == meet(a, b)
     """
     return relation_as_indexset(
         frozenset.intersection(*(map(indexset_as_relation, indexsets)))
@@ -103,6 +105,15 @@ def join(*indexsets: IndexSet) -> IndexSet:
 
     For example, the join of the indexsets ``{"a": {0, 1}}`` and ``{"b": {0, 1}}``
     is ``{"a": {0, 1}, "b": {0, 1}}``.
+
+    Note::
+
+        join is associative and commutative:
+
+        .. code-block:: python
+
+            join(a, join(b, c)) == join(join(a, b), c)
+            join(a, b) == join(b, a)
     """
     return relation_as_indexset(frozenset.union(*map(indexset_as_relation, indexsets)))
 
