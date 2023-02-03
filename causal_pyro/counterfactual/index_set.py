@@ -1,5 +1,20 @@
 """
-Module for working with index sets.
+Index sets
+==========
+
+Index sets are used to represent sets of indices of elements in a list or array.
+They are used to represent sets of indices of variables in a model, and sets of
+indices of observations in a dataset.
+
+Index sets are represented as a mapping from strings to sets of integers.
+The strings are labels for the sets of indices, and the integers are the indices
+of the elements in the list or array.
+
+For example, the index set
+```
+{"x": {0, 1}, "y": {2, 3}}
+```
+represents the sets of indices of the variables "x" and "y" in a model.
 """
 import functools
 import itertools
@@ -10,7 +25,7 @@ T = TypeVar("T")
 
 class IndexSet(dict[str, Set[int]]):
     """
-    This class is used to store sets of integers, where the integers
+    Data structure used to store labelled sets of integers, where the integers
     represent the indices of the elements present in a list or array.
     """
 
@@ -67,27 +82,25 @@ def meet(*indexsets: IndexSet) -> IndexSet:
 
     Example::
 
-        .. code-block:: python
+        meet(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={1})
 
-            meet({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {1}}
+    .. note::
 
-    Note::
+        ``meet``, ``join``, and ``difference`` satisfy several algebraic equations.
 
-        meet is associative and commutative:
-
-        .. code-block:: python
+        ``meet`` is associative and commutative::
 
             meet(a, meet(b, c)) == meet(meet(a, b), c)
             meet(a, b) == meet(b, a)
 
-    Note::
-
-        meet is idempotent:
-
-        .. code-block:: python
+        ``meet`` is idempotent::
 
             meet(a, a) == a
             meet(a, meet(a, b)) == meet(a, b)
+
+        ``meet`` distributes over ``join``::
+
+            meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
     """
     return relation_as_indexset(
         frozenset.intersection(*(map(indexset_as_relation, indexsets)))
@@ -100,18 +113,25 @@ def join(*indexsets: IndexSet) -> IndexSet:
 
     Example::
 
-        .. code-block:: python
+        join(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0, 1, 2})
 
-            join({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {0, 1, 2}}
+    .. note::
 
-    Note::
+        ``meet``, ``join``, and ``difference`` satisfy several algebraic equations.
 
-        join is associative and commutative:
-
-        .. code-block:: python
+        ``join`` is associative and commutative::
 
             join(a, join(b, c)) == join(join(a, b), c)
             join(a, b) == join(b, a)
+
+        ``join`` is idempotent::
+
+            join(a, a) == a
+            join(a, join(a, b)) == join(a, b)
+
+        ``join`` distributes over ``meet``::
+
+            meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
     """
     return relation_as_indexset(frozenset.union(*map(indexset_as_relation, indexsets)))
 
@@ -122,9 +142,7 @@ def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
 
     Example::
 
-        .. code-block:: python
-
-            difference({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {0}}
+        difference(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0})
     """
     return relation_as_indexset(indexset_as_relation(lhs) - indexset_as_relation(rhs))
 
