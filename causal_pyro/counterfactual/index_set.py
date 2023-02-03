@@ -73,8 +73,11 @@ def meet(*indexsets: IndexSet) -> IndexSet:
     """
     Compute the intersection of multiple indexsets.
 
-    For example, the meet of the indexsets ``{"a": {0, 1}}`` and ``{"a": {1, 2}}``
-    is ``{"a": {1}}``.
+    Example::
+
+        .. code-block:: python
+
+            meet({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {1}}
 
     Note::
 
@@ -103,8 +106,11 @@ def join(*indexsets: IndexSet) -> IndexSet:
     """
     Compute the union of multiple indexsets.
 
-    For example, the join of the indexsets ``{"a": {0, 1}}`` and ``{"b": {0, 1}}``
-    is ``{"a": {0, 1}, "b": {0, 1}}``.
+    Example::
+
+        .. code-block:: python
+
+            join({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {0, 1, 2}}
 
     Note::
 
@@ -122,8 +128,11 @@ def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
     """
     Compute the difference of two indexsets.
 
-    For example, the difference of the indexsets ``{"a": {0, 1}}`` and ``{"a": {1, 2}}``
-    is ``{"a": {0}}``.
+    Example::
+
+        .. code-block:: python
+
+            difference({"a": {0, 1}}, {"a": {1, 2}}) == {"a": {0}}
     """
     return relation_as_indexset(indexset_as_relation(lhs) - indexset_as_relation(rhs))
 
