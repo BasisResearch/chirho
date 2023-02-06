@@ -84,7 +84,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         assert first_available_dim < 0
         self._orig_dim = first_available_dim
         self.first_available_dim = first_available_dim
-        self.plates = {}
+        self.plates = collections.OrderedDict()
         super().__init__()
 
     def __enter__(self):
