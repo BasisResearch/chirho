@@ -17,8 +17,7 @@ For example, the index set
 represents the sets of indices of the variables "x" and "y" in a model.
 """
 import functools
-import itertools
-from typing import Dict, FrozenSet, Iterable, Optional, Set, Tuple, TypeVar, Union
+from typing import Dict, Iterable, Optional, Set, TypeVar, Union
 
 T = TypeVar("T")
 
@@ -39,41 +38,21 @@ class IndexSet(dict[str, Set[int]]):
         )
 
     def __hash__(self):
-        return hash(indexset_as_relation(self))
+        return hash(frozenset((k, v) for k, vs in self.items() for v in vs))
 
 
-def indexset_as_relation(mapping: IndexSet) -> FrozenSet[Tuple[str, int]]:
+def unifiable(*indexsets: IndexSet) -> bool:
     """
-    Convert an :class:``IndexSet`` to a relation.
+    Check if indexsets can be unified.
 
-    The indexset is a mapping from strings to sets of integers.
-    This function converts the indexset to a relation, which is
-    a :class:``set`` of pairs of strings and integers. Algebraic operations
-    on indexsets are easy to implement in terms of Python set operations.
+    Two indexsets can be unified if they have the same values for all shared keys.
     """
-    return frozenset((k, v) for k, vs in mapping.items() for v in vs)
-
-
-def relation_as_indexset(relation: FrozenSet[Tuple[str, int]]) -> IndexSet:
-    """
-    Converts a relation into an IndexSet.
-
-    The input relation is a set of tuples,
-    where the first element of the tuple is a string and the second element is
-    an integer. The output IndexSet is a dict where the keys are strings and the
-    values are sets of integers.
-
-    The keys of the output IndexSet are the same
-    as the strings in the tuples in the input relation, and the values of the
-    output IndexSet are the set of integers in the tuples in the input relation
-    that are associated with the key.
-    """
-    return IndexSet(
-        **{
-            k: {v for _, v in vs}
-            for k, vs in itertools.groupby(sorted(relation), key=lambda x: x[0])
-        }
-    )
+    if len(indexsets) < 2:
+        return True
+    if len(indexsets) == 2:
+        lhs, rhs = indexsets
+        return all(lhs[v] == rhs[v] for v in set(lhs.keys()) & set(rhs.keys()))
+    return all(unifiable(a, b) for a, b in zip(indexsets[:-1], indexsets[1:]))
 
 
 def meet(*indexsets: IndexSet) -> IndexSet:
@@ -102,9 +81,10 @@ def meet(*indexsets: IndexSet) -> IndexSet:
 
             meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
     """
-    return relation_as_indexset(
-        frozenset.intersection(*(map(indexset_as_relation, indexsets)))
-    )
+    return IndexSet(**{
+        k: set.intersection(*[vs[k] for vs in indexsets if k in vs])
+        for k in set.intersection(*map(set, indexsets))
+    })
 
 
 def join(*indexsets: IndexSet) -> IndexSet:
@@ -133,7 +113,10 @@ def join(*indexsets: IndexSet) -> IndexSet:
 
             meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
     """
-    return relation_as_indexset(frozenset.union(*map(indexset_as_relation, indexsets)))
+    return IndexSet(**{
+        k: set.union(*[vs[k] for vs in indexsets if k in vs])
+        for k in set.union(*map(set, indexsets))
+    })
 
 
 def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
@@ -144,7 +127,7 @@ def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
 
         difference(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0})
     """
-    return relation_as_indexset(indexset_as_relation(lhs) - indexset_as_relation(rhs))
+    return IndexSet(**{k: lhs[k] - rhs.get(k, set()) for k in lhs})
 
 
 @functools.singledispatch
