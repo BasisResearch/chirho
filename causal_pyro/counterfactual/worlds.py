@@ -122,6 +122,20 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
 
 
 @gather.register
+def _gather_number(
+    value: numbers.Number,
+    indexset: IndexSet,
+    *,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
+) -> Union[numbers.Number, torch.Tensor]:
+    assert event_dim is None or event_dim == 0
+    return gather(
+        torch.as_tensor(value), indexset, event_dim=event_dim, name_to_dim=name_to_dim
+    )
+
+
+@gather.register
 def _gather_tensor(
     value: torch.Tensor,
     indexset: IndexSet,
@@ -145,6 +159,25 @@ def _gather_tensor(
             torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
         )
     return result
+
+
+@scatter.register
+def _scatter_number(
+    value: numbers.Number,
+    indexset: IndexSet,
+    *,
+    result: Optional[torch.Tensor] = None,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
+) -> Union[numbers.Number, torch.Tensor]:
+    assert event_dim is None or event_dim == 0
+    return scatter(
+        torch.as_tensor(value),
+        indexset,
+        result=result,
+        event_dim=event_dim,
+        name_to_dim=name_to_dim,
+    )
 
 
 @scatter.register
