@@ -83,7 +83,7 @@ def meet(*indexsets: IndexSet) -> IndexSet:
     """
     return IndexSet(**{
         k: set.intersection(*[vs[k] for vs in indexsets if k in vs])
-        for k in set.intersection(*map(set, indexsets))
+        for k in set.intersection(*(set(vs) for vs in indexsets))
     })
 
 
@@ -115,7 +115,7 @@ def join(*indexsets: IndexSet) -> IndexSet:
     """
     return IndexSet(**{
         k: set.union(*[vs[k] for vs in indexsets if k in vs])
-        for k in set.union(*map(set, indexsets))
+        for k in set.union(*(set(vs) for vs in indexsets))
     })
 
 
