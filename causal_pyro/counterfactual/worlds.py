@@ -6,27 +6,19 @@ import pyro
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from .index_set import IndexSet, difference, gather, indices_of, join, meet, scatter
+from .index_set import IndexSet, gather, indices_of, join, scatter
 
 T = TypeVar("T")
-
-
-@pyro.poutine.runtime.effectful(type="get_full_index")
-def get_full_index() -> IndexSet:
-    """
-    Compute the full indexset.
-    """
-    raise NotImplementedError
-
-
-@pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
-    raise NotImplementedError
 
 
 @pyro.poutine.runtime.effectful(type="add_indices")
 def add_indices(indexset: IndexSet) -> IndexSet:
     return indexset
+
+
+@pyro.poutine.runtime.effectful(type="get_index_plates")
+def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
+    raise NotImplementedError
 
 
 def indexset_as_mask(
@@ -36,7 +28,7 @@ def indexset_as_mask(
     name_to_dim: Optional[Dict[Hashable, int]] = None,
 ) -> torch.Tensor:
     """
-    Get a mask for indexing into a indexset.
+    Get a dense mask tensor for indexing into a tensor from an indexset.
     """
     if name_to_dim is None:
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
@@ -58,6 +50,8 @@ def mask_as_indexset(
 ) -> IndexSet:
     """
     Get a sparse index set from a dense mask.
+
+    .. warning:: This is an expensive operation primarily useful for writing unit tests.
     """
     assert mask.dtype == torch.bool
     if name_to_dim is None:
@@ -102,12 +96,6 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         for name in reversed(list(self.plates.keys())):
             self.plates.pop(name).__exit__(*args)
         return super().__exit__(*args)
-
-    def _pyro_get_full_index(self, msg):
-        msg["value"] = IndexSet(
-            **{name: set(range(plate.size)) for name, plate in self.plates.items()}
-        )
-        msg["stop"], msg["done"] = True, True
 
     def _pyro_get_index_plates(self, msg):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
@@ -205,15 +193,6 @@ def _indices_of_number(value: numbers.Number, **kwargs) -> IndexSet:
 @indices_of.register
 def _indices_of_bool(value: bool, **kwargs) -> IndexSet:
     return IndexSet()
-
-
-@indices_of.register
-def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
-    if not value:
-        return IndexSet()
-    if all(isinstance(v, int) for v in value):
-        return indices_of(torch.Size(value))
-    return join(*map(indices_of, value))
 
 
 @indices_of.register

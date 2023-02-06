@@ -9,7 +9,6 @@ from causal_pyro.counterfactual.index_set import IndexSet, gather, indices_of, s
 from causal_pyro.counterfactual.worlds import (
     IndexPlatesMessenger,
     add_indices,
-    get_full_index,
     get_index_plates,
     indexset_as_mask,
     mask_as_indexset,
