@@ -1,21 +1,3 @@
-"""
-Index sets
-==========
-
-Index sets are used to represent sets of indices of elements in a list or array.
-They are used to represent sets of indices of variables in a model, and sets of
-indices of observations in a dataset.
-
-Index sets are represented as a mapping from strings to sets of integers.
-The strings are labels for the sets of indices, and the integers are the indices
-of the elements in the list or array.
-
-For example, the index set
-```
-{"x": {0, 1}, "y": {2, 3}}
-```
-represents the sets of indices of the variables "x" and "y" in a model.
-"""
 import functools
 from typing import Dict, Iterable, Optional, Set, TypeVar, Union
 
@@ -24,8 +6,19 @@ T = TypeVar("T")
 
 class IndexSet(dict[str, Set[int]]):
     """
-    Data structure used to store labelled sets of integers, where the integers
-    represent the indices of the elements present in a list or array.
+    Index sets are used to represent sets of indices of elements in a list or array.
+    They are used to represent sets of indices of variables in a model, and sets of
+    indices of observations in a dataset.
+
+    Index sets are represented as a mapping from strings to sets of integers.
+    The strings are labels for the sets of indices, and the integers are the indices
+    of the elements in the list or array.
+
+    For example, the index set
+    ```
+    {"x": {0, 1}, "y": {2, 3}}
+    ```
+    represents the sets of indices of the variables "x" and "y" in a model.
     """
 
     def __init__(self, **mapping: Union[int, Iterable[int]]):
