@@ -14,10 +14,10 @@ class IndexSet(dict[str, Set[int]]):
     The strings are labels for the sets of indices, and the integers are the indices
     of the elements in the list or array.
 
-    For example, the index set
-    ```
-    {"x": {0, 1}, "y": {2, 3}}
-    ```
+    For example, the index set::
+
+        {"x": {0, 1}, "y": {2, 3}}
+
     represents the sets of indices of the variables "x" and "y" in a model.
     """
 
