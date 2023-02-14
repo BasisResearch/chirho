@@ -52,7 +52,7 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
            return act
 
 """
-from typing import Callable, Dict, Iterable, Optional, Set, TypeVar, Union
+from typing import Callable, Iterable, Optional, Set, TypeVar, Union
 
 import functools
 
@@ -82,11 +82,10 @@ def intervene(
 
 class IndexSet(dict[str, Set[int]]):
     """
-    Index sets are used to represent sets of indices of elements in a list or array.
-    They are used to represent sets of indices of variables in a model, and sets of
+    Index sets represent sets of indices of variables in a model, and sets of
     indices of observations in a dataset.
 
-    Index sets are represented as a mapping from strings to sets of integers.
+    Index sets are implemented as a dictionary mapping from strings to sets of integers.
     The strings are labels for the sets of indices, and the integers are the indices
     of the elements in the list or array.
 
@@ -185,17 +184,3 @@ def scatter(value, indexset: IndexSet, *, result: Optional[T] = None, **kwargs):
         The value, scattered into the indexset.
     """
     raise NotImplementedError
-
-
-def merge(partitioned_values: Dict[IndexSet, T], **kwargs) -> Optional[T]:
-    """
-    Merges a dictionary of disjoint masked values into a single value
-    using repeated calls to :func:``scatter``.
-
-    :param dense_values: A dictionary mapping index sets to values.
-    :return: A single value.
-    """
-    result = None
-    for indices, value in partitioned_values.items():
-        result = scatter(value, indices, result=result, **kwargs)
-    return result
