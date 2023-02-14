@@ -38,53 +38,7 @@ class IndexSet(dict[str, Set[int]]):
         )
 
     def __hash__(self):
-        return hash(frozenset((k, v) for k, vs in self.items() for v in vs))
-
-
-def unifiable(*indexsets: IndexSet) -> bool:
-    """
-    Check if indexsets can be unified.
-
-    Two indexsets can be unified if they have the same values for all shared keys.
-    """
-    if len(indexsets) < 2:
-        return True
-    if len(indexsets) == 2:
-        lhs, rhs = indexsets
-        return all(lhs[v] == rhs[v] for v in set(lhs.keys()) & set(rhs.keys()))
-    return all(unifiable(a, b) for a, b in zip(indexsets[:-1], indexsets[1:]))
-
-
-def meet(*indexsets: IndexSet) -> IndexSet:
-    """
-    Compute the intersection of multiple indexsets.
-
-    Example::
-
-        meet(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={1})
-
-    .. note::
-
-        ``meet``, ``join``, and ``difference`` satisfy several algebraic equations.
-
-        ``meet`` is associative and commutative::
-
-            meet(a, meet(b, c)) == meet(meet(a, b), c)
-            meet(a, b) == meet(b, a)
-
-        ``meet`` is idempotent::
-
-            meet(a, a) == a
-            meet(a, meet(a, b)) == meet(a, b)
-
-        ``meet`` distributes over ``join``::
-
-            meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
-    """
-    return IndexSet(**{
-        k: set.intersection(*[vs[k] for vs in indexsets if k in vs])
-        for k in set.intersection(*(set(vs) for vs in indexsets))
-    })
+        return hash(frozenset((k, frozenset(vs)) for k, vs in self.items()))
 
 
 def join(*indexsets: IndexSet) -> IndexSet:
@@ -96,38 +50,17 @@ def join(*indexsets: IndexSet) -> IndexSet:
         join(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0, 1, 2})
 
     .. note::
-
-        ``meet``, ``join``, and ``difference`` satisfy several algebraic equations.
-
-        ``join`` is associative and commutative::
+        ``join`` is associative, commutative and idempotent::
 
             join(a, join(b, c)) == join(join(a, b), c)
             join(a, b) == join(b, a)
-
-        ``join`` is idempotent::
-
             join(a, a) == a
             join(a, join(a, b)) == join(a, b)
-
-        ``join`` distributes over ``meet``::
-
-            meet(a, join(b, c)) == join(meet(a, b), meet(a, c))
     """
     return IndexSet(**{
         k: set.union(*[vs[k] for vs in indexsets if k in vs])
         for k in set.union(*(set(vs) for vs in indexsets))
     })
-
-
-def difference(lhs: IndexSet, rhs: IndexSet) -> IndexSet:
-    """
-    Compute the difference of two indexsets.
-
-    Example::
-
-        difference(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0})
-    """
-    return IndexSet(**{k: lhs[k] - rhs.get(k, set()) for k in lhs})
 
 
 @functools.singledispatch
@@ -193,9 +126,6 @@ def merge(partitioned_values: Dict[IndexSet, T], **kwargs) -> Optional[T]:
     :param dense_values: A dictionary mapping index sets to values.
     :return: A single value.
     """
-    assert not functools.reduce(
-        meet, partitioned_values.keys(), IndexSet()
-    ), "keys must be disjoint"
     sparse_values = {k: gather(v, k, **kwargs) for k, v in partitioned_values.items()}
     result = None
     for indices, value in sparse_values.items():
