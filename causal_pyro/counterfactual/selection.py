@@ -8,7 +8,7 @@ from .worlds import get_index_plates, indexset_as_mask
 T = TypeVar("T")
 
 
-class SelectWorldsMessenger(pyro.contrib.autoname.scoping.ScopeMessenger):
+class SelectWorldsMessenger(pyro.poutine.messenger.Messenger):
     """
     Effect handler to select a subset of worlds.
     """
@@ -19,7 +19,6 @@ class SelectWorldsMessenger(pyro.contrib.autoname.scoping.ScopeMessenger):
 
     def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         msg["mask"] = msg["mask"] & indexset_as_mask(self.indices)
-        super()._pyro_sample(msg)
 
 
 class OnlySelected(SelectWorldsMessenger):
@@ -27,13 +26,13 @@ class OnlySelected(SelectWorldsMessenger):
     Effect handler to select a subset of worlds.
     """
 
-    def __init__(self, worlds: IndexSet, prefix: Optional[str] = None):
-        self._worlds = worlds
-        super().__init__(prefix=prefix)
+    def __init__(self, indices: IndexSet):
+        self._indices = indices
+        super().__init__()
 
     @property
     def indices(self) -> IndexSet:
-        return self._worlds
+        return self._indices
 
 
 class OnlyCounterfactual(SelectWorldsMessenger):
