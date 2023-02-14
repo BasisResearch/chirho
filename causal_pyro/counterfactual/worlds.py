@@ -42,23 +42,6 @@ def indexset_as_mask(
     return mask[(...,) + (None,) * event_dim]
 
 
-def mask_as_indexset(
-    mask: torch.Tensor,
-    *,
-    event_dim: int = 0,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
-) -> IndexSet:
-    """
-    Get a sparse index set from a dense mask.
-
-    .. warning:: This is an expensive operation primarily useful for writing unit tests.
-    """
-    assert mask.dtype == torch.bool
-    if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    raise NotImplementedError("TODO")
-
-
 class _LazyPlateMessenger(IndepMessenger):
     @property
     def frame(self) -> CondIndepStackFrame:
