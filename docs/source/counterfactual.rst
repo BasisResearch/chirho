@@ -10,3 +10,7 @@ Counterfactual Handlers
     :members:
     :undoc-members:
     :show-inheritance:
+
+.. automodule:: causal_pyro.counterfactual.internals
+    :members:
+    :show-inheritance:
