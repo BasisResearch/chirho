@@ -152,6 +152,11 @@ def _indices_of_bool(value: bool, **kwargs) -> IndexSet:
 
 
 @indices_of.register
+def _indices_of_none(value: None, **kwargs) -> IndexSet:
+    return IndexSet()
+
+
+@indices_of.register
 def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
     if all(isinstance(v, int) for v in value):
         return indices_of(torch.Size(value), **kwargs)

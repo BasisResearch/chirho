@@ -2,8 +2,11 @@ from typing import Any, Dict, List, Optional
 
 import pyro
 
-from ..primitives import IndexSet, join, merge
-from .internals import IndexPlatesMessenger, add_indices
+import causal_pyro.primitives
+import causal_pyro.counterfactual.internals
+
+from causal_pyro.primitives import IndexSet, join, merge
+from causal_pyro.counterfactual.internals import IndexPlatesMessenger, add_indices
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
