@@ -240,6 +240,12 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
         msg["done"], msg["stop"] = True, True
 
+    def _enter_plate(self, plate: pyro.poutine.messenger.Messenger) -> None:
+        plate.__enter__()
+        stack = pyro.poutine.runtime._PYRO_STACK
+        stack.pop(stack.index(plate))
+        stack.insert(stack.index(self) + len(self.plates), plate)
+
     def _pyro_add_indices(self, msg):
         (indexset,) = msg["args"]
         for name, indices in indexset.items():
@@ -248,7 +254,11 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 self.plates[name] = _LazyPlateMessenger(
                     name=name, dim=self.first_available_dim, size=new_size
                 )
-                self.plates[name].__enter__()
+                # Push the new plate onto Pyro's handler stack at a location
+                # adjacent to this IndexPlatesMessenger instance so that
+                # any handlers pushed after this IndexPlatesMessenger instance
+                # are still guaranteed to exit safely in the correct order.
+                self._enter_plate(self.plates[name])
                 self.first_available_dim -= 1
             else:
                 assert (
