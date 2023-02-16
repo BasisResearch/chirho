@@ -1,12 +1,9 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 import pyro
 
-import causal_pyro.primitives
-import causal_pyro.counterfactual.internals
-
-from causal_pyro.primitives import IndexSet, join, merge
 from causal_pyro.counterfactual.internals import IndexPlatesMessenger, add_indices
+from causal_pyro.primitives import IndexSet, join, merge
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
@@ -33,7 +30,9 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].setdefault("event_dim", 0)
         if msg["name"] is None:
-            msg["name"] = f"intervention_{self.first_available_dim}"
+            msg["name"] = "__intervention__"
+        if msg["name"] in self.plates:
+            msg["name"] = f"{msg['name']}_{self.first_available_dim}"
         name = msg["name"]
 
         obs_indices = IndexSet(**{name: {0}})
