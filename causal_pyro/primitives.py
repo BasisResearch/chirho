@@ -53,7 +53,7 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
 
 """
 import functools
-from typing import Callable, Iterable, Optional, Set, TypeVar, Union
+from typing import Callable, Dict, Iterable, Optional, Set, TypeVar, Union
 
 import pyro
 
@@ -79,7 +79,7 @@ def intervene(
     return act
 
 
-class IndexSet(dict[str, Set[int]]):
+class IndexSet(Dict[str, Set[int]]):
     """
     :class:`IndexSet` s represent the support of an indexed value, primarily
     those created using :func:`intervene` and :class:`MultiWorldCounterfactual`
