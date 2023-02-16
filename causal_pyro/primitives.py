@@ -81,18 +81,40 @@ def intervene(
 
 class IndexSet(dict[str, Set[int]]):
     """
-    Index sets represent sets of indices of variables in a model, and sets of
-    indices of observations in a dataset.
+    :class:`IndexSet` s represent the support of an indexed value, primarily
+    those created using :func:`intervene` and :class:`MultiWorldCounterfactual`
+    for which free variables correspond to single interventions and indices
+    to worlds where that intervention either did or did not happen.
 
-    Index sets are implemented as a dictionary mapping from strings to sets of integers.
-    The strings are labels for the sets of indices, and the integers are the indices
-    of the elements in the list or array.
+    :class:`IndexSet` can be understood conceptually
+    as generalizing :class:`torch.Size`
+    from multidimensional arrays to arbitrary values,
+    from positional to named dimensions,
+    and from bounded integer interval supports to finite sets of positive integers.
 
-    For example, the index set::
+    :class:`IndexSet` s are implemented as :class:`dict` s with
+    :class:`str` s as keys corresponding to names of free index variables
+    and :class:`set` s of positive :class:`int` s as values corresponding
+    to the values of the index variables where the indexed value is defined.
 
+    For example, the following :class:`IndexSet` represents
+    the sets of indices of the free variables ``x`` and ``y``
+    for which a value is defined::
+
+        >>> IndexSet(x={0, 1}, y={2, 3}})
         {"x": {0, 1}, "y": {2, 3}}
 
-    represents the sets of indices of the variables "x" and "y" in a model.
+    :class:`IndexSet` 's constructor will automatically drop empty entries
+    and attempt to convert input values to :class:`set` s::
+
+        >>> IndexSet(x=[0, 0, 1], y=set(), z=2)
+        {"x": {0, 1}, "z": {2}}
+
+    :class:`IndexSet` s are also hashable and can be used as keys in :class:`dict` s::
+
+        >>> indexset = IndexSet(x={0, 1}, y={2, 3}})
+        >>> indexset in {indexset: 1}
+        True
     """
 
     def __init__(self, **mapping: Union[int, Iterable[int]]):
@@ -110,14 +132,21 @@ class IndexSet(dict[str, Set[int]]):
 
 def join(*indexsets: IndexSet) -> IndexSet:
     """
-    Compute the union of multiple indexsets.
+    Compute the union of multiple :class:`IndexSet` s
+    as the union of their keys and of value sets at shared keys.
+
+    If :class:`IndexSet` may be viewed as a generalization of :class:`torch.Size`,
+    then :func:`join` is a generalization of :func:`torch.broadcast_shapes`
+    for the more abstract :class:`IndexSet` data structure.
 
     Example::
 
-        join(IndexSet(a={0, 1}), IndexSet(a={1, 2})) == IndexSet(a={0, 1, 2})
+        >>> join(IndexSet(a={0, 1}, b={1}), IndexSet(a={1, 2}))
+        {"a": {0, 1, 2}, "b": {1}}
 
     .. note::
-        ``join`` is associative, commutative and idempotent::
+        :func:`join` satisfies several algebraic equations for arbitrary inputs.
+        In particular, it is associative, commutative, idempotent and absorbing::
 
             join(a, join(b, c)) == join(join(a, b), c)
             join(a, b) == join(b, a)
@@ -135,23 +164,124 @@ def join(*indexsets: IndexSet) -> IndexSet:
 @functools.singledispatch
 def indices_of(value, **kwargs) -> IndexSet:
     """
-    Get the indexset of a value.
+    Get a :class:`IndexSet` of indices on which an indexed value is supported.
 
-    Can be extended to new value types by registering an implementation
-    for the type using :func:``functools.singledispatch``.
+    :func:`indices_of` is useful in conjunction with :class:`MultiWorldCounterfactual`
+    for identifying the worlds where an intervention happened upstream of a value.
+
+    For example, in a model with an outcome variable ``Y`` and a treatment variable
+    ``T`` that has been intervened on, ``T`` and ``Y`` are both indexed by ``"T"``::
+
+        >>> with MultiWorldCounterfactual():
+        ...     X = pyro.sample("X", get_X_dist())
+        ...     T = pyro.sample("T", get_T_dist(X))
+        ...     T = intervene(T, t, name="T")
+        ...     Y = pyro.sample("Y", get_Y_dist(X, T))
+
+        ...     assert indices_of(X) == IndexSet()
+        ...     assert indices_of(T) == IndexSet(T={0, 1})
+        ...     assert indices_of(Y) == IndexSet(T={0, 1})
+
+    Just as multidimensional arrays can be expanded to shapes with new dimensions
+    over which they are constant, :func:`indices_of` is defined extensionally,
+    meaning that values are treated as constant functions of free variables
+    not in their support.
+
+    .. note::
+        :func:`indices_of` can be extended to new value types by registering
+        an implementation for the type using :func:`functools.singledispatch` .
+
+    .. note::
+        Fully general versions of :func:`indices_of` , :func:`gather`
+        and :func:`scatter` would require a dependent broadcasting semantics
+        for indexed values, as is the case in sparse or masked array libraries
+        like ``torch.sparse`` or relational databases.
+
+        However, this is beyond the scope of this library as it currently exists.
+        Instead, :func:`gather` currently binds free variables in ``indexset``
+        when their indices there are a strict subset of the corresponding indices
+        in ``value`` , so that they no longer appear as free in the result.
+
+        For example, in the above snippet, applying :func:`gather` to to select only
+        the values of ``Y`` from worlds where no intervention on ``T`` happened
+        would result in a value that no longer contains free variable ``"T"``::
+
+            >>> indices_of(Y) == IndexSet(T={0, 1})
+            True
+            >>> Y0 = gather(Y, IndexSet(T={0}))
+            >>> indices_of(Y0) == IndexSet() != IndexSet(T={0})
+            True
+
+        The practical implications of this imprecision are limited
+        since we rarely need to :func:`gather` along a variable twice.
+
+    :param value: A value.
+    :param kwargs: Additional keyword arguments used by specific implementations.
+    :return: A :class:`IndexSet` containing the indices on which the value is supported.
     """
-    if callable(value) or value is None:
-        return IndexSet()
     raise NotImplementedError
 
 
 @functools.singledispatch
 def gather(value, indexset: IndexSet, **kwargs):
     """
-    Gather values from a single indexset in a multi-world object.
+    Selects entries from an indexed value at the indices in a :class:`IndexSet` .
 
-    Can be extended to new value types by registering an implementation
-    for the type using :func:``functools.singledispatch``.
+    :func:`gather` is useful in conjunction with :class:`MultiWorldCounterfactual`
+    for selecting components of a value corresponding to specific counterfactual worlds.
+
+    For example, in a model with an outcome variable ``Y`` and a treatment variable
+    ``T`` that has been intervened on, we can use :func:`gather` to define quantities
+    like treatment effects that require comparison of different potential outcomes::
+
+        >>> with MultiWorldCounterfactual():
+        ...     X = pyro.sample("X", get_X_dist())
+        ...     T = pyro.sample("T", get_T_dist(X))
+        ...     T = intervene(T, t, name="T")
+        ...     Y = pyro.sample("Y", get_Y_dist(X, T))
+
+        ...     Y_factual = gather(Y, IndexSet(T=0))         # no intervention
+        ...     Y_counterfactual = gather(Y, IndexSet(T=1))  # intervention
+        ...     treatment_effect = Y_counterfactual - Y_factual
+
+    Like :func:`torch.gather` and substitution in term rewriting,
+    :func:`gather` is defined extensionally, meaning that values
+    are treated as constant functions of variables not in their support.
+    :func:`gather` will accordingly ignore variables in ``indexset``
+    that are not in the support of ``value`` computed by :func:`indices_of` .
+
+    .. note::
+        :func:`gather` can be extended to new value types by registering
+        an implementation for the type using :func:`functools.singledispatch` .
+
+    .. note::
+        Fully general versions of :func:`indices_of` , :func:`gather`
+        and :func:`scatter` would require a dependent broadcasting semantics
+        for indexed values, as is the case in sparse or masked array libraries
+        like ``scipy.sparse`` or ``xarray`` or in relational databases.
+
+        However, this is beyond the scope of this library as it currently exists.
+        Instead, :func:`gather` currently binds free variables in ``indexset``
+        when their indices there are a strict subset of the corresponding indices
+        in ``value`` , so that they no longer appear as free in the result.
+
+        For example, in the above snippet, applying :func:`gather` to to select only
+        the values of ``Y`` from worlds where no intervention on ``T`` happened
+        would result in a value that no longer contains free variable ``"T"``::
+
+            >>> indices_of(Y) == IndexSet(T={0, 1})
+            True
+            >>> Y0 = gather(Y, IndexSet(T={0}))
+            >>> indices_of(Y0) == IndexSet() != IndexSet(T={0})
+            True
+
+        The practical implications of this imprecision are limited
+        since we rarely need to :func:`gather` along a variable twice.
+
+    :param value: The value to gather.
+    :param IndexSet indexset: The :class:`IndexSet` of entries to select from ``value``.
+    :param kwargs: Additional keyword arguments used by specific implementations.
+    :return: A new value containing entries of ``value`` from ``indexset``.
     """
     raise NotImplementedError
 
@@ -159,29 +289,25 @@ def gather(value, indexset: IndexSet, **kwargs):
 @functools.singledispatch
 def scatter(value, indexset: IndexSet, *, result: Optional[T] = None, **kwargs):
     """
-    Scatter values from multiple indexsets into a single shared object.
+    Assigns entries from an indexed value to entries in a larger indexed value.
 
-    This function takes a value and an indexset, and scatters the value
-    into the indexset, returning a new object.
+    :func:`scatter` is primarily used internally in :class:`MultiWorldCounterfactual`
+    for concisely and extensibly defining the semantics of counterfactuals.
+    It also satisfies some equations with :func:`gather` and :func:`indices_of`
+    that are useful for testing and debugging.
 
-    Can be extended to new value types by registering an implementation
-    for the type using :func:``functools.singledispatch``.
+    Like :func:`torch.scatter` and assignment in term rewriting,
+    :func:`scatter` is defined extensionally, meaning that values
+    are treated as constant functions of variables not in their support.
 
-    Parameters
-    ----------
-    value : Any
-        The value to scatter.
-    indexset : IndexSet
-        The indexset to scatter the value into.
-    result : Optional[T], optional
-        The result to store the scattered value in.
-    **kwargs
-        Additional keyword arguments that are used by the specific
-        implementation.
+    .. note::
+        :func:`scatter` can be extended to new value types by registering
+        an implementation for the type using :func:`functools.singledispatch` .
 
-    Returns
-    -------
-    T
-        The value, scattered into the indexset.
+    :param value: The value to scatter.
+    :param IndexSet indexset: The :class:`IndexSet` of entries of ``result`` to fill.
+    :param Optional[T] result: The result to store the scattered value in.
+    :param kwargs: Additional keyword arguments used by specific implementations.
+    :return: The ``result``, with ``value`` scattered into the indices in ``indexset``.
     """
     raise NotImplementedError
