@@ -47,9 +47,8 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
     def _pyro_post_intervene(self, msg):
         obs, act = msg["args"][0], msg["value"]
         event_dim = msg["kwargs"].setdefault("event_dim", 0)
-        if msg["name"] is None:
-            msg["name"] = "intervention"  # repeat the name
-        name = msg["name"]
+        # disregard the name
+        name = "__intervention__"
 
         obs_indices = IndexSet(**{name: {0}})
         act_indices = IndexSet(**{name: {1}})
