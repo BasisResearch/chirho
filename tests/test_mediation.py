@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-x_cf_values = [-1.0, 0.0, 2.0, 2]
+x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 
 
 def make_mediation_model(f_W: Callable, f_X: Callable, f_Z: Callable, f_Y: Callable):
