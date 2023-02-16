@@ -311,3 +311,17 @@ def scatter(value, indexset: IndexSet, *, result: Optional[T] = None, **kwargs):
     :return: The ``result``, with ``value`` scattered into the indices in ``indexset``.
     """
     raise NotImplementedError
+
+
+def merge(partitioned_values: dict[IndexSet, T], **kwargs) -> Optional[T]:
+    """
+    Merges a dictionary of disjoint masked values into a single value
+    using repeated calls to :func:``scatter``.
+
+    :param dense_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    result = None
+    for indices, value in partitioned_values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result
