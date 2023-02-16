@@ -3,7 +3,7 @@ from typing import Dict, Hashable, List, Optional, TypeVar, Union
 
 import pyro
 import torch
-from pyro.poutine.indep_messenger import CondIndepStackFrame
+from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from ..primitives import IndexSet, gather, indices_of, scatter, union
 
@@ -185,3 +185,70 @@ def _indices_of_distribution(
 ) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
+
+
+@pyro.poutine.runtime.effectful(type="add_indices")
+def add_indices(indexset: IndexSet) -> IndexSet:
+    return indexset
+
+
+class _LazyPlateMessenger(IndepMessenger):
+    @property
+    def frame(self) -> CondIndepStackFrame:
+        return CondIndepStackFrame(
+            name=self.name, dim=self.dim, size=self.size, counter=0
+        )
+
+    def _process_message(self, msg):
+        if msg["type"] not in (
+            "sample",
+            "param",
+        ) or pyro.poutine.util.site_is_subsample(msg):
+            return
+        if self.frame.name in join(indices_of(msg["value"]), indices_of(msg["fn"])):
+            super()._process_message(msg)
+
+
+class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
+    plates: Dict[Hashable, IndepMessenger]
+    first_available_dim: int
+
+    def __init__(self, first_available_dim: int):
+        assert first_available_dim < 0
+        self._orig_dim = first_available_dim
+        self.first_available_dim = first_available_dim
+        self.plates = collections.OrderedDict()
+        super().__init__()
+
+    def __enter__(self):
+        self.first_available_dim = self._orig_dim
+        self.plates = collections.OrderedDict()
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        for name in reversed(list(self.plates.keys())):
+            self.plates.pop(name).__exit__(*args)
+        return super().__exit__(*args)
+
+    def _pyro_get_index_plates(self, msg):
+        msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
+        msg["done"], msg["stop"] = True, True
+
+    def _pyro_add_indices(self, msg):
+        (indexset,) = msg["args"]
+        for name, indices in indexset.items():
+            if name not in self.plates:
+                new_size = max(max(indices) + 1, len(indices))
+                self.plates[name] = _LazyPlateMessenger(
+                    name=name, dim=self.first_available_dim, size=new_size
+                )
+                self.plates[name].__enter__()
+                self.first_available_dim -= 1
+            else:
+                assert (
+                    0
+                    <= min(indices)
+                    <= len(indices) - 1
+                    <= max(indices)
+                    < self.plates[name].size
+                ), f"cannot add {name}={indices} to {self.plates[name].size}"
