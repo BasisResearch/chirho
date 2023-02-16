@@ -1,7 +1,6 @@
 import contextlib
 import logging
 
-import pyro
 import pyro.distributions as dist
 import pytest
 import torch
@@ -9,7 +8,6 @@ import torch
 from causal_pyro.counterfactual.internals import (
     IndexPlatesMessenger,
     add_indices,
-    get_index_plates,
     indexset_as_mask,
 )
 from causal_pyro.primitives import IndexSet, gather, indices_of, scatter
