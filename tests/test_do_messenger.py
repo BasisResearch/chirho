@@ -130,7 +130,6 @@ def test_do_messenger_base_counterfactual(x_cf_value):
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 def test_do_messenger_twin_counterfactual(x_cf_value):
-
     intervened_model = create_intervened_model(x_cf_value)
     intervened_model_messenger_1 = create_intervened_model_1(x_cf_value)
     intervened_model_messenger_2 = create_intervened_model_2(x_cf_value)
@@ -185,7 +184,6 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
 def test_predictive_shapes_plate_multiworld(
     cf_handler, observed_vars, expected_shapes, cf_dim
 ):
-
     data = {
         "x": torch.tensor(0.5),
         "y": torch.tensor([1.0, 2.0, 3.0]),

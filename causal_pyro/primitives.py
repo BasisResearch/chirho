@@ -52,9 +52,8 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
            return act
 
 """
-from typing import Callable, Iterable, Optional, Set, TypeVar, Union
-
 import functools
+from typing import Callable, Iterable, Optional, Set, TypeVar, Union
 
 import pyro
 
@@ -125,10 +124,12 @@ def join(*indexsets: IndexSet) -> IndexSet:
             join(a, a) == a
             join(a, join(a, b)) == join(a, b)
     """
-    return IndexSet(**{
-        k: set.union(*[vs[k] for vs in indexsets if k in vs])
-        for k in set.union(*(set(vs) for vs in indexsets))
-    })
+    return IndexSet(
+        **{
+            k: set.union(*[vs[k] for vs in indexsets if k in vs])
+            for k in set.union(*(set(vs) for vs in indexsets))
+        }
+    )
 
 
 @functools.singledispatch
