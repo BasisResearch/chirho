@@ -1,4 +1,5 @@
 import collections
+import functools
 import numbers
 from typing import Dict, Hashable, List, Optional, TypeVar, Union
 
@@ -27,7 +28,7 @@ def indexset_as_mask(
     """
     if name_to_dim is None:
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    batch_shape = [1] * -min(name_to_dim.values())
+    batch_shape = [1] * -functools.reduce(min, name_to_dim.values(), 0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
     for name, values in indexset.items():
         inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
