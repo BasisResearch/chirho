@@ -5,8 +5,8 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.primitives import IndexSet, gather, indices_of, scatter
 from causal_pyro.counterfactual.internals import indexset_as_mask
+from causal_pyro.primitives import IndexSet, gather, indices_of, scatter
 
 logger = logging.getLogger(__name__)
 
@@ -51,9 +51,7 @@ def test_indices_of_tensor(batch_shape, event_shape, num_named, first_available_
 
     value = torch.randn(batch_shape + event_shape)
     actual_world = indices_of(
-        value,
-        event_dim=len(event_shape),
-        name_to_dim=batch_dim_names
+        value, event_dim=len(event_shape), name_to_dim=batch_dim_names
     )
 
     expected_world = IndexSet(
@@ -81,14 +79,10 @@ def test_indices_of_distribution(
     }
 
     value = (
-        dist.Normal(0, 1)
-        .expand(batch_shape + event_shape)
-        .to_event(len(event_shape))
+        dist.Normal(0, 1).expand(batch_shape + event_shape).to_event(len(event_shape))
     )
     actual_world = indices_of(
-        value,
-        event_dim=len(event_shape),
-        name_to_dim=batch_dim_names
+        value, event_dim=len(event_shape), name_to_dim=batch_dim_names
     )
 
     expected_world = IndexSet(
