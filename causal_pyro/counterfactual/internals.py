@@ -14,7 +14,10 @@ T = TypeVar("T")
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
 def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
-    raise NotImplementedError
+    raise NotImplementedError(
+        "No handler active for get_index_plates."
+        "Did you forget to use MultiWorldCounterfactual?"
+    )
 
 
 def indexset_as_mask(
@@ -262,11 +265,12 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
         msg["done"], msg["stop"] = True, True
 
-    def _enter_plate(self, plate: pyro.poutine.messenger.Messenger) -> None:
+    def _enter_index_plate(self, plate: _LazyPlateMessenger) -> None:
         plate.__enter__()
-        stack = pyro.poutine.runtime._PYRO_STACK
-        stack.pop(stack.index(plate))
-        stack.insert(stack.index(self) + len(self.plates), plate)
+        stack: List[pyro.poutine.messenger.Messenger] = pyro.poutine.runtime._PYRO_STACK
+        stack.insert(
+            stack.index(self) + len(self.plates), stack.pop(stack.index(plate))
+        )
 
     def _pyro_add_indices(self, msg):
         (indexset,) = msg["args"]
@@ -280,7 +284,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 # adjacent to this IndexPlatesMessenger instance so that
                 # any handlers pushed after this IndexPlatesMessenger instance
                 # are still guaranteed to exit safely in the correct order.
-                self._enter_plate(self.plates[name])
+                self._enter_index_plate(self.plates[name])
                 self.first_available_dim -= 1
             else:
                 assert (
