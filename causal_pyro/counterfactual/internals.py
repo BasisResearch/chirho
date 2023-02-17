@@ -129,12 +129,17 @@ def _scatter_tensor(
             result_shape[name_to_dim[name] - event_dim] = index_plates[name].size
         result = value.new_zeros(result_shape)
 
-    index: List[Union[slice, torch.Tensor]] = [slice(None)] * len(result.shape)
+    index = [
+        torch.arange(0, result.shape[i], dtype=torch.long).reshape(
+            (-1,) + (1,) * (len(result.shape) - 1 - i)
+        )
+        for i in range(len(result.shape))
+    ]
     for name, indices in indexset.items():
         if result.shape[name_to_dim[name] - event_dim] > 1:
             index[name_to_dim[name] - event_dim] = torch.tensor(
                 list(sorted(indices)), device=value.device, dtype=torch.long
-            )
+            ).reshape((-1,) + (1,) * (event_dim - name_to_dim[name] - 1))
 
     result[tuple(index)] = value
     return result
