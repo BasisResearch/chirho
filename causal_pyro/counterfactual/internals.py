@@ -215,7 +215,7 @@ class _LazyPlateMessenger(IndepMessenger):
     def _process_message(self, msg):
         if msg["type"] not in (
             "sample",
-            "param",
+            # "param",
         ) or pyro.poutine.util.site_is_subsample(msg):
             return
         if self.frame.name in join(indices_of(msg["value"]), indices_of(msg["fn"])):
