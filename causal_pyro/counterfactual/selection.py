@@ -78,14 +78,13 @@ class FactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
 class FactualConditioning(pyro.infer.reparam.strategies.Strategy):
     @staticmethod
     def _expand_msg_value(msg: dict) -> None:
-        _custom_init = getattr(msg["value"], "_pyro_custom_init", None)
+        _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
         msg["value"] = msg["value"].expand(
             torch.broadcast_shapes(
                 msg["fn"].batch_shape + msg["fn"].event_shape, msg["value"].shape
             )
         )
-        if _custom_init is not None:
-            msg["value"]._pyro_custom_init = _custom_init
+        msg["value"]._pyro_custom_init = _custom_init
 
     def configure(self, msg) -> Optional[FactualConditioningReparam]:
         if (
