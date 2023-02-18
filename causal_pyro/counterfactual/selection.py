@@ -21,7 +21,7 @@ class IndexSetMaskMessenger(pyro.poutine.messenger.Messenger):
 
     def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         mask = indexset_as_mask(self.indices)
-        msg["mask"] = msg["mask"] & mask if msg["mask"] is not None else mask
+        msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
 
 
 class OnlySelected(IndexSetMaskMessenger):
