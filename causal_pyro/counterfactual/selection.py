@@ -24,21 +24,7 @@ class IndexSetMaskMessenger(pyro.poutine.messenger.Messenger):
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
 
 
-class OnlySelected(IndexSetMaskMessenger):
-    """
-    Effect handler to select a subset of worlds.
-    """
-
-    def __init__(self, indices: IndexSet):
-        self._indices = indices
-        super().__init__()
-
-    @property
-    def indices(self) -> IndexSet:
-        return self._indices
-
-
-class OnlyCounterfactual(IndexSetMaskMessenger):
+class SelectCounterfactual(IndexSetMaskMessenger):
     """
     Effect handler to select only counterfactual worlds.
     """
@@ -50,7 +36,7 @@ class OnlyCounterfactual(IndexSetMaskMessenger):
         )
 
 
-class OnlyFactual(IndexSetMaskMessenger):
+class SelectFactual(IndexSetMaskMessenger):
     """
     Effect handler to select only factual world.
     """
@@ -63,10 +49,10 @@ class OnlyFactual(IndexSetMaskMessenger):
 class FactualConditioningReparam(pyro.infer.reparam.reparam.Reparam):
     @pyro.poutine.infer_config(config_fn=lambda msg: {"_cf_conditioned": True})
     def apply(self, msg):
-        with OnlyFactual() as fw:
+        with SelectFactual() as fw:
             fv = pyro.sample(msg["name"] + "_factual", msg["fn"], obs=msg["value"])
 
-        with OnlyCounterfactual() as cw:
+        with SelectCounterfactual() as cw:
             cv = pyro.sample(msg["name"] + "_counterfactual", msg["fn"])
 
         event_dim = len(msg["fn"].event_shape)
