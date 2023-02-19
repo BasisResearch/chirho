@@ -35,9 +35,7 @@ class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
         def _wrapper(*args) -> Optional[AmbiguousConditioningReparam]:
             msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
 
-            if msg["infer"].get("_specified_conditioning", False) or indices_of(
-                msg["value"], event_dim=len(msg["fn"].event_shape)
-            ):
+            if msg["infer"].get("_specified_conditioning", False):
                 # avoid infinite recursion
                 return None
 
@@ -147,11 +145,11 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
         with SelectFactual() as fw, pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
-            obs_noise = pyro.sample(name + "_noise_likelihood", new_noise_dist)
+            obs_noise = pyro.sample(name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value))
 
         # depends on strategy and indices of noise_dist
-        obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim)
-        obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
+        obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim).expand(obs_noise.shape)
+        # obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)  # DEBUG
 
         # counterfactual world
         with SelectCounterfactual() as cw, pyro.poutine.infer_config(
