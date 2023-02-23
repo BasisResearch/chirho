@@ -1,7 +1,7 @@
 import collections
 import functools
 import numbers
-from typing import Dict, Hashable, List, Optional, TypeVar, Union
+from typing import Callable, Dict, Hashable, List, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -294,3 +294,46 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                     <= max(indices)
                     < self.plates[name].size
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
+
+
+def expand_reparam_msg_value_inplace(
+    config_fn: Callable[..., Optional[pyro.infer.reparam.reparam.Reparam]]
+) -> Callable[..., Optional[pyro.infer.reparam.reparam.Reparam]]:
+    """
+    Slightly gross workaround that mutates the msg in place
+    to avoid triggering overzealous validation logic in
+    :class:~`pyro.poutine.reparam.ReparamMessenger`
+    that uses cheaper tensor shape and identity equality checks as
+    a conservative proxy for an expensive tensor value equality check.
+    (see https://github.com/pyro-ppl/pyro/blob/685c7adee65bbcdd6bd6c84c834a0a460f2224eb/pyro/poutine/reparam_messenger.py#L99)  # noqa: E501
+
+    This workaround is correct because these reparameterizers do not change
+    the observed entries, it just packs counterfactual values around them;
+    the equality check being approximated by that logic would still pass.
+    """
+    @functools.wraps(config_fn)
+    def _wrapper(*args) -> Optional[pyro.infer.reparam.reparam.Reparam]:
+        msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
+
+        if msg["infer"].get("_specified_conditioning", False):
+            # avoid infinite recursion
+            return None
+
+        if (
+            msg["is_observed"]
+            and msg["value"] is not None
+            and not pyro.poutine.util.site_is_subsample(msg)
+        ):
+            msg["infer"]["orig_shape"] = msg["value"].shape
+            _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
+            msg["value"] = msg["value"].expand(
+                torch.broadcast_shapes(
+                    msg["fn"].batch_shape + msg["fn"].event_shape,
+                    msg["value"].shape,
+                )
+            )
+            setattr(msg["value"], "_pyro_custom_init", _custom_init)
+
+        return config_fn(*(args[:-1] + (msg,)))
+
+    return _wrapper

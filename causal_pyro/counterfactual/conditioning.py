@@ -1,13 +1,13 @@
-import functools
-from typing import Any, Callable, Dict, Literal, Optional, TypedDict, TypeVar
+from typing import Any, Dict, Literal, Optional, TypedDict, TypeVar
 
 import pyro
 import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
 
+from causal_pyro.counterfactual.internals import expand_reparam_msg_value_inplace
 from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
-from causal_pyro.primitives import gather, indices_of, merge
+from causal_pyro.primitives import gather, merge
 
 T = TypeVar("T")
 
@@ -21,50 +21,7 @@ class AmbiguousConditioningReparam(pyro.infer.reparam.reparam.Reparam):
 
 
 class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
-    def __init_subclass__(cls, **kwargs) -> None:
-        # TODO check to avoid wrapping configure more than once
-        cls.configure = cls._expand_msg_value(cls.configure)
-        return super().__init_subclass__(**kwargs)
-
-    @staticmethod
-    def _expand_msg_value(
-        config_fn: Callable[..., Optional[AmbiguousConditioningReparam]]
-    ) -> Callable[..., Optional[AmbiguousConditioningReparam]]:
-
-        @functools.wraps(config_fn)
-        def _wrapper(*args) -> Optional[AmbiguousConditioningReparam]:
-            msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
-
-            if msg["infer"].get("_specified_conditioning", False):
-                # avoid infinite recursion
-                return None
-
-            if (
-                msg["is_observed"]
-                and msg["value"] is not None
-                and not pyro.poutine.util.site_is_subsample(msg)
-            ):
-                # XXX slightly gross workaround that mutates the msg in place to avoid
-                #   triggering overzealous validation logic in pyro.poutine.reparam
-                #   that uses cheaper tensor shape and identity equality checks as
-                #   a conservative proxy for an expensive tensor value equality check.
-                #   (see https://github.com/pyro-ppl/pyro/blob/685c7adee65bbcdd6bd6c84c834a0a460f2224eb/pyro/poutine/reparam_messenger.py#L99)  # noqa: E501
-                #   This workaround is correct because these reparameterizers do not change
-                #   the observed entries, it just packs counterfactual values around them;
-                #   the equality check being approximated by that logic would still pass.
-                msg["infer"]["orig_shape"] = msg["value"].shape
-                _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
-                msg["value"] = msg["value"].expand(
-                    torch.broadcast_shapes(
-                        msg["fn"].batch_shape + msg["fn"].event_shape,
-                        msg["value"].shape,
-                    )
-                )
-                setattr(msg["value"], "_pyro_custom_init", _custom_init)
-
-            return config_fn(*(args[:-1] + (msg,)))
-
-        return _wrapper
+    pass
 
 
 class ConditionReparamMsg(TypedDict):
@@ -101,6 +58,7 @@ class MinimalFactualConditioning(AmbiguousConditioningStrategy):
     Default strategy for handling ambiguity in conditioning.
     """
 
+    @expand_reparam_msg_value_inplace
     def configure(
         self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> Optional[FactualConditioningReparam]:
@@ -172,6 +130,7 @@ class AutoFactualConditioning(MinimalFactualConditioning):
     Strategy for handling ambiguity in conditioning.
     """
 
+    @expand_reparam_msg_value_inplace
     def configure(
         self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> Optional[FactualConditioningReparam]:
