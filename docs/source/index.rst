@@ -40,8 +40,8 @@ For introductory Pyro tutorials please see "Additional background reading materi
    :caption: Tutorials
 
    tutorial_i
-   tutorial_ii
-   tutorial_iii
+   .. tutorial_ii
+   .. tutorial_iii
 
 Example applications
 --------------------
