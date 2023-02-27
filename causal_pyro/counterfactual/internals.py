@@ -36,7 +36,8 @@ def indexset_as_mask(
     mask[tuple(inds)] = True
     return mask[(...,) + (None,) * event_dim]
 
-
+# Note that `gather` is defined using a `@functools.singledispatch` decorator, 
+# which in turn defines the `@gather.register` decorator used here
 @gather.register
 def _gather_number(
     value: numbers.Number,
