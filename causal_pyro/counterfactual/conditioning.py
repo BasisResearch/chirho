@@ -48,7 +48,9 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
             cv = pyro.sample(msg["name"] + "_counterfactual", msg["fn"])
 
         event_dim = len(msg["fn"].event_shape)
-        new_value: torch.Tensor = scatter({fw.indices: fv, cw.indices: cv}, event_dim=event_dim)
+        new_value: torch.Tensor = scatter(
+            {fw.indices: fv, cw.indices: cv}, event_dim=event_dim
+        )
         new_fn = dist.Delta(new_value, event_dim=event_dim).mask(False)
         return {"fn": new_fn, "value": new_value, "is_observed": True}
 
@@ -103,11 +105,17 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
         with SelectFactual() as fw, pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
-            obs_noise = pyro.sample(name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value))
+            obs_noise = pyro.sample(
+                name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
+            )
 
         # depends on strategy and indices of noise_dist
-        obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim).expand(obs_noise.shape)
-        obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)  # DEBUG
+        obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim).expand(
+            obs_noise.shape
+        )
+        obs_noise = pyro.sample(
+            name + "_noise_prior", noise_dist, obs=obs_noise
+        )  # DEBUG
 
         # counterfactual world
         with SelectCounterfactual() as cw, pyro.poutine.infer_config(

@@ -311,14 +311,16 @@ def expand_reparam_msg_value_inplace(
     the observed entries, it just packs counterfactual values around them;
     the equality check being approximated by that logic would still pass.
     """
+
     @functools.wraps(config_fn)
     def _wrapper(*args) -> Optional[pyro.infer.reparam.reparam.Reparam]:
         msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
 
         if indices_of(msg["value"], event_dim=len(msg["fn"].event_shape)):
             # not ambiguous
-            msg["infer"]["_specified_conditioning"] = \
-                msg["infer"].get("_specified_conditioning", True)
+            msg["infer"]["_specified_conditioning"] = msg["infer"].get(
+                "_specified_conditioning", True
+            )
 
         if msg["infer"].get("_specified_conditioning", False):
             # avoid infinite recursion

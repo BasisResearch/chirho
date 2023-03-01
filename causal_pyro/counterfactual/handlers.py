@@ -10,10 +10,8 @@ from causal_pyro.counterfactual.conditioning import (
     AutoFactualConditioning,
 )
 
-
 CondStrategy = Union[
-    Dict[str, AmbiguousConditioningReparam],
-    AmbiguousConditioningStrategy
+    Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
 ]
 
 
@@ -21,6 +19,7 @@ class BaseCounterfactual(pyro.poutine.reparam_messenger.ReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
+
     def __init__(self, config: Optional[CondStrategy] = None):
         if config is None:
             config = AutoFactualConditioning()
