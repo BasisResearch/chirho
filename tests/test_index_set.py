@@ -2,7 +2,7 @@ import logging
 
 import pytest
 
-from causal_pyro.primitives import IndexSet, join
+from causal_pyro.primitives import IndexSet, union
 
 logger = logging.getLogger(__name__)
 
@@ -25,23 +25,23 @@ INDEXSET_CASES = [
 
 @pytest.mark.parametrize("wa", INDEXSET_CASES)
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
-def test_join_indexset_commutes(wa, wb):
-    assert join(wa, wb) == join(wb, wa)
+def test_union_indexset_commutes(wa, wb):
+    assert union(wa, wb) == union(wb, wa)
 
 
 @pytest.mark.parametrize("wa", INDEXSET_CASES)
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
 @pytest.mark.parametrize("wc", INDEXSET_CASES)
-def test_join_indexset_assoc(wa, wb, wc):
-    assert join(wa, join(wb, wc)) == join(join(wa, wb), wc) == join(wa, wb, wc)
+def test_union_indexset_assoc(wa, wb, wc):
+    assert union(wa, union(wb, wc)) == union(union(wa, wb), wc) == union(wa, wb, wc)
 
 
 @pytest.mark.parametrize("w", INDEXSET_CASES)
-def test_join_indexset_idempotent(w):
-    assert join(w, w) == w
+def test_union_indexset_idempotent(w):
+    assert union(w, w) == w
 
 
 @pytest.mark.parametrize("wa", INDEXSET_CASES)
 @pytest.mark.parametrize("wb", INDEXSET_CASES)
-def test_join_indexset_absorbing(wa, wb):
-    assert join(wa, join(wa, wb)) == join(wa, wb)
+def test_union_indexset_absorbing(wa, wb):
+    assert union(wa, union(wa, wb)) == union(wa, wb)
