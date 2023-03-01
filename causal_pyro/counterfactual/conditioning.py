@@ -113,9 +113,7 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
         obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim).expand(
             obs_noise.shape
         )
-        obs_noise = pyro.sample(
-            name + "_noise_prior", noise_dist, obs=obs_noise
-        )  # DEBUG
+        obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
 
         # counterfactual world
         with SelectCounterfactual() as cw, pyro.poutine.infer_config(
