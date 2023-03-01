@@ -92,7 +92,7 @@ def _scatter_dict(
     """
     assert len(partitioned_values) > 0
     assert all(isinstance(k, IndexSet) for k in partitioned_values)
-    add_indices(join(*partitioned_values.keys()))
+    add_indices(union(*partitioned_values.keys()))
     for indices, value in partitioned_values.items():
         result = scatter(value, indices, result=result, **kwargs)
     return result

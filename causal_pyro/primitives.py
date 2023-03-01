@@ -53,7 +53,7 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
 
 """
 import functools
-from typing import Callable, Iterable, Optional, Set, TypeVar, Union
+from typing import Callable, Dict, Iterable, Optional, Set, TypeVar, Union
 
 import pyro
 
