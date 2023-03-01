@@ -4,8 +4,13 @@ import pyro
 import pyro.infer.reparam
 import torch
 
-from causal_pyro.counterfactual.internals import get_index_plates, indexset_as_mask
+from causal_pyro.counterfactual.internals import (
+    get_index_plates,
+    get_sample_msg_device,
+    indexset_as_mask,
+)
 from causal_pyro.primitives import IndexSet, merge
+
 
 T = TypeVar("T")
 
@@ -20,7 +25,8 @@ class IndexSetMaskMessenger(pyro.poutine.messenger.Messenger):
         raise NotImplementedError
 
     def _pyro_sample(self, msg: Dict[str, Any]) -> None:
-        mask = indexset_as_mask(self.indices)
+        mask_device = get_sample_msg_device(msg["fn"], msg["value"])
+        mask = indexset_as_mask(self.indices, device=mask_device)
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
 
 

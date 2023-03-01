@@ -25,6 +25,7 @@ def indexset_as_mask(
     *,
     event_dim: int = 0,
     name_to_dim: Optional[Dict[Hashable, int]] = None,
+    device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """
     Get a dense mask tensor for indexing into a tensor from an indexset.
@@ -36,7 +37,7 @@ def indexset_as_mask(
     for name, values in indexset.items():
         inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
         batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
-    mask = torch.zeros(tuple(batch_shape), dtype=torch.bool)
+    mask = torch.zeros(tuple(batch_shape), dtype=torch.bool, device=device)
     mask[tuple(inds)] = True
     return mask[(...,) + (None,) * event_dim]
 
@@ -294,6 +295,25 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                     <= max(indices)
                     < self.plates[name].size
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
+
+
+def get_sample_msg_device(
+    dist: pyro.distributions.Distribution,
+    value: Optional[Union[torch.Tensor, float, int, bool]],
+) -> torch.device:
+    # some gross code to infer the device of the obs_mask tensor
+    #   because distributions are hard to introspect
+    if isinstance(value, torch.Tensor):
+        return value.device
+    else:
+        dist_ = dist
+        while hasattr(dist_, "base_dist"):
+            dist_ = dist_.base_dist
+        for param_name in dist_.arg_constraints.keys():
+            p = getattr(dist_, param_name)
+            if isinstance(p, torch.Tensor):
+                return p.device
+    raise ValueError(f"could not infer device for {dist} and {value}")
 
 
 def expand_reparam_msg_value_inplace(
