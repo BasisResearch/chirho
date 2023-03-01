@@ -79,6 +79,28 @@ def _gather_tensor(
     return result
 
 
+@scatter.register(dict)
+def _scatter_dict(
+    partitioned_values: Dict[IndexSet, T],
+    *,
+    result: Optional[T] = None,
+    **kwargs
+) -> T:
+    """
+    Scatters a dictionary of disjoint masked values into a single value
+    using repeated calls to :func:``scatter``.
+
+    :param partitioned_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    assert len(partitioned_values) > 0
+    assert all(isinstance(k, IndexSet) for k in partitioned_values)
+    add_indices(join(*partitioned_values.keys()))
+    for indices, value in partitioned_values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
 @scatter.register
 def _scatter_number(
     value: numbers.Number,

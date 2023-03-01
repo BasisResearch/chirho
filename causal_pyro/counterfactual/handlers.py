@@ -2,8 +2,8 @@ from typing import Any, Dict
 
 import pyro
 
-from causal_pyro.counterfactual.internals import IndexPlatesMessenger, add_indices
-from causal_pyro.primitives import IndexSet, join, merge
+from causal_pyro.counterfactual.internals import IndexPlatesMessenger
+from causal_pyro.primitives import IndexSet, scatter
 
 
 class BaseCounterfactual(pyro.poutine.messenger.Messenger):
@@ -35,11 +35,10 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
             msg["name"] = f"{msg['name']}_{self.first_available_dim}"
         name = msg["name"]
 
-        obs_indices = IndexSet(**{name: {0}})
-        act_indices = IndexSet(**{name: {1}})
-        add_indices(join(obs_indices, act_indices))
-
-        msg["value"] = merge({obs_indices: obs, act_indices: act}, event_dim=event_dim)
+        msg["value"] = scatter({
+            IndexSet(**{name: {0}}): obs,
+            IndexSet(**{name: {1}}): act,
+        }, event_dim=event_dim)
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
@@ -49,8 +48,7 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
         # disregard the name
         name = "__intervention__"
 
-        obs_indices = IndexSet(**{name: {0}})
-        act_indices = IndexSet(**{name: {1}})
-        add_indices(join(obs_indices, act_indices))
-
-        msg["value"] = merge({obs_indices: obs, act_indices: act}, event_dim=event_dim)
+        msg["value"] = scatter({
+            IndexSet(**{name: {0}}): obs,
+            IndexSet(**{name: {1}}): act,
+        }, event_dim=event_dim)
