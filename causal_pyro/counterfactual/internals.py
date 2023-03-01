@@ -1,4 +1,3 @@
-import collections
 import numbers
 from typing import Dict, Hashable, List, Optional, TypeVar, Union
 
@@ -6,7 +5,7 @@ import pyro
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame
 
-from ..primitives import IndexSet, gather, indices_of, join, scatter
+from ..primitives import IndexSet, gather, indices_of, scatter, union
 
 T = TypeVar("T")
 
@@ -114,7 +113,7 @@ def _scatter_tensor(
         name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
-    indexset = join(
+    indexset = union(
         indexset, indices_of(value, event_dim=event_dim, name_to_dim=name_to_dim)
     )
 
@@ -155,7 +154,7 @@ def _indices_of_bool(value: bool, **kwargs) -> IndexSet:
 def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
     if all(isinstance(v, int) for v in value):
         return indices_of(torch.Size(value), **kwargs)
-    return join(*(indices_of(v, **kwargs) for v in value))
+    return union(*(indices_of(v, **kwargs) for v in value))
 
 
 @indices_of.register

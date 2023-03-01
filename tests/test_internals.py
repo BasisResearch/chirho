@@ -1,6 +1,5 @@
 import logging
 
-import pyro
 import pyro.distributions as dist
 import pytest
 import torch
