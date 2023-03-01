@@ -316,7 +316,9 @@ def expand_reparam_msg_value_inplace(
     def _wrapper(*args) -> Optional[pyro.infer.reparam.reparam.Reparam]:
         msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
 
-        if indices_of(msg["value"], event_dim=len(msg["fn"].event_shape)):
+        value_indices = indices_of(msg["value"], event_dim=len(msg["fn"].event_shape))
+        dist_indices = indices_of(msg["fn"])
+        if not join(value_indices, dist_indices) or value_indices == dist_indices:
             # not ambiguous
             msg["infer"]["_specified_conditioning"] = msg["infer"].get(
                 "_specified_conditioning", True
@@ -331,6 +333,7 @@ def expand_reparam_msg_value_inplace(
             and msg["value"] is not None
             and not pyro.poutine.util.site_is_subsample(msg)
         ):
+            msg["value"] = torch.as_tensor(msg["value"])
             msg["infer"]["orig_shape"] = msg["value"].shape
             _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
             msg["value"] = msg["value"].expand(

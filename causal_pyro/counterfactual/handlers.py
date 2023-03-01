@@ -25,6 +25,10 @@ class BaseCounterfactual(pyro.poutine.reparam_messenger.ReparamMessenger):
             config = AutoFactualConditioning()
         super().__init__(config=config)
 
+    def _pyro_get_index_plates(self, msg: Dict[str, Any]) -> None:
+        msg["stop"], msg["done"] = True, True
+        msg["value"] = {}
+
     def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
         msg["stop"] = True
 
