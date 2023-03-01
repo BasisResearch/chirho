@@ -35,10 +35,13 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
             msg["name"] = f"{msg['name']}_{self.first_available_dim}"
         name = msg["name"]
 
-        msg["value"] = scatter({
-            IndexSet(**{name: {0}}): obs,
-            IndexSet(**{name: {1}}): act,
-        }, event_dim=event_dim)
+        msg["value"] = scatter(
+            {
+                IndexSet(**{name: {0}}): obs,
+                IndexSet(**{name: {1}}): act,
+            },
+            event_dim=event_dim,
+        )
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
@@ -48,7 +51,10 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
         # disregard the name
         name = "__intervention__"
 
-        msg["value"] = scatter({
-            IndexSet(**{name: {0}}): obs,
-            IndexSet(**{name: {1}}): act,
-        }, event_dim=event_dim)
+        msg["value"] = scatter(
+            {
+                IndexSet(**{name: {0}}): obs,
+                IndexSet(**{name: {1}}): act,
+            },
+            event_dim=event_dim,
+        )
