@@ -120,8 +120,7 @@ class MultiWorldCounterfactual(BaseCounterfactual):
         msg["done"] = True
         self._add_plate()
 
-    def _pyro_sample(self, msg):
-
+    def _pyro_sample(self, msg) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
 
