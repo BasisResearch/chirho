@@ -96,6 +96,7 @@ def test_indices_of_distribution(
     assert actual_world == expected_world
 
 
+# Test the law `gather(value, world) == value[indexset_as_mask(world)]`
 @pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
 @pytest.mark.parametrize("cf_dim", [-1])
