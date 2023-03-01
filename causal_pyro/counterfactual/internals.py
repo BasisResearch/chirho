@@ -1,3 +1,4 @@
+import collections
 import numbers
 from typing import Dict, Hashable, List, Optional, TypeVar, Union
 
@@ -205,7 +206,7 @@ class _LazyPlateMessenger(IndepMessenger):
             "param",
         ) or pyro.poutine.util.site_is_subsample(msg):
             return
-        if self.frame.name in join(indices_of(msg["value"]), indices_of(msg["fn"])):
+        if self.frame.name in union(indices_of(msg["value"]), indices_of(msg["fn"])):
             super()._process_message(msg)
 
 
