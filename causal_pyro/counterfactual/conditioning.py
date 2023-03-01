@@ -7,7 +7,7 @@ import torch
 
 from causal_pyro.counterfactual.internals import expand_reparam_msg_value_inplace
 from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
-from causal_pyro.primitives import gather, merge
+from causal_pyro.primitives import gather
 
 T = TypeVar("T")
 
@@ -48,7 +48,7 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
             cv = pyro.sample(msg["name"] + "_counterfactual", msg["fn"])
 
         event_dim = len(msg["fn"].event_shape)
-        new_value: torch.Tensor = merge({fw.indices: fv, cw.indices: cv}, event_dim=event_dim)
+        new_value: torch.Tensor = scatter({fw.indices: fv, cw.indices: cv}, event_dim=event_dim)
         new_fn = dist.Delta(new_value, event_dim=event_dim).mask(False)
         return {"fn": new_fn, "value": new_value, "is_observed": True}
 
@@ -118,7 +118,7 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
 
         # merge
-        new_value = merge(
+        new_value = scatter(
             {fw.indices: value, cw.indices: cf_obs_value}, event_dim=obs_event_dim
         )
         new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
