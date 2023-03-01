@@ -7,7 +7,7 @@ import pyro
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from ..primitives import IndexSet, gather, indices_of, scatter, union
+from causal_pyro.primitives import IndexSet, gather, indices_of, scatter, union
 
 T = TypeVar("T")
 
@@ -338,7 +338,7 @@ def expand_reparam_msg_value_inplace(
 
         value_indices = indices_of(msg["value"], event_dim=len(msg["fn"].event_shape))
         dist_indices = indices_of(msg["fn"])
-        if not join(value_indices, dist_indices) or value_indices == dist_indices:
+        if not union(value_indices, dist_indices) or value_indices == dist_indices:
             # not ambiguous
             msg["infer"]["_specified_conditioning"] = msg["infer"].get(
                 "_specified_conditioning", True
