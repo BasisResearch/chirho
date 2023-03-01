@@ -7,7 +7,7 @@ import torch
 
 from causal_pyro.counterfactual.internals import expand_reparam_msg_value_inplace
 from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
-from causal_pyro.primitives import gather
+from causal_pyro.primitives import gather, scatter
 
 T = TypeVar("T")
 
