@@ -135,7 +135,6 @@ def test_gather_tensor(batch_shape, event_shape, cf_dim):
         -1,
     ],
 )
-
 def test_scatter_tensor(batch_shape, event_shape, cf_dim):
     name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
 
