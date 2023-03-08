@@ -17,10 +17,18 @@ def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 class AmbiguousConditioningReparam(pyro.infer.reparam.reparam.Reparam):
+    """
+    Abstract base class for reparameterizers that handle ambiguous conditioning.
+    """
+
     pass
 
 
 class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
+    """
+    Abstract base class for strategies that handle ambiguous conditioning.
+    """
+
     pass
 
 
