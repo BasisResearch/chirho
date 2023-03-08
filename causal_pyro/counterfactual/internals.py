@@ -79,6 +79,25 @@ def _gather_tensor(
     return result
 
 
+@scatter.register(dict)
+def _scatter_dict(
+    partitioned_values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs
+):
+    """
+    Scatters a dictionary of disjoint masked values into a single value
+    using repeated calls to :func:``causal_pyro.internals.scatter``.
+
+    :param partitioned_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    assert len(partitioned_values) > 0
+    assert all(isinstance(k, IndexSet) for k in partitioned_values)
+    add_indices(union(*partitioned_values.keys()))
+    for indices, value in partitioned_values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
 @scatter.register
 def _scatter_number(
     value: numbers.Number,
@@ -148,6 +167,11 @@ def _indices_of_number(value: numbers.Number, **kwargs) -> IndexSet:
 
 @indices_of.register
 def _indices_of_bool(value: bool, **kwargs) -> IndexSet:
+    return IndexSet()
+
+
+@indices_of.register
+def _indices_of_none(value: None, **kwargs) -> IndexSet:
     return IndexSet()
 
 
@@ -235,6 +259,12 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
         msg["done"], msg["stop"] = True, True
 
+    def _enter_plate(self, plate: pyro.poutine.messenger.Messenger) -> None:
+        plate.__enter__()
+        stack = pyro.poutine.runtime._PYRO_STACK
+        stack.pop(stack.index(plate))
+        stack.insert(stack.index(self) + len(self.plates), plate)
+
     def _pyro_add_indices(self, msg):
         (indexset,) = msg["args"]
         for name, indices in indexset.items():
@@ -243,7 +273,11 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 self.plates[name] = _LazyPlateMessenger(
                     name=name, dim=self.first_available_dim, size=new_size
                 )
-                self.plates[name].__enter__()
+                # Push the new plate onto Pyro's handler stack at a location
+                # adjacent to this IndexPlatesMessenger instance so that
+                # any handlers pushed after this IndexPlatesMessenger instance
+                # are still guaranteed to exit safely in the correct order.
+                self._enter_plate(self.plates[name])
                 self.first_available_dim -= 1
             else:
                 assert (
