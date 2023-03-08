@@ -51,7 +51,8 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
     """
     Factual conditioning reparameterizer.
 
-    This reparameterizer is used to resolve ambiguity in conditioning by
+    This :class:`pyro.infer.reparam.reparam.Reparam` is used to resolve inherent
+    semantic ambiguity in conditioning in the presence of interventions by
     splitting the observed value into a factual and counterfactual component,
     associating the observed value with the factual random variable,
     and sampling the counterfactual random variable from its prior.
