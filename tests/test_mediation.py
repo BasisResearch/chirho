@@ -11,7 +11,6 @@ from causal_pyro.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.selection import FactualConditioning
 from causal_pyro.query.do_messenger import DoMessenger, do
 
 logger = logging.getLogger(__name__)
@@ -191,7 +190,6 @@ def test_mediation_nde_smoke():
     y_obs = torch.randn(N)
 
     extended_model = direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs)
-    extended_model = FactualConditioning()(extended_model)
 
     with MultiWorldCounterfactual(-2):
         W, X, Z, Y = extended_model()

@@ -2,13 +2,13 @@ from typing import Any, Dict, Optional, Union
 
 import pyro
 
-from causal_pyro.counterfactual.internals import IndexPlatesMessenger
-from causal_pyro.primitives import IndexSet, scatter
 from causal_pyro.counterfactual.conditioning import (
     AmbiguousConditioningReparam,
     AmbiguousConditioningStrategy,
     AutoFactualConditioning,
 )
+from causal_pyro.counterfactual.internals import IndexPlatesMessenger
+from causal_pyro.primitives import IndexSet, scatter
 
 CondStrategy = Union[
     Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
