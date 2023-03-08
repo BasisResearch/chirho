@@ -13,6 +13,11 @@ T = TypeVar("T")
 
 
 def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Helper function used with :func:`pyro.poutine.infer_config` to inform
+    :class:`AmbiguousConditioningReparam` that all ambiguity in the current
+    context has been resolved.
+    """
     return {"_specified_conditioning": True}
 
 
@@ -45,6 +50,11 @@ class ConditionReparamArgMsg(ConditionReparamMsg):
 class FactualConditioningReparam(AmbiguousConditioningReparam):
     """
     Factual conditioning reparameterizer.
+
+    This reparameterizer is used to resolve ambiguity in conditioning by
+    splitting the observed value into a factual and counterfactual component,
+    associating the observed value with the factual random variable,
+    and sampling the counterfactual random variable from its prior.
     """
 
     @pyro.poutine.infer_config(config_fn=no_ambiguity)
@@ -65,7 +75,19 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
 
 class AutoFactualConditioning(AmbiguousConditioningStrategy):
     """
-    Default strategy for handling ambiguity in conditioning.
+    Default strategy for handling ambiguity in conditioning, for use with
+    counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
+
+    This strategy automatically applies :class:`FactualConditioningReparam` to
+    all sites that are observed and are downstream of an intervention, provided
+    that the observed value's index variables are a strict subset of the distribution's
+    indices and hence require clarification of which entries of the random variable
+    are fixed/observed (as opposed to random/unobserved).
+
+    .. note::
+
+        This strategy is applied by default via :class:`MultiWorldCounterfactual`
+        and :class:`TwinWorldCounterfactual` unless otherwise specified.
     """
 
     @expand_reparam_msg_value_inplace
