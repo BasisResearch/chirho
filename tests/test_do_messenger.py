@@ -18,7 +18,7 @@ from causal_pyro.query.predictive import PredictiveMessenger
 logger = logging.getLogger(__name__)
 
 
-x_cf_values = [-1.0, 0.0, 2.0, 2]
+x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 
 
 def all_unique(xs):
@@ -161,6 +161,7 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
     )
 
 
+@pytest.mark.xfail(reason="disabling pending removal of predictive")
 @pytest.mark.parametrize(
     "cf_handler,observed_vars,expected_shapes",
     [

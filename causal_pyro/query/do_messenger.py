@@ -20,6 +20,7 @@ class DoMessenger(pyro.poutine.messenger.Messenger):
                 msg["value"],
                 self.actions[msg["name"]],
                 event_dim=len(msg["fn"].event_shape),
+                name=msg["name"],
             )
 
 
