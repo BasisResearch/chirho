@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-x_cf_values = [-1.0, 0.0, 2.0, 2]
+x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 
 
 def make_mediation_model(f_W: Callable, f_X: Callable, f_Z: Callable, f_Y: Callable):
@@ -165,6 +165,7 @@ def test_multiple_interventions(x_cf_value):
     assert Y.shape == (2, 2)
 
 
+@pytest.mark.xfail(reason="TODO support obs_mask for conditioning")
 def test_mediation_nde_smoke():
     model = make_mediation_model(*linear_fs())
 

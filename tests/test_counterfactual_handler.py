@@ -11,12 +11,12 @@ from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.primitives import intervene
+from causal_pyro.primitives import IndexSet, indices_of, intervene
 
 logger = logging.getLogger(__name__)
 
 
-x_cf_values = [-1.0, 0.0, 2.0, 2]
+x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -112,3 +112,50 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
     assert Z.shape == (2,) + (1,) * (-cf_dim - 1) + event_shape
     assert X.shape == (2, 1) + (1,) * (-cf_dim - 1) + event_shape
     assert Y.shape == (2, 2) + (1,) * (-cf_dim - 1) + event_shape
+
+
+@pytest.mark.parametrize("nested", [False, True])
+@pytest.mark.parametrize("x_cf_value", x_cf_values)
+@pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim):
+    def model():
+        #   z
+        #     \
+        # x --> y
+        Z = pyro.sample(
+            "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
+        )
+        Z = intervene(
+            Z,
+            torch.full(event_shape, x_cf_value - 1.0),
+            event_dim=len(event_shape),
+            name="Z",
+        )
+        X = pyro.sample(
+            "x",
+            dist.Normal(Z if nested else 0.0, 1)
+            .expand(Z.shape if nested else event_shape)
+            .to_event(len(event_shape)),
+        )
+        X = intervene(
+            X,
+            torch.full(event_shape, x_cf_value),
+            event_dim=len(event_shape),
+            name="X",
+        )
+        Y = pyro.sample(
+            "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
+        )
+        return Z, X, Y
+
+    with MultiWorldCounterfactual(cf_dim):
+        Z, X, Y = model()
+
+        assert indices_of(Z, event_dim=len(event_shape)) == IndexSet(Z={0, 1})
+        assert (
+            indices_of(X, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
+            if nested
+            else IndexSet(X={0, 1})
+        )
+        assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
