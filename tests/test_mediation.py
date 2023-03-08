@@ -21,7 +21,6 @@ x_cf_values = [-1.0, 0.0, 2.0, 2]
 
 
 def make_mediation_model(f_W: Callable, f_X: Callable, f_Z: Callable, f_Y: Callable):
-
     # Shared model across multiple queries/tests.
     # See Figure 1a in https://ftp.cs.ucla.edu/pub/stat_ser/R273-U.pdf
 
@@ -91,7 +90,6 @@ def test_do_api(x_cf_value):
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 def test_linear_mediation_unconditioned(x_cf_value):
-
     model = make_mediation_model(*linear_fs())
 
     intervened_model = do(model, {"X": x_cf_value})
@@ -168,7 +166,6 @@ def test_multiple_interventions(x_cf_value):
 
 
 def test_mediation_nde_smoke():
-
     model = make_mediation_model(*linear_fs())
 
     # natural direct effect: DE{x,x'}(Y) = E[ Y(X=x', Z(X=x)) - E[Y(X=x)] ]
@@ -206,7 +203,6 @@ def test_mediation_nde_smoke():
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 @pytest.mark.parametrize("cf_value", [0.0, 1.0])
 def test_mediation_dependent_intervention(cf_dim, cf_value):
-
     model = make_mediation_model(*linear_fs())
 
     intervened_model = do(model, {"Z": lambda Z: Z + cf_value})
