@@ -15,7 +15,9 @@ class IndexSetMaskMessenger(pyro.poutine.messenger.Messenger):
     Abstract base clas for effect handlers that select a subset of worlds.
     """
 
-    indices: IndexSet
+    @property
+    def indices(self) -> IndexSet:
+        raise NotImplementedError
 
     def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         mask_device = get_sample_msg_device(msg["fn"], msg["value"])
