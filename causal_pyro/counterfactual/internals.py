@@ -85,7 +85,7 @@ def _scatter_dict(
 ):
     """
     Scatters a dictionary of disjoint masked values into a single value
-    using repeated calls to :func:``scatter``.
+    using repeated calls to :func:``causal_pyro.internals.scatter``.
 
     :param partitioned_values: A dictionary mapping index sets to values.
     :return: A single value.
