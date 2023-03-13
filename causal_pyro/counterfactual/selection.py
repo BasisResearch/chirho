@@ -51,9 +51,9 @@ class SelectCounterfactual(IndexSetMaskMessenger):
     Useful for transformations that require different behavior in the factual
     and counterfactual worlds, such as conditioning.
 
-    .. note:: Semantically equivalent to
+    .. note:: Semantically equivalent to applying the following at each sample site:
 
-        pyro.poutine.mask(mask=~indexset_as_mask(counterfactual_indices()))
+        pyro.poutine.mask(mask=~indexset_as_mask(get_factual_indices()))
     """
 
     def get_mask(
@@ -75,9 +75,9 @@ class SelectFactual(IndexSetMaskMessenger):
     Useful for transformations that require different behavior in the factual
     and counterfactual worlds, such as conditioning.
 
-    .. note:: Semantically equivalent to
+    .. note:: Semantically equivalent to applying the following at each sample site:
 
-        pyro.poutine.mask(mask=indexset_as_mask(factual_indices()))
+        pyro.poutine.mask(mask=indexset_as_mask(get_factual_indices()))
     """
 
     def get_mask(

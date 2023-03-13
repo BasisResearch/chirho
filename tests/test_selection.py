@@ -22,8 +22,10 @@ x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
-@pytest.mark.parametrize("use_twin", [False, True])
-def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, use_twin):
+@pytest.mark.parametrize(
+    "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
+)
+def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
     def model():
         #   z
         #     \
@@ -58,9 +60,7 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, use_twin):
     }
 
     queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
-    cf_handler = (TwinWorldCounterfactual if use_twin else MultiWorldCounterfactual)(
-        cf_dim
-    )
+    cf_handler = cf_class(cf_dim)
 
     with cf_handler:
         full_tr = pyro.poutine.trace(queried_model).get_trace()
