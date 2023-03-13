@@ -11,7 +11,7 @@ from causal_pyro.counterfactual.internals import (
 from causal_pyro.primitives import IndexSet
 
 
-class IndexSetMaskMessenger(pyro.poutine.messenger.Messenger):
+class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
     """
     Abstract base class for effect handlers that select a subset of worlds.
     """
@@ -42,7 +42,7 @@ def get_factual_indices() -> IndexSet:
     return IndexSet(**{f.name: {0} for f in get_index_plates().values()})
 
 
-class SelectCounterfactual(IndexSetMaskMessenger):
+class SelectCounterfactual(DependentMaskMessenger):
     """
     Effect handler to include only log-density terms from counterfactual worlds.
     This implementation piggybacks on Pyro's existing masking functionality,
@@ -66,7 +66,7 @@ class SelectCounterfactual(IndexSetMaskMessenger):
         return ~indexset_as_mask(indices, device=device)  # negate == complement
 
 
-class SelectFactual(IndexSetMaskMessenger):
+class SelectFactual(DependentMaskMessenger):
     """
     Effect handler to include only log-density terms from the factual world.
     This implementation piggybacks on Pyro's existing masking functionality,
