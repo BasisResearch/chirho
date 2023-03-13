@@ -53,30 +53,31 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
 
 """
 import functools
-from typing import Callable, Dict, Iterable, Optional, Set, TypeVar, Union
-
-import pyro
+from typing import (
+    Callable,
+    Dict,
+    Hashable,
+    Iterable,
+    Mapping,
+    Optional,
+    Set,
+    TypeVar,
+    Union,
+)
 
 T = TypeVar("T")
 
-Intervention = Union[
-    Optional[T],
-    Callable[[T], T],
-]
+AtomicIntervention = Union[T, Callable[[T], T]]
+CompoundIntervention = Union[Mapping[Hashable, T], Callable[..., T]]
+Intervention = Union[AtomicIntervention[T], CompoundIntervention[T]]
 
 
-@pyro.poutine.runtime.effectful(type="intervene")
-def intervene(
-    obs: T, act: Intervention[T] = None, *, event_dim: Optional[int] = None
-) -> T:
+@functools.singledispatch
+def intervene(obs, act: Optional[Intervention[T]] = None, **kwargs):
     """
     Intervene on a value in a probabilistic program.
     """
-    if callable(act) and not isinstance(act, pyro.distributions.Distribution):
-        return act(obs)
-    elif act is None:
-        return obs
-    return act
+    raise NotImplementedError(f"intervene not implemented for type {type(obs)}")
 
 
 class IndexSet(Dict[str, Set[int]]):
