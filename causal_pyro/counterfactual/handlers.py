@@ -1,13 +1,14 @@
 from typing import Any, Dict, Optional, Union
 
-import pyro
-
 from causal_pyro.counterfactual.conditioning import (
     AmbiguousConditioningReparam,
     AmbiguousConditioningStrategy,
     AutoFactualConditioning,
 )
-from causal_pyro.counterfactual.internals import IndexPlatesMessenger
+from causal_pyro.counterfactual.internals import (
+    ExpandReparamMessenger,
+    IndexPlatesMessenger,
+)
 from causal_pyro.primitives import IndexSet, scatter
 
 CondStrategy = Union[
@@ -15,7 +16,7 @@ CondStrategy = Union[
 ]
 
 
-class BaseCounterfactual(pyro.poutine.reparam_messenger.ReparamMessenger):
+class BaseCounterfactual(ExpandReparamMessenger):
     """
     Base class for counterfactual handlers.
     """

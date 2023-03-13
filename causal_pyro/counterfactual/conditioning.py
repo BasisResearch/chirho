@@ -5,8 +5,11 @@ import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
 
-from causal_pyro.counterfactual.internals import expand_reparam_msg_value_inplace
-from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
+from causal_pyro.counterfactual.selection import (
+    SelectCounterfactual,
+    SelectFactual,
+    get_factual_indices,
+)
 from causal_pyro.primitives import scatter
 
 T = TypeVar("T")
@@ -60,15 +63,16 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
 
     @pyro.poutine.infer_config(config_fn=no_ambiguity)
     def apply(self, msg: ConditionReparamArgMsg) -> ConditionReparamMsg:
-        with SelectFactual() as fw:
+        with SelectFactual():
             fv = pyro.sample(msg["name"] + "_factual", msg["fn"], obs=msg["value"])
 
-        with SelectCounterfactual() as cw:
+        with SelectCounterfactual():
             cv = pyro.sample(msg["name"] + "_counterfactual", msg["fn"])
 
         event_dim = len(msg["fn"].event_shape)
+        fw_indices = get_factual_indices()
         new_value: torch.Tensor = scatter(
-            {fw.indices: fv, cw.indices: cv}, event_dim=event_dim
+            fv, fw_indices, result=cv.clone(), event_dim=event_dim
         )
         new_fn = dist.Delta(new_value, event_dim=event_dim).mask(False)
         return {"fn": new_fn, "value": new_value, "is_observed": True}
@@ -91,11 +95,14 @@ class AutoFactualConditioning(AmbiguousConditioningStrategy):
         and :class:`TwinWorldCounterfactual` unless otherwise specified.
     """
 
-    @expand_reparam_msg_value_inplace
     def configure(
         self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> Optional[FactualConditioningReparam]:
-        if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
+        if (
+            not msg["is_observed"]
+            or pyro.poutine.util.site_is_subsample(msg)
+            or msg["infer"].get("_specified_conditioning", False)
+        ):
             return None
 
         return FactualConditioningReparam()

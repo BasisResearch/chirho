@@ -1,9 +1,9 @@
 import collections
-import functools
 import numbers
-from typing import Callable, Dict, Hashable, List, Optional, TypeVar, Union
+from typing import Dict, Hashable, List, Optional, Tuple, TypeVar, Union
 
 import pyro
+import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
@@ -24,19 +24,22 @@ def indexset_as_mask(
     indexset: IndexSet,
     *,
     event_dim: int = 0,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim_size: Optional[Dict[Hashable, Tuple[int, int]]] = None,
     device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """
     Get a dense mask tensor for indexing into a tensor from an indexset.
     """
-    if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
-    batch_shape = [1] * -functools.reduce(min, name_to_dim.values(), 0)
+    if name_to_dim_size is None:
+        name_to_dim_size = {
+            f.name: (f.dim, f.size) for f in get_index_plates().values()
+        }
+    batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
     for name, values in indexset.items():
-        inds[name_to_dim[name]] = torch.tensor(list(sorted(values)), dtype=torch.long)
-        batch_shape[name_to_dim[name]] = max(len(values), max(values) + 1)
+        dim, size = name_to_dim_size[name]
+        inds[dim] = torch.tensor(list(sorted(values)), dtype=torch.long)
+        batch_shape[dim] = size
     mask = torch.zeros(tuple(batch_shape), dtype=torch.bool, device=device)
     mask[tuple(inds)] = True
     return mask[(...,) + (None,) * event_dim]
@@ -256,13 +259,14 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def __enter__(self):
-        self.first_available_dim = self._orig_dim
-        self.plates = collections.OrderedDict()
+        assert not self.plates
+        assert self.first_available_dim == self._orig_dim
         return super().__enter__()
 
     def __exit__(self, *args):
         for name in reversed(list(self.plates.keys())):
             self.plates.pop(name).__exit__(*args)
+        self.first_available_dim = self._orig_dim
         return super().__exit__(*args)
 
     def _pyro_get_index_plates(self, msg):
@@ -300,6 +304,51 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
 
 
+class ExpandReparamMessenger(pyro.poutine.reparam_messenger.ReparamMessenger):
+    """
+    Slightly gross workaround that mutates the msg in place
+    to avoid triggering overzealous validation logic in
+    :class:~`pyro.poutine.reparam.ReparamMessenger`
+    that uses cheaper tensor shape and identity equality checks as
+    a conservative proxy for an expensive tensor value equality check.
+    (see https://github.com/pyro-ppl/pyro/blob/685c7adee65bbcdd6bd6c84c834a0a460f2224eb/pyro/poutine/reparam_messenger.py#L99)  # noqa: E501
+
+    This workaround is correct because these reparameterizers do not change
+    the observed entries, it just packs counterfactual values around them;
+    the equality check being approximated by that logic would still pass.
+    """
+
+    def _pyro_sample(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
+        if msg["is_observed"]:
+            value_indices = indices_of(
+                msg["value"], event_dim=len(msg["fn"].event_shape)
+            )
+            dist_indices = indices_of(msg["fn"])
+            if not union(value_indices, dist_indices) or value_indices == dist_indices:
+                # not ambiguous
+                msg["infer"]["_specified_conditioning"] = msg["infer"].get(
+                    "_specified_conditioning", True
+                )
+
+            if (
+                not msg["infer"].get("_specified_conditioning", False)
+                and msg["value"] is not None
+                and not pyro.poutine.util.site_is_subsample(msg)
+            ):
+                msg["value"] = torch.as_tensor(msg["value"])
+                msg["infer"]["orig_shape"] = msg["value"].shape
+                _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
+                msg["value"] = msg["value"].expand(
+                    torch.broadcast_shapes(
+                        msg["fn"].batch_shape + msg["fn"].event_shape,
+                        msg["value"].shape,
+                    )
+                )
+                setattr(msg["value"], "_pyro_custom_init", _custom_init)
+
+        return super()._pyro_sample(msg)
+
+
 def get_sample_msg_device(
     dist: pyro.distributions.Distribution,
     value: Optional[Union[torch.Tensor, float, int, bool]],
@@ -317,56 +366,3 @@ def get_sample_msg_device(
             if isinstance(p, torch.Tensor):
                 return p.device
     raise ValueError(f"could not infer device for {dist} and {value}")
-
-
-def expand_reparam_msg_value_inplace(
-    config_fn: Callable[..., Optional[pyro.infer.reparam.reparam.Reparam]]
-) -> Callable[..., Optional[pyro.infer.reparam.reparam.Reparam]]:
-    """
-    Slightly gross workaround that mutates the msg in place
-    to avoid triggering overzealous validation logic in
-    :class:~`pyro.poutine.reparam.ReparamMessenger`
-    that uses cheaper tensor shape and identity equality checks as
-    a conservative proxy for an expensive tensor value equality check.
-    (see https://github.com/pyro-ppl/pyro/blob/685c7adee65bbcdd6bd6c84c834a0a460f2224eb/pyro/poutine/reparam_messenger.py#L99)  # noqa: E501
-
-    This workaround is correct because these reparameterizers do not change
-    the observed entries, it just packs counterfactual values around them;
-    the equality check being approximated by that logic would still pass.
-    """
-
-    @functools.wraps(config_fn)
-    def _wrapper(*args) -> Optional[pyro.infer.reparam.reparam.Reparam]:
-        msg: pyro.infer.reparam.reparam.ReparamMessage = args[-1]
-
-        value_indices = indices_of(msg["value"], event_dim=len(msg["fn"].event_shape))
-        dist_indices = indices_of(msg["fn"])
-        if not union(value_indices, dist_indices) or value_indices == dist_indices:
-            # not ambiguous
-            msg["infer"]["_specified_conditioning"] = msg["infer"].get(
-                "_specified_conditioning", True
-            )
-
-        if msg["infer"].get("_specified_conditioning", False):
-            # avoid infinite recursion
-            return None
-
-        if (
-            msg["is_observed"]
-            and msg["value"] is not None
-            and not pyro.poutine.util.site_is_subsample(msg)
-        ):
-            msg["value"] = torch.as_tensor(msg["value"])
-            msg["infer"]["orig_shape"] = msg["value"].shape
-            _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
-            msg["value"] = msg["value"].expand(
-                torch.broadcast_shapes(
-                    msg["fn"].batch_shape + msg["fn"].event_shape,
-                    msg["value"].shape,
-                )
-            )
-            setattr(msg["value"], "_pyro_custom_init", _custom_init)
-
-        return config_fn(*(args[:-1] + (msg,)))
-
-    return _wrapper
