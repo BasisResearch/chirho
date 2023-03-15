@@ -52,7 +52,9 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
     assert torch.all(x_cf_twin[0] != x_cf_value)
     assert torch.all(x_cf_twin[1] == x_cf_value)
     assert z_cf_twin.shape == torch.Size([])
-    assert x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (len(y_cf_twin.shape) - 1)
+    assert (
+        x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (len(y_cf_twin.shape) - 1)
+    )
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -110,8 +112,12 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
         Z, X, Y = model()
 
     assert Z.shape == (2,) + (1,) * (len(Z.shape) - len(event_shape) - 1) + event_shape
-    assert X.shape == (2, 1) + (1,) * (len(X.shape) - len(event_shape) - 2) + event_shape
-    assert Y.shape == (2, 2) + (1,) * (len(Y.shape) - len(event_shape) - 2) + event_shape
+    assert (
+        X.shape == (2, 1) + (1,) * (len(X.shape) - len(event_shape) - 2) + event_shape
+    )
+    assert (
+        Y.shape == (2, 2) + (1,) * (len(Y.shape) - len(event_shape) - 2) + event_shape
+    )
 
 
 @pytest.mark.parametrize("nested", [False, True])
