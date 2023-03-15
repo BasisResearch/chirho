@@ -15,6 +15,16 @@ from causal_pyro.primitives import gather, scatter
 T = TypeVar("T")
 
 
+def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
+    """
+    Helper function used with :func:`pyro.poutine.condition` to determine
+    whether a site is observed or ambiguous.
+    """
+    return msg["is_observed"] and \
+        not pyro.poutine.util.site_is_subsample(msg) and \
+        msg["infer"].get("_specified_conditioning", False)
+
+
 def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
     """
     Helper function used with :func:`pyro.poutine.infer_config` to inform
@@ -98,11 +108,7 @@ class MinimalFactualConditioning(AmbiguousConditioningStrategy):
     def configure(
         self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> Optional[FactualConditioningReparam]:
-        if (
-            not msg["is_observed"]
-            or pyro.poutine.util.site_is_subsample(msg)
-            or msg["infer"].get("_specified_conditioning", False)
-        ):
+        if not site_is_ambiguous(msg):
             return None
 
         return FactualConditioningReparam()
@@ -122,12 +128,7 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
     def apply(
         self, msg: ConditionTransformReparamArgMsg
     ) -> ConditionTransformReparamMsg:
-        name, fn, value, is_observed = (
-            msg["name"],
-            msg["fn"],
-            msg["value"],
-            msg["is_observed"],
-        )
+        name, fn, value = msg["name"], msg["fn"], msg["value"]
 
         tfm = (
             fn.transforms[-1]
@@ -135,12 +136,11 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
             else dist.transforms.ComposeTransformModule(fn.transforms)
         )
         noise_dist = fn.base_dist
-        noise_event_dim, obs_event_dim = len(noise_dist.event_shape), len(
-            fn.event_shape
-        )
+        noise_event_dim = len(noise_dist.event_shape)
+        obs_event_dim = len(fn.event_shape)
 
         # factual world
-        with SelectFactual() as fw, pyro.poutine.infer_config(config_fn=no_ambiguity):
+        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
             obs_noise = pyro.sample(
@@ -148,25 +148,20 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
             )
 
         # depends on strategy and indices of noise_dist
-        obs_noise = gather(obs_noise, fw.indices, event_dim=noise_event_dim).expand(
-            obs_noise.shape
-        )
+        fw = get_factual_indices()
+        obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(obs_noise.shape)
         obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
 
         # counterfactual world
-        with SelectCounterfactual() as cw, pyro.poutine.infer_config(
-            config_fn=no_ambiguity
-        ):
+        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
             cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
 
         # merge
-        new_value = scatter(
-            {fw.indices: value, cw.indices: cf_obs_value}, event_dim=obs_event_dim
-        )
+        new_value = scatter(value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim)
         new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
-        return {"fn": new_fn, "value": new_value, "is_observed": is_observed}
+        return {"fn": new_fn, "value": new_value, "is_observed": msg["is_observed"]}
 
 
 class AutoFactualConditioning(MinimalFactualConditioning):
@@ -177,7 +172,7 @@ class AutoFactualConditioning(MinimalFactualConditioning):
     def configure(
         self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> Optional[FactualConditioningReparam]:
-        if not msg["is_observed"] or pyro.poutine.util.site_is_subsample(msg):
+        if not site_is_ambiguous(msg):
             return None
 
         fn = msg["fn"]
