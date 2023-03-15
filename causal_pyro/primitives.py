@@ -68,7 +68,7 @@ from typing import (
 T = TypeVar("T")
 
 AtomicIntervention = Union[T, Callable[[T], T]]
-CompoundIntervention = Union[Mapping[Hashable, T], Callable[..., T]]
+CompoundIntervention = Union[Mapping[Hashable, AtomicIntervention[T]], Callable[..., T]]
 Intervention = Union[AtomicIntervention[T], CompoundIntervention[T]]
 
 
