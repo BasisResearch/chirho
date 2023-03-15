@@ -235,7 +235,9 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
     plates: Dict[Hashable, IndepMessenger]
     first_available_dim: int
 
-    def __init__(self, first_available_dim: int = -5):
+    def __init__(self, first_available_dim: Optional[int] = None):
+        if first_available_dim is None:
+            first_available_dim = -5  # conservative default for 99% of models
         assert first_available_dim < 0
         self._orig_dim = first_available_dim
         self.first_available_dim = first_available_dim
