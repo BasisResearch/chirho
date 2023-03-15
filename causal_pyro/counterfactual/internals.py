@@ -249,34 +249,47 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         self.plates = collections.OrderedDict()
         return super().__enter__()
 
-    def __exit__(self, *args):
+    def __exit__(self, exc_type, exc_value, traceback):
         for name in reversed(list(self.plates.keys())):
-            self.plates.pop(name).__exit__(*args)
-        return super().__exit__(*args)
+            self.plates.pop(name).__exit__(exc_type, exc_value, traceback)
+        return super().__exit__(exc_type, exc_value, traceback)
 
     def _pyro_get_index_plates(self, msg):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
         msg["done"], msg["stop"] = True, True
 
-    def _enter_plate(self, plate: pyro.poutine.messenger.Messenger) -> None:
-        plate.__enter__()
+    def _enter_plate(self, plate: pyro.poutine.messenger.Messenger):
+        try:
+            plate.__enter__()
+        except ValueError as e:
+            if "collide at dim" in str(e):
+                raise ValueError(
+                    f"{self} was unable to allocate an index plate dimension "
+                    f"at dimension {self.first_available_dim}.\n"
+                    f"Try setting a value less than {self._orig_dim} for `first_available_dim` "
+                    "that is less than the leftmost (most negative) plate dimension in your model."
+                )
+            else:
+                raise e
         stack = pyro.poutine.runtime._PYRO_STACK
         stack.pop(stack.index(plate))
-        stack.insert(stack.index(self) + len(self.plates), plate)
+        stack.insert(stack.index(self) + len(self.plates) + 1, plate)
+        return plate
 
     def _pyro_add_indices(self, msg):
         (indexset,) = msg["args"]
         for name, indices in indexset.items():
             if name not in self.plates:
                 new_size = max(max(indices) + 1, len(indices))
-                self.plates[name] = _LazyPlateMessenger(
-                    name=name, dim=self.first_available_dim, size=new_size
-                )
                 # Push the new plate onto Pyro's handler stack at a location
                 # adjacent to this IndexPlatesMessenger instance so that
                 # any handlers pushed after this IndexPlatesMessenger instance
                 # are still guaranteed to exit safely in the correct order.
-                self._enter_plate(self.plates[name])
+                self.plates[name] = self._enter_plate(
+                    _LazyPlateMessenger(
+                        name=name, dim=self.first_available_dim, size=new_size
+                    )
+                )
                 self.first_available_dim -= 1
             else:
                 assert (

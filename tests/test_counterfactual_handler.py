@@ -165,3 +165,15 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
             else IndexSet(X={0, 1})
         )
         assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+def test_dim_allocation_failure(cf_dim):
+    def model():
+        with pyro.plate("data", 3, dim=-5 if cf_dim is None else cf_dim):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            intervene(x, torch.ones_like(x))
+
+    with pytest.raises(ValueError, match=".*unable to allocate an index plate.*"):
+        with MultiWorldCounterfactual(cf_dim):
+            model()
