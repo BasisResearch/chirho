@@ -125,9 +125,7 @@ class ConditionTransformReparamArgMsg(ConditionTransformReparamMsg):
 
 
 class ConditionTransformReparam(AmbiguousConditioningReparam):
-    def apply(
-        self, msg: ConditionTransformReparamArgMsg
-    ) -> ConditionTransformReparamMsg:
+    def apply(self, msg: ConditionTransformReparamArgMsg) -> ConditionTransformReparamMsg:
         name, fn, value = msg["name"], msg["fn"], msg["value"]
 
         tfm = (
@@ -143,9 +141,7 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
         with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
-            obs_noise = pyro.sample(
-                name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
-            )
+            obs_noise = pyro.sample(name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value))
 
         # depends on strategy and indices of noise_dist
         fw = get_factual_indices()
