@@ -13,7 +13,6 @@ from causal_pyro.counterfactual.handlers import (
 )
 from causal_pyro.primitives import intervene
 from causal_pyro.query.do_messenger import DoMessenger, do
-from causal_pyro.query.predictive import PredictiveMessenger
 
 logger = logging.getLogger(__name__)
 
@@ -159,83 +158,6 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
         == y_messenger_2.shape
         == (2,)
     )
-
-
-@pytest.mark.xfail(reason="disabling pending removal of predictive")
-@pytest.mark.parametrize(
-    "cf_handler,observed_vars,expected_shapes",
-    [
-        (MultiWorldCounterfactual, ("x",), ((2,), (2,), (2,))),
-        (MultiWorldCounterfactual, ("y",), ((), (2,), (2,))),
-        (MultiWorldCounterfactual, ("z",), ((), (), (2,))),
-        (MultiWorldCounterfactual, ("x", "y"), ((2,), (2, 2), (2, 2))),
-        (MultiWorldCounterfactual, ("x", "z"), ((2,), (2,), (2, 2))),
-        (MultiWorldCounterfactual, ("y", "z"), ((), (2,), (2, 2))),
-        (MultiWorldCounterfactual, ("x", "y", "z"), ((2,), (2, 2), (2, 2, 2))),
-        (TwinWorldCounterfactual, ("x",), ((2,), (2,), (2,))),
-        (TwinWorldCounterfactual, ("y",), ((), (2,), (2,))),
-        (TwinWorldCounterfactual, ("z",), ((), (), (2,))),
-        (TwinWorldCounterfactual, ("x", "y"), ((2,), (2,), (2,))),
-        (TwinWorldCounterfactual, ("x", "z"), ((2,), (2,), (2,))),
-        (TwinWorldCounterfactual, ("y", "z"), ((), (2,), (2,))),
-        (TwinWorldCounterfactual, ("x", "y", "z"), ((2,), (2,), (2,))),
-    ],
-)
-@pytest.mark.parametrize("cf_dim", [-2, -3])
-def test_predictive_shapes_plate_multiworld(
-    cf_handler, observed_vars, expected_shapes, cf_dim
-):
-    data = {
-        "x": torch.tensor(0.5),
-        "y": torch.tensor([1.0, 2.0, 3.0]),
-        "z": torch.tensor([1.7, 0.6, 0.3]),
-    }
-    data = {k: v for k, v in data.items() if k in observed_vars}
-
-    def model():
-        x = pyro.sample("x", dist.Normal(0, 1))
-        with pyro.plate("data", 3, dim=-1):
-            y = pyro.sample("y", dist.Normal(x, 1))
-            z = pyro.sample("z", dist.Normal(y, 1))
-            return x, y, z
-
-    conditioned_model = pyro.condition(model, data=data)
-    predictive_model = PredictiveMessenger(names=observed_vars)(conditioned_model)
-
-    with cf_handler(cf_dim):
-        x, y, z = predictive_model()
-
-    expected_x_shape = expected_shapes[0] + (
-        (1,) * (-cf_dim - 1) if expected_shapes[0] else ()
-    )
-    expected_y_shape = (
-        expected_shapes[1] + ((1,) * (-cf_dim - 2) if expected_shapes[1] else ()) + (3,)
-    )
-    expected_z_shape = (
-        expected_shapes[2] + ((1,) * (-cf_dim - 2) if expected_shapes[2] else ()) + (3,)
-    )
-
-    assert x.shape == expected_x_shape
-    assert y.shape == expected_y_shape
-    assert z.shape == expected_z_shape
-
-    with cf_handler(cf_dim):
-        x2, y2, z2 = predictive_model()
-
-    if "x" in observed_vars:
-        assert torch.all(x[0] != x[1])
-        assert torch.any(x[0] == x2[0])
-        assert torch.all(x[1] != x2[1])
-
-    if "y" in observed_vars:
-        assert torch.all(y[0] != y[1])
-        assert torch.any(y[0] == y2[0])
-        assert torch.all(y[1] != y2[1])
-
-    if "z" in observed_vars:
-        assert torch.all(z[0] != z[1])
-        assert torch.any(z[0] == z2[0])
-        assert torch.all(z[1] != z2[1])
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
