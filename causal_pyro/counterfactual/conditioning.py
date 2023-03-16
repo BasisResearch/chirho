@@ -92,19 +92,16 @@ class FactualConditioningReparam(AmbiguousConditioningReparam):
 
 class MinimalFactualConditioning(AmbiguousConditioningStrategy):
     """
-    Default strategy for handling ambiguity in conditioning, for use with
+    Reparameterization strategy for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
 
-    This strategy automatically applies :class:`FactualConditioningReparam` to
-    all sites that are observed and are downstream of an intervention, provided
-    that the observed value's index variables are a strict subset of the distribution's
+    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+    and the observed value's index variables are a strict subset of the distribution's
     indices and hence require clarification of which entries of the random variable
     are fixed/observed (as opposed to random/unobserved).
 
-    .. note::
-
-        This strategy is applied by default via :class:`MultiWorldCounterfactual`
-        and :class:`TwinWorldCounterfactual` unless otherwise specified.
+    :class:`MinimalFactualConditioning` applies :class:`FactualConditioningReparam`
+    instances to all ambiguous sample sites in a model.
     """
 
     def configure(
@@ -172,7 +169,22 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
 
 class AutoFactualConditioning(MinimalFactualConditioning):
     """
-    Strategy for handling ambiguity in conditioning.
+    Reparameterization strategy for handling ambiguity in conditioning, for use with
+    counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
+
+    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+    and the observed value's index variables are a strict subset of the distribution's
+    indices and hence require clarification of which entries of the random variable
+    are fixed/observed (as opposed to random/unobserved).
+
+    When the distribution is a :class:`pyro.distributions.TransformedDistribution`,
+    :class:`AutoFactualConditioning` automatically applies :class:`ConditionTransformReparam`
+    to the site. Otherwise, it behaves like :class:`MinimalFactualConditioning` .
+ 
+    .. note::
+
+        This strategy is applied by default via :class:`MultiWorldCounterfactual`
+        and :class:`TwinWorldCounterfactual` unless otherwise specified.
     """
 
     def configure(

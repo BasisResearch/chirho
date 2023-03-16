@@ -15,9 +15,10 @@ from causal_pyro.query.do_messenger import do
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.parametrize("cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-def test_ambiguous_conditioning_transform(cf_dim, event_shape):
+def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
     def model():
         X = pyro.sample(
             "x",
@@ -31,17 +32,17 @@ def test_ambiguous_conditioning_transform(cf_dim, event_shape):
         )
 
     observations = {
-        "z": torch.full([2], 1.0),
-        "x": torch.full([2], 1.1),
-        "y": torch.full([2], 1.3),
+        "z": torch.full(event_shape, 1.0),
+        "x": torch.full(event_shape, 1.1),
+        "y": torch.full(event_shape, 1.3),
     }
     interventions = {
-        "z": torch.full([2], 0.5),
-        "x": torch.full([2], 0.6),
+        "z": torch.full(event_shape, 0.5),
+        "x": torch.full(event_shape, 0.6),
     }
 
     queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
-    cf_handler = TwinWorldCounterfactual(cf_dim)
+    cf_handler = cf_class(cf_dim)
 
     with cf_handler:
         full_tr = pyro.poutine.trace(queried_model).get_trace()
