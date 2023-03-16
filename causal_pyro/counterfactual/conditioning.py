@@ -1,30 +1,46 @@
-from typing import Any, Dict, Literal, Optional, TypedDict, TypeVar
+from typing import Any, Dict, Literal, Optional, TypedDict, TypeVar, Union
 
 import pyro
 import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
 
+from causal_pyro.counterfactual.internals import expand_obs_value_inplace_
 from causal_pyro.counterfactual.selection import (
     SelectCounterfactual,
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.primitives import gather, scatter
+from causal_pyro.primitives import gather, indices_of, scatter, union
 
 T = TypeVar("T")
 
 
 def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     """
-    Helper function used with :func:`pyro.poutine.condition` to determine
+    Helper function used with :func:`pyro.condition` to determine
     whether a site is observed or ambiguous.
+
+    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+    and the observed value's index variables are a strict subset of the distribution's
+    indices and hence require clarification of which entries of the random variable
+    are fixed/observed (as opposed to random/unobserved).
     """
-    return (
-        msg["is_observed"]
+    if not (
+        msg["type"] == "sample"
+        and msg["is_observed"]
         and not pyro.poutine.util.site_is_subsample(msg)
-        and not msg["infer"].get("_specified_conditioning", False)
-    )
+    ):
+        return False
+
+    try:
+        return not msg["infer"]["_specified_conditioning"]
+    except KeyError:
+        value_indices = indices_of(msg["value"], event_dim=len(msg["fn"].event_shape))
+        dist_indices = indices_of(msg["fn"])
+        return (
+            bool(union(value_indices, dist_indices)) and value_indices != dist_indices
+        )
 
 
 def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
@@ -50,6 +66,29 @@ class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
     """
 
     pass
+
+
+class AmbiguousConditioningReparamMessenger(
+    pyro.poutine.reparam_messenger.ReparamMessenger
+):
+    def __init__(
+        self,
+        config: Optional[
+            Union[
+                Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
+            ]
+        ] = None,
+    ):
+        if config is None:
+            config = AutoFactualConditioning()
+        super().__init__(config=config)
+
+    def _pyro_sample(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
+        if site_is_ambiguous(msg):
+            expand_obs_value_inplace_(msg)
+            msg["infer"]["_specified_conditioning"] = False
+        super()._pyro_sample(msg)
+        msg["infer"]["_specified_conditioning"] = True
 
 
 class ConditionReparamMsg(TypedDict):
@@ -95,13 +134,16 @@ class MinimalFactualConditioning(AmbiguousConditioningStrategy):
     Reparameterization strategy for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
 
-    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-    and the observed value's index variables are a strict subset of the distribution's
-    indices and hence require clarification of which entries of the random variable
-    are fixed/observed (as opposed to random/unobserved).
-
     :class:`MinimalFactualConditioning` applies :class:`FactualConditioningReparam`
     instances to all ambiguous sample sites in a model.
+
+    .. note::
+
+        A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+        and the observed value's index variables are a strict subset of the distribution's
+        indices and hence require clarification of which entries of the random variable
+        are fixed/observed (as opposed to random/unobserved).
+
     """
 
     def configure(
@@ -172,19 +214,22 @@ class AutoFactualConditioning(MinimalFactualConditioning):
     Reparameterization strategy for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
 
-    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-    and the observed value's index variables are a strict subset of the distribution's
-    indices and hence require clarification of which entries of the random variable
-    are fixed/observed (as opposed to random/unobserved).
-
     When the distribution is a :class:`pyro.distributions.TransformedDistribution`,
     :class:`AutoFactualConditioning` automatically applies :class:`ConditionTransformReparam`
     to the site. Otherwise, it behaves like :class:`MinimalFactualConditioning` .
- 
+
     .. note::
 
         This strategy is applied by default via :class:`MultiWorldCounterfactual`
         and :class:`TwinWorldCounterfactual` unless otherwise specified.
+
+    .. note::
+
+        A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+        and the observed value's index variables are a strict subset of the distribution's
+        indices and hence require clarification of which entries of the random variable
+        are fixed/observed (as opposed to random/unobserved).
+
     """
 
     def configure(

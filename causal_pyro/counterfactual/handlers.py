@@ -1,30 +1,16 @@
 from typing import Any, Dict, Optional, Union
 
 from causal_pyro.counterfactual.conditioning import (
-    AmbiguousConditioningReparam,
-    AmbiguousConditioningStrategy,
-    AutoFactualConditioning,
+    AmbiguousConditioningReparamMessenger,
 )
-from causal_pyro.counterfactual.internals import (
-    ExpandReparamMessenger,
-    IndexPlatesMessenger,
-)
+from causal_pyro.counterfactual.internals import IndexPlatesMessenger
 from causal_pyro.primitives import IndexSet, scatter
 
-CondStrategy = Union[
-    Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
-]
 
-
-class BaseCounterfactual(ExpandReparamMessenger):
+class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
-
-    def __init__(self, config: Optional[CondStrategy] = None):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
 
     def _pyro_get_index_plates(self, msg: Dict[str, Any]) -> None:
         msg["stop"], msg["done"] = True, True

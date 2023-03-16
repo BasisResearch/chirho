@@ -11,6 +11,7 @@ from causal_pyro.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
+from causal_pyro.primitives import indices_of
 from causal_pyro.query.do_messenger import do
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
         fact_tr = pyro.poutine.trace(queried_model).get_trace()
         fact_log_prob = fact_tr.log_prob_sum()
 
+    assert set(obs_tr.nodes.keys()) < set(cf_tr.nodes.keys())
     assert set(fact_tr.nodes.keys()) == set(cf_tr.nodes.keys())
     assert cf_log_prob != 0.0
     assert fact_log_prob != 0.0
