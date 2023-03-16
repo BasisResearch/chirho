@@ -68,20 +68,15 @@ class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
     pass
 
 
+CondStrategy = Union[
+    Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
+]
+
+
 class AmbiguousConditioningReparamMessenger(
     pyro.poutine.reparam_messenger.ReparamMessenger
 ):
-    def __init__(
-        self,
-        config: Optional[
-            Union[
-                Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
-            ]
-        ] = None,
-    ):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
+    config: CondStrategy
 
     def _pyro_sample(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
         if site_is_ambiguous(msg):
