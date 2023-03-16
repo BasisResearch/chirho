@@ -304,7 +304,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
 
 
-class ExpandReparamMessenger(pyro.poutine.reparam_messenger.ReparamMessenger):
+def expand_obs_value_inplace_(msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
     """
     Slightly gross workaround that mutates the msg in place
     to avoid triggering overzealous validation logic in
@@ -317,36 +317,16 @@ class ExpandReparamMessenger(pyro.poutine.reparam_messenger.ReparamMessenger):
     the observed entries, it just packs counterfactual values around them;
     the equality check being approximated by that logic would still pass.
     """
-
-    def _pyro_sample(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
-        if msg["is_observed"]:
-            value_indices = indices_of(
-                msg["value"], event_dim=len(msg["fn"].event_shape)
-            )
-            dist_indices = indices_of(msg["fn"])
-            if not union(value_indices, dist_indices) or value_indices == dist_indices:
-                # not ambiguous
-                msg["infer"]["_specified_conditioning"] = msg["infer"].get(
-                    "_specified_conditioning", True
-                )
-
-            if (
-                not msg["infer"].get("_specified_conditioning", False)
-                and msg["value"] is not None
-                and not pyro.poutine.util.site_is_subsample(msg)
-            ):
-                msg["value"] = torch.as_tensor(msg["value"])
-                msg["infer"]["orig_shape"] = msg["value"].shape
-                _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
-                msg["value"] = msg["value"].expand(
-                    torch.broadcast_shapes(
-                        msg["fn"].batch_shape + msg["fn"].event_shape,
-                        msg["value"].shape,
-                    )
-                )
-                setattr(msg["value"], "_pyro_custom_init", _custom_init)
-
-        return super()._pyro_sample(msg)
+    msg["value"] = torch.as_tensor(msg["value"])
+    msg["infer"]["orig_shape"] = msg["value"].shape
+    _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
+    msg["value"] = msg["value"].expand(
+        torch.broadcast_shapes(
+            msg["fn"].batch_shape + msg["fn"].event_shape,
+            msg["value"].shape,
+        )
+    )
+    setattr(msg["value"], "_pyro_custom_init", _custom_init)
 
 
 def get_sample_msg_device(
