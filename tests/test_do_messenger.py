@@ -13,7 +13,6 @@ from causal_pyro.counterfactual.handlers import (
 )
 from causal_pyro.primitives import intervene
 from causal_pyro.query.do_messenger import DoMessenger, do
-from causal_pyro.query.predictive import PredictiveMessenger
 
 logger = logging.getLogger(__name__)
 
@@ -161,7 +160,6 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
     )
 
 
-@pytest.mark.xfail(reason="disabling pending removal of predictive")
 @pytest.mark.parametrize(
     "cf_handler,observed_vars,expected_shapes",
     [
@@ -182,15 +180,15 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
     ],
 )
 @pytest.mark.parametrize("cf_dim", [-2, -3])
-def test_predictive_shapes_plate_multiworld(
+def test_intervene_shapes_plate_multiworld(
     cf_handler, observed_vars, expected_shapes, cf_dim
 ):
-    data = {
+    all_data = {
         "x": torch.tensor(0.5),
         "y": torch.tensor([1.0, 2.0, 3.0]),
         "z": torch.tensor([1.7, 0.6, 0.3]),
     }
-    data = {k: v for k, v in data.items() if k in observed_vars}
+    data = {k: v for k, v in all_data.items() if k in observed_vars}
 
     def model():
         x = pyro.sample("x", dist.Normal(0, 1))
@@ -199,11 +197,11 @@ def test_predictive_shapes_plate_multiworld(
             z = pyro.sample("z", dist.Normal(y, 1))
             return x, y, z
 
-    conditioned_model = pyro.condition(model, data=data)
-    predictive_model = PredictiveMessenger(names=observed_vars)(conditioned_model)
+    intervened_model = pyro.condition(data=data)(model)
 
-    with cf_handler(cf_dim):
-        x, y, z = predictive_model()
+    actions = {k: torch.rand(v.shape) for k, v in data.items()}
+    with cf_handler(cf_dim), do(actions=actions):
+        x, y, z = intervened_model()
 
     expected_x_shape = expected_shapes[0] + (
         (1,) * (-cf_dim - 1) if expected_shapes[0] else ()
@@ -219,8 +217,9 @@ def test_predictive_shapes_plate_multiworld(
     assert y.shape == expected_y_shape
     assert z.shape == expected_z_shape
 
-    with cf_handler(cf_dim):
-        x2, y2, z2 = predictive_model()
+    actions2 = {k: torch.rand(v.shape) for k, v in data.items()}
+    with cf_handler(cf_dim), do(actions=actions2):
+        x2, y2, z2 = intervened_model()
 
     if "x" in observed_vars:
         assert torch.all(x[0] != x[1])
