@@ -12,7 +12,7 @@ from causal_pyro.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from causal_pyro.primitives import intervene
-from causal_pyro.query.do_messenger import DoMessenger, do
+from causal_pyro.query.do_messenger import do
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +49,11 @@ def create_intervened_model(x_cf_value):
 
 
 def create_intervened_model_1(x_cf_value):
-    return DoMessenger({"x": torch.tensor(x_cf_value)})(model)
+    return do(actions={"x": torch.tensor(x_cf_value)})(model)
 
 
 def create_intervened_model_2(x_cf_value):
-    return do(model, {"x": torch.tensor(x_cf_value)})
+    return intervene(model, {"x": torch.tensor(x_cf_value)})
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -170,8 +170,8 @@ def test_nested_interventions_same_variable(cf_dim, event_shape):
         y = pyro.sample("y", dist.Normal(x, 1).to_event(len(event_shape)))
         return x, y
 
-    intervened_model = do(model, {"x": torch.full(event_shape, 2.0)})
-    intervened_model = do(intervened_model, {"x": torch.full(event_shape, 1.0)})
+    intervened_model = intervene(model, {"x": torch.full(event_shape, 2.0)})
+    intervened_model = intervene(intervened_model, {"x": torch.full(event_shape, 1.0)})
 
     with MultiWorldCounterfactual(cf_dim):
         x, y = intervened_model()
