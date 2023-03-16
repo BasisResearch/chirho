@@ -160,7 +160,7 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
     )
 
 
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (3,), (4, 3)])
 def test_nested_interventions_same_variable(cf_dim, event_shape):
     def model():
@@ -176,7 +176,11 @@ def test_nested_interventions_same_variable(cf_dim, event_shape):
     with MultiWorldCounterfactual(cf_dim):
         x, y = intervened_model()
 
-    assert y.shape == x.shape == (2, 2) + (1,) * (-cf_dim - 1) + event_shape
+    assert (
+        y.shape
+        == x.shape
+        == (2, 2) + (1,) * (len(x.shape) - len(event_shape) - 2) + event_shape
+    )
     assert torch.all(x[0, 0, ...] != 2.0) and torch.all(x[0, 0] != 1.0)
     assert torch.all(x[0, 1, ...] == 1.0)
     assert torch.all(x[1, 0, ...] == 2.0) and torch.all(x[1, 1, ...] == 2.0)
