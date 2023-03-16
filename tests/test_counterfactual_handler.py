@@ -20,7 +20,7 @@ x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
     # estimand: p(y | do(x)) = \int p(y | z, x) p(x' | z) p(z) dz dx'
 
@@ -52,7 +52,9 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
     assert torch.all(x_cf_twin[0] != x_cf_value)
     assert torch.all(x_cf_twin[1] == x_cf_value)
     assert z_cf_twin.shape == torch.Size([])
-    assert x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (-cf_dim - 1)
+    assert (
+        x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (len(y_cf_twin.shape) - 1)
+    )
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -83,7 +85,7 @@ def test_intervene_distribution_same():
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_dim):
     def model():
         #   z
@@ -109,15 +111,19 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
     with MultiWorldCounterfactual(cf_dim):
         Z, X, Y = model()
 
-    assert Z.shape == (2,) + (1,) * (-cf_dim - 1) + event_shape
-    assert X.shape == (2, 1) + (1,) * (-cf_dim - 1) + event_shape
-    assert Y.shape == (2, 2) + (1,) * (-cf_dim - 1) + event_shape
+    assert Z.shape == (2,) + (1,) * (len(Z.shape) - len(event_shape) - 1) + event_shape
+    assert (
+        X.shape == (2, 1) + (1,) * (len(X.shape) - len(event_shape) - 2) + event_shape
+    )
+    assert (
+        Y.shape == (2, 2) + (1,) * (len(Y.shape) - len(event_shape) - 2) + event_shape
+    )
 
 
 @pytest.mark.parametrize("nested", [False, True])
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim):
     def model():
         #   z
@@ -159,3 +165,15 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
             else IndexSet(X={0, 1})
         )
         assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+def test_dim_allocation_failure(cf_dim):
+    def model():
+        with pyro.plate("data", 3, dim=-5 if cf_dim is None else cf_dim):
+            x = pyro.sample("x", dist.Normal(0, 1))
+            intervene(x, torch.ones_like(x))
+
+    with pytest.raises(ValueError, match=".*unable to allocate an index plate.*"):
+        with MultiWorldCounterfactual(cf_dim):
+            model()
