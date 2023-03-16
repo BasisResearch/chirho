@@ -11,7 +11,6 @@ from causal_pyro.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from causal_pyro.counterfactual.selection import SelectCounterfactual, SelectFactual
-from causal_pyro.primitives import indices_of
 from causal_pyro.query.do_messenger import do
 
 logger = logging.getLogger(__name__)

@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from causal_pyro.counterfactual.conditioning import (
     AmbiguousConditioningReparamMessenger,
