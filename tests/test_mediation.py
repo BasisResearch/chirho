@@ -165,7 +165,6 @@ def test_multiple_interventions(x_cf_value):
     assert Y.shape == (2, 2)
 
 
-@pytest.mark.xfail(reason="TODO support obs_mask for conditioning")
 def test_mediation_nde_smoke():
     model = make_mediation_model(*linear_fs())
 
@@ -201,7 +200,7 @@ def test_mediation_nde_smoke():
     assert Y.shape == (2, 2, 2, N)
 
 
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 @pytest.mark.parametrize("cf_value", [0.0, 1.0])
 def test_mediation_dependent_intervention(cf_dim, cf_value):
     model = make_mediation_model(*linear_fs())
@@ -213,7 +212,7 @@ def test_mediation_dependent_intervention(cf_dim, cf_value):
 
     assert W.shape == ()
     assert X.shape == ()
-    assert Z.shape == (2,) + (1,) * (-cf_dim - 1)
-    assert Y.shape == (2,) + (1,) * (-cf_dim - 1)
+    assert Z.shape == (2,) + (1,) * (len(Z.shape) - 1)
+    assert Y.shape == (2,) + (1,) * (len(Y.shape) - 1)
 
     assert torch.all(Z[1] == (Z[0] + cf_value))
