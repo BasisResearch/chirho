@@ -23,7 +23,7 @@ def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     return (
         msg["is_observed"]
         and not pyro.poutine.util.site_is_subsample(msg)
-        and msg["infer"].get("_specified_conditioning", False)
+        and not msg["infer"].get("_specified_conditioning", False)
     )
 
 
