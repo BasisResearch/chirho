@@ -290,7 +290,9 @@ def gather(value, indexset: IndexSet, **kwargs):
 
 
 @functools.singledispatch
-def scatter(value, indexset: IndexSet, *, result: Optional[T] = None, **kwargs):
+def scatter(
+    value, indexset: Optional[IndexSet] = None, *, result: Optional[T] = None, **kwargs
+):
     """
     Assigns entries from an indexed value to entries in a larger indexed value.
 
