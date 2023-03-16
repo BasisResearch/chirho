@@ -13,10 +13,6 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
-    def __init__(self, config: Optional[CondStrategy] = None):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
 
     def __init__(self, config: Optional[CondStrategy] = None):
         if config is None:
