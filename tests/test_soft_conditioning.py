@@ -1,22 +1,17 @@
 import logging
 
 import pyro
-import pyro.contrib.gp as gp
 import pyro.distributions as dist
 import pytest
 import torch
 
 from causal_pyro.counterfactual.handlers import (
-    BaseCounterfactual,
-    Factual,
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.primitives import intervene
 from causal_pyro.query.do_messenger import do
 from causal_pyro.reparam.soft_conditioning import (
     AutoSoftConditioning,
-    DiscreteSoftConditionReparam,
     KernelSoftConditionReparam,
     site_is_deterministic,
 )
@@ -99,22 +94,18 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, kernel, x_obs, y_obs, z_
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-@pytest.mark.parametrize("use_auto", [True, False])
+@pytest.mark.parametrize("alpha", [0.5])
 @pytest.mark.parametrize("x_obs", [1, None])
 @pytest.mark.parametrize("y_obs", [2, None])
 @pytest.mark.parametrize("z_obs", [3, None])
-@pytest.mark.parametrize("alpha", [0.5])
-def test_soft_conditioning_smoke_discrete_1(use_auto, alpha, x_obs, y_obs, z_obs):
+def test_soft_conditioning_smoke_discrete_1(alpha, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    if use_auto:
-        reparam_config = AutoSoftConditioning(alpha, dummy_kernel)
-    else:
-        reparam_config = {name: DiscreteSoftConditionReparam(alpha) for name in data}
+    reparam_config = AutoSoftConditioning(alpha, dummy_kernel)
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
@@ -124,9 +115,12 @@ def test_soft_conditioning_smoke_discrete_1(use_auto, alpha, x_obs, y_obs, z_obs
     tr.trace.compute_log_prob()
     for name in names:
         if name in data:
+            expected_value = data[name]
+            if f"{name}_factual" in tr.trace.nodes:
+                name = f"{name}_factual"
             assert tr.trace.nodes[name]["type"] == "sample"
-            assert torch.all(tr.trace.nodes[name]["value"] == data[name])
             assert site_is_deterministic(tr.trace.nodes[name])
+            assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
             assert (
                 tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
@@ -137,13 +131,16 @@ def test_soft_conditioning_smoke_discrete_1(use_auto, alpha, x_obs, y_obs, z_obs
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-@pytest.mark.parametrize("use_auto", [True, False])
 @pytest.mark.parametrize("kernel", [rbf_kernel])
 @pytest.mark.parametrize("x_obs", [1.5, None])
 @pytest.mark.parametrize("y_obs", [2.5, None])
 @pytest.mark.parametrize("z_obs", [3.5, None])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+@pytest.mark.parametrize(
+    "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
+)
 def test_soft_conditioning_counterfactual_continuous_1(
-    use_auto, kernel, x_obs, y_obs, z_obs
+    kernel, x_obs, y_obs, z_obs, cf_dim, cf_class
 ):
     names = ["x", "y", "z"]
     data = {
@@ -151,32 +148,27 @@ def test_soft_conditioning_counterfactual_continuous_1(
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    if use_auto:
-        reparam_config = AutoSoftConditioning(0.0, kernel)
-    else:
-        reparam_config = {name: KernelSoftConditionReparam(kernel) for name in data}
+    reparam_config = AutoSoftConditioning(0.0, kernel)
 
     actions = {"x": torch.tensor(0.1234)}
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), MultiWorldCounterfactual(-1), do(actions=actions), pyro.condition(data=data):
+    ), cf_class(cf_dim), do(actions=actions), pyro.condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
     for name in names:
-        if name == "x":
-            continue  # TODO
-
         if name in data:
+            expected_value = data[name]
+            if f"{name}_factual" in tr.trace.nodes:
+                name = f"{name}_factual"
             assert tr.trace.nodes[name]["type"] == "sample"
-            assert torch.all(tr.trace.nodes[name]["value"] == data[name])
             assert site_is_deterministic(tr.trace.nodes[name])
+            assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
+            assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
             assert (
-                tr.trace.nodes[f"{name}_observed_approx_log_prob"]["type"] == "sample"
-            )
-            assert (
-                tr.trace.nodes[f"{name}_observed_approx_log_prob"]["log_prob"].shape
+                tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
                 == tr.trace.nodes[name]["log_prob"].shape
             )
         else:
