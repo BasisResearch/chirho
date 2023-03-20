@@ -21,6 +21,9 @@ EXTRAS_REQUIRE = [
     # 'biopython>=1.54',
     # 'scanpy>=1.4',  # Requires HDF5
     # 'scvi>=0.6',  # Requires loopy and other fragile packages
+    "pytorch-lightning>=1.0.0",
+    "scikit-image>=0.16.0",
+    "tensorboard>=2.2.0",
 ]
 
 setup(
