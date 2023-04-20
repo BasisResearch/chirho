@@ -37,7 +37,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "myst_parser",
-    "sphinx_gallery.load_style",
+    # "sphinx_gallery.gen_gallery",
     # "sphinx_search.extension",
 ]
 

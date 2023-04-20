@@ -35,7 +35,7 @@ see the following in-depth tutorials describes Causal Pyro's underlying machiner
 Note: These tutorials assume some familiarity with Pyro and probabilistic programming. 
 For introductory Pyro tutorials please see "Additional background reading material" below.
 
-.. nbgallery::
+.. toctree::
    :maxdepth: 2
    :caption: Tutorials
 
@@ -62,7 +62,7 @@ These example illustrate how Causal Pyro is compatible with any inference method
 implemented in Pyro, including the kinds of scalable gradient-based
 approximations that power much of the modern probabilistic machine learning landscape.
 
-.. nbgallery::
+.. toctree::
    :maxdepth: 2
    :caption: Examples
 
@@ -74,7 +74,7 @@ approximations that power much of the modern probabilistic machine learning land
 
 .. toctree::
    :maxdepth: 2
-   :caption: API Documentation
+   :caption: Documentation
 
    counterfactual
    interventional
