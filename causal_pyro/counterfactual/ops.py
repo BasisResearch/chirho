@@ -1,12 +1,13 @@
 from typing import Any, Dict, Optional
 
-from causal_pyro.counterfactual.conditioning import (
+from causal_pyro.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.internals import IndexPlatesMessenger
-from causal_pyro.primitives import IndexSet, scatter
+from causal_pyro.indexed.handlers import IndexPlatesMessenger
+from causal_pyro.indexed.ops import IndexSet
+from causal_pyro.indexed.ops import scatter
 
 
 class BaseCounterfactual(AmbiguousConditioningReparamMessenger):

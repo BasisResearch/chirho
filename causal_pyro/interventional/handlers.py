@@ -5,7 +5,7 @@ from typing import Callable, Generic, Hashable, Mapping, Optional, TypeVar
 import pyro
 import torch
 
-from causal_pyro.primitives import AtomicIntervention, CompoundIntervention, intervene
+from causal_pyro.interventional.ops import AtomicIntervention, CompoundIntervention, intervene
 
 T = TypeVar("T")
 

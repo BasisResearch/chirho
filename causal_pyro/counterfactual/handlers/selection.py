@@ -1,33 +1,13 @@
-from typing import Any, Dict, Optional
+from typing import Optional
 
 import pyro
 import torch
+from causal_pyro.indexed.handlers import DependentMaskMessenger
 
-from causal_pyro.counterfactual.internals import (
-    get_index_plates,
-    get_sample_msg_device,
+from causal_pyro.indexed.ops import (
     indexset_as_mask,
 )
-from causal_pyro.primitives import IndexSet
-
-
-class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
-    """
-    Abstract base class for effect handlers that select a subset of worlds.
-    """
-
-    def get_mask(
-        self,
-        dist: pyro.distributions.Distribution,
-        value: Optional[torch.Tensor],
-        device: torch.device = torch.device("cpu"),
-    ) -> torch.Tensor:
-        raise NotImplementedError
-
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
-        device = get_sample_msg_device(msg["fn"], msg["value"])
-        mask = self.get_mask(msg["fn"], msg["value"], device=device)
-        msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
+from causal_pyro.indexed.ops import IndexSet, get_index_plates
 
 
 def get_factual_indices() -> IndexSet:

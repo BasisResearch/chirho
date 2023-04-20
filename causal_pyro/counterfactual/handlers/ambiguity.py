@@ -6,12 +6,13 @@ import pyro.infer.reparam
 import torch
 
 from causal_pyro.counterfactual.internals import expand_obs_value_inplace_
-from causal_pyro.counterfactual.selection import (
+from causal_pyro.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.primitives import gather, indices_of, scatter, union
+from causal_pyro.indexed.ops import gather, indices_of, union
+from causal_pyro.indexed.ops import scatter
 
 T = TypeVar("T")
 
