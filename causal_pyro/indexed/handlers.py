@@ -3,13 +3,12 @@ from typing import Any, Dict, Hashable, List, Optional
 
 import pyro
 import torch
-from pyro.poutine.indep_messenger import IndepMessenger
 
 from causal_pyro.indexed.internals import _LazyPlateMessenger, get_sample_msg_device
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
-    plates: Dict[Hashable, IndepMessenger]
+    plates: Dict[Hashable, pyro.poutine.indep_messenger.IndepMessenger]
     first_available_dim: int
 
     def __init__(self, first_available_dim: Optional[int] = None):
