@@ -1,9 +1,8 @@
 import logging
 
 import pytest
-from causal_pyro.indexed.ops import IndexSet
 
-from causal_pyro.indexed.ops import union
+from causal_pyro.indexed.ops import IndexSet, union
 
 logger = logging.getLogger(__name__)
 

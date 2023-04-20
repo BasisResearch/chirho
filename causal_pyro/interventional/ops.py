@@ -53,15 +53,7 @@ The polymorphic definition of `intervene` above can be expanded as the generic t
 
 """
 import functools
-from typing import (
-    Callable,
-    Hashable,
-    Mapping,
-    Optional,
-    TypeVar,
-    Union,
-)
-
+from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 T = TypeVar("T")
 

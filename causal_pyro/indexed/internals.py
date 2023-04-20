@@ -5,9 +5,15 @@ import pyro
 import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
-from causal_pyro.indexed.ops import IndexSet, gather, get_index_plates, indices_of, union
 
-from causal_pyro.indexed.ops import scatter
+from causal_pyro.indexed.ops import (
+    IndexSet,
+    gather,
+    get_index_plates,
+    indices_of,
+    scatter,
+    union,
+)
 
 T = TypeVar("T")
 

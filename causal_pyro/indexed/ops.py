@@ -14,8 +14,8 @@ from typing import (
 )
 
 import pyro
-from pyro.poutine.indep_messenger import CondIndepStackFrame
 import torch
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 
 from causal_pyro.interventional.ops import T
 
@@ -256,6 +256,3 @@ def indexset_as_mask(
     mask = torch.zeros(tuple(batch_shape), dtype=torch.bool, device=device)
     mask[tuple(inds)] = True
     return mask[(...,) + (None,) * event_dim]
-
-
-

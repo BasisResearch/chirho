@@ -6,8 +6,7 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
     CondStrategy,
 )
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import IndexSet
-from causal_pyro.indexed.ops import scatter
+from causal_pyro.indexed.ops import IndexSet, scatter
 
 
 class BaseCounterfactual(AmbiguousConditioningReparamMessenger):

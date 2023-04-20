@@ -5,14 +5,13 @@ import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
 
-from causal_pyro.counterfactual.internals import expand_obs_value_inplace_
 from causal_pyro.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.indexed.ops import gather, indices_of, union
-from causal_pyro.indexed.ops import scatter
+from causal_pyro.counterfactual.internals import expand_obs_value_inplace_
+from causal_pyro.indexed.ops import gather, indices_of, scatter, union
 
 T = TypeVar("T")
 

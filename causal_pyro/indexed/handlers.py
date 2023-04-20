@@ -1,13 +1,11 @@
-import torch
-from causal_pyro.indexed.internals import _LazyPlateMessenger, get_sample_msg_device
-
-
-import pyro
-from pyro.poutine.indep_messenger import IndepMessenger
-
-
 import collections
 from typing import Dict, Hashable, List, Optional
+
+import pyro
+import torch
+from pyro.poutine.indep_messenger import IndepMessenger
+
+from causal_pyro.indexed.internals import _LazyPlateMessenger, get_sample_msg_device
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):

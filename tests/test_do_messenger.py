@@ -11,8 +11,8 @@ from causal_pyro.counterfactual.ops import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.interventional.ops import intervene
 from causal_pyro.interventional.handlers import do
+from causal_pyro.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
 

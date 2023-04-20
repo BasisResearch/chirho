@@ -4,13 +4,16 @@ import logging
 import pyro.distributions as dist
 import pytest
 import torch
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
 
+from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.indexed.ops import (
+    IndexSet,
+    add_indices,
+    gather,
     indexset_as_mask,
+    indices_of,
+    scatter,
 )
-from causal_pyro.indexed.ops import IndexSet, add_indices, gather, indices_of
-from causal_pyro.indexed.ops import scatter
 
 logger = logging.getLogger(__name__)
 
