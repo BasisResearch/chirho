@@ -228,11 +228,6 @@ def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
     )
 
 
-@pyro.poutine.runtime.effectful(type="add_indices")
-def add_indices(indexset: IndexSet) -> IndexSet:
-    return indexset
-
-
 def indexset_as_mask(
     indexset: IndexSet,
     *,

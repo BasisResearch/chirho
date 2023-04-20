@@ -6,9 +6,9 @@ import pytest
 import torch
 
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
+from causal_pyro.indexed.internals import add_indices
 from causal_pyro.indexed.ops import (
     IndexSet,
-    add_indices,
     gather,
     indexset_as_mask,
     indices_of,

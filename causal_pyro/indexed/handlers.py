@@ -1,5 +1,5 @@
 import collections
-from typing import Dict, Hashable, List, Optional
+from typing import Any, Dict, Hashable, List, Optional
 
 import pyro
 import torch

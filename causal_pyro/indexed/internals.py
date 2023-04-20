@@ -232,3 +232,8 @@ def get_sample_msg_device(
             if isinstance(p, torch.Tensor):
                 return p.device
     raise ValueError(f"could not infer device for {dist} and {value}")
+
+
+@pyro.poutine.runtime.effectful(type="add_indices")
+def add_indices(indexset: IndexSet) -> IndexSet:
+    return indexset
