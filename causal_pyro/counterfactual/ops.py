@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, TypeVar
+from typing import Dict, Optional, Tuple, TypeVar
 
 import pyro
 
@@ -18,21 +18,15 @@ def gen_intervene_name(name: Optional[str] = None) -> str:
 @pyro.poutine.runtime.effectful(type="split")
 @pyro.poutine.block(hide_types=["intervene"])
 def split(
-    obs: T,
-    acts: Tuple[Intervention[T], ...],
-    *,
-    name: Optional[str] = None,
-    **kwargs
+    obs: T, acts: Tuple[Intervention[T], ...], *, name: Optional[str] = None, **kwargs
 ) -> T:
     """
     Split the state of the world at an intervention.
     """
     name = gen_intervene_name(name)
 
-    act_values: List[Tuple[IndexSet, T]] = [(IndexSet(**{name: 0}), obs)]
+    act_values: Dict[IndexSet, T] = {IndexSet(**{name: {0}}): obs}
     for i, act in enumerate(acts):
-        act_values += [
-            (IndexSet(**{name: i + 1}), intervene(act_values[i][1], act, **kwargs))
-        ]
+        act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    return scatter(dict(act_values), event_dim=kwargs.get("event_dim", 0))
+    return scatter(act_values, event_dim=kwargs.get("event_dim", 0))

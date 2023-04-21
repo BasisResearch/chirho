@@ -1,5 +1,7 @@
 from typing import Any, Dict, Optional
 
+import pyro
+
 from causal_pyro.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
     AutoFactualConditioning,
@@ -8,12 +10,14 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
 from causal_pyro.counterfactual.ops import split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.indexed.ops import get_index_plates
+from causal_pyro.interventional.ops import intervene
 
 
 class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
+
     default_name: str = "intervened"
 
     def __init__(self, config: Optional[CondStrategy] = None):
@@ -37,9 +41,23 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         if not msg["done"]:
-            name, = msg["args"]
+            (name,) = msg["args"]
             msg["value"] = name if name is not None else cls.default_name
             msg["done"] = True
+
+
+class SingleWorldCounterfactual(BaseCounterfactual):
+    """
+    Trivial counterfactual handler that returns the intervened value.
+    """
+
+    @staticmethod
+    @pyro.poutine.block(hide_types=["intervene"])
+    def _pyro_split(msg: Dict[str, Any]) -> None:
+        obs, acts = msg["args"]
+        msg["value"] = intervene(obs, acts[-1], **msg["kwargs"])
+        msg["done"] = True
+        msg["stop"] = True
 
 
 class Factual(BaseCounterfactual):
@@ -56,7 +74,6 @@ class Factual(BaseCounterfactual):
 
 
 class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
-
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         (name,) = msg["args"]
@@ -70,7 +87,6 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
-
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         msg["value"] = cls.default_name
