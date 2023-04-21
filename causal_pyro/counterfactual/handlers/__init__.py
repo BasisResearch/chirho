@@ -28,11 +28,11 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
 
     @staticmethod
     def _pyro_intervene(msg: Dict[str, Any]) -> None:
+        msg["stop"] = True
         if msg["args"][1] is not None:
-            msg["stop"] = True
-            msg["done"] = True
             obs, acts = msg["args"][0], (msg["args"][1],)
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
+            msg["done"] = True
 
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
@@ -72,6 +72,6 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
 
     @classmethod
-    def _pyro_gen_intervene_name(cls, msg):
+    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         msg["value"] = cls.default_name
         msg["done"] = True
