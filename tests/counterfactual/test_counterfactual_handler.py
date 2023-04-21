@@ -5,13 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
+from causal_pyro.counterfactual.ops import (  # TwinWorldCounterfactual,
     BaseCounterfactual,
     Factual,
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.primitives import IndexSet, indices_of, intervene
+from causal_pyro.indexed.ops import IndexSet, indices_of
+from causal_pyro.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
 

@@ -1,83 +1,11 @@
-"""
-Design notes: Interventions on values
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Pyro's design makes extensive use of `algebraic effect handlers <http://pyro.ai/examples/effect_handlers.html>`_,
-a technology from programming language research for representing side effects compositionally.
-As described in the `Pyro introductory tutorial <http://pyro.ai/examples/intro_long.html>`_,
-sampling or observing a random variable is done using the ``pyro.sample`` primitive,
-whose behavior is modified by effect handlers during posterior inference::
-
-    @pyro.poutine.runtime.effectful
-    def sample(name: str, dist: pyro.distributions.Distribution, obs: Optional[Tensor] = None) -> Tensor:
-        return obs if obs is not None else dist.sample()
-
-Pyro already has an effect handler `pyro.poutine.do` for intervening on `sample` statements,
-but its implementation is too limited to be ergonomic for most causal inference problems of interest to practitioners::
-
-   def model():
-       x = sample("x", Normal(0, 1))
-       y = sample("y", Normal(x, 1))
-       return x, y
-
-   x, y = model()
-   assert x != 10  # with probability 1
-
-   with pyro.poutine.do({"x": 10}):
-       x, y = model()
-   assert x == 10
-
-This library is built around understanding interventions as side-effectful operations on values within a Pyro model::
-
-   @effectful
-   def intervene(obs: T, act: Intervention[T]) -> T:
-       return act
-
-The polymorphic definition of `intervene` above can be expanded as the generic type `Intervention` is made explicit::
-
-   T = TypeVar("T", bound=[Number, Tensor, Callable])
-
-   Intervention = Union[
-       Optional[T],
-       Callable[[T], T]
-   ]
-
-   @pyro.poutine.runtime.effectful(type="intervene")
-   def intervene(obs: T, act: Intervention[T]) -> T:
-       if act is None:
-           return obs
-       elif callable(act):
-           return act(obs)
-       else:
-           return act
-
-"""
 import functools
-from typing import (
-    Callable,
-    Dict,
-    Hashable,
-    Iterable,
-    Mapping,
-    Optional,
-    Set,
-    TypeVar,
-    Union,
-)
+from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
+
+import pyro
+import torch
+from pyro.poutine.indep_messenger import CondIndepStackFrame
 
 T = TypeVar("T")
-
-AtomicIntervention = Union[T, Callable[[T], T]]
-CompoundIntervention = Union[Mapping[Hashable, AtomicIntervention[T]], Callable[..., T]]
-Intervention = Union[AtomicIntervention[T], CompoundIntervention[T]]
-
-
-@functools.singledispatch
-def intervene(obs, act: Optional[Intervention[T]] = None, **kwargs):
-    """
-    Intervene on a value in a probabilistic program.
-    """
-    raise NotImplementedError(f"intervene not implemented for type {type(obs)}")
 
 
 class IndexSet(Dict[str, Set[int]]):
@@ -87,10 +15,8 @@ class IndexSet(Dict[str, Set[int]]):
     for which free variables correspond to single interventions and indices
     to worlds where that intervention either did or did not happen.
 
-    :class:`IndexSet` can be understood conceptually
-    as generalizing :class:`torch.Size`
-    from multidimensional arrays to arbitrary values,
-    from positional to named dimensions,
+    :class:`IndexSet` can be understood conceptually as generalizing :class:`torch.Size`
+    from multidimensional arrays to arbitrary values, from positional to named dimensions,
     and from bounded integer interval supports to finite sets of positive integers.
 
     :class:`IndexSet` s are implemented as :class:`dict` s with
@@ -149,6 +75,7 @@ def union(*indexsets: IndexSet) -> IndexSet:
         {"a": {0, 1, 2}, "b": {1}}
 
     .. note::
+
         :func:`union` satisfies several algebraic equations for arbitrary inputs.
         In particular, it is associative, commutative, idempotent and absorbing::
 
@@ -169,7 +96,6 @@ def union(*indexsets: IndexSet) -> IndexSet:
 def indices_of(value, **kwargs) -> IndexSet:
     """
     Get a :class:`IndexSet` of indices on which an indexed value is supported.
-
     :func:`indices_of` is useful in conjunction with :class:`MultiWorldCounterfactual`
     for identifying the worlds where an intervention happened upstream of a value.
 
@@ -181,7 +107,6 @@ def indices_of(value, **kwargs) -> IndexSet:
         ...     T = pyro.sample("T", get_T_dist(X))
         ...     T = intervene(T, t, name="T_ax")  # adds an index variable "T_ax"
         ...     Y = pyro.sample("Y", get_Y_dist(X, T))
-
         ...     assert indices_of(X) == IndexSet()
         ...     assert indices_of(T) == IndexSet(T_ax={0, 1})
         ...     assert indices_of(Y) == IndexSet(T_ax={0, 1})
@@ -192,10 +117,12 @@ def indices_of(value, **kwargs) -> IndexSet:
     not in their support.
 
     .. note::
+
         :func:`indices_of` can be extended to new value types by registering
         an implementation for the type using :func:`functools.singledispatch` .
 
     .. note::
+
         Fully general versions of :func:`indices_of` , :func:`gather`
         and :func:`scatter` would require a dependent broadcasting semantics
         for indexed values, as is the case in sparse or masked array libraries
@@ -230,7 +157,6 @@ def indices_of(value, **kwargs) -> IndexSet:
 def gather(value, indexset: IndexSet, **kwargs):
     """
     Selects entries from an indexed value at the indices in a :class:`IndexSet` .
-
     :func:`gather` is useful in conjunction with :class:`MultiWorldCounterfactual`
     for selecting components of a value corresponding to specific counterfactual worlds.
 
@@ -243,7 +169,6 @@ def gather(value, indexset: IndexSet, **kwargs):
         ...     T = pyro.sample("T", get_T_dist(X))
         ...     T = intervene(T, t, name="T_ax")  # adds an index variable "T_ax"
         ...     Y = pyro.sample("Y", get_Y_dist(X, T))
-
         ...     Y_factual = gather(Y, IndexSet(T_ax=0))         # no intervention
         ...     Y_counterfactual = gather(Y, IndexSet(T_ax=1))  # intervention
         ...     treatment_effect = Y_counterfactual - Y_factual
@@ -251,14 +176,17 @@ def gather(value, indexset: IndexSet, **kwargs):
     Like :func:`torch.gather` and substitution in term rewriting,
     :func:`gather` is defined extensionally, meaning that values
     are treated as constant functions of variables not in their support.
+
     :func:`gather` will accordingly ignore variables in ``indexset``
     that are not in the support of ``value`` computed by :func:`indices_of` .
 
     .. note::
+
         :func:`gather` can be extended to new value types by registering
         an implementation for the type using :func:`functools.singledispatch` .
 
     .. note::
+
         Fully general versions of :func:`indices_of` , :func:`gather`
         and :func:`scatter` would require a dependent broadcasting semantics
         for indexed values, as is the case in sparse or masked array libraries
@@ -296,9 +224,9 @@ def scatter(
 ):
     """
     Assigns entries from an indexed value to entries in a larger indexed value.
-
     :func:`scatter` is primarily used internally in :class:`MultiWorldCounterfactual`
     for concisely and extensibly defining the semantics of counterfactuals.
+
     It also satisfies some equations with :func:`gather` and :func:`indices_of`
     that are useful for testing and debugging.
 
@@ -307,6 +235,7 @@ def scatter(
     are treated as constant functions of variables not in their support.
 
     .. note::
+
         :func:`scatter` can be extended to new value types by registering
         an implementation for the type using :func:`functools.singledispatch` .
 
@@ -317,3 +246,36 @@ def scatter(
     :return: The ``result``, with ``value`` scattered into the indices in ``indexset``.
     """
     raise NotImplementedError
+
+
+@pyro.poutine.runtime.effectful(type="get_index_plates")
+def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
+    raise NotImplementedError(
+        "No handler active for get_index_plates."
+        "Did you forget to use MultiWorldCounterfactual?"
+    )
+
+
+def indexset_as_mask(
+    indexset: IndexSet,
+    *,
+    event_dim: int = 0,
+    name_to_dim_size: Optional[Dict[Hashable, Tuple[int, int]]] = None,
+    device: torch.device = torch.device("cpu"),
+) -> torch.Tensor:
+    """
+    Get a dense mask tensor for indexing into a tensor from an indexset.
+    """
+    if name_to_dim_size is None:
+        name_to_dim_size = {
+            f.name: (f.dim, f.size) for f in get_index_plates().values()
+        }
+    batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
+    inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
+    for name, values in indexset.items():
+        dim, size = name_to_dim_size[name]
+        inds[dim] = torch.tensor(list(sorted(values)), dtype=torch.long)
+        batch_shape[dim] = size
+    mask = torch.zeros(tuple(batch_shape), dtype=torch.bool, device=device)
+    mask[tuple(inds)] = True
+    return mask[(...,) + (None,) * event_dim]

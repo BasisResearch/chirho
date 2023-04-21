@@ -40,8 +40,6 @@ For introductory Pyro tutorials please see "Additional background reading materi
    :caption: Tutorials
 
    tutorial_i
-   .. tutorial_ii
-   .. tutorial_iii
 
 Example applications
 --------------------
@@ -74,54 +72,24 @@ approximations that power much of the modern probabilistic machine learning land
    slc
    mediation
 
-
-Design notes
-------------
-
-The probabilistic programming language `Omega.jl <http://www.zenna.org/Omega.jl/latest/>`_
-exemplifies this connection with its counterfactual semantics, but making standard probabilistic
-inference methods compatible with Omega’s highly expressive
-measure-theoretic semantics for conditioning remains an open problem.
-
-In contrast, Pyro is an older, more established PPL built on top of
-Python and PyTorch that already has a program transformation
-``pyro.poutine.do`` for intervening on ``sample`` statements.
-
-.. code:: python
-
-   def model():
-     x = sample("x", Normal(0, 1))
-     y = sample("y", Normal(x, 1))
-     return x, y
-
-   x, y = model()
-   assert x != 10  # with probability 1
-
-   with pyro.poutine.do({"x": 10}):
-     x, y = model()
-   assert x == 10
-
-However, this transformation is too limited to be ergonomic for most
-causal inference problems of interest to practitioners. This Pyro
-library explores a new programming model for causal inference
-intermediate in expressivity between Pyro’s limited built-in approach
-and Omega’s highly expressive one, in which interventions are defined as
-operations on values within a Pyro model:
-
-.. code:: python
-
-   def intervene(obs: torch.Tensor, act: torch.Tensor) -> torch.Tensor:
-     return act
-
 .. toctree::
    :maxdepth: 2
    :caption: Documentation
 
-   primitives
    counterfactual
-   reparam
-   query
+   interventional
+   observational
+   indexed
 
+.. toctree::
+   :maxdepth: 2
+   :caption: Design Notes
+
+   design_notes/index
+   design_notes/counterfactuals
+   design_notes/interventions
+   design_notes/queries
+   design_notes/observations
 
 Additional background reading material
 --------------------------------------

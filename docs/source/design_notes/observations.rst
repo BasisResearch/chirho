@@ -1,4 +1,3 @@
-"""
 Design notes: Sampling and conditioning via reparameterization
 --------------------------------------------------------------
 
@@ -128,4 +127,3 @@ variable can be written as `an invertible transformation <https://pytorch.org/do
 of exogenous noise, conditioning can be handled exactly using something
 similar to the existing
 `Pyro TransformReparam <https://docs.pyro.ai/en/stable/infer.reparam.html#module-pyro.infer.reparam.transform>`_.
-"""
