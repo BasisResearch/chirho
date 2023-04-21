@@ -1,72 +1,38 @@
-from typing import Any, Dict, Optional
+from typing import List, Optional, Tuple, TypeVar
 
-from causal_pyro.counterfactual.handlers.ambiguity import (
-    AmbiguousConditioningReparamMessenger,
-    AutoFactualConditioning,
-    CondStrategy,
-)
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
+import pyro
+
 from causal_pyro.indexed.ops import IndexSet, scatter
+from causal_pyro.interventional.ops import Intervention, intervene
+
+T = TypeVar("T")
 
 
-class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
+@pyro.poutine.runtime.effectful(type="gen_intervene_name")
+def gen_intervene_name(name: Optional[str] = None) -> str:
+    if name is not None:
+        return name
+    raise NotImplementedError
+
+
+@pyro.poutine.runtime.effectful(type="split")
+@pyro.poutine.block(hide_types=["intervene"])
+def split(
+    obs: T,
+    acts: Tuple[Intervention[T], ...],
+    *,
+    name: Optional[str] = None,
+    **kwargs
+) -> T:
     """
-    Base class for counterfactual handlers.
+    Split the state of the world at an intervention.
     """
+    name = gen_intervene_name(name)
 
-    def __init__(self, config: Optional[CondStrategy] = None):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
+    act_values: List[Tuple[IndexSet, T]] = [(IndexSet(**{name: 0}), obs)]
+    for i, act in enumerate(acts):
+        act_values += [
+            (IndexSet(**{name: i + 1}), intervene(act_values[i][1], act, **kwargs))
+        ]
 
-    def _pyro_get_index_plates(self, msg: Dict[str, Any]) -> None:
-        msg["stop"], msg["done"] = True, True
-        msg["value"] = {}
-
-    def _pyro_intervene(self, msg: Dict[str, Any]) -> None:
-        msg["stop"] = True
-
-
-class Factual(BaseCounterfactual):
-    """
-    Trivial counterfactual handler that returns the observed value.
-    """
-
-    def _pyro_post_intervene(self, msg: Dict[str, Any]) -> None:
-        obs, _ = msg["args"]
-        msg["value"] = obs
-
-
-class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
-    def _pyro_post_intervene(self, msg):
-        obs, act = msg["args"][0], msg["value"]
-        event_dim = msg["kwargs"].setdefault("event_dim", 0)
-        if msg["name"] is None:
-            msg["name"] = "__intervention__"
-        if msg["name"] in self.plates:
-            msg["name"] = f"{msg['name']}_{self.first_available_dim}"
-        name = msg["name"]
-
-        msg["value"] = scatter(
-            {
-                IndexSet(**{name: {0}}): obs,
-                IndexSet(**{name: {1}}): act,
-            },
-            event_dim=event_dim,
-        )
-
-
-class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
-    def _pyro_post_intervene(self, msg):
-        obs, act = msg["args"][0], msg["value"]
-        event_dim = msg["kwargs"].setdefault("event_dim", 0)
-        # disregard the name
-        name = "__intervention__"
-
-        msg["value"] = scatter(
-            {
-                IndexSet(**{name: {0}}): obs,
-                IndexSet(**{name: {1}}): act,
-            },
-            event_dim=event_dim,
-        )
+    return scatter(dict(act_values), event_dim=kwargs.get("event_dim", 0))
