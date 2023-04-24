@@ -13,6 +13,7 @@ from causal_pyro.indexed.ops import (
     indexset_as_mask,
     indices_of,
     scatter,
+    union,
 )
 
 logger = logging.getLogger(__name__)
@@ -316,6 +317,49 @@ def test_scatter_broadcast_new(batch_shape, event_shape):
     assert actual.shape == (2,) + batch_shape + event_shape
     assert actual1.shape == (1,) + batch_shape + event_shape
     assert actual2.shape == (1,) + batch_shape + event_shape
+
+    assert (actual1 == value1).all()
+    assert (actual2 == value2).all()
+
+
+@pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+def test_persistent_index_state(batch_shape, event_shape):
+    cf_dim = -1
+    event_dim = len(event_shape)
+    ind1, ind2 = IndexSet(new_dim={0}), IndexSet(new_dim={1})
+    result = torch.zeros((2,) + batch_shape + event_shape)
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    value1 = torch.randn(batch_shape + event_shape)
+    value2 = torch.randn(batch_shape + event_shape)
+
+    with IndexPlatesMessenger(cf_dim) as index_state:
+        for name, dim in name_to_dim.items():
+            add_indices(IndexSet(**{name: set(range(max(2, batch_shape[dim])))}))
+
+    with index_state:
+        actual = scatter(
+            {ind1: value1, ind2: value2}, result=result, event_dim=event_dim
+        )
+
+    try:
+        with index_state:
+            raise ValueError("dummy")
+    except ValueError:
+        pass
+
+    with index_state:
+        actual1 = gather(actual, ind1, event_dim=event_dim)
+        actual2 = gather(actual, ind2, event_dim=event_dim)
+
+    with index_state:
+        assert indices_of(actual1, event_dim=event_dim) == indices_of(
+            actual2, event_dim=event_dim
+        )
+        assert indices_of(actual, event_dim=event_dim) == union(
+            ind1, ind2, indices_of(actual1, event_dim=event_dim)
+        )
 
     assert (actual1 == value1).all()
     assert (actual2 == value2).all()

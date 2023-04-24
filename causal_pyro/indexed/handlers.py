@@ -21,14 +21,14 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def __enter__(self):
-        assert not self.plates
-        assert self.first_available_dim == self._orig_dim
-        return super().__enter__()
+        ret = super().__enter__()
+        for name in self.plates.keys():
+            self.plates[name].__enter__()
+        return ret
 
     def __exit__(self, exc_type, exc_value, traceback):
         for name in reversed(list(self.plates.keys())):
-            self.plates.pop(name).__exit__(exc_type, exc_value, traceback)
-        self.first_available_dim = self._orig_dim
+            self.plates[name].__exit__(exc_type, exc_value, traceback)
         return super().__exit__(exc_type, exc_value, traceback)
 
     def _pyro_get_index_plates(self, msg):
