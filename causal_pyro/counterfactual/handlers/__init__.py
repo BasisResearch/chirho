@@ -58,7 +58,7 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
         obs, acts = msg["args"]
         name = gen_intervene_name(msg["name"])
 
-        act_values: Dict[IndexSet, T] = {IndexSet(**{name: {0}}): obs}
+        act_values = {IndexSet(**{name: {0}}): obs}
         for i, act in enumerate(acts):
             act_values[IndexSet(**{name: {i + 1}})] = intervene(
                 obs, act, **msg["kwargs"]
