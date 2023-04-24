@@ -1,8 +1,18 @@
 import functools
 import operator
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import (
+    Callable,
+    Generic,
+    Literal,
+    Optional,
+    Protocol,
+    TypedDict,
+    TypeVar,
+    Union,
+)
 
 import pyro
+import pyro.distributions.constraints as constraints
 import torch
 
 T = TypeVar("T")
@@ -10,68 +20,88 @@ T = TypeVar("T")
 Kernel = Callable[[T, T], torch.Tensor]
 
 
-def site_is_deterministic(msg: dict) -> bool:
-    return (
-        msg["is_observed"]
-        and isinstance(msg["fn"], pyro.distributions.MaskedDistribution)
-        and isinstance(msg["fn"].base_dist, pyro.distributions.Delta)
-    )
+class TorchKernel(Generic[T], torch.nn.Module):
+    support: constraints.Constraint
+
+    def forward(self, x: T, y: T) -> torch.Tensor:
+        raise NotImplementedError
 
 
-class SoftEqKernel(torch.nn.Module):
-    event_dim: int
+class SoftEqKernel(TorchKernel[torch.Tensor]):
+    """
+    Kernel that returns a Bernoulli log-probability of equality.
+    """
+
+    support: constraints.Constraint = constraints.boolean
     alpha: torch.Tensor
 
     def __init__(self, alpha: Union[float, torch.Tensor] = 1.0, *, event_dim: int = 0):
         super().__init__()
         self.register_buffer("alpha", torch.as_tensor(alpha))
-        self.event_dim = event_dim
+        if event_dim > 0:
+            self.support = constraints.independent(constraints.boolean, event_dim)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         eq = (x == y).to(dtype=self.alpha.dtype)
         return (
             pyro.distributions.Bernoulli(probs=self.alpha)
-            .expand([1] * self.event_dim)
-            .to_event(self.event_dim)
+            .expand([1] * self.support.event_dim)
+            .to_event(self.support.event_dim)
             .log_prob(eq)
         )
 
 
-class RBFKernel(torch.nn.Module):
-    event_dim: int
+class RBFKernel(TorchKernel[torch.Tensor]):
+    """
+    Kernel that returns a Normal log-probability of distance.
+    """
+
+    support: constraints.Constraint = constraints.real
     scale: torch.Tensor
 
     def __init__(self, scale: Union[float, torch.Tensor] = 1.0, *, event_dim: int = 0):
         super().__init__()
         self.register_buffer("scale", torch.as_tensor(scale))
-        self.event_dim = event_dim
+        if event_dim > 0:
+            self.support = constraints.independent(constraints.real, event_dim)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         r = x - y
-        event_shape = r.shape[len(r.shape) - self.event_dim :]
-        scale = self.scale / functools.reduce(operator.mul, event_shape, 1.)
+        event_shape = r.shape[len(r.shape) - self.support.event_dim :]
+        scale = self.scale * functools.reduce(operator.mul, event_shape, 1.0)
         return (
             pyro.distributions.Normal(loc=0.0, scale=scale)
-            .expand([1] * self.event_dim)
-            .to_event(self.event_dim)
+            .expand([1] * self.support.event_dim)
+            .to_event(self.support.event_dim)
             .log_prob(x - y)
         )
 
 
-class KernelSoftConditionReparam(Generic[T], pyro.infer.reparam.reparam.Reparam):
+class _MaskedDelta(Protocol):
+    base_dist: pyro.distributions.Delta
+    event_dim: int
+    _mask: Union[bool, torch.Tensor]
+
+
+class _DeterministicReparamMessage(TypedDict):
+    name: str
+    fn: _MaskedDelta
+    value: torch.Tensor
+    is_observed: Literal[True]
+
+
+class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
     """
     Reparametrizer that allows approximate conditioning on a ``pyro.deterministic`` site.
     """
 
-    def __init__(self, kernel: Kernel[T]):
+    def __init__(self, kernel: Kernel[torch.Tensor]):
         self.kernel = kernel
         super().__init__()
 
     def apply(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
+        self, msg: _DeterministicReparamMessage
     ) -> pyro.infer.reparam.reparam.ReparamResult:
-        assert site_is_deterministic(msg), "Can only reparametrize deterministic sites"
-
         name = msg["name"]
         event_dim = msg["fn"].event_dim
         observed_value = msg["value"]
@@ -97,8 +127,18 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         self.scale = scale
         super().__init__()
 
-    def configure(self, msg: dict) -> Optional[pyro.infer.reparam.reparam.Reparam]:
-        if not site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
+    @staticmethod
+    def site_is_deterministic(msg: pyro.infer.reparam.reparam.ReparamMessage) -> bool:
+        return (
+            msg["is_observed"]
+            and isinstance(msg["fn"], pyro.distributions.MaskedDistribution)
+            and isinstance(msg["fn"].base_dist, pyro.distributions.Delta)
+        )
+
+    def configure(
+        self, msg: pyro.infer.reparam.reparam.ReparamMessage
+    ) -> Optional[pyro.infer.reparam.reparam.Reparam]:
+        if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None
 
         event_dim = len(msg["fn"].event_shape)

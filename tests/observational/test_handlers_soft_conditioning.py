@@ -15,7 +15,6 @@ from causal_pyro.observational.handlers import (
     KernelSoftConditionReparam,
     RBFKernel,
     SoftEqKernel,
-    site_is_deterministic,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,14 +77,14 @@ def test_soft_conditioning_smoke_continuous_1(
         if name in data:
             assert tr.trace.nodes[name]["type"] == "sample"
             assert torch.all(tr.trace.nodes[name]["value"] == data[name])
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
             assert (
                 tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
                 == tr.trace.nodes[name]["log_prob"].shape
             )
         else:
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
@@ -121,7 +120,7 @@ def test_soft_conditioning_smoke_discrete_1(
             if f"{name}_factual" in tr.trace.nodes:
                 name = f"{name}_factual"
             assert tr.trace.nodes[name]["type"] == "sample"
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
             assert (
@@ -129,7 +128,7 @@ def test_soft_conditioning_smoke_discrete_1(
                 == tr.trace.nodes[name]["log_prob"].shape
             )
         else:
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
@@ -165,7 +164,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
             if f"{name}_factual" in tr.trace.nodes:
                 name = f"{name}_factual"
             assert tr.trace.nodes[name]["type"] == "sample"
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
             assert (
@@ -173,5 +172,5 @@ def test_soft_conditioning_counterfactual_continuous_1(
                 == tr.trace.nodes[name]["log_prob"].shape
             )
         else:
-            assert site_is_deterministic(tr.trace.nodes[name])
+            assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
