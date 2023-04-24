@@ -36,7 +36,8 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
     def _pyro_intervene(msg: Dict[str, Any]) -> None:
         msg["stop"] = True
         if msg["args"][1] is not None:
-            obs, acts = msg["args"][0], (msg["args"][1],)
+            obs, acts = msg["args"][0], msg["args"][1]
+            acts = (acts,) if not isinstance(acts, tuple) else acts
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
             msg["done"] = True
 

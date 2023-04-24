@@ -5,7 +5,6 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-import causal_pyro.interventional.handlers
 from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
