@@ -29,11 +29,6 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
     def __exit__(self, exc_type, exc_value, traceback):
         for name in reversed(list(self.plates.keys())):
             self.plates[name].__exit__(exc_type, exc_value, traceback)
-            if exc_type is not None:
-                del self.plates[name]
-        if exc_type is not None:
-            self.first_available_dim = self._orig_dim
-            assert not self.plates
         return super().__exit__(exc_type, exc_value, traceback)
 
     def _pyro_get_index_plates(self, msg):
