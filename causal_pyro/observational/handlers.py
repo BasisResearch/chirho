@@ -1,15 +1,6 @@
 import functools
 import operator
-from typing import (
-    Callable,
-    Generic,
-    Literal,
-    Optional,
-    Protocol,
-    TypedDict,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -20,14 +11,14 @@ T = TypeVar("T")
 Kernel = Callable[[T, T], torch.Tensor]
 
 
-class TorchKernel(Generic[T], torch.nn.Module):
+class TorchKernel(torch.nn.Module):
     support: constraints.Constraint
 
-    def forward(self, x: T, y: T) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
 
-class SoftEqKernel(TorchKernel[torch.Tensor]):
+class SoftEqKernel(TorchKernel):
     """
     Kernel that returns a Bernoulli log-probability of equality.
     """
@@ -51,7 +42,7 @@ class SoftEqKernel(TorchKernel[torch.Tensor]):
         )
 
 
-class RBFKernel(TorchKernel[torch.Tensor]):
+class RBFKernel(TorchKernel):
     """
     Kernel that returns a Normal log-probability of distance.
     """
