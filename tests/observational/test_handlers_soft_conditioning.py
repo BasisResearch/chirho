@@ -5,12 +5,12 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (
+from causal_pyro.counterfactual.ops import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.query.do_messenger import do
-from causal_pyro.reparam.soft_conditioning import (
+from causal_pyro.interventional.handlers import do
+from causal_pyro.observational.handlers import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
     site_is_deterministic,
