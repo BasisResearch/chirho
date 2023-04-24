@@ -5,10 +5,11 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+import causal_pyro.interventional.handlers
 from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
-    Factual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
+    SingleWorldFactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.indexed.ops import IndexSet, indices_of
@@ -35,7 +36,7 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
         Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1))
         return Z, X, Y
 
-    with Factual():
+    with SingleWorldFactual():
         z_factual, x_factual, y_factual = model()
 
     assert x_factual != x_cf_value

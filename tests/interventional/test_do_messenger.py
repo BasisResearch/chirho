@@ -6,8 +6,9 @@ import pytest
 import torch
 
 from causal_pyro.counterfactual.handlers import (
-    Factual,
+    MultiWorldCounterfactual,
     SingleWorldCounterfactual,
+    SingleWorldFactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.interventional.handlers import do
@@ -61,7 +62,7 @@ def test_do_messenger_factual(x_cf_value):
     intervened_model_messenger_1 = create_intervened_model_1(x_cf_value)
     intervened_model_messenger_2 = create_intervened_model_2(x_cf_value)
 
-    with Factual():
+    with SingleWorldFactual():
         z, x, y = intervened_model()
         (
             z_messenger_1,

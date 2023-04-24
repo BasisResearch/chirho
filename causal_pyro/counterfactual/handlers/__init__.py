@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, TypeVar
 
 import pyro
 
@@ -7,10 +7,12 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import split
+from causal_pyro.counterfactual.ops import gen_intervene_name, split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import get_index_plates
+from causal_pyro.indexed.ops import IndexSet, get_index_plates, scatter
 from causal_pyro.interventional.ops import intervene
+
+T = TypeVar("T")
 
 
 class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
@@ -45,6 +47,24 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["value"] = name if name is not None else cls.default_name
             msg["done"] = True
 
+    @staticmethod
+    @pyro.poutine.block(hide_types=["intervene"])
+    def _pyro_split(msg: Dict[str, Any]) -> None:
+        if msg["done"]:
+            return
+
+        obs, acts = msg["args"]
+        name = gen_intervene_name(msg["name"])
+
+        act_values: Dict[IndexSet, T] = {IndexSet(**{name: {0}}): obs}
+        for i, act in enumerate(acts):
+            act_values[IndexSet(**{name: {i + 1}})] = intervene(
+                obs, act, **msg["kwargs"]
+            )
+
+        msg["value"] = scatter(act_values, event_dim=msg["kwargs"].get("event_dim", 0))
+        msg["done"] = True
+
 
 class SingleWorldCounterfactual(BaseCounterfactual):
     """
@@ -60,7 +80,7 @@ class SingleWorldCounterfactual(BaseCounterfactual):
         msg["stop"] = True
 
 
-class Factual(BaseCounterfactual):
+class SingleWorldFactual(BaseCounterfactual):
     """
     Trivial counterfactual handler that returns the observed value.
     """
