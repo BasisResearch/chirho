@@ -324,8 +324,8 @@ def test_scatter_broadcast_new(batch_shape, event_shape):
 
 @pytest.mark.parametrize("batch_shape", BATCH_SHAPES, ids=str)
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
-@pytest.mark.parametrize("cf_dim", [-1], ids=str)
-def test_persistent_index_state(batch_shape, event_shape, cf_dim):
+def test_persistent_index_state(batch_shape, event_shape):
+    cf_dim = -1
     event_dim = len(event_shape)
     ind1, ind2 = IndexSet(new_dim={0}), IndexSet(new_dim={1})
     result = torch.zeros((2,) + batch_shape + event_shape)
@@ -339,16 +339,27 @@ def test_persistent_index_state(batch_shape, event_shape, cf_dim):
             add_indices(IndexSet(**{name: set(range(max(2, batch_shape[dim])))}))
 
     with index_state:
-        actual = scatter({ind1: value1, ind2: value2}, result=result, event_dim=event_dim)
+        actual = scatter(
+            {ind1: value1, ind2: value2}, result=result, event_dim=event_dim
+        )
+
+    try:
+        with index_state:
+            raise ValueError("dummy")
+    except ValueError:
+        pass
 
     with index_state:
         actual1 = gather(actual, ind1, event_dim=event_dim)
         actual2 = gather(actual, ind2, event_dim=event_dim)
 
     with index_state:
-        assert indices_of(actual1, event_dim=event_dim) == indices_of(actual2, event_dim=event_dim)
-        assert indices_of(actual, event_dim=event_dim) == \
-            union(ind1, ind2, indices_of(actual1, event_dim=event_dim))
+        assert indices_of(actual1, event_dim=event_dim) == indices_of(
+            actual2, event_dim=event_dim
+        )
+        assert indices_of(actual, event_dim=event_dim) == union(
+            ind1, ind2, indices_of(actual1, event_dim=event_dim)
+        )
 
     assert (actual1 == value1).all()
     assert (actual2 == value2).all()
