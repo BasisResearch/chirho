@@ -37,6 +37,7 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
         msg["stop"] = True
         if msg["args"][1] is not None:
             obs, acts = msg["args"][0], msg["args"][1]
+            acts = acts(obs) if callable(acts) else acts
             acts = (acts,) if not isinstance(acts, tuple) else acts
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
             msg["done"] = True

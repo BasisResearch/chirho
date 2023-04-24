@@ -5,13 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+import causal_pyro.interventional.handlers
 from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.indexed.ops import IndexSet, indices_of, union
+from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
 from causal_pyro.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
@@ -202,27 +203,62 @@ def test_dim_allocation_failure(cf_dim):
             model()
 
 
+@pytest.mark.parametrize("dependent_intervention", [False, True])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (3,), (4, 3)])
-def test_nested_interventions_same_variable(cf_dim, event_shape):
-    def model():
+def test_nested_interventions_same_variable(
+    cf_dim, event_shape, dependent_intervention
+):
+    event_dim = len(event_shape)
+    x_obs = torch.full(event_shape, 0.0)
+    x_cf_2 = torch.full(event_shape, 1.0)
+
+    if dependent_intervention:
+        x_cf_1 = lambda x: x + torch.full(event_shape, 2.0)  # noqa: E731
+        x_cfs = lambda x: (x_cf_1(x), x_cf_2)  # noqa: E731
+    else:
+        x_cf_1 = torch.full(event_shape, 2.0)
+        x_cfs = (x_cf_1, x_cf_2)
+
+    def composed_model():
         x = pyro.sample(
-            "x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
+            "x",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+            obs=x_obs,
         )
+        x = intervene(x, x_cf_1, event_dim=event_dim, name="X1")
+        x = intervene(x, x_cf_2, event_dim=event_dim, name="X2")
         y = pyro.sample("y", dist.Normal(x, 1).to_event(len(event_shape)))
         return x, y
 
-    intervened_model = intervene(model, {"x": torch.full(event_shape, 2.0)})
-    intervened_model = intervene(intervened_model, {"x": torch.full(event_shape, 1.0)})
+    def stacked_model():
+        x = pyro.sample(
+            "x",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+            obs=x_obs,
+        )
+        x = intervene(x, x_cfs, event_dim=event_dim, name="X")
+        y = pyro.sample("y", dist.Normal(x, 1).to_event(len(event_shape)))
+        return x, y
 
     with MultiWorldCounterfactual(cf_dim):
-        x, y = intervened_model()
+        x_composed, y_composed = composed_model()
+        indices_composed = indices_of(y_composed, event_dim=event_dim)
+        assert indices_of(x_composed, event_dim=event_dim) == indices_composed
+        x00 = gather(x_composed, IndexSet(X1={0}, X2={0}), event_dim=event_dim)
+        x01 = gather(x_composed, IndexSet(X1={0}, X2={1}), event_dim=event_dim)
+        x10 = gather(x_composed, IndexSet(X1={1}, X2={0}), event_dim=event_dim)
+        x11 = gather(x_composed, IndexSet(X1={1}, X2={1}), event_dim=event_dim)
 
-    assert (
-        y.shape
-        == x.shape
-        == (2, 2) + (1,) * (len(x.shape) - len(event_shape) - 2) + event_shape
-    )
-    assert torch.all(x[0, 0, ...] != 2.0) and torch.all(x[0, 0] != 1.0)
-    assert torch.all(x[0, 1, ...] == 1.0)
-    assert torch.all(x[1, 0, ...] == 2.0) and torch.all(x[1, 1, ...] == 2.0)
+    with MultiWorldCounterfactual(cf_dim):
+        x_stacked, y_stacked = stacked_model()
+        indices_stacked = indices_of(y_stacked, event_dim=event_dim)
+        assert indices_of(x_stacked, event_dim=event_dim) == indices_stacked
+        x0 = gather(x_stacked, IndexSet(X={0}), event_dim=event_dim)
+        x1 = gather(x_stacked, IndexSet(X={1}), event_dim=event_dim)
+        x2 = gather(x_stacked, IndexSet(X={2}), event_dim=event_dim)
+
+    assert (x00 == x0).all()
+    assert (x10 == x1).all()
+    assert (x01 == x2).all()
+    assert (x11 == x2).all()
