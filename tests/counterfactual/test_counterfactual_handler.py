@@ -211,13 +211,14 @@ def test_nested_interventions_same_variable(
 ):
     event_dim = len(event_shape)
     x_obs = torch.full(event_shape, 0.0)
-    x_cf_2 = torch.full(event_shape, 1.0)
 
     if dependent_intervention:
         x_cf_1 = lambda x: x + torch.full(event_shape, 2.0)  # noqa: E731
-        x_cfs = lambda x: (x_cf_1(x), x_cf_2)  # noqa: E731
+        x_cf_2 = lambda x: x + torch.full(event_shape, 1.0)  # noqa: E731
+        x_cfs = lambda x: (x_cf_1(x), x_cf_2(x))  # noqa: E731
     else:
         x_cf_1 = torch.full(event_shape, 2.0)
+        x_cf_2 = torch.full(event_shape, 1.0)
         x_cfs = (x_cf_1, x_cf_2)
 
     def composed_model():
@@ -261,4 +262,4 @@ def test_nested_interventions_same_variable(
     assert (x00 == x0).all()
     assert (x10 == x1).all()
     assert (x01 == x2).all()
-    assert (x11 == x2).all()
+    assert (x11 != x2).all() if dependent_intervention else (x11 == x2).all()
