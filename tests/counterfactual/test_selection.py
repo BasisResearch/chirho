@@ -63,9 +63,8 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
     }
 
     queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
-    cf_handler = cf_class(cf_dim)
 
-    with cf_handler:
+    with cf_class(cf_dim):
         full_tr = pyro.poutine.trace(queried_model).get_trace()
         full_log_prob = full_tr.log_prob_sum()
 
@@ -77,11 +76,11 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
         }
     )
 
-    with pin_cf_latents, cf_handler, SelectCounterfactual():
+    with pin_cf_latents, cf_class(cf_dim), SelectCounterfactual():
         cf_tr = pyro.poutine.trace(queried_model).get_trace()
         cf_log_prob = cf_tr.log_prob_sum()
 
-    with pin_cf_latents, cf_handler, SelectFactual():
+    with pin_cf_latents, cf_class(cf_dim), SelectFactual():
         fact_tr = pyro.poutine.trace(queried_model).get_trace()
         fact_log_prob = fact_tr.log_prob_sum()
 
