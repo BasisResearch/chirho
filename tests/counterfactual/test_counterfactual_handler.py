@@ -11,7 +11,7 @@ from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.indexed.ops import IndexSet, indices_of
+from causal_pyro.indexed.ops import IndexSet, indices_of, union
 from causal_pyro.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
@@ -58,25 +58,47 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
     )
 
 
+@pytest.mark.parametrize("num_splits", [1, 2, 3])
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_multiple_interventions(x_cf_value):
+@pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
+@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+def test_multiple_interventions(x_cf_value, num_splits, cf_dim, event_shape):
+    x_cf_value = torch.full(event_shape, float(x_cf_value))
+    event_dim = len(event_shape)
+
     def model():
         #   z
         #  /  \
         # x --> y
-        Z = pyro.sample("z", dist.Normal(0, 1))
-        Z = intervene(Z, torch.tensor(x_cf_value - 1.0))
-        X = pyro.sample("x", dist.Normal(Z, 1))
-        X = intervene(X, torch.tensor(x_cf_value))
+        Z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(event_dim))
+        Z = intervene(
+            Z,
+            tuple(x_cf_value - i for i in range(num_splits)),
+            event_dim=event_dim,
+            name="Z",
+        )
+        X = pyro.sample("x", dist.Normal(Z, 1).to_event(event_dim))
+        X = intervene(
+            X,
+            tuple(x_cf_value + i for i in range(num_splits)),
+            event_dim=event_dim,
+            name="X",
+        )
         Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1))
         return Z, X, Y
 
-    with MultiWorldCounterfactual(-1):
+    with MultiWorldCounterfactual(cf_dim):
         Z, X, Y = model()
 
-    assert Z.shape == (2,)
-    assert X.shape == (2, 2)
-    assert Y.shape == (2, 2)
+        assert indices_of(Z, event_dim=event_dim) == IndexSet(
+            Z=set(range(1 + num_splits))
+        )
+        assert indices_of(X, event_dim=event_dim) == IndexSet(
+            X=set(range(1 + num_splits)), Z=set(range(1 + num_splits))
+        )
+        assert indices_of(Y, event_dim=event_dim) == union(
+            indices_of(X, event_dim=event_dim), indices_of(Z, event_dim=event_dim)
+        )
 
 
 def test_intervene_distribution_same():
