@@ -1,6 +1,5 @@
-"""
 Design notes: Causal queries as program transformations
--------------------------------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A primary motivation for working in a PPL is separation of concerns
 between models, queries, and inference. The design for causal inference
@@ -68,5 +67,3 @@ We can then define higher level causal query operators by composing
                model)))
 
      return _query
-
-"""
