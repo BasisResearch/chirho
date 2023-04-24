@@ -28,7 +28,8 @@ def _intervene_atom(
     if act is None:
         return obs
     elif callable(act):
-        return act(obs)
+        act = act(obs)
+        return act[-1] if isinstance(act, tuple) else act
     elif isinstance(act, tuple):
         return act[-1]
     return act
@@ -47,7 +48,8 @@ def _intervene_atom_distribution(
     if act is None:
         return obs
     elif callable(act) and not isinstance(act, pyro.distributions.Distribution):
-        return act(obs)
+        act = act(obs)
+        return act[-1] if isinstance(act, tuple) else act
     elif isinstance(act, tuple):
         return act[-1]
     return act
