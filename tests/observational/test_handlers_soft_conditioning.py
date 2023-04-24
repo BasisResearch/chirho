@@ -13,21 +13,12 @@ from causal_pyro.interventional.handlers import do
 from causal_pyro.observational.handlers import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
+    RBFKernel,
+    SoftEqKernel,
     site_is_deterministic,
 )
 
 logger = logging.getLogger(__name__)
-
-
-def _sum_rightmost(tensor, ndims: int):
-    assert len(tensor.shape) >= ndims
-    for _ in range(ndims):
-        tensor = tensor.sum(-1)
-    return tensor
-
-
-def rbf_kernel(x, y, event_dim=0):
-    return torch.exp(-0.5 * _sum_rightmost((x - y) ** 2, event_dim))
 
 
 def dummy_kernel(x, y, event_dim=0):
@@ -58,11 +49,13 @@ def discrete_scm_1():
 
 
 @pytest.mark.parametrize("use_auto", [True, False])
-@pytest.mark.parametrize("kernel", [rbf_kernel])
+@pytest.mark.parametrize("scale,alpha", [(0.6, 0.6)])
 @pytest.mark.parametrize("x_obs", [1.5, None])
 @pytest.mark.parametrize("y_obs", [2.5, None])
 @pytest.mark.parametrize("z_obs", [3.5, None])
-def test_soft_conditioning_smoke_continuous_1(use_auto, kernel, x_obs, y_obs, z_obs):
+def test_soft_conditioning_smoke_continuous_1(
+    use_auto, scale, alpha, x_obs, y_obs, z_obs
+):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
@@ -70,9 +63,11 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, kernel, x_obs, y_obs, z_
         if obs is not None
     }
     if use_auto:
-        reparam_config = AutoSoftConditioning(0.0, kernel)
+        reparam_config = AutoSoftConditioning(scale, alpha)
     else:
-        reparam_config = {name: KernelSoftConditionReparam(kernel) for name in data}
+        reparam_config = {
+            name: KernelSoftConditionReparam(RBFKernel(scale=scale)) for name in data
+        }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
     ), pyro.condition(data=data):
@@ -94,19 +89,26 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, kernel, x_obs, y_obs, z_
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-@pytest.mark.parametrize("alpha", [0.5])
+@pytest.mark.parametrize("use_auto", [True, False])
+@pytest.mark.parametrize("scale,alpha", [(0.5, 0.5)])
 @pytest.mark.parametrize("x_obs", [1, None])
 @pytest.mark.parametrize("y_obs", [2, None])
 @pytest.mark.parametrize("z_obs", [3, None])
-def test_soft_conditioning_smoke_discrete_1(alpha, x_obs, y_obs, z_obs):
+def test_soft_conditioning_smoke_discrete_1(
+    use_auto, scale, alpha, x_obs, y_obs, z_obs
+):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    reparam_config = AutoSoftConditioning(alpha, dummy_kernel)
-
+    if use_auto:
+        reparam_config = AutoSoftConditioning(scale, alpha)
+    else:
+        reparam_config = {
+            name: KernelSoftConditionReparam(SoftEqKernel(alpha)) for name in data
+        }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
     ), pyro.condition(data=data):
@@ -131,7 +133,6 @@ def test_soft_conditioning_smoke_discrete_1(alpha, x_obs, y_obs, z_obs):
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-@pytest.mark.parametrize("kernel", [rbf_kernel])
 @pytest.mark.parametrize("x_obs", [1.5, None])
 @pytest.mark.parametrize("y_obs", [2.5, None])
 @pytest.mark.parametrize("z_obs", [3.5, None])
@@ -140,7 +141,7 @@ def test_soft_conditioning_smoke_discrete_1(alpha, x_obs, y_obs, z_obs):
     "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
 )
 def test_soft_conditioning_counterfactual_continuous_1(
-    kernel, x_obs, y_obs, z_obs, cf_dim, cf_class
+    x_obs, y_obs, z_obs, cf_dim, cf_class
 ):
     names = ["x", "y", "z"]
     data = {
@@ -148,7 +149,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    reparam_config = AutoSoftConditioning(0.0, kernel)
+    reparam_config = AutoSoftConditioning(1.0, 0.0)
 
     actions = {"x": torch.tensor(0.1234)}
 
