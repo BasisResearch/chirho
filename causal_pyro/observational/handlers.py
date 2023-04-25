@@ -26,7 +26,7 @@ class SoftEqKernel(TorchKernel):
     support: constraints.Constraint = constraints.boolean
     alpha: torch.Tensor
 
-    def __init__(self, alpha: Union[float, torch.Tensor] = 1.0, *, event_dim: int = 0):
+    def __init__(self, alpha: Union[float, torch.Tensor], *, event_dim: int = 0):
         super().__init__()
         self.register_buffer("alpha", torch.as_tensor(alpha))
         if event_dim > 0:
@@ -50,18 +50,15 @@ class RBFKernel(TorchKernel):
     support: constraints.Constraint = constraints.real
     scale: torch.Tensor
 
-    def __init__(self, scale: Union[float, torch.Tensor] = 1.0, *, event_dim: int = 0):
+    def __init__(self, scale: Union[float, torch.Tensor], *, event_dim: int = 0):
         super().__init__()
         self.register_buffer("scale", torch.as_tensor(scale))
         if event_dim > 0:
             self.support = constraints.independent(constraints.real, event_dim)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        r = x - y
-        event_shape = r.shape[len(r.shape) - self.support.event_dim :]
-        scale = self.scale * functools.reduce(operator.mul, event_shape, 1.0)
         return (
-            pyro.distributions.Normal(loc=0.0, scale=scale)
+            pyro.distributions.Normal(loc=0.0, scale=self.scale)
             .expand([1] * self.support.event_dim)
             .to_event(self.support.event_dim)
             .log_prob(x - y)
@@ -83,7 +80,27 @@ class _DeterministicReparamMessage(TypedDict):
 
 class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
     """
-    Reparametrizer that allows approximate conditioning on a ``pyro.deterministic`` site.
+    Reparametrizer that allows approximate soft conditioning on a ``pyro.deterministic``
+    site using a kernel function that compares the observed and computed values,
+    as in approximate Bayesian computation methods from classical statistics.
+
+    This may be useful for estimating counterfactuals in Pyro programs
+    corresponding to structural causal models with exogenous noise variables.
+
+    The kernel function should return a score corresponding to the
+    log-probability of the observed value given the computed value,
+    which is then added to the model's unnormalized log-joint probability
+    using :func:~`pyro.factor` ::
+
+        $$\\log p(v' | v) \\approx K\\(v, v'\\)$$
+
+    The score tensor returned by the kernel function must be broadcastable
+    to the ``batch_shape`` of the site.
+
+    .. note::
+        Kernel functions must be positive-definite and symmetric.
+        For example, :class:~`RBFKernel` returns a Normal log-probability
+        of the distance between the observed and computed values.
     """
 
     def __init__(self, kernel: Kernel[torch.Tensor]):
@@ -110,10 +127,25 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
 
 class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
     """
-    Reparametrization strategy that allows approximate conditioning on ``pyro.deterministic`` sites.
+    Automatic reparametrization strategy that allows approximate soft conditioning
+    on ``pyro.deterministic`` sites in a Pyro model.
+
+    This may be useful for estimating counterfactuals in Pyro programs corresponding
+    to structural causal models with exogenous noise variables.
+
+    This strategy uses :class:~`KernelSoftConditionReparam` to approximate
+    the log-probability of the observed value given the computed value
+    at each ``pyro.deterministic`` site whose observed value is different
+    from its computed value.
+
+    .. note::
+        Implementation details are subject to change.
+        Currently uses a few pre-defined kernels such as :class:~`SoftEqKernel`
+        and :class:~`RBFKernel` which are chosen for each site based on
+        the site's ``event_dim`` and ``support``.
     """
 
-    def __init__(self, scale: float, alpha: float):
+    def __init__(self, *, scale: float = 1.0, alpha: float = 1.0):
         self.alpha = alpha
         self.scale = scale
         super().__init__()
@@ -132,11 +164,12 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None
 
-        event_dim = len(msg["fn"].event_shape)
-
         if msg["fn"].base_dist.v.is_floating_point():
+            scale = self.scale * functools.reduce(
+                operator.mul, msg["fn"].event_shape, 1.0
+            )
             return KernelSoftConditionReparam(
-                RBFKernel(scale=self.scale, event_dim=event_dim)
+                RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
             )
 
         if msg["fn"].base_dist.v.dtype in (
@@ -146,8 +179,11 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             torch.int32,
             torch.int64,
         ):
+            alpha = self.alpha * functools.reduce(
+                operator.mul, msg["fn"].event_shape, 1.0
+            )
             return KernelSoftConditionReparam(
-                SoftEqKernel(alpha=self.alpha, event_dim=event_dim)
+                SoftEqKernel(alpha=alpha, event_dim=len(msg["fn"].event_shape))
             )
 
         raise NotImplementedError(
