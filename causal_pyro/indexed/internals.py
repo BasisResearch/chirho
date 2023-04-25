@@ -46,7 +46,7 @@ def _gather_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
 
     result = value
     for name, indices in indexset.items():
@@ -111,7 +111,7 @@ def _scatter_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -173,7 +173,7 @@ def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
     name_to_dim = (
         kwargs["name_to_dim"]
         if "name_to_dim" in kwargs
-        else {f.name: f.dim for f in get_index_plates().values()}
+        else {name: f.dim for name, f in get_index_plates().items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(

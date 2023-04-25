@@ -268,7 +268,7 @@ def indexset_as_mask(
     """
     if name_to_dim_size is None:
         name_to_dim_size = {
-            f.name: (f.dim, f.size) for f in get_index_plates().values()
+            name: (f.dim, f.size) for name, f in get_index_plates().items()
         }
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)

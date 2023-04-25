@@ -16,7 +16,7 @@ def get_factual_indices() -> IndexSet:
 
     :return: IndexSet corresponding to the factual world.
     """
-    return IndexSet(**{f.name: {0} for f in get_index_plates().values()})
+    return IndexSet(**{name: {0} for name in get_index_plates().keys()})
 
 
 class SelectCounterfactual(DependentMaskMessenger):
