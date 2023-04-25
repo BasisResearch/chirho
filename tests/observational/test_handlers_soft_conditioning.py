@@ -62,7 +62,7 @@ def test_soft_conditioning_smoke_continuous_1(
         if obs is not None
     }
     if use_auto:
-        reparam_config = AutoSoftConditioning(scale, alpha)
+        reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
         reparam_config = {
             name: KernelSoftConditionReparam(RBFKernel(scale=scale)) for name in data
@@ -103,7 +103,7 @@ def test_soft_conditioning_smoke_discrete_1(
         if obs is not None
     }
     if use_auto:
-        reparam_config = AutoSoftConditioning(scale, alpha)
+        reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
         reparam_config = {
             name: KernelSoftConditionReparam(SoftEqKernel(alpha)) for name in data
@@ -148,7 +148,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    reparam_config = AutoSoftConditioning(1.0, 0.0)
+    reparam_config = AutoSoftConditioning(scale=1.0, alpha=0.0)
 
     actions = {"x": torch.tensor(0.1234)}
 
