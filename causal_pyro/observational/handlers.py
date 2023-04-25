@@ -80,7 +80,7 @@ class _DeterministicReparamMessage(TypedDict):
 
 class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
     """
-    Reparametrizer that allows approximate soft conditioning on a ``pyro.deterministic``
+    Reparametrizer that allows approximate soft conditioning on a :func:`pyro.deterministic`
     site using a kernel function that compares the observed and computed values,
     as in approximate Bayesian computation methods from classical statistics.
 
@@ -90,16 +90,16 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
     The kernel function should return a score corresponding to the
     log-probability of the observed value given the computed value,
     which is then added to the model's unnormalized log-joint probability
-    using :func:~`pyro.factor` ::
+    using :func:`pyro.factor`  :
 
-        $$\\log p(v' | v) \\approx K\\(v, v'\\)$$
+        :math:`\\log p(v' | v) \\approx K(v, v')`
 
-    The score tensor returned by the kernel function must be broadcastable
-    to the ``batch_shape`` of the site.
+    The score tensor returned by the kernel function must have shape equal
+    or broadcastable to the ``batch_shape`` of the site.
 
     .. note::
         Kernel functions must be positive-definite and symmetric.
-        For example, :class:~`RBFKernel` returns a Normal log-probability
+        For example, :class:`~RBFKernel` returns a Normal log-probability
         of the distance between the observed and computed values.
     """
 
@@ -133,15 +133,15 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
     This may be useful for estimating counterfactuals in Pyro programs corresponding
     to structural causal models with exogenous noise variables.
 
-    This strategy uses :class:~`KernelSoftConditionReparam` to approximate
+    This strategy uses :class:`~KernelSoftConditionReparam` to approximate
     the log-probability of the observed value given the computed value
-    at each ``pyro.deterministic`` site whose observed value is different
+    at each :func:`pyro.deterministic` site whose observed value is different
     from its computed value.
 
     .. note::
         Implementation details are subject to change.
-        Currently uses a few pre-defined kernels such as :class:~`SoftEqKernel`
-        and :class:~`RBFKernel` which are chosen for each site based on
+        Currently uses a few pre-defined kernels such as :class:`~SoftEqKernel`
+        and :class:`~RBFKernel` which are chosen for each site based on
         the site's ``event_dim`` and ``support``.
     """
 
