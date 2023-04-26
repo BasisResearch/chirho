@@ -1,9 +1,9 @@
 import functools
-from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
+from typing import Callable, Hashable, Mapping, Optional, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 
-AtomicIntervention = Union[T, Callable[[T], T]]
+AtomicIntervention = Union[T, Tuple[T, ...], Callable[[T], Union[T, Tuple[T, ...]]]]
 CompoundIntervention = Union[Mapping[Hashable, AtomicIntervention[T]], Callable[..., T]]
 Intervention = Union[AtomicIntervention[T], CompoundIntervention[T]]
 

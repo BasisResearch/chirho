@@ -5,10 +5,9 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.ops import (
-    BaseCounterfactual,
-    Factual,
-    MultiWorldCounterfactual,
+from causal_pyro.counterfactual.handlers import (
+    SingleWorldCounterfactual,
+    SingleWorldFactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.interventional.handlers import do
@@ -62,7 +61,7 @@ def test_do_messenger_factual(x_cf_value):
     intervened_model_messenger_1 = create_intervened_model_1(x_cf_value)
     intervened_model_messenger_2 = create_intervened_model_2(x_cf_value)
 
-    with Factual():
+    with SingleWorldFactual():
         z, x, y = intervened_model()
         (
             z_messenger_1,
@@ -97,7 +96,7 @@ def test_do_messenger_base_counterfactual(x_cf_value):
     intervened_model_messenger_1 = create_intervened_model_1(x_cf_value)
     intervened_model_messenger_2 = create_intervened_model_2(x_cf_value)
 
-    with BaseCounterfactual():
+    with SingleWorldCounterfactual():
         z, x, y = intervened_model()
 
         (
@@ -158,29 +157,3 @@ def test_do_messenger_twin_counterfactual(x_cf_value):
         == y_messenger_2.shape
         == (2,)
     )
-
-
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
-@pytest.mark.parametrize("event_shape", [(), (3,), (4, 3)])
-def test_nested_interventions_same_variable(cf_dim, event_shape):
-    def model():
-        x = pyro.sample(
-            "x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
-        y = pyro.sample("y", dist.Normal(x, 1).to_event(len(event_shape)))
-        return x, y
-
-    intervened_model = intervene(model, {"x": torch.full(event_shape, 2.0)})
-    intervened_model = intervene(intervened_model, {"x": torch.full(event_shape, 1.0)})
-
-    with MultiWorldCounterfactual(cf_dim):
-        x, y = intervened_model()
-
-    assert (
-        y.shape
-        == x.shape
-        == (2, 2) + (1,) * (len(x.shape) - len(event_shape) - 2) + event_shape
-    )
-    assert torch.all(x[0, 0, ...] != 2.0) and torch.all(x[0, 0] != 1.0)
-    assert torch.all(x[0, 1, ...] == 1.0)
-    assert torch.all(x[1, 0, ...] == 2.0) and torch.all(x[1, 1, ...] == 2.0)

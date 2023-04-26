@@ -5,14 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+from causal_pyro.counterfactual.handlers import (
+    MultiWorldCounterfactual,
+    SingleWorldFactual,
+    TwinWorldCounterfactual,
+)
 from causal_pyro.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
-)
-from causal_pyro.counterfactual.ops import (
-    Factual,
-    MultiWorldCounterfactual,
-    TwinWorldCounterfactual,
 )
 from causal_pyro.interventional.handlers import do
 
@@ -72,7 +72,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
     queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
     cf_handler = cf_class(cf_dim)
 
-    with Factual():
+    with SingleWorldFactual():
         obs_tr = pyro.poutine.trace(queried_model).get_trace()
         obs_log_prob = obs_tr.log_prob_sum()
 
