@@ -1,11 +1,15 @@
-from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Container, ContextManager, Generic, List, NamedTuple, Optional, Type, TypeVar, Union
 
 import collections
 import contextlib
 import torch
 
+from torch.distributions import Distribution
+from torch.distributions.constraints import Constraint
+
 from ..ops.terms import Context, Operation, Term, define
-from ..ops.models import Model
+from ..ops.syntax import Return
+from ..ops.models import Model, cont, reflect
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -96,20 +100,20 @@ def plate(name: str, size: int, dim: Optional[int] = None) -> ContextManager[Pla
 
 class TraceNode(NamedTuple):
     name: str
-    value: Tensor
+    value: torch.Tensor
 
 
 class SampleTraceNode(TraceNode):
     name: str
     distribution: Distribution
-    value: Tensor
+    value: torch.Tensor
     is_observed: bool
 
 
 class ParamTraceNode(TraceNode):
     name: str
     constraint: Constraint
-    value: Tensor
+    value: torch.Tensor
     event_dim: Optional[int]
 
 
@@ -167,7 +171,7 @@ def replay_sample(
     return cont(ctx, result)
 
 
-Observations = collections.OrderedDict[str, Tensor]
+Observations = collections.OrderedDict[str, torch.Tensor]
 
 
 class condition(Model[Observations]):
@@ -217,7 +221,7 @@ def elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args: Any, **kw
 
     with handle(replay(guide_trace), runtime=runtime), \
             handle(trace(Trace()), runtime=runtime) as model_trace:
-        model(*args, **kwargs)
+        pyro_model(*args, **kwargs)
 
     elbo = 0.0
     for name, node in model_trace.items():
