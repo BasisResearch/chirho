@@ -10,6 +10,7 @@ from causal_pyro.indexed.internals import add_indices
 from causal_pyro.indexed.ops import (
     IndexSet,
     gather,
+    get_index_plates,
     indexset_as_mask,
     indices_of,
     scatter,
@@ -363,3 +364,13 @@ def test_persistent_index_state(batch_shape, event_shape):
 
     assert (actual1 == value1).all()
     assert (actual2 == value2).all()
+
+
+def test_index_plate_names():
+    with IndexPlatesMessenger():
+        add_indices(IndexSet(a={0, 1}))
+        index_plates = get_index_plates()
+
+    assert len(index_plates) == 1
+    for name, frame in index_plates.items():
+        assert name != frame.name
