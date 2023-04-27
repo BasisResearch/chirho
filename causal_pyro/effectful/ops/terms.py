@@ -76,7 +76,7 @@ def contains(ctx: Context[T], key: Symbol[T]) -> bool:
 
 
 @define(Operation)
-def union(ctx: Context[T], other: Context[T]) -> Context[T]:
+def union(ctx: Context[T], other: Context[S]) -> Context[S | T]:
     ...
 
 
