@@ -32,6 +32,11 @@ class Operation(Generic[T]):
 define.register(Operation)(define_operation)
 
 
+@define(Operation)
+def get_name(op: Operation[T]) -> Symbol[T]:
+    ...
+
+
 @define(Kind)
 class Form(Generic[T]):
     pass
@@ -61,12 +66,27 @@ class Context(Generic[T]):
 
 
 @define(Operation)
+def read(ctx: Context[T], key: Symbol[T]) -> T:
+    ...
+
+
+@define(Operation)
+def contains(ctx: Context[T], key: Symbol[T]) -> bool:
+    ...
+
+
+@define(Operation)
+def union(ctx: Context[T], other: Context[T]) -> Context[T]:
+    ...
+
+
+@define(Operation)
 def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
     ...
 
 
 @define(Operation)
-def fvs(term: Term[T]) -> Context[None]:
+def fvs(term: Term[T]) -> Context[Type[T]]:
     ...
 
 

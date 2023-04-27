@@ -1,13 +1,14 @@
 from typing import Generic, List, Optional, TypeVar
 
 from .terms import Kind, Operation, Term, Context, Form, define, get_head, get_args
+from .interpretations import Interpretation, get_model, read
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
 @define(Form)
-def evaluate(ctx: Context[T], model: Model[T], term: Term[T]) -> T:
+def evaluate(ctx: Context[T], model: Interpretation[T], term: Term[T]) -> T:
     # inr(product(model, comodel)) == comodel
     # inl(product(model, comodel)) == model
     # sem = get_model(inl(model), get_head(term))(ctx, *get_args(term))
@@ -16,7 +17,7 @@ def evaluate(ctx: Context[T], model: Model[T], term: Term[T]) -> T:
 
 
 @define(Form)
-def apply(ctx: Context[T], model: Model[T], op: Operation[T], *args: Term[T]) -> T:
+def apply(ctx: Context[T], model: Interpretation[T], op: Operation[T], *args: Term[T]) -> T:
     return get_model(model, op)(*(evaluate(ctx, model, arg) for arg in args))
 
 

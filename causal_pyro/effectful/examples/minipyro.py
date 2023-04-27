@@ -9,7 +9,8 @@ from torch.distributions.constraints import Constraint
 
 from ..ops.terms import Context, Operation, Term, define
 from ..ops.forms import Return
-from ..ops.models import Model, cont, reflect
+from ..ops.interpretations import Interpretation
+from ..ops.interpreter import cont, reflect
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -38,7 +39,7 @@ def param(
 ParamStore = collections.OrderedDict[str, tuple[torch.Tensor, Constraint, Optional[int]]]
 
 
-class DefaultModel(Model[ParamStore]):
+class DefaultModel(Interpretation[ParamStore]):
     state: ParamStore
 
 
@@ -120,7 +121,7 @@ class ParamTraceNode(TraceNode):
 Trace = collections.OrderedDict[str, TraceNode]
 
 
-class trace(Model[Trace]):
+class trace(Interpretation[Trace]):
     state: Trace
 
 
@@ -153,7 +154,7 @@ def trace_param(
     return result
 
 
-class replay(Model[Trace]):
+class replay(Interpretation[Trace]):
     state: Trace
 
 
@@ -174,7 +175,7 @@ def replay_sample(
 Observations = collections.OrderedDict[str, torch.Tensor]
 
 
-class condition(Model[Observations]):
+class condition(Interpretation[Observations]):
     state: Observations
 
 
@@ -194,7 +195,7 @@ def condition_sample(
     return cont(ctx, result)
 
 
-class block(Model[Container[str]]):
+class block(Interpretation[Container[str]]):
     state: Container[str]
 
 
@@ -243,7 +244,7 @@ def intervene(obs: T, act: Optional[T] = None) -> T:
     return act if act is not None else obs
 
 
-class MultiWorldCounterfactual(Model[List[Plate]]):
+class MultiWorldCounterfactual(Interpretation[List[Plate]]):
     state: List[Plate]
 
 

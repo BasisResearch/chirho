@@ -1,13 +1,14 @@
 from typing import Generic, Optional, TypeVar, List
 
 from ..ops.terms import Context, Operation, Term, define
-from ..ops.models import Model, evaluate, apply, union, product, compose, quotient
+from ..ops.interpretations import Interpretation, union, product, compose, quotient
+from ..ops.interpreter import evaluate, apply
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-@define(Model)
+@define(Interpretation)
 class BaseModel:
     pass
 
