@@ -24,7 +24,8 @@ def define_operation(fn: Callable[..., T]):  # -> "Operation[T]":
 
     @functools.wraps(fn)
     def _op_wrapper(*args, **kwargs) -> T:
-        return get_model(fn, fn)(*args, **kwargs)
+        return apply(fn, *args, **kwargs)
+        # return get_model(fn, fn)(*args, **kwargs)
 
     return _op_wrapper
 

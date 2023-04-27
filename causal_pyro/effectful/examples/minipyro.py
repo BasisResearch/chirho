@@ -8,7 +8,7 @@ from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
 from ..ops.terms import Context, Operation, Term, define
-from ..ops.syntax import Return
+from ..ops.forms import Return
 from ..ops.models import Model, cont, reflect
 
 

@@ -23,8 +23,10 @@ def union_model(model: BaseModel, other: BaseModel) -> UnionModel:
 
 @default_register(evaluate)
 def evaluate_union_model(ctx: Context[T], model: UnionModel, term: Term[T]) -> T:
-    for model in model.models:
-        term = evaluate(ctx, model, term)
+    op = get_head(term)
+    for submodel in model.models:
+        if op in submodel:
+            return evaluate(ctx, submodel, term)
     return term
 
 

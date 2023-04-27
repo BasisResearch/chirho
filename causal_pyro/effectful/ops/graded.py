@@ -11,6 +11,9 @@ class Graded(Generic[S, T]):
     pass
 
 
+GradedContext = Context[Graded[S, T]]
+
+
 @define(Operation)
 def grade(value: T, weight: Optional[S] = None) -> Graded[S, T]:
     ...
@@ -27,11 +30,8 @@ def get_value(value: Graded[S, T]) -> T:
 
 
 @define(Operation)
-def get_base(value: Graded[S, T]) -> Graded[S, T]:
+def get_ctx(value: Graded[S, T]) -> GradedContext[S, T]:
     ...
-
-
-GradedContext = Context[Graded[S, T]]
 
 
 @define(Operation)

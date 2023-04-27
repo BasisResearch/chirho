@@ -33,28 +33,16 @@ define.register(Operation)(define_operation)
 
 
 @define(Kind)
-class Term(Generic[T]):
+class Form(Generic[T]):
     pass
 
-
-@define(Kind)
-class Context(Generic[T]):
-    pass
-
-
-Form = define(Kind)(Operation[Term[T]])
 
 define.register(Form)(define_form)
 
 
-@define(Operation)
-def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
-    ...
-
-
-@define(Operation)
-def fvs(term: Term[T]) -> Context[None]:
-    ...
+@define(Kind)
+class Term(Generic[T]):
+    pass
 
 
 @define(Operation)
@@ -64,6 +52,21 @@ def get_head(term: Term[T]) -> Operation[T] | Form[T]:
 
 @define(Operation)
 def get_args(term: Term[T]) -> tuple[Term[T], ...]:
+    ...
+
+
+@define(Kind)
+class Context(Generic[T]):
+    pass
+
+
+@define(Operation)
+def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
+    ...
+
+
+@define(Operation)
+def fvs(term: Term[T]) -> Context[None]:
     ...
 
 
