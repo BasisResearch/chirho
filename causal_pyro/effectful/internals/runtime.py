@@ -16,7 +16,7 @@ def define(t: Type[T]) -> Callable[..., T]:
 define.register = lambda k: lambda f: FORMDEFS.setdefault(k, f)
 
 
-def define_kind(cls: Type[T]) -> Type[T]:
+def define_meta(cls: Type[T]) -> Type[T]:
     return cls
 
 

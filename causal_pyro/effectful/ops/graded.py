@@ -1,12 +1,12 @@
 from typing import Generic, Optional, TypeVar
 
-from ..ops.terms import Context, Kind, Operation, Term, define
+from ..ops.terms import Context, Meta, Operation, Term, define
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-@define(Kind)
+@define(Meta)
 class Semiring(Generic[S]):
     pass
 
@@ -31,7 +31,7 @@ def times(semiring: Semiring[S], lhs: S, rhs: S) -> S:
     ...
 
 
-@define(Kind)
+@define(Meta)
 class Graded(Generic[S, T]):
     pass
 
@@ -55,5 +55,5 @@ def get_value(value: Graded[S, T]) -> T:
 
 
 @define(Operation)
-def count(value: Graded[S, T], ctx: GradedContext[S, T]) -> Graded[S, T]:
-    ...  # graded substitution
+def contract(semiring: Semiring[S], value: Graded[S, T], ctx: GradedContext[S, T]) -> Graded[S, T]:
+    ...

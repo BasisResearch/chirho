@@ -1,30 +1,30 @@
 from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Type, TypeVar, Union
 
-from ..internals.runtime import Kind, define, define_operation, define_form, define_kind, get_model
+from ..internals.runtime import Kind, define, define_operation, define_form, define_meta, get_model
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-class Kind(Generic[T]):
+class Meta(Generic[T]):
     pass
 
 
-define.register(Kind)(define_kind)
-Kind = define(Kind)(Kind)
+define.register(Meta)(define_meta)
+Meta = define(Meta)(Meta)
 
 
-@define(Kind)
+@define(Meta)
 class Symbol(Generic[T]):
     pass
 
 
-@define(Kind)
+@define(Meta)
 class Atom(Generic[T]):
     pass
 
 
-@define(Kind)
+@define(Meta)
 class Operation(Generic[T]):
     pass
 
@@ -37,7 +37,7 @@ def get_name(op: Operation[T]) -> Symbol[T]:
     ...
 
 
-@define(Kind)
+@define(Meta)
 class Form(Generic[T]):
     pass
 
@@ -45,7 +45,7 @@ class Form(Generic[T]):
 define.register(Form)(define_form)
 
 
-@define(Kind)
+@define(Meta)
 class Term(Generic[T]):
     pass
 
@@ -60,7 +60,7 @@ def get_args(term: Term[T]) -> tuple[Term[T], ...]:
     ...
 
 
-@define(Kind)
+@define(Meta)
 class Context(Generic[T]):
     pass
 
@@ -90,7 +90,7 @@ def fvs(term: Term[T]) -> Context[Type[T]]:
     ...
 
 
-@define(Kind)
+@define(Meta)
 class Object(Generic[T]):
     pass
 

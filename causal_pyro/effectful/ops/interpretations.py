@@ -1,12 +1,12 @@
 from typing import Generic, List, Optional, TypeVar
 
-from .terms import Kind, Operation, Term, Context, Form, define, get_name, get_head, get_args, read
+from .terms import Meta, Operation, Term, Context, Form, define, get_name, get_head, get_args, read
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-@define(Kind)
+@define(Meta)
 class Interpretation(Generic[T]):
     pass
 

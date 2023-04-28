@@ -1,6 +1,6 @@
 from typing import Generic, List, Optional, TypeVar
 
-from .terms import Kind, Operation, Term, Context, Form, define, get_head, get_args
+from .terms import Meta, Operation, Term, Context, Form, define, get_head, get_args
 from .interpretations import Interpretation, get_model, read
 
 
