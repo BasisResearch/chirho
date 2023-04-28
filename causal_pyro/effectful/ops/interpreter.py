@@ -3,7 +3,7 @@ from typing import Generic, List, Optional, Type, TypeVar
 from causal_pyro.effectful.internals.runtime import define
 from causal_pyro.effectful.ops.terms import T, Context, Operation, Term
 
-from .terms import Meta, Operation, Term, Context, Form, define, get_head, get_args
+from .terms import Meta, Operation, Term, Context, Form, define, get_head, get_args, get_ctx
 from .interpretations import Interpretation, get_name, read
 
 
@@ -31,15 +31,15 @@ def reflect(ctx: Context[T], result: Optional[T]) -> T:
 
 
 @define(Form)
-def typeof(term: Term[T]) -> Type[T]:
-    ...
+def typeof(judgements: Interpretation[Type[T]], term: Term[T]) -> Type[T]:
+    return evaluate(ctx, judgements, term)
 
 
 @define(Form)
-def fvs(term: Term[T]) -> Context[Type[T]]:
-    ...
+def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Context[Type[T]]:
+    return get_ctx(typeof(judgements, term))
 
 
 @define(Form)
 def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
-    ...
+    return evaluate(ctx, default, term)
