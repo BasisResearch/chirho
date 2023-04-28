@@ -1,6 +1,6 @@
 from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Set, TypeVar, Union
 
-from ..internals.runtime import define, define_operation, define_meta
+from .bootstrap import define, define_operation, define_meta
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -34,6 +34,11 @@ define.register(Operation)(define_operation)
 
 @define(Operation)
 def get_name(op: Operation[T]) -> Symbol[T]:
+    ...
+
+
+@define(Operation)
+def get_signature(op: Operation[T]):
     ...
 
 
