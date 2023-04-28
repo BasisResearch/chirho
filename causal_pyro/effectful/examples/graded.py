@@ -36,14 +36,6 @@ class Graded(Generic[S, T]):
     pass
 
 
-GradedContext = Context[Graded[S, T]]
-
-
-@define(Operation)
-def grade(value: T, weight: Optional[S] = None) -> Graded[S, T]:
-    ...
-
-
 @define(Operation)
 def get_weight(value: Graded[S, T]) -> S:
     ...
@@ -55,5 +47,5 @@ def get_value(value: Graded[S, T]) -> T:
 
 
 @define(Operation)
-def contract(semiring: Semiring[S], value: Graded[S, T], ctx: GradedContext[S, T]) -> Graded[S, T]:
+def contract(semiring: Semiring[S], value: Graded[S, T], ctx: Context[Graded[S, T]]) -> Graded[S, T]:
     ...
