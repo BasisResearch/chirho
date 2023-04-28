@@ -9,69 +9,41 @@ S, T = TypeVar("S"), TypeVar("T")
 
 
 @define(Interpretation)
-class BaseModel:
+class BaseInterpretation:
     pass
 
 
-class UnionModel(BaseModel):
-    models: List[BaseModel]
+class UnionInterpretation(BaseInterpretation):
+    interpretations: List[BaseInterpretation]
 
 
 @define(union)
-def union_model(model: BaseModel, other: BaseModel) -> UnionModel:
-    return UnionModel(models=[model, other])
+def union_interpretation(interpretation: BaseInterpretation, other: BaseInterpretation) -> UnionInterpretation:
+    return UnionInterpretation(interpretations=[interpretation, other])
 
 
 @define(evaluate)
-def evaluate_union_model(ctx: Environment[T], model: UnionModel, term: Term[T]) -> T:
+def evaluate_union_interpretation(ctx: Environment[T], interpretation: UnionInterpretation, term: Term[T]) -> T:
     op = get_head(term)
-    for submodel in model.models:
-        if op in submodel:
-            return evaluate(ctx, submodel, term)
+    for subinterpretation in interpretation.interpretations:
+        if op in subinterpretation:
+            return evaluate(ctx, subinterpretation, term)
     return term
 
 
-class ComposeModel(BaseModel):
-    models: List[BaseModel]
+class ComposeInterpretation(BaseInterpretation):
+    interpretations: List[BaseInterpretation]
 
 
 @define(compose)
-def compose_model(model: BaseModel, other: BaseModel) -> ComposeModel:
-    return ComposeModel(models=[model, other])
+def compose_interpretation(interpretation: BaseInterpretation, other: BaseInterpretation) -> ComposeInterpretation:
+    return ComposeInterpretation(interpretations=[interpretation, other])
 
 
-@define(evaluate)
-def evaluate_compose_model(ctx: Environment[T], model: ComposeModel, term: Term[T]) -> T:
-    for model in reversed(model.models):
-        term = evaluate(ctx, model, term)
-    return term
-
-
-class ProductModel(BaseModel):
-    models: List[BaseModel]
+class ProductInterpretation(BaseInterpretation):
+    interpretations: List[BaseInterpretation]
 
 
 @define(product)
-def product_model(model: BaseModel, other: BaseModel) -> ProductModel:
-    return ProductModel(models=[model, other])
-
-
-@define(evaluate)
-def evaluate_product_model(ctx: Environment[T], model: ProductModel, term: Term[T]) -> T:
-    return evaluate(ctx, inl(model), term), evaluate(ctx, inr(model), term)
-
-
-class QuotientModel(BaseModel):
-    models: List[BaseModel]
-
-
-@define(quotient)
-def quotient_model(model: BaseModel, other: BaseModel) -> QuotientModel:
-    return QuotientModel(models=[model, other])
-
-
-@define(evaluate)
-def evaluate_quotient_model(ctx: Environment[T], model: QuotientModel, term: Term[T]) -> T:
-    for model in model.models:
-        term = evaluate(ctx, model, term)
-    return term
+def product_interpretation(interpretation: BaseInterpretation, other: BaseInterpretation) -> ProductInterpretation:
+    return ProductInterpretation(interpretations=[interpretation, other])
