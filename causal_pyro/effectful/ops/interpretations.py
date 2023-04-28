@@ -2,16 +2,16 @@ from typing import Generic, List, Optional, TypeVar
 
 from causal_pyro.effectful.internals.runtime import define
 from causal_pyro.effectful.ops.interpreter import T
-from causal_pyro.effectful.ops.terms import T, Context, Operation, define
+from causal_pyro.effectful.ops.terms import T, Environment, Operation, define
 
-from .terms import Meta, Operation, Term, Context, Form, define, get_name, read
+from .terms import Meta, Operation, Term, Environment, Form, define, get_name, read
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
 @define(Meta)
-class Interpretation(Generic[T], Context[Operation[T]]):
+class Interpretation(Generic[T], Environment[Operation[T]]):
     pass
 
 
@@ -41,10 +41,10 @@ def quotient(model: Interpretation[T], other: Interpretation[T]) -> Interpretati
 
 
 @define(Operation)
-def cont(ctx: Context[T], result: Optional[T]) -> T:
+def cont(ctx: Environment[T], result: Optional[T]) -> T:
     ...
 
 
 @define(Operation)
-def reflect(ctx: Context[T], result: Optional[T]) -> T:
+def reflect(ctx: Environment[T], result: Optional[T]) -> T:
     ...

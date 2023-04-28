@@ -1,6 +1,6 @@
 from typing import Generic, Optional, TypeVar, List
 
-from ..ops.terms import Context, Operation, Term, define, get_args, get_head
+from ..ops.terms import Environment, Operation, Term, define, get_args, get_head
 from ..ops.interpretations import Interpretation, union, product, compose, quotient
 from ..ops.interpreter import evaluate, apply
 
@@ -23,7 +23,7 @@ def union_model(model: BaseModel, other: BaseModel) -> UnionModel:
 
 
 @define(evaluate)
-def evaluate_union_model(ctx: Context[T], model: UnionModel, term: Term[T]) -> T:
+def evaluate_union_model(ctx: Environment[T], model: UnionModel, term: Term[T]) -> T:
     op = get_head(term)
     for submodel in model.models:
         if op in submodel:
@@ -41,7 +41,7 @@ def compose_model(model: BaseModel, other: BaseModel) -> ComposeModel:
 
 
 @define(evaluate)
-def evaluate_compose_model(ctx: Context[T], model: ComposeModel, term: Term[T]) -> T:
+def evaluate_compose_model(ctx: Environment[T], model: ComposeModel, term: Term[T]) -> T:
     for model in reversed(model.models):
         term = evaluate(ctx, model, term)
     return term
@@ -57,7 +57,7 @@ def product_model(model: BaseModel, other: BaseModel) -> ProductModel:
 
 
 @define(evaluate)
-def evaluate_product_model(ctx: Context[T], model: ProductModel, term: Term[T]) -> T:
+def evaluate_product_model(ctx: Environment[T], model: ProductModel, term: Term[T]) -> T:
     return evaluate(ctx, inl(model), term), evaluate(ctx, inr(model), term)
 
 
@@ -71,7 +71,7 @@ def quotient_model(model: BaseModel, other: BaseModel) -> QuotientModel:
 
 
 @define(evaluate)
-def evaluate_quotient_model(ctx: Context[T], model: QuotientModel, term: Term[T]) -> T:
+def evaluate_quotient_model(ctx: Environment[T], model: QuotientModel, term: Term[T]) -> T:
     for model in model.models:
         term = evaluate(ctx, model, term)
     return term

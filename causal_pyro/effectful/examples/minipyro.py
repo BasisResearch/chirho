@@ -7,7 +7,7 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from ..ops.terms import Context, Operation, Term, define
+from ..ops.terms import Environment, Operation, Term, define
 from ..ops.forms import Return
 from ..ops.interpretations import Interpretation, cont
 from ..ops.interpretations import reflect
@@ -46,7 +46,7 @@ class DefaultModel(Interpretation[ParamStore]):
 @DefaultModel.union_(sample)
 def default_sample(
     param_store: ParamStore,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -58,7 +58,7 @@ def default_sample(
 @DefaultModel.union_(param)
 def default_param(
     param_store: ParamStore,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
@@ -128,7 +128,7 @@ class trace(Interpretation[Trace]):
 @trace.union_(sample)
 def trace_sample(
     state: Trace,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -142,7 +142,7 @@ def trace_sample(
 @trace.union_(param)
 def trace_param(
     tr: Trace,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
@@ -161,7 +161,7 @@ class replay(Interpretation[Trace]):
 @replay.union_(sample)
 def replay_sample(
     tr: Trace,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -182,7 +182,7 @@ class condition(Interpretation[Observations]):
 @condition.union_(sample)
 def condition_sample(
     state: Observations,
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -202,7 +202,7 @@ class block(Interpretation[Container[str]]):
 @block.union_(sample)
 def block_sample(
     blocked: Container[str],
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -251,7 +251,7 @@ class MultiWorldCounterfactual(Interpretation[List[Plate]]):
 @MultiWorldCounterfactual.union_(intervene)
 def multi_world_counterfactual_intervene(
     cf_plates: List[Plate],
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     obs: T,
     act: Optional[T] = None
@@ -265,7 +265,7 @@ def multi_world_counterfactual_intervene(
 @MultiWorldCounterfactual.union_(Return)
 def multi_world_counterfactual_return(
     cf_plates: List[Plate],
-    ctx: Context[T],
+    ctx: Environment[T],
     result: Optional[T],
     value: Optional[T],
 ) -> T:

@@ -1,6 +1,6 @@
 from typing import Generic, Optional, TypeVar
 
-from ..ops.terms import Context, Meta, Operation, Term, define
+from ..ops.terms import Environment, Meta, Operation, Term, define
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -47,5 +47,5 @@ def get_value(value: Graded[S, T]) -> T:
 
 
 @define(Operation)
-def contract(semiring: Semiring[S], value: Graded[S, T], ctx: Context[Graded[S, T]]) -> Graded[S, T]:
+def contract(semiring: Semiring[S], value: Graded[S, T], ctx: Environment[Graded[S, T]]) -> Graded[S, T]:
     ...

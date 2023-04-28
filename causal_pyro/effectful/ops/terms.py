@@ -61,32 +61,32 @@ def get_args(term: Term[T]) -> tuple[Term[T], ...]:
 
 
 @define(Meta)
-class Context(Generic[T]):
+class Environment(Generic[T]):
     pass
 
 
 @define(Operation)
-def read(ctx: Context[T], key: Symbol[T]) -> T:
+def read(ctx: Environment[T], key: Symbol[T]) -> T:
     ...
 
 
 @define(Operation)
-def write(ctx: Context[T], key: Symbol[T], value: T) -> Context[T]:
+def write(ctx: Environment[T], key: Symbol[T], value: T) -> Environment[T]:
     ...
 
 
 @define(Operation)
-def keys(ctx: Context[T]) -> Set[Symbol[T]]:
+def keys(ctx: Environment[T]) -> Set[Symbol[T]]:
     ...
 
 
 @define(Operation)
-def contains(ctx: Context[T], key: Symbol[T]) -> bool:
+def contains(ctx: Environment[T], key: Symbol[T]) -> bool:
     return key in keys(ctx)
 
 
 @define(Operation)
-def union(ctx: Context[S], other: Context[T]) -> Context[S | T]:
+def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
     ...
 
 
@@ -96,7 +96,7 @@ class Object(Generic[T]):
 
 
 @define(Operation)
-def get_ctx(obj: Object[T]) -> Context[T]:
+def get_ctx(obj: Object[T]) -> Environment[T]:
     ...
 
 
