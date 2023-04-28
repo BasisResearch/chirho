@@ -33,4 +33,3 @@ def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Context[Type[T]]:
 @define(Form)
 def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
     return evaluate(ctx, default, term)
-

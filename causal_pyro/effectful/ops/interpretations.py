@@ -4,17 +4,16 @@ from causal_pyro.effectful.internals.runtime import define
 from causal_pyro.effectful.ops.interpreter import T
 from causal_pyro.effectful.ops.terms import T, Context, Operation, define
 
-from .terms import Meta, Operation, Term, Context, Form, define, get_name, get_head, get_args, read
+from .terms import Meta, Operation, Term, Context, Form, define, get_name, read
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
 @define(Meta)
-class Interpretation(Generic[T]):
+class Interpretation(Generic[T], Context[Operation[T]]):
     pass
 
-# Model ?= Context[Term[T]]
 
 @define(Operation)
 def get_model(model: Interpretation[T], op: Operation[T]) -> Term[T]:
