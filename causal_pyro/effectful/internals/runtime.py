@@ -28,11 +28,3 @@ def define_operation(fn: Callable[..., T]):  # -> "Operation[T]":
         # return get_model(fn, fn)(*args, **kwargs)
 
     return _op_wrapper
-
-
-def define_form(cls: Type[T]) -> Type[T]:
-    return cls
-
-
-def get_model(model: Callable[..., T], op: Callable[..., T]) -> Callable[..., T]:
-    ...

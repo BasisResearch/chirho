@@ -4,7 +4,7 @@ from causal_pyro.effectful.internals.runtime import define
 from causal_pyro.effectful.ops.interpreter import T
 from causal_pyro.effectful.ops.terms import T, Environment, Operation, define
 
-from .terms import Meta, Operation, Term, Environment, Form, define, get_name, read
+from .terms import Meta, Operation, Term, Environment, define, get_name, read
 
 
 S, T = TypeVar("S"), TypeVar("T")

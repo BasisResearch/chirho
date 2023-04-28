@@ -1,6 +1,6 @@
 from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Set, TypeVar, Union
 
-from ..internals.runtime import Kind, define, define_operation, define_form, define_meta, get_model
+from ..internals.runtime import define, define_operation, define_meta
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -32,16 +32,8 @@ class Operation(Generic[T]):
 define.register(Operation)(define_operation)
 
 
-@define(Meta)
-class Form(Generic[T]):
-    pass
-
-
-define.register(Form)(define_form)
-
-
 @define(Operation)
-def get_name(op: Operation[T] | Form[T]) -> Symbol[T]:
+def get_name(op: Operation[T]) -> Symbol[T]:
     ...
 
 
@@ -51,7 +43,7 @@ class Term(Generic[T]):
 
 
 @define(Operation)
-def get_head(term: Term[T]) -> Operation[T] | Form[T]:
+def get_head(term: Term[T]) -> Operation[T]:
     ...
 
 
