@@ -1,4 +1,4 @@
-from typing import Generic, List, Optional, Type, TypeVar
+from typing import Generic, List, Type, TypeVar
 
 from causal_pyro.effectful.internals.runtime import define
 from causal_pyro.effectful.ops.terms import T, Context, Operation, Term
@@ -20,16 +20,6 @@ def apply(ctx: Context[T], interpretation: Interpretation[T], op: Operation[T], 
     return read(interpretation, get_name(op))(*(evaluate(ctx, interpretation, arg) for arg in args))
 
 
-@define(Operation)
-def cont(ctx: Context[T], result: Optional[T]) -> T:
-    ...
-
-
-@define(Operation)
-def reflect(ctx: Context[T], result: Optional[T]) -> T:
-    ...
-
-
 @define(Form)
 def typeof(judgements: Interpretation[Type[T]], term: Term[T]) -> Type[T]:
     return evaluate(ctx, judgements, term)
@@ -43,3 +33,4 @@ def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Context[Type[T]]:
 @define(Form)
 def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
     return evaluate(ctx, default, term)
+

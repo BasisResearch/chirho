@@ -1,5 +1,9 @@
 from typing import Generic, List, Optional, TypeVar
 
+from causal_pyro.effectful.internals.runtime import define
+from causal_pyro.effectful.ops.interpreter import T
+from causal_pyro.effectful.ops.terms import T, Context, Operation, define
+
 from .terms import Meta, Operation, Term, Context, Form, define, get_name, get_head, get_args, read
 
 
@@ -34,4 +38,14 @@ def product(model: Interpretation[T], comodel: Interpretation[T]) -> Interpretat
 
 @define(Operation)
 def quotient(model: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
+    ...
+
+
+@define(Operation)
+def cont(ctx: Context[T], result: Optional[T]) -> T:
+    ...
+
+
+@define(Operation)
+def reflect(ctx: Context[T], result: Optional[T]) -> T:
     ...

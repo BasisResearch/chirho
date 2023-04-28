@@ -9,8 +9,8 @@ from torch.distributions.constraints import Constraint
 
 from ..ops.terms import Context, Operation, Term, define
 from ..ops.forms import Return
-from ..ops.interpretations import Interpretation
-from ..ops.interpreter import cont, reflect
+from ..ops.interpretations import Interpretation, cont
+from ..ops.interpretations import reflect
 
 
 S, T = TypeVar("S"), TypeVar("T")
