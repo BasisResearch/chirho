@@ -1,4 +1,4 @@
-from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, TypeVar, Union
+from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Set, TypeVar, Union
 
 from ..internals.runtime import Kind, define, define_operation, define_form, define_meta, get_model
 
@@ -32,17 +32,17 @@ class Operation(Generic[T]):
 define.register(Operation)(define_operation)
 
 
-@define(Operation)
-def get_name(op: Operation[T]) -> Symbol[T]:
-    ...
-
-
 @define(Meta)
 class Form(Generic[T]):
     pass
 
 
 define.register(Form)(define_form)
+
+
+@define(Operation)
+def get_name(op: Operation[T] | Form[T]) -> Symbol[T]:
+    ...
 
 
 @define(Meta)
@@ -71,8 +71,18 @@ def read(ctx: Context[T], key: Symbol[T]) -> T:
 
 
 @define(Operation)
-def contains(ctx: Context[T], key: Symbol[T]) -> bool:
+def write(ctx: Context[T], key: Symbol[T], value: T) -> Context[T]:
     ...
+
+
+@define(Operation)
+def keys(ctx: Context[T]) -> Set[Symbol[T]]:
+    ...
+
+
+@define(Operation)
+def contains(ctx: Context[T], key: Symbol[T]) -> bool:
+    return key in keys(ctx)
 
 
 @define(Operation)
