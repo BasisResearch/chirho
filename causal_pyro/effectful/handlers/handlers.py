@@ -13,6 +13,15 @@ class BaseInterpretation:
     pass
 
 
+@define(evaluate)
+def evaluate_union_interpretation(ctx: Environment[T], interpretation: BaseInterpretation, term: Term[T]) -> T:
+    op = get_head(term)
+    for subinterpretation in interpretation.interpretations:
+        if op in subinterpretation:
+            return evaluate(ctx, subinterpretation, term)
+    return term
+
+
 class UnionInterpretation(BaseInterpretation):
     interpretations: List[BaseInterpretation]
 
@@ -20,15 +29,6 @@ class UnionInterpretation(BaseInterpretation):
 @define(union)
 def union_interpretation(interpretation: BaseInterpretation, other: BaseInterpretation) -> UnionInterpretation:
     return UnionInterpretation(interpretations=[interpretation, other])
-
-
-@define(evaluate)
-def evaluate_union_interpretation(ctx: Environment[T], interpretation: UnionInterpretation, term: Term[T]) -> T:
-    op = get_head(term)
-    for subinterpretation in interpretation.interpretations:
-        if op in subinterpretation:
-            return evaluate(ctx, subinterpretation, term)
-    return term
 
 
 class ComposeInterpretation(BaseInterpretation):
