@@ -1,4 +1,4 @@
-from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, TypeVar, Union
 
 from ..internals.runtime import Kind, define, define_operation, define_form, define_meta, get_model
 
@@ -76,17 +76,7 @@ def contains(ctx: Context[T], key: Symbol[T]) -> bool:
 
 
 @define(Operation)
-def union(ctx: Context[T], other: Context[S]) -> Context[S | T]:
-    ...
-
-
-@define(Operation)
-def substitute(term: Term[T], ctx: Context[T]) -> Term[T]:
-    ...
-
-
-@define(Operation)
-def fvs(term: Term[T]) -> Context[Type[T]]:
+def union(ctx: Context[S], other: Context[T]) -> Context[S | T]:
     ...
 
 
