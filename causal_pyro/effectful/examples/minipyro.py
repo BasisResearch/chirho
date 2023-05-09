@@ -43,7 +43,7 @@ class DefaultModel(Interpretation[ParamStore]):
     state: ParamStore
 
 
-@DefaultModel.union_(sample)
+@DefaultModel.define(sample)
 def default_sample(
     param_store: ParamStore,
     ctx: Environment[T],
@@ -55,7 +55,7 @@ def default_sample(
     return distribution.sample()
 
 
-@DefaultModel.union_(param)
+@DefaultModel.define(param)
 def default_param(
     param_store: ParamStore,
     ctx: Environment[T],
@@ -125,7 +125,7 @@ class trace(Interpretation[Trace]):
     state: Trace
 
 
-@trace.union_(sample)
+@trace.define(sample)
 def trace_sample(
     state: Trace,
     ctx: Environment[T],
@@ -139,7 +139,7 @@ def trace_sample(
     return result
 
 
-@trace.union_(param)
+@trace.define(param)
 def trace_param(
     tr: Trace,
     ctx: Environment[T],
@@ -158,7 +158,7 @@ class replay(Interpretation[Trace]):
     state: Trace
 
 
-@replay.union_(sample)
+@replay.define(sample)
 def replay_sample(
     tr: Trace,
     ctx: Environment[T],
@@ -179,7 +179,7 @@ class condition(Interpretation[Observations]):
     state: Observations
 
 
-@condition.union_(sample)
+@condition.define(sample)
 def condition_sample(
     state: Observations,
     ctx: Environment[T],
@@ -199,7 +199,7 @@ class block(Interpretation[Container[str]]):
     state: Container[str]
 
 
-@block.union_(sample)
+@block.define(sample)
 def block_sample(
     blocked: Container[str],
     ctx: Environment[T],

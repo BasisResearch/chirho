@@ -15,28 +15,28 @@ class Interpretation(Generic[T], Environment[Operation[T]]):
     pass
 
 
-@define(Operation)
-def get_model(model: Interpretation[T], op: Operation[T]) -> Term[T]:
-    return read(model, get_name(op))
+@define(Interpretation)
+class FreeInterpretation(Generic[T]):
+    pass
+
+
+@define(Interpretation)
+class HostInterpretation(Generic[T]):
+    pass
 
 
 @define(Operation)
-def union(model: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
+def compose(interpretation: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
     ...
 
 
 @define(Operation)
-def compose(model: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
+def product(interpretation: Interpretation[T], cointerpretation: Interpretation[T]) -> Interpretation[T]:
     ...
 
 
 @define(Operation)
-def product(model: Interpretation[T], comodel: Interpretation[T]) -> Interpretation[T]:
-    ...
-
-
-@define(Operation)
-def quotient(model: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
+def quotient(interpretation: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
     ...
 
 

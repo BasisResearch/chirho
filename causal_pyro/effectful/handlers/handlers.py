@@ -1,4 +1,4 @@
-from typing import Generic, Optional, TypeVar, List
+from typing import Generic, Hashable, Optional, TypeVar, List
 
 from ..ops.terms import Environment, Operation, Term, define, get_args, get_head
 from ..ops.interpretations import Interpretation, union, product, compose, quotient
@@ -8,8 +8,13 @@ from ..ops.interpreter import evaluate, apply
 S, T = TypeVar("S"), TypeVar("T")
 
 
+@define(Environment)
+class BaseEnvironment(Generic[T], dict[Hashable, T]):
+    pass
+
+
 @define(Interpretation)
-class BaseInterpretation:
+class BaseInterpretation(Generic[T], BaseEnvironment[Operation[T]]):
     pass
 
 
@@ -23,7 +28,7 @@ def evaluate_union_interpretation(ctx: Environment[T], interpretation: BaseInter
 
 
 class UnionInterpretation(BaseInterpretation):
-    interpretations: List[BaseInterpretation]
+    interpretations: List[BaseInterpretation]  
 
 
 @define(union)
