@@ -9,7 +9,7 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
 )
 from causal_pyro.counterfactual.ops import gen_intervene_name, split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import IndexSet, get_index_plates, scatter
+from causal_pyro.indexed.ops import IndexSet, cond, get_index_plates, scatter
 from causal_pyro.interventional.ops import intervene
 
 T = TypeVar("T")
@@ -65,6 +65,37 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             )
 
         msg["value"] = scatter(act_values, event_dim=msg["kwargs"].get("event_dim", 0))
+        msg["done"] = True
+
+    @staticmethod
+    @pyro.poutine.block(hide_types=["intervene"])
+    def _pyro_preempt(msg: Dict[str, Any]):
+        if msg["done"]:
+            return
+
+        obs, acts = msg["args"]
+        name = gen_intervene_name(msg["name"])
+
+        act_values = {IndexSet(**{name: {0}}): obs}
+        for i, act in enumerate(acts):
+            act_values[IndexSet(**{name: {i + 1}})] = intervene(
+                obs, act, **msg["kwargs"]
+            )
+
+        # TODO move this up into IndexPlatesMessenger?
+        p_preempt = obs.new_ones(len(acts) + 1) / (len(acts) + 1)  # TODO define outside
+        preempt_inds = pyro.sample(name, pyro.distributions.Categorical(p_preempt))
+
+        # TODO hide this loop in a cond implementation, as with scatter
+        event_dim = msg["kwargs"].get("event_dim", 0)
+        result = obs
+        for act_ind, act_value in act_values.items():
+            act_ind_: int = list(act_ind[name])[0]
+            result = cond(
+                result, act_value, preempt_inds == act_ind_, event_dim=event_dim
+            )
+
+        msg["value"] = result
         msg["done"] = True
 
 

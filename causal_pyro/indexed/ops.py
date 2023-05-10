@@ -248,6 +248,21 @@ def scatter(
     raise NotImplementedError
 
 
+@functools.singledispatch
+def cond(body, orelse: T, test, **kwargs):
+    """
+    Selection operation that is the sum-type analogue of :func:`scatter`
+    in the sense that where :func:`scatter` propagates both of its arguments,
+    :func:`cond` propagates only one, depending on the value of a boolean ``test`` .
+    For a given observation, action, and test, :func:`cond` returns
+    the action if the test is true, and the observation otherwise,
+    analogous to a Python conditional expression ``act if test else obs`` .
+    Unlike a Python conditional expression, however, the test may be a tensor,
+    and the observation and action are both evaluated, as with :func:`torch.where` .
+    """
+    raise NotImplementedError(f"cond not implemented for {type(body)}")
+
+
 @pyro.poutine.runtime.effectful(type="get_index_plates")
 def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
     raise NotImplementedError(

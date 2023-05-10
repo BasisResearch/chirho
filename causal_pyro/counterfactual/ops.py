@@ -28,3 +28,17 @@ def split(
         "No handler active for split. "
         "Did you forget to use MultiWorldCounterfactual?"
     )
+
+
+@pyro.poutine.runtime.effectful(type="preempt")
+def preempt(
+    obs: T, acts: Tuple[Intervention[T], ...], *, name: Optional[str] = None, **kwargs
+) -> T:
+    """
+    Effectful primitive operation for preempting values in a probabilistic program.
+    Without any enclosing handler, :func:`preempt` is identical to :func:`intervene` .
+    """
+    raise NotImplementedError(
+        "No handler active for preempt. "
+        "Did you forget to use MultiWorldCounterfactual?"
+    )
