@@ -55,9 +55,9 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
         if msg["done"]:
             return
 
+        # TODO factor this out of _pyro_split and _pyro_preempt?
         obs, acts = msg["args"]
         name = gen_intervene_name(msg["name"])
-
         act_values = {IndexSet(**{name: {0}}): obs}
         for i, act in enumerate(acts):
             act_values[IndexSet(**{name: {i + 1}})] = intervene(
@@ -73,17 +73,17 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
         if msg["done"]:
             return
 
+        # TODO factor this out of _pyro_split and _pyro_preempt?
         obs, acts = msg["args"]
         name = gen_intervene_name(msg["name"])
-
         act_values = {IndexSet(**{name: {0}}): obs}
         for i, act in enumerate(acts):
             act_values[IndexSet(**{name: {i + 1}})] = intervene(
                 obs, act, **msg["kwargs"]
             )
 
-        # TODO move this up into IndexPlatesMessenger?
-        p_preempt = obs.new_ones(len(acts) + 1) / (len(acts) + 1)  # TODO define outside
+        # TODO maybe move this up into IndexPlatesMessenger? or elsewhere in indexed?
+        p_preempt = obs.new_ones(len(acts) + 1) / (len(acts) + 1)  # TODO define outside _pyro_preempt
         preempt_inds = pyro.sample(name, pyro.distributions.Categorical(p_preempt))
 
         # TODO hide this loop in a cond implementation, as with scatter
