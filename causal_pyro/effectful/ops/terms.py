@@ -1,38 +1,20 @@
-from typing import Any, Callable, Container, ContextManager, Generic, NamedTuple, Optional, Protocol, Set, TypeVar, Union, runtime_checkable
+from typing import Any, Callable, Container, ContextManager, Generic, Iterable, NamedTuple, Optional, Protocol, Set, TypeVar, Union, runtime_checkable
 
 import functools
 
-from .bootstrap import define, define_operation, define_meta
+from .bootstrap import define
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-class Meta(Generic[T]):
-    pass
-
-
-define.register(Meta)(functools.partial(define_meta, Meta))
-Meta = define(Meta)(Meta)
-
-
-@define(Meta)
 class Symbol(Generic[T]):
     pass
 
 
-@define(Meta)
-class Atom(Generic[T]):
-    pass
-
-
-@define(Meta)
-class Operation(Generic[T]):
+class Operation(Protocol[T]):
     __symbol__: Symbol[T]
     __signature__: tuple[Symbol[T], ...]
-
-
-define.register(Operation)(functools.partial(define_operation, Operation))
 
 
 @define(Operation)
@@ -49,10 +31,9 @@ def get_signature(op: Operation[T]):
     raise TypeError(f"Expected operation, got {op}")
 
 
-@define(Meta)
 class Term(Protocol[T]):
     __head__: Operation[T]
-    __args__: tuple["Term[T]" | Atom[T], ...]
+    __args__: tuple["Term[T]" | T, ...]
 
 
 @define(Operation)
@@ -63,13 +44,12 @@ def get_head(term: Term[T]) -> Operation[T]:
 
 
 @define(Operation)
-def get_args(term: Term[T]) -> tuple[Term[T] | Atom[T], ...]:
+def get_args(term: Term[T]) -> Iterable[Term[T] | T]:
     if hasattr(term, "__args__"):
         return term.__args__
     raise TypeError(f"Expected term, got {term}")
 
 
-@define(Meta)
 class Environment(Protocol[T]):
     pass
 
@@ -104,21 +84,20 @@ def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
     return result
 
 
-@define(Meta)
-class Object(Protocol[T]):
+class Computation(Protocol[T]):
     __ctx__: Environment[T]
     __value__: Term[T]
 
 
 @define(Operation)
-def get_ctx(obj: Object[T]) -> Environment[T]:
+def get_ctx(obj: Computation[T]) -> Environment[T]:
     if hasattr(obj, "__ctx__"):
         return obj.__ctx__
     raise TypeError(f"Object {obj} has no context")
 
 
 @define(Operation)
-def get_value(obj: Object[T]) -> Term[T]:
+def get_value(obj: Computation[T]) -> Term[T]:
     if hasattr(obj, "__value__"):
         return obj.__value__
     raise TypeError(f"Object {obj} has no value")
