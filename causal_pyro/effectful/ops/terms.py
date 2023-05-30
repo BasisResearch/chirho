@@ -60,7 +60,7 @@ def read(ctx: Environment[T], key: Symbol[T]) -> T:
 
 
 @define(Operation)
-def write(ctx: Environment[T], key: Symbol[T], value: T) -> Environment[T]:
+def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
     ...
 
 
@@ -70,18 +70,17 @@ def keys(ctx: Environment[T]) -> Set[Symbol[T]]:
 
 
 @define(Operation)
+def write(ctx: Environment[T], key: Symbol[T], value: T) -> Environment[T]:
+    return union(ctx, Environment((key, value)))
+
+
+@define(Operation)
 def contains(ctx: Environment[T], key: Symbol[T]) -> bool:
     return key in keys(ctx)
 
 
-@define(Operation)
-def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
-    result = ctx
-    for key in keys(other):
-        if contains(result, key):
-            raise ValueError(f"Duplicate key: {key}")
-        result = write(result, key, read(other, key))
-    return result
+class Interpretation(Generic[T], Environment[Operation[T]]):
+    pass
 
 
 class Computation(Protocol[T]):
@@ -101,7 +100,3 @@ def get_value(obj: Computation[T]) -> Term[T]:
     if hasattr(obj, "__value__"):
         return obj.__value__
     raise TypeError(f"Object {obj} has no value")
-
-
-class Interpretation(Generic[T], Environment[Operation[T]]):
-    pass
