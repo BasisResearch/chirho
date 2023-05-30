@@ -1,85 +1,50 @@
-from typing import Any, Callable, Container, ContextManager, Generic, Hashable, NamedTuple, Protocol, Optional, Set, Type, TypeVar, Union, runtime_checkable
-
-import collections
-import functools
-
+from typing import Any, Callable, Container, ContextManager, Generic, Hashable, Mapping, NamedTuple, Protocol, Optional, Set, Type, TypeVar, Union, runtime_checkable
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-FORMDEFS: dict[Hashable, Callable[..., T]] = {}
+class Operation(Generic[T]):
 
-LATTICE: dict[Hashable, Set[Hashable]] = collections.defaultdict(set)
+    def __init__(self, body: Callable[..., T]):
+        self.body = body
 
-
-def define(t) -> Callable[..., T]:
-    return FORMDEFS[get_sym(t)]
-
-
-define.register = lambda k: lambda f: FORMDEFS.setdefault(k, f)
+    def __call__(self, *args: T, **kwargs: T) -> T:
+        return apply(self, *args, **kwargs)
 
 
-def define_meta(Meta, cls: Type[T]) -> Type[T]:
-
-    # name
-    name = get_sym(cls)
-
-    # register
-    LATTICE.setdefault(get_sym(Meta), set()).add(name)
-
-    # meta-circularity?
-    LATTICE.setdefault(name, set()).add(name)
-
-    return cls
+def get_op_body(op: Operation[T]) -> Callable[..., T]:
+    return op.body
 
 
-def define_operation(Operation, fn: Callable[..., T]):
-
-    # name
-    name = get_sym(fn)
-
-    # register
-    LATTICE[get_sym(Operation)].add(name)
-
-    # default model
-    define(name)(fn)
-
-    # # type judgement
-    # deftype(name)(...)
-
-    # # shape judgement
-    # defshape(name)(...)
-
-    # syntactic embedding
-    @functools.wraps(fn)
-    def _op_wrapper(*args, **kwargs) -> T:
-        return FORMDEFS[get_sym(name)](*args, **kwargs)
-
-    return _op_wrapper
+def apply(op: Operation[T], *args: T, **kwargs: T) -> T:
+    return get_op_body(op)(*args, **kwargs)
 
 
-@runtime_checkable
-class _Meta(Protocol):
-    __symbol__: Hashable
-    __defines__: "_Meta"
+def define_define(constructors: Mapping[Hashable, Callable]):
+
+    # define is the embedding function from host syntax to embedded syntax
+    def define(m: Type[T] | Hashable) -> Callable[..., Type[T]]:
+        return constructors.get(m, m)
+
+    def metadef(m: Type[T] | Hashable, fn: Optional[Callable[..., Type[T]]] = None):
+        if fn is None:  # curry
+            return lambda fn: metadef(m, fn)
+
+        constructors[m] = define(Operation)(fn)
+        return define(m)
+
+    metadef(define, metadef)
+    return define
 
 
-@functools.singledispatch
-def get_sym(tp) -> Hashable:
-    if isinstance(tp, _Meta):
-        return tp.__symbol__
-    if hasattr(tp, "__name__"):
-        return tp.__name__
-    raise NotImplementedError
+define = define_define({})
 
 
-@functools.singledispatch
-def get_defines(tp):
-    if isinstance(tp, _Meta):
-        return tp.__defines__
-    raise NotImplementedError
+@define(define)(Operation)
+def defop(fn: Callable[..., T]) -> Operation[T]:
+    return Operation(fn)
 
 
-def isdefinition(impl, interface) -> bool:
-    return get_sym(impl) in LATTICE.get(get_sym(interface), set()) or \
-        isdefinition(get_defines(impl), interface)
+# TODO self-hosting
+# apply = define(Operation)(apply)
+# get_op_body = define(Operation)(get_op_body)
