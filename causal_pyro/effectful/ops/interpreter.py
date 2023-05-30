@@ -1,8 +1,5 @@
 from typing import Generic, List, Type, TypeVar
 
-from causal_pyro.effectful.ops.bootstrap import define
-from causal_pyro.effectful.ops.terms import T, Environment, Operation, Term
-
 from .terms import Computation, Operation, Symbol, Term, Environment, Operation, define, get_head, get_args, get_ctx, get_value
 from .interpretations import Interpretation, get_name, read
 
