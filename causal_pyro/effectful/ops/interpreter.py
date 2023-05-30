@@ -11,6 +11,14 @@ S, T = TypeVar("S"), TypeVar("T")
 
 
 @define(Operation)
+def apply(interpretation: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
+    ctx = sum(*(get_ctx(arg) for arg in args), Environment())
+    return read(interpretation, get_name(op))(
+        *(traverse(interpretation, arg) for arg in args)
+    )
+
+
+@define(Operation)
 def traverse(interpretation: Interpretation[S], obj: Computation[T]) -> Computation[S]:
     """
     Generic meta-circular transformation of a term in a context.
@@ -26,26 +34,13 @@ def traverse(interpretation: Interpretation[S], obj: Computation[T]) -> Computat
 
 
 @define(Operation)
-def t_apply(interpretation: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
-    ctx = sum(*(get_ctx(arg) for arg in args), Environment())
-    return read(interpretation, get_name(op))(
-        *(traverse(interpretation, arg) for arg in args)
-    )
-
-
-@define(Operation)
 def evaluate(ctx: Environment[T], interpretation: Interpretation[T], term: Term[T]) -> T:
-    return read(interpretation, get_name(apply))(ctx, interpretation, get_head(term), *get_args(term))
-
-
-@define(Operation)
-def apply(ctx: Environment[T], interpretation: Interpretation[T], op: Operation[T], *args: Term[T]) -> T:
-    return read(interpretation, get_name(op))(*(evaluate(ctx, interpretation, arg) for arg in args))
+    return traverse(interpretation, Computation(ctx, term))
 
 
 @define(Operation)
 def typeof(ctx: Environment[Type[T]], judgements: Interpretation[Type[T]], term: Term[T]) -> Type[T]:
-    return evaluate(ctx, judgements, term)
+    return traverse(judgements, Computation(ctx, term))
 
 
 @define(Operation)
@@ -55,7 +50,7 @@ def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Environment[Type[
 
 @define(Operation)
 def substitute(term: Term[T], ctx: Environment[T]) -> Term[T]:
-    return evaluate(ctx, default, term)
+    return traverse((), Computation(ctx, term))
 
 
 @define(Operation)
@@ -65,4 +60,4 @@ def rename(term: Term[T], ctx: Environment[Symbol[T]]) -> Term[T]:
 
 @define(Operation)
 def pprint(reprs: Interpretation[str], term: Term[T]) -> str:
-    return evaluate({}, reprs, term)
+    return traverse(reprs, term)
