@@ -7,7 +7,7 @@ from .interpretations import Interpretation, get_name, read
 S, T = TypeVar("S"), TypeVar("T")
 
 
-@define(Operation)
+# @define(Operation)  # TODO self-hosting
 def apply(interpretation: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
     ctx = sum(*(get_ctx(arg) for arg in args), Environment())
     return read(interpretation, get_name(op))(
@@ -15,7 +15,7 @@ def apply(interpretation: Interpretation[S], op: Operation[T], *args: Computatio
     )
 
 
-@define(Operation)
+# @define(Operation)  # TODO self-hosting
 def traverse(interpretation: Interpretation[S], obj: Computation[T]) -> Computation[S]:
     """
     Generic meta-circular transformation of a term in a context.
@@ -28,6 +28,11 @@ def traverse(interpretation: Interpretation[S], obj: Computation[T]) -> Computat
         get_head(term),
         *(Computation(ctx, arg) for arg in get_args(term))
     )
+
+
+#########################################################
+# Special built-in interpretations
+#########################################################
 
 
 @define(Operation)
