@@ -101,3 +101,7 @@ def get_value(obj: Computation[T]) -> Term[T]:
     if hasattr(obj, "__value__"):
         return obj.__value__
     raise TypeError(f"Object {obj} has no value")
+
+
+class Interpretation(Generic[T], Environment[Operation[T]]):
+    pass
