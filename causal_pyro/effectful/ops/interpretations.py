@@ -22,17 +22,12 @@ def compose(interpretation: Interpretation[T], other: Interpretation[T]) -> Inte
 
 
 @define(Operation)
-def product(interpretation: Interpretation[T], cointerpretation: Interpretation[T]) -> Interpretation[T]:
-    ...
-
-
-@define(Operation)
-def quotient(interpretation: Interpretation[T], other: Interpretation[T]) -> Interpretation[T]:
-    ...
-
-
-@define(Operation)
 def cont(ctx: Environment[T], result: Optional[T]) -> T:
+    ...
+
+
+@define(Operation)
+def product(interpretation: Interpretation[T], cointerpretation: Interpretation[T]) -> Interpretation[T]:
     ...
 
 
