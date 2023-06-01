@@ -64,7 +64,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 # are still guaranteed to exit safely in the correct order.
                 self.plates[name] = self._enter_index_plate(
                     _LazyPlateMessenger(
-                        name="__index_plate__" + name,
+                        name=name,
                         dim=self.first_available_dim,
                         size=new_size,
                     )
