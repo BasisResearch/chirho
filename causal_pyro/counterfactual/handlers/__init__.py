@@ -49,9 +49,8 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["value"] = name if name is not None else cls.default_name
             msg["done"] = True
 
-    @staticmethod
     @pyro.poutine.block(hide_types=["intervene"])
-    def _pyro_split(msg: Dict[str, Any]) -> None:
+    def _pyro_split(self, msg: Dict[str, Any]) -> None:
         if msg["done"]:
             return
 
@@ -73,9 +72,8 @@ class SingleWorldCounterfactual(BaseCounterfactual):
     Trivial counterfactual handler that returns the intervened value.
     """
 
-    @staticmethod
     @pyro.poutine.block(hide_types=["intervene"])
-    def _pyro_split(msg: Dict[str, Any]) -> None:
+    def _pyro_split(self, msg: Dict[str, Any]) -> None:
         obs, acts = msg["args"]
         msg["value"] = intervene(obs, acts[-1], **msg["kwargs"])
         msg["done"] = True
