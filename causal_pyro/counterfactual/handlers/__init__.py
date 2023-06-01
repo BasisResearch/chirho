@@ -1,7 +1,6 @@
 from typing import Any, Dict, Optional, TypeVar
 
 import pyro
-import pyro.infer.reparam
 
 from causal_pyro.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
