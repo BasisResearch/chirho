@@ -15,6 +15,7 @@ EXTRAS_REQUIRE = [
     "pytorch-lightning",
     "scikit-image",
     "tensorboard",
+    "torchdiffeq",
 ]
 
 setup(
@@ -37,7 +38,8 @@ setup(
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE + [
+        "test": EXTRAS_REQUIRE
+        + [
             "pytest",
             "pytest-cov",
             "pytest-xdist",

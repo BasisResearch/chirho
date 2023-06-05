@@ -1,4 +1,17 @@
-from typing import Any, Callable, Generic, Hashable, Mapping, Optional, Protocol, Tuple, TypeVar, Union, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    Mapping,
+    Optional,
+    Protocol,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+    runtime_checkable,
+)
 
 import functools
 import pyro
@@ -7,18 +20,30 @@ S, T = TypeVar("S"), TypeVar("T")
 
 
 class State(Generic[T]):
-
     def __init__(self, **values: T):
+        self.__dict__["_values"]: dict[str, T] = {}
         for k, v in values.items():
             setattr(self, k, v)
 
+    @property
+    def keys(self) -> Set[str]:
+        return frozenset(self.__dict__["_values"].keys())
+
+    def __repr__(self) -> str:
+        return f"State({self.__dict__['_values']})"
+
+    def __str__(self) -> str:
+        return f"State({self.__dict__['_values']})"
+
     @pyro.poutine.runtime.effectful(type="state_setattr")
     def __setattr__(self, __name: str, __value: T) -> None:
-        return super().__setattr__(__name, __value)
-    
+        self.__dict__["_values"][__name] = __value
+
     @pyro.poutine.runtime.effectful(type="state_getattr")
-    def __getattribute__(self, __name: str) -> T:
-        return super().__getattribute__(__name)
+    def __getattr__(self, __name: str) -> T:
+        if __name in self.__dict__["_values"]:
+            return self.__dict__["_values"][__name]
+        return super().__getattr__(__name)
 
 
 @runtime_checkable
@@ -30,9 +55,11 @@ class Dynamics(Protocol[S, T]):
 def simulate_step(dynamics, curr_state: State[T], dt) -> None:
     pass
 
+
 @pyro.poutine.runtime.effectful(type="get_dt")
 def get_dt(dynamics, curr_state: State[T]):
     pass
+
 
 @functools.singledispatch
 def simulate(dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs):
@@ -40,10 +67,6 @@ def simulate(dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwar
     Simulate a dynamical system.
     """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
-
-
-
-
 
 
 # Copied from PyCIEMSS - SCRATCH BELOW
@@ -58,7 +81,6 @@ def simulate(dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwar
 #         dt = get_dt(dynamics, state)
 #         state = simulate_step(dynamics, initial_state, dt=dt)
 #         t = t + dt
-
 
 
 # def get_solution(self, method="dopri5") -> Solution:
