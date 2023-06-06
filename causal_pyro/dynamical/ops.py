@@ -15,6 +15,7 @@ from typing import (
 
 import functools
 import pyro
+import torch
 
 S, T = TypeVar("S"), TypeVar("T")
 
@@ -45,6 +46,21 @@ class State(Generic[T]):
             return self.__dict__["_values"][__name]
         return super().__getattr__(__name)
 
+    # def __getitem__(self, __name: str) -> T:
+    #     return self.__getattr__(__name)
+
+
+class Trajectory(State[T]):
+    def __init__(self, **values: T):
+        super().__init__(**values)
+
+    def __getitem__(self, item: int) -> State[T]:
+        assert isinstance(item, int), "We don't support slicing trajectories."
+        state = State()
+        for k, v in self.__dict__["_values"].items():
+            setattr(state, k, v[item])
+        return state
+
 
 @runtime_checkable
 class Dynamics(Protocol[S, T]):
@@ -62,11 +78,34 @@ def get_dt(dynamics, curr_state: State[T]):
 
 
 @functools.singledispatch
-def simulate(dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs):
+def simulate(
+    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+) -> Trajectory[T]:
     """
     Simulate a dynamical system.
     """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+
+
+@functools.singledispatch
+def concatenate(input1, input2):
+    """
+    Concatenate two Ts.
+    """
+    raise NotImplementedError(f"concatenate not implemented for type {type(input1)}")
+
+
+@concatenate.register
+def trajectory_concatenate(state1: Trajectory, state2: Trajectory) -> Trajectory:
+    """
+    Concatenate two states.
+    """
+    return Trajectory(
+        **{
+            k: torch.cat([getattr(state1, k)[:-1], getattr(state2, k)[1:]])
+            for k in state1.keys
+        }
+    )
 
 
 # Copied from PyCIEMSS - SCRATCH BELOW

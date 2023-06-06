@@ -15,7 +15,14 @@ import pyro
 import torch
 import torchdiffeq
 
-from causal_pyro.dynamical.ops import State, Dynamics, simulate, simulate_step
+from causal_pyro.dynamical.ops import (
+    State,
+    Dynamics,
+    simulate,
+    simulate_step,
+    Trajectory,
+    concatenate,
+)
 from causal_pyro.interventional.ops import intervene
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -55,7 +62,7 @@ def ode_simulate(
         **kwargs,
     )
 
-    trajectory = State()
+    trajectory = Trajectory()
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -127,33 +134,52 @@ def push_simulation(args) -> None:
 #             msg["args"] = (dynamics, initial_state, (tspan[0], self.time))
 
 
-class PointInterruption(pyro.pouting.messenger.Messenger):
+class PointInterruption(pyro.poutine.messenger.Messenger):
     """
     This effect handler interrupts a simulation at a given time, and
     splits it into two separate calls to `simulate` with tspan1 = [tspan[0], time]
     and tspan2 = (time, tspan[-1]].
     """
 
-    eps: float = 1e-10
-    time: float
+    def __init__(self, time: Union[float, torch.Tensor], eps: float = 1e-10):
+        self.time = torch.as_tensor(time)
+        self.eps = eps
 
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, tspan = msg["args"]
         if tspan[0] < self.time < tspan[-1]:
-            msg["args"] = (dynamics, initial_state, (tspan[0], self.time))
-            msg["remaining_tspan"] = (self.time, tspan[-1])
+            # Get a tspan that goes from tspan[0] to self.time
+
+            tspan1 = torch.cat((tspan[tspan < self.time], self.time[..., None]), dim=-1)
+            tspan2 = torch.cat(
+                (self.time[..., None], tspan[tspan >= self.time[..., None]]), dim=-1
+            )
+            msg["args"] = (dynamics, initial_state, tspan1)
+            msg["remaining_tspan"] = tspan2
+
+            # AZ.Q: We need this so that msg["fn"] is not executed
+            #  in the default_process_msg call after all the pre-procs
+            #  have fired? We don't want it to run there, we instead want
+            #  to split up the simulate operation and execute it in chunks
+            #  during post-processing.  (???)
+            #  Wait that's what ["done"] does. Not sure what "stop" does.
+            #  Mmm ya, because the simulate that gets called after the
+            #   pre processing will not be wrapped. So it will just execute
+            #   on whatever arguments exist in the msg.
             # msg["stop"] = True
+
             # push_simulation((dynamics, initial_state, (self.time, tspan[-1])))
 
     def _pyro_post_simulate(self, msg) -> None:
         dynamics = msg["args"][0]
         soln1 = msg["value"]
         tspan = msg["remaining_tspan"]
+        # This just prevents this handler from being "seen" in the handler
+        #  stack in contained simulate call — thereby preventing recursion
+        #  into this specific handler. -AZ (?)
         with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-            soln2 = simulate(dynamics, soln1, (self.time + self.eps, tspan[-1]))
+            soln2 = simulate(dynamics, soln1[-1], tspan)
             msg["value"] = concatenate(soln1, soln2)
-            # Cool stuff andy is working on below. But doesn't work yet.
-            # msg["fn"] = lambda list_of_args, list_of_kwargs:
 
 
 class PointIntervention(PointInterruption):
@@ -164,10 +190,9 @@ class PointIntervention(PointInterruption):
     and tspan2 = (time, tspan[-1]].
     """
 
-    eps: float = 1e-10
-    time: float
-    # TODO: type of intervention
-    intervention: State[torch.Tensor]
+    def __init__(self, time: float, intervention: State[torch.Tensor], eps=1e-10):
+        super().__init__(time, eps)
+        self.intervention = intervention
 
     def _pyro_post_simulate(self, msg) -> None:
         _, current_state, _ = msg["args"]
