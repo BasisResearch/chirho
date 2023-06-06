@@ -51,11 +51,13 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
 
     @staticmethod
     def _pyro_split(msg: Dict[str, Any]) -> None:
-        msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
+        if msg["kwargs"].get("name", None) is None:
+            msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
     @staticmethod
     def _pyro_preempt(msg: Dict[str, Any]):
-        msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
+        if msg["kwargs"].get("name", None) is None:
+            msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
 
 class SingleWorldCounterfactual(BaseCounterfactual):
