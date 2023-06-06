@@ -4,7 +4,8 @@ from typing import Any, Dict, Hashable, List, Optional
 import pyro
 import torch
 
-from causal_pyro.indexed.internals import _LazyPlateMessenger, get_sample_msg_device
+from causal_pyro.indexed.ops import union
+from causal_pyro.indexed.internals import _LazyPlateMessenger, add_indices, get_sample_msg_device
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
@@ -78,6 +79,10 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                     <= max(indices)
                     < self.plates[name].size
                 ), f"cannot add {name}={indices} to {self.plates[name].size}"
+
+    def _pyro_scatter_n(self, msg: Dict[str, Any]) -> None:
+        add_indices(union(*msg["args"][0].keys()))
+        msg["stop"] = True
 
 
 class DependentMaskMessenger(pyro.poutine.messenger.Messenger):

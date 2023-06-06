@@ -50,53 +50,12 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["done"] = True
 
     @staticmethod
-    @pyro.poutine.block(hide_types=["intervene"])
     def _pyro_split(msg: Dict[str, Any]) -> None:
-        if msg["done"]:
-            return
-
-        # TODO factor this out of _pyro_split and _pyro_preempt?
-        obs, acts = msg["args"]
-        name = gen_intervene_name(msg["name"])
-        act_values = {IndexSet(**{name: {0}}): obs}
-        for i, act in enumerate(acts):
-            act_values[IndexSet(**{name: {i + 1}})] = intervene(
-                obs, act, **msg["kwargs"]
-            )
-
-        msg["value"] = scatter(act_values, event_dim=msg["kwargs"].get("event_dim", 0))
-        msg["done"] = True
+        msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
     @staticmethod
-    @pyro.poutine.block(hide_types=["intervene"])
     def _pyro_preempt(msg: Dict[str, Any]):
-        if msg["done"]:
-            return
-
-        # TODO factor this out of _pyro_split and _pyro_preempt?
-        obs, acts = msg["args"]
-        name = gen_intervene_name(msg["name"])
-        act_values = {IndexSet(**{name: {0}}): obs}
-        for i, act in enumerate(acts):
-            act_values[IndexSet(**{name: {i + 1}})] = intervene(
-                obs, act, **msg["kwargs"]
-            )
-
-        # TODO maybe move this up into IndexPlatesMessenger? or elsewhere in indexed?
-        p_preempt = obs.new_ones(len(acts) + 1) / (len(acts) + 1)  # TODO define outside _pyro_preempt
-        preempt_inds = pyro.sample(name, pyro.distributions.Categorical(p_preempt))
-
-        # TODO hide this loop in a cond implementation, as with scatter
-        event_dim = msg["kwargs"].get("event_dim", 0)
-        result = obs
-        for act_ind, act_value in act_values.items():
-            act_ind_: int = list(act_ind[name])[0]
-            result = cond(
-                result, act_value, preempt_inds == act_ind_, event_dim=event_dim
-            )
-
-        msg["value"] = result
-        msg["done"] = True
+        msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
 
 class SingleWorldCounterfactual(BaseCounterfactual):

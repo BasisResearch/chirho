@@ -248,6 +248,25 @@ def scatter(
     raise NotImplementedError
 
 
+@scatter.register(dict)
+@pyro.poutine.runtime.effectful(type="scatter_n")
+def _scatter_n(
+    partitioned_values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs
+):
+    """
+    Scatters a dictionary of disjoint masked values into a single value
+    using repeated calls to :func:``scatter``.
+
+    :param partitioned_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    assert len(partitioned_values) > 0
+    assert all(isinstance(k, IndexSet) for k in partitioned_values)
+    for indices, value in partitioned_values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
 @functools.singledispatch
 def cond(body, orelse: T, test, **kwargs):
     """
@@ -261,6 +280,17 @@ def cond(body, orelse: T, test, **kwargs):
     and the observation and action are both evaluated, as with :func:`torch.where` .
     """
     raise NotImplementedError(f"cond not implemented for {type(body)}")
+
+
+@cond.register(dict)
+@pyro.poutine.runtime.effectful(type="cond_n")
+def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kwargs) -> T:
+    assert len(values) > 0
+    assert all(isinstance(k, IndexSet) for k in values.keys())
+    for indices, value in values.items():
+        indices_: int = list(indices.values())[0][0]
+        result = cond(value, case == indices_, result=result, **kwargs)
+    return result
 
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
