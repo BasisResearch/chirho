@@ -4,7 +4,6 @@ from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar
 
 import pyro
 import torch
-from pyro.poutine.indep_messenger import CondIndepStackFrame
 
 T = TypeVar("T")
 
@@ -293,11 +292,8 @@ def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kw
 
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
-    raise NotImplementedError(
-        "No handler active for get_index_plates."
-        "Did you forget to use MultiWorldCounterfactual?"
-    )
+def get_index_plates() -> Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]:
+    return {}
 
 
 def indexset_as_mask(

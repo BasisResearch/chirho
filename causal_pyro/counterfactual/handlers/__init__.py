@@ -20,17 +20,10 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
     Base class for counterfactual handlers.
     """
 
-    default_name: str = "intervened"
-
     def __init__(self, config: Optional[CondStrategy] = None):
         if config is None:
             config = AutoFactualConditioning()
         super().__init__(config=config)
-
-    @staticmethod
-    def _pyro_get_index_plates(msg: Dict[str, Any]) -> None:
-        msg["stop"], msg["done"] = True, True
-        msg["value"] = {}
 
     @staticmethod
     def _pyro_intervene(msg: Dict[str, Any]) -> None:
@@ -40,13 +33,6 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
             acts = acts(obs) if callable(acts) else acts
             acts = (acts,) if not isinstance(acts, tuple) else acts
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
-            msg["done"] = True
-
-    @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        if not msg["done"]:
-            (name,) = msg["args"]
-            msg["value"] = name if name is not None else cls.default_name
             msg["done"] = True
 
     @staticmethod
@@ -88,6 +74,8 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
 
 
 class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    default_name: str = "intervened"
+
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         (name,) = msg["args"]
@@ -101,6 +89,8 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    default_name: str = "intervened"
+
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         msg["value"] = cls.default_name
