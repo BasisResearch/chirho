@@ -266,18 +266,18 @@ def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwarg
 
 
 @functools.singledispatch
-def cond(body, orelse: T, test, **kwargs):
+def cond(fst, snd: T, case, **kwargs):
     """
     Selection operation that is the sum-type analogue of :func:`scatter`
     in the sense that where :func:`scatter` propagates both of its arguments,
-    :func:`cond` propagates only one, depending on the value of a boolean ``test`` .
-    For a given observation, action, and test, :func:`cond` returns
-    the action if the test is true, and the observation otherwise,
-    analogous to a Python conditional expression ``act if test else obs`` .
-    Unlike a Python conditional expression, however, the test may be a tensor,
-    and the observation and action are both evaluated, as with :func:`torch.where` .
+    :func:`cond` propagates only one, depending on the value of a boolean ``case`` .
+    For a given fst, snd, and case, :func:`cond` returns
+    snd if the case is true, and fst otherwise,
+    analogous to a Python conditional expression ``snd if case else fst`` .
+    Unlike a Python conditional expression, however, the case may be a tensor,
+    and both branches evaluated, as with :func:`torch.where` .
     """
-    raise NotImplementedError(f"cond not implemented for {type(body)}")
+    raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
 @cond.register(dict)
@@ -287,7 +287,7 @@ def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kw
     assert all(isinstance(k, IndexSet) for k in values.keys())
     for indices, value in values.items():
         tst = functools.reduce(operator.or_, [case == index for index in indices])
-        result = cond(value, tst, result=result, **kwargs)
+        result = cond(value, result if result is not None else value, tst, **kwargs)
     return result
 
 

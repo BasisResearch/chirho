@@ -184,26 +184,26 @@ def _indices_of_distribution(
 @cond.register(float)
 @cond.register(bool)
 def _cond_number(
-    obs: Union[bool, numbers.Number],
-    act: Union[bool, numbers.Number, torch.Tensor],
-    test: Union[bool, torch.Tensor],
+    fst: Union[bool, numbers.Number],
+    snd: Union[bool, numbers.Number, torch.Tensor],
+    case: Union[bool, torch.Tensor],
     **kwargs,
 ) -> torch.Tensor:
     return cond(
-        torch.as_tensor(obs), torch.as_tensor(act), torch.as_tensor(test), **kwargs
+        torch.as_tensor(fst), torch.as_tensor(snd), torch.as_tensor(case), **kwargs
     )
 
 
 @cond.register
 def _cond_tensor(
-    obs: torch.Tensor,
-    act: torch.Tensor,
-    test: torch.Tensor,
+    fst: torch.Tensor,
+    snd: torch.Tensor,
+    case: torch.Tensor,
     *,
     event_dim: int = 0,
     **kwargs,
 ) -> torch.Tensor:
-    return torch.where(test[(...,) + (None,) * event_dim], act, obs)
+    return torch.where(case[(...,) + (None,) * event_dim], snd, fst)
 
 
 class _LazyPlateMessenger(IndepMessenger):
