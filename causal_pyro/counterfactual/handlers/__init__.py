@@ -9,7 +9,7 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
 )
 from causal_pyro.counterfactual.ops import gen_intervene_name, split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import IndexSet, cond, get_index_plates, scatter
+from causal_pyro.indexed.ops import get_index_plates
 from causal_pyro.interventional.ops import intervene
 
 T = TypeVar("T")

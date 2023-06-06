@@ -1,4 +1,5 @@
 import functools
+import operator
 from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import pyro
@@ -250,9 +251,7 @@ def scatter(
 
 @scatter.register(dict)
 @pyro.poutine.runtime.effectful(type="scatter_n")
-def _scatter_n(
-    partitioned_values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs
-):
+def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
     """
     Scatters a dictionary of disjoint masked values into a single value
     using repeated calls to :func:``scatter``.
@@ -260,9 +259,9 @@ def _scatter_n(
     :param partitioned_values: A dictionary mapping index sets to values.
     :return: A single value.
     """
-    assert len(partitioned_values) > 0
-    assert all(isinstance(k, IndexSet) for k in partitioned_values)
-    for indices, value in partitioned_values.items():
+    assert len(values) > 0
+    assert all(isinstance(k, IndexSet) for k in values)
+    for indices, value in values.items():
         result = scatter(value, indices, result=result, **kwargs)
     return result
 
@@ -284,12 +283,12 @@ def cond(body, orelse: T, test, **kwargs):
 
 @cond.register(dict)
 @pyro.poutine.runtime.effectful(type="cond_n")
-def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kwargs) -> T:
+def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kwargs):
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     for indices, value in values.items():
-        indices_: int = list(indices.values())[0][0]
-        result = cond(value, case == indices_, result=result, **kwargs)
+        tst = functools.reduce(operator.or_, [case == index for index in indices])
+        result = cond(value, tst, result=result, **kwargs)
     return result
 
 
