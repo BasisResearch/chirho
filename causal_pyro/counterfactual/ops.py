@@ -1,6 +1,7 @@
 from typing import Optional, Tuple, TypeVar
 
 import pyro
+import torch
 
 from causal_pyro.indexed.ops import IndexSet, cond, scatter
 from causal_pyro.interventional.ops import Intervention, intervene
@@ -37,7 +38,6 @@ def choose_preempt_case(num_worlds: int, case: Optional[T] = None, **kwargs) -> 
     """
     Choose a case for :func:`preempt` .
     """
-    import torch
     name = kwargs.get("name", "case")
     return pyro.sample(name, pyro.distributions.Categorical(torch.ones(num_worlds)).mask(False), obs=case)
 
