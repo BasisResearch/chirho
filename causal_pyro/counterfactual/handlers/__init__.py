@@ -15,7 +15,7 @@ from causal_pyro.interventional.ops import intervene
 T = TypeVar("T")
 
 
-class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
+class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
@@ -60,7 +60,7 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
 
-class SingleWorldCounterfactual(BaseCounterfactual):
+class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the intervened value.
     """
@@ -74,7 +74,7 @@ class SingleWorldCounterfactual(BaseCounterfactual):
         msg["stop"] = True
 
 
-class SingleWorldFactual(BaseCounterfactual):
+class SingleWorldFactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the observed value.
     """
@@ -87,7 +87,7 @@ class SingleWorldFactual(BaseCounterfactual):
         msg["stop"] = True
 
 
-class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
+class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         (name,) = msg["args"]
@@ -100,7 +100,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
         msg["done"] = True
 
 
-class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
+class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
     @classmethod
     def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
         msg["value"] = cls.default_name
