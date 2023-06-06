@@ -197,3 +197,19 @@ class PointIntervention(PointInterruption):
     def _pyro_post_simulate(self, msg) -> None:
         msg["remaining_init"] = intervene(msg["value"][-1], self.intervention)
         return super()._pyro_post_simulate(msg)
+
+
+class PointObservation(PointInterruption):
+    def __init__(
+        self,
+        time: float,
+        loglikelihood: Callable[[State[torch.Tensor]], torch.Tensor],
+        eps: float = 1e-10,
+    ):
+        super().__init__(time, eps)
+        self.loglikelihood = loglikelihood
+
+    def _pyro_post_simulate(self, msg) -> None:
+        curr_state = msg["value"][-1]
+        pyro.factor(f"obs_{self.time}", self.loglikelihood(curr_state))
+        return super()._pyro_post_simulate(msg)
