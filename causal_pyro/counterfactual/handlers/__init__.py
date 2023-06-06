@@ -55,7 +55,7 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
     @staticmethod
-    def _pyro_preempt(msg: Dict[str, Any]):
+    def _pyro_preempt(msg: Dict[str, Any]) -> None:
         if msg["kwargs"].get("name", None) is None:
             msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
