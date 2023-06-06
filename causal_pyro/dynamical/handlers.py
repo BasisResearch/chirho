@@ -24,6 +24,7 @@ from causal_pyro.dynamical.ops import (
     concatenate,
 )
 from causal_pyro.interventional.ops import intervene
+from causal_pyro.interventional.handlers import do
 
 S, T = TypeVar("S"), TypeVar("T")
 
@@ -157,29 +158,28 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
             msg["args"] = (dynamics, initial_state, tspan1)
             msg["remaining_tspan"] = tspan2
 
-            # AZ.Q: We need this so that msg["fn"] is not executed
-            #  in the default_process_msg call after all the pre-procs
-            #  have fired? We don't want it to run there, we instead want
-            #  to split up the simulate operation and execute it in chunks
-            #  during post-processing.  (???)
-            #  Wait that's what ["done"] does. Not sure what "stop" does.
-            #  Mmm ya, because the simulate that gets called after the
-            #   pre processing will not be wrapped. So it will just execute
-            #   on whatever arguments exist in the msg.
-            # msg["stop"] = True
-
             # push_simulation((dynamics, initial_state, (self.time, tspan[-1])))
 
     def _pyro_post_simulate(self, msg) -> None:
         dynamics = msg["args"][0]
         soln1 = msg["value"]
-        tspan = msg["remaining_tspan"]
+        remaining_init = msg["remaining_init"] if "remaining_init" in msg else soln1[-1]
         # This just prevents this handler from being "seen" in the handler
         #  stack in contained simulate call — thereby preventing recursion
         #  into this specific handler. -AZ (?)
         with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-            soln2 = simulate(dynamics, soln1[-1], tspan)
+            soln2 = simulate(dynamics, remaining_init, msg["remaining_tspan"])
             msg["value"] = concatenate(soln1, soln2)
+
+
+@intervene.register(State)
+def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
+    new_state = State()
+    for k in obs.keys:
+        setattr(
+            new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
+        )
+    return new_state
 
 
 class PointIntervention(PointInterruption):
@@ -195,6 +195,5 @@ class PointIntervention(PointInterruption):
         self.intervention = intervention
 
     def _pyro_post_simulate(self, msg) -> None:
-        _, current_state, _ = msg["args"]
-        msg["args"][1] = intervene(current_state, self.intervention)
+        msg["remaining_init"] = intervene(msg["value"][-1], self.intervention)
         return super()._pyro_post_simulate(msg)
