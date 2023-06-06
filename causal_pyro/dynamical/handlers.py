@@ -40,7 +40,8 @@ class ODEDynamics(pyro.nn.PyroModule):
         return tuple(getattr(ddt, var, 0.0) for var in var_order)
 
 
-@simulate.register
+@simulate.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate")
 def ode_simulate(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
@@ -50,7 +51,7 @@ def ode_simulate(
         functools.partial(dynamics._deriv, var_order),
         tuple(getattr(initial_state, v) for v in var_order),
         timespan,
-        **kwargs
+        **kwargs,
     )
 
     trajectory = State()
@@ -58,3 +59,42 @@ def ode_simulate(
         setattr(trajectory, var, soln)
 
     return trajectory
+
+
+@pyro.poutine.runtime.effectful(type="simulate_to_next_event")
+def simulate_to_next_event(
+    dynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+):
+    """Simulate to next event, whatever it is."""
+    ...
+
+
+class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
+    @functools.singledispatchmethod
+    def _prepare_event(self, event) -> None:
+        raise NotImplementedError(f"Event type {type(event)} not supported")
+
+    def _pyro_simulate(self, msg) -> None:
+        dynamics, result, timespan = msg["args"]
+        while True:
+            try:
+                result = simulate_to_next_event(dynamics, result, timespan)
+            except StopSimulation:
+                break
+
+        msg["value"] = result
+        msg["done"] = True
+
+
+class PointIntervention(pyro.poutine.messenger.Messenger):
+    eps: float = 1e-10
+    time: float
+    intervention: State[torch.Tensor]
+
+    def _pyro_simulate_to_next_event(self, msg) -> None:
+        dynamics, initial_state, tspan = msg["args"]
+        if tspan[0] < self.time < tspan[-1]:
+            msg["args"] = (dynamics, initial_state, (tspan[0], self.time - self.eps))
+        elif self.time == tspan[0]:
+            initial_state = intervene(initial_state, act=self.intervention)
+            msg["args"] = (dynamics, initial_state, tspan)
