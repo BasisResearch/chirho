@@ -9,16 +9,6 @@ from causal_pyro.interventional.ops import Intervention, intervene
 S, T = TypeVar("S"), TypeVar("T")
 
 
-@pyro.poutine.runtime.effectful(type="gen_intervene_name")
-def gen_intervene_name(name: Optional[str] = None) -> str:
-    if name is not None:
-        return name
-    raise NotImplementedError(
-        "No handler active for gen_intervene_name. "
-        "Did you forget to use MultiWorldCounterfactual?"
-    )
-
-
 @pyro.poutine.runtime.effectful(type="split")
 @pyro.poutine.block(hide_types=["intervene"])
 def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:

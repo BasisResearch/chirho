@@ -7,7 +7,7 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import gen_intervene_name, split
+from causal_pyro.counterfactual.ops import split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.indexed.ops import get_index_plates
 from causal_pyro.interventional.ops import intervene
@@ -34,16 +34,6 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
             acts = (acts,) if not isinstance(acts, tuple) else acts
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
             msg["done"] = True
-
-    @staticmethod
-    def _pyro_split(msg: Dict[str, Any]) -> None:
-        if msg["kwargs"].get("name", None) is None:
-            msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
-
-    @staticmethod
-    def _pyro_preempt(msg: Dict[str, Any]) -> None:
-        if msg["kwargs"].get("name", None) is None:
-            msg["kwargs"]["name"] = msg["name"] = gen_intervene_name(msg["name"])
 
 
 class SingleWorldCounterfactual(BaseCounterfactualMessenger):
@@ -77,21 +67,17 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
     default_name: str = "intervened"
 
     @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        (name,) = msg["args"]
-        if name is None:
-            name = cls.default_name
+    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+        name = msg["name"] if msg["name"] is not None else cls.default_name
         index_plates = get_index_plates()
         if name in index_plates:
             name = f"{name}_{len(index_plates)}"
-        msg["value"] = name
-        msg["done"] = True
+        msg["kwargs"]["name"] = msg["name"] = name
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
     default_name: str = "intervened"
 
     @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        msg["value"] = cls.default_name
-        msg["done"] = True
+    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+        msg["kwargs"]["name"] = msg["name"] = cls.default_name
