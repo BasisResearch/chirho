@@ -47,7 +47,6 @@ def choose_preempt_case(num_worlds: int, case: Optional[T] = None, **kwargs) -> 
 def preempt(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     """
     Effectful primitive operation for preempting values in a probabilistic program.
-    Without any enclosing handler, :func:`preempt` is identical to :func:`intervene` .
     """
     name = kwargs.get("name", None)
     act_values = {IndexSet(**{name: {0}}): obs}
