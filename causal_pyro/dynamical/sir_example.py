@@ -3,7 +3,7 @@ import torch
 from pyro.distributions import constraints
 
 from causal_pyro.dynamical.ops import State, simulate
-from causal_pyro.dynamical.handlers import ODEDynamics
+from causal_pyro.dynamical.handlers import ODEDynamics, PointInterruption
 
 
 class SimpleSIRDynamics(ODEDynamics):
@@ -26,6 +26,6 @@ if __name__ == "__main__":
 
     init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
     tspan = torch.tensor([1.0, 2.0, 3.0])
-
-    result = simulate(SIR_simple_model, init_state, tspan)
+    with PointInterruption(time=2.0):
+        result = simulate(SIR_simple_model, init_state, tspan)
     print(type(result), result, result.keys)
