@@ -5,7 +5,8 @@ import pyro
 from causal_pyro.indexed.ops import IndexSet, cond, scatter
 from causal_pyro.interventional.ops import Intervention, intervene
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 @pyro.poutine.runtime.effectful(type="split")
