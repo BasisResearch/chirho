@@ -157,6 +157,7 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
             )
             msg["args"] = (dynamics, initial_state, tspan1)
             msg["remaining_tspan"] = tspan2
+            msg["stop"] = True
 
             # push_simulation((dynamics, initial_state, (self.time, tspan[-1])))
 
