@@ -25,7 +25,7 @@ from .dynamical_fixtures import sir_ode, check_trajectories_match, check_traject
 logger = logging.getLogger(__name__)
 
 # Points at which to measure the state of the system.
-tspan_values = torch.tensor([1.0, 3.0])
+tspan_values = torch.tensor([1.0, 2.0, 3.0])
 
 # Initial state of the system.
 init_state_values = State(S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0))
@@ -72,9 +72,11 @@ def test_nested_point_interventions_cause_difference(
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # # DELETE THIS. debugging. If this is active, then we pass everything except those that fail
-    #  due to the length bug.
-    # if intervene_time1 >= intervene_time2:
-    #     return
+    # #  due to the length bug.
+    # if intervene_time1 == intervene_time2:
+    #     pytest.skip("DEBUG")
+    # if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
+    #     pytest.skip("DEBUG")
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with PointIntervention(time=intervene_time1, intervention=intervene_state1):
