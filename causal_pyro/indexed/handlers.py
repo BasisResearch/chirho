@@ -4,8 +4,12 @@ from typing import Any, Dict, Hashable, List, Optional
 import pyro
 import torch
 
+from causal_pyro.indexed.internals import (
+    _LazyPlateMessenger,
+    add_indices,
+    get_sample_msg_device,
+)
 from causal_pyro.indexed.ops import union
-from causal_pyro.indexed.internals import _LazyPlateMessenger, add_indices, get_sample_msg_device
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):

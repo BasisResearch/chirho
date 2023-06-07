@@ -286,13 +286,17 @@ def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kw
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     for indices, value in values.items():
-        tst = functools.reduce(operator.or_, [case == index for index in next(iter(indices.values()))])
+        tst = functools.reduce(
+            operator.or_, [case == index for index in next(iter(indices.values()))]
+        )
         result = cond(result if result is not None else value, value, tst, **kwargs)
     return result
 
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]:
+def get_index_plates() -> (
+    Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]
+):
     return {}
 
 

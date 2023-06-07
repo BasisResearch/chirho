@@ -25,7 +25,9 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
 
 @pyro.poutine.runtime.effectful(type="preempt")
 @pyro.poutine.block(hide_types=["intervene"])
-def preempt(obs: T, acts: Tuple[Intervention[T], ...], case: Optional[S] = None, **kwargs) -> T:
+def preempt(
+    obs: T, acts: Tuple[Intervention[T], ...], case: Optional[S] = None, **kwargs
+) -> T:
     """
     Effectful primitive operation for preempting values in a probabilistic program.
     """

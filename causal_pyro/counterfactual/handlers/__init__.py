@@ -39,7 +39,9 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
     @staticmethod
     def _pyro_preempt(msg: Dict[str, Any]) -> None:
         obs, acts, case = msg["args"]
-        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1)).mask(False)
+        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1)).mask(
+            False
+        )
         case = pyro.sample(f"__split_{msg['name']}", case_dist, obs=case)
         msg["args"] = (obs, acts, case)
 

@@ -383,7 +383,11 @@ def test_index_plate_names():
 def test_cond_tensor_associate(enum_shape, batch_shape, event_shape):
     cf_dim = -1
     event_dim = len(event_shape)
-    ind1, ind2, ind3 = IndexSet(new_dim={0}), IndexSet(new_dim={1}), IndexSet(new_dim={2})
+    ind1, ind2, ind3 = (
+        IndexSet(new_dim={0}),
+        IndexSet(new_dim={1}),
+        IndexSet(new_dim={2}),
+    )
     name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
 
     case = torch.randint(0, 3, enum_shape + batch_shape)
@@ -395,7 +399,9 @@ def test_cond_tensor_associate(enum_shape, batch_shape, event_shape):
         for name, dim in name_to_dim.items():
             add_indices(IndexSet(**{name: set(range(max(3, batch_shape[dim])))}))
 
-        actual_full = cond({ind1: value1, ind2: value2, ind3: value3}, case, event_dim=event_dim)
+        actual_full = cond(
+            {ind1: value1, ind2: value2, ind3: value3}, case, event_dim=event_dim
+        )
 
         actual_left = cond(
             cond(value1, value2, case == 1, event_dim=event_dim),
