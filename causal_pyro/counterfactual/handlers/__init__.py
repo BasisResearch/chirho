@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, TypeVar
+from typing import Any, Dict, Generic, Hashable, Mapping, Optional, TypeVar
 
 import pyro
 import torch
@@ -8,10 +8,10 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import split
+from causal_pyro.counterfactual.ops import preempt, split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.indexed.ops import get_index_plates
-from causal_pyro.interventional.ops import intervene
+from causal_pyro.interventional.ops import Intervention, intervene
 
 T = TypeVar("T")
 
@@ -39,10 +39,9 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
     @staticmethod
     def _pyro_preempt(msg: Dict[str, Any]) -> None:
         obs, acts, case = msg["args"]
-        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1)).mask(
-            False
-        )
-        case = pyro.sample(f"__split_{msg['name']}", case_dist, obs=case)
+        msg["kwargs"]["name"] = f"__split_{msg['name']}"
+        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1))
+        case = pyro.sample(msg["kwargs"]["name"], case_dist.mask(False), obs=case)
         msg["args"] = (obs, acts, case)
 
 
@@ -91,3 +90,24 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
         msg["kwargs"]["name"] = msg["name"] = cls.default_name
+
+
+class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
+    actions: Mapping[Hashable, Intervention[T]]
+
+    def __init__(self, actions: Mapping[Hashable, Intervention[T]]):
+        self.actions = actions
+        super().__init__()
+
+    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+        try:
+            action = self.actions[msg["name"]]
+        except KeyError:
+            return
+        msg["value"] = preempt(
+            msg["value"],
+            (action,),
+            None,
+            event_dim=len(msg["fn"].event_shape),
+            name=msg["name"],
+        )
