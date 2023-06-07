@@ -164,12 +164,14 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
         dynamics = msg["args"][0]
         soln1 = msg["value"]
         remaining_init = msg["remaining_init"] if "remaining_init" in msg else soln1[-1]
-        # This just prevents this handler from being "seen" in the handler
-        #  stack in contained simulate call — thereby preventing recursion
-        #  into this specific handler. -AZ (?)
-        with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-            soln2 = simulate(dynamics, remaining_init, msg["remaining_tspan"])
-            msg["value"] = concatenate(soln1, soln2)
+
+        if "remaining_tspan" in msg:
+            # This just prevents this handler from being "seen" in the handler
+            #  stack in contained simulate call — thereby preventing recursion
+            #  into this specific handler. -AZ (?)
+            with pyro.poutine.messenger.block_messengers(lambda m: m is self):
+                soln2 = simulate(dynamics, remaining_init, msg["remaining_tspan"])
+                msg["value"] = concatenate(soln1, soln2)
 
 
 @intervene.register(State)
