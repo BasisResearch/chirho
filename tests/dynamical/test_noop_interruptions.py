@@ -20,7 +20,7 @@ from causal_pyro.dynamical.handlers import (
     simulate,
 )
 
-from .dynamical_fixtures import sir_ode
+from .dynamical_fixtures import sir_ode, check_trajectories_match
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +39,6 @@ intervene_states = [
 ]
 
 
-def check_trajectories_match(traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]):
-
-    assert traj2.keys == traj1.keys, "Trajectories have different state variables."
-
-    for k in traj1.keys:
-        assert len(getattr(traj2, k)) == len(getattr(traj1, k)),\
-            f"Trajectories have different lengths for variable {k}."
-        assert torch.allclose(getattr(traj2, k), getattr(traj1, k)),\
-            f"Trajectories differ in state trajectory of variable {k}."
-
-    return True
-
-
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_noop_point_interruptions(sir_ode, init_state, tspan):
@@ -67,19 +54,21 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
     # Test with two standard point interruptions.
     with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/4 of the way through the timespan
         with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
-            result_double_pint = simulate(sir_ode, init_state, tspan)
+            result_double_pint1 = simulate(sir_ode, init_state, tspan)
 
     # FIXME AZ-yu28184 This test fails rn because the state of the system at the the point interruption is included in the
     #  returned vector of measurements. TODO parse that out so that user gets what they ask for?
     #  Odd that this only procs for the double point interruption case
-    assert check_trajectories_match(observational_execution_result, result_double_pint)
+    assert check_trajectories_match(observational_execution_result, result_double_pint1)
 
     # Test with two standard point interruptions, in a different order.
     with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
         with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/3
-            result_double_pint = simulate(sir_ode, init_state, tspan)
+            result_double_pint2 = simulate(sir_ode, init_state, tspan)
 
-    assert check_trajectories_match(observational_execution_result, result_double_pint)
+    assert check_trajectories_match(observational_execution_result, result_double_pint2)
+
+    # TODO test pointinterruptions when they are out of scope of the timespan
 
 
 @pytest.mark.parametrize("init_state", [init_state_values])

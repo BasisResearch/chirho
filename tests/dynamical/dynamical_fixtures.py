@@ -42,3 +42,42 @@ class SimpleSIRDynamics(ODEDynamics):
 def sir_ode():
     return SimpleSIRDynamics()
 
+
+def check_trajectory_keys_match(traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]):
+    assert traj2.keys == traj1.keys, "Trajectories have different state variables."
+    return True
+
+
+def check_trajectory_length_match(traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]):
+    for k in traj1.keys:
+        assert len(getattr(traj2, k)) == len(getattr(traj1, k)),\
+            f"Trajectories have different lengths for variable {k}."
+    return True
+
+
+def check_trajectories_match(
+        traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]):
+
+    assert check_trajectory_keys_match(traj1, traj2)
+
+    assert check_trajectory_length_match(traj1, traj2)
+
+    for k in traj1.keys:
+        assert torch.allclose(getattr(traj2, k), getattr(traj1, k)),\
+            f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+
+    return True
+
+
+def check_trajectories_match_in_all_but_values(
+        traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]):
+
+    assert check_trajectory_keys_match(traj1, traj2)
+
+    assert check_trajectory_length_match(traj1, traj2)
+
+    for k in traj1.keys:
+        assert not torch.allclose(getattr(traj2, k), getattr(traj1, k)),\
+            f"Trajectories are identical in state trajectory of variable {k}, but should differ."
+
+    return True
