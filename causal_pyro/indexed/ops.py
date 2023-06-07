@@ -286,8 +286,8 @@ def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kw
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     for indices, value in values.items():
-        tst = functools.reduce(operator.or_, [case == index for index in indices])
-        result = cond(value, result if result is not None else value, tst, **kwargs)
+        tst = functools.reduce(operator.or_, [case == index for index in next(iter(indices.values()))])
+        result = cond(result if result is not None else value, value, tst, **kwargs)
     return result
 
 
