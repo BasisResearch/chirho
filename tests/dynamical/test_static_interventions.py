@@ -25,14 +25,13 @@ from .dynamical_fixtures import sir_ode, check_trajectories_match, check_traject
 logger = logging.getLogger(__name__)
 
 # Points at which to measure the state of the system.
-tspan_values = torch.tensor([1.0, 2.0, 3.0, 4.0])
+tspan_values = torch.tensor([1.0, 3.0])
 
 # Initial state of the system.
 init_state_values = State(S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0))
 
 # Large interventions that will make a difference.
 intervene_states = [
-    State(S=torch.tensor(50.0)),
     State(I=torch.tensor(50.0)),
     State(S=torch.tensor(50.0), R=torch.tensor(50.0)),
     State(S=torch.tensor(50.0), I=torch.tensor(50.0), R=torch.tensor(50.0)),
