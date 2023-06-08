@@ -19,6 +19,7 @@ from causal_pyro.dynamical.ops import (
     State,
     Dynamics,
     simulate,
+    concatenate
     simulate_span,
     Trajectory,
 )
@@ -130,7 +131,10 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
                 span_traj = simulate_span(dynamics, current_state, timespan)
 
             current_state = span_traj[-1]
-            span_traj = span_traj[1:][:-1]  # remove interruption times at endpoints
+            if i < len(point_interruptions) - 1:
+                span_traj = span_traj[1:][:-1]  # remove interruption times at endpoints
+            else:
+                span_traj = span_traj[1:] # remove interruption time at start
             span_trajectories.append(span_traj)
 
         full_trajectory = concatenate(span_trajectories)

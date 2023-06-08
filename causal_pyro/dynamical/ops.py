@@ -1,5 +1,6 @@
 from typing import (
     Any,
+    List,
     Callable,
     Generic,
     Hashable,
@@ -59,7 +60,7 @@ class Trajectory(State[T]):
             return state
         elif isinstance(key, slice):
             state = State()
-            start, end = slice
+            start, end = key
             for k, v in self.__dict__["_values"].keys():
                 setattr(state, k, v[start:end])
             return state
