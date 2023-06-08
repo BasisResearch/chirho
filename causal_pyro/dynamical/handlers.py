@@ -19,9 +19,8 @@ from causal_pyro.dynamical.ops import (
     State,
     Dynamics,
     simulate,
-    simulate_step,
+    simulate_span,
     Trajectory,
-    concatenate,
 )
 from causal_pyro.interventional.ops import intervene
 from causal_pyro.interventional.handlers import do
@@ -54,6 +53,12 @@ class ODEDynamics(pyro.nn.PyroModule):
 def ode_simulate(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
+    return ode_simulate_span(dynamics, initial_state, timespan, **kwargs)
+
+
+@simulate_span.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate_span")
+def ode_simulate_span(dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs):
     var_order = tuple(sorted(initial_state.keys))  # arbitrary, but fixed
 
     solns = torchdiffeq.odeint(
@@ -70,87 +75,57 @@ def ode_simulate(
     return trajectory
 
 
-@pyro.poutine.runtime.effectful(type="simulate_to_next_event")
-def simulate_to_next_event(
-    dynamics, initial_state: State[torch.Tensor], timespan, **kwargs
-):
-    """Simulate to next event, whatever it is."""
-    ...
-
-
-@pyro.poutine.runtime.effectful(type="push_simulation")
-def push_simulation(args) -> None:
-    pass
-
-
 class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
 
     def __enter__(self):
-        # self._queue = []
         return super().__enter__()
 
-    # def _pyro_push_simulation(self, msg) -> None:
-    #     (dynamics, result, timespan) = msg["args"]
-    #     self._queue.append((dynamics, result, timespan))
-
     def _pyro_simulate(self, msg) -> None:
-        # self._queue.append(msg["args"])
-        # while self._queue:
-        #     (dynamics, initial_state, timespan) = self._queue.pop(0)
-        #     result = simulate_to_next_event(dynamics, initial_state, timespan)
-        sorted_interruptions = sorted(msg["accrued_interruptions"], key=lambda x: x.time)
-        dynamic_event_func = make_dynamic_event_func(msg["dynamic_interruptions"])
+        sorted_point_interruptions = sorted(msg["accrued_point_interruptions"], key=lambda x: x.time)
 
-        start = msg["kwargs"]["tspan"][0]
-        states = []
-        for interruption in sorted_interruptions:
-            with pyro.poutine.messenger.block_messengers(lambda m: m is not interruption and isinstance(m, PointInterruption)):
-                start_state, did_event_happen, event_index = simulate_step(msg["args"][0], msg["args"][1], (start, interruption.time), dynamic_event_func)
+        # dynamic_interruptions = msg["accrued_dynamic_interruptions"]
 
+        dynamics, current_state, full_timespan = msg["args"]
+        
+        span_trajectories = []
 
+        prepended_sorted_point_interruptions = [None] + [*sorted_point_interruptions]
+        lpspi = len(prepended_sorted_point_interruptions)
 
-            if did_event_happen:
-                with pyro.poutine.messenger.block_messengers(lambda m: m is not dynamic_event_func[event_index] and isinstance(m, PointInterruption)):
-                    start_state, did_event_happen, event_index = simulate_step(msg["args"][0], start_state, (start, interruption.time), dynamic_event_func)
+        for i in range(lpspi):
 
-            states.append(simulate_section(start_state, start_time, interruption.time))
-            start = interruption.time
+            curr_interruption = prepended_sorted_point_interruptions[i]
 
+            span_start = curr_interruption.time if curr_interruption is not None else timespan[0]
+            span_end = prepended_sorted_point_interruptions[i + 1].time if i < len(lpspi) - 1 else timespan[-1]
 
-        msg["value"] = states
+            timespan = torch.cat(
+                (span_start[..., None],
+                full_timespan[span_start < full_timespan < span_end],
+                span_end[..., None]), dim=-1)
+
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: isinstance(m, PointInterruption) and ((m is not curr_interruption) or (curr_interruption is None))):
+                
+                span_traj = simulate_span(dynamics, current_state, timespan)
+                
+            current_state = span_traj[-1]
+
+            # FIXME this needs to slice the point interruption times away so the user gets what they asked for in the original tspan.
+            span_trajectories.append(span_traj)
+        # TODO: Raj implement me.
+        full_trajectory = concatenate(span_trajectories)
+
+        msg["value"] = full_trajectory
         msg["done"] = True
 
 
-# class PointIntervention(pyro.poutine.messenger.Messenger):
-#     eps: float = 1e-10
-#     time: float
-#     intervention: State[torch.Tensor]
-
-#     def _pyro_simulate(self, msg) -> None:
-#         dynamics, initial_state, tspan = msg["args"]
-#         if tspan[0] < self.time < tspan[-1]:
-#             msg["args"] = (dynamics, initial_state, (tspan[0], self.time))
-#             msg["remaining_tspan"] = (self.time, tspan[-1])
-#             msg["stop"] = True
-#             push_simulation((dynamics, initial_state, (self.time, tspan[-1])))
-
-#     def _pyro_post_simulate(self, msg) -> None:
-#         dynamics = msg["args"][0]
-#         soln1 = msg["value"]
-#         tspan = msg["remaining_tspan"]
-#         with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-#             soln2 = simulate(dynamics, soln1, (self.time + self.eps, tspan[-1]))
-#             msg["value"] = concatenate(soln1, soln2)
-
-
-# class PointInterruption(pyro.poutine.messenger.Messenger):
-#     eps: float = 1e-10
-#     time: float
-
-#     def _pyro_simulate_to_next_event(self, msg) -> None:
-#         dynamics, initial_state, tspan = msg["args"]
-#         if tspan[0] < self.time < tspan[-1]:
-#             msg["args"] = (dynamics, initial_state, (tspan[0], self.time))
+class DynamicInterruption(pyro.poutine.messenger.Messenger):
+    # TODO AZ - I don't think this should subclass from PointInterruption, because
+    #  it doesn't take a known time.
+    #  Maybe we want a kind of noop abstraction though to make type checking easier?
+    def __init__(self):
+        raise NotImplementedError
 
 
 class PointInterruption(pyro.poutine.messenger.Messenger):
@@ -165,35 +140,13 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
         self.eps = eps
 
     def _pyro_simulate(self, msg) -> None:
-        accrued_interruptions = msg.get("accrued_interruptions", [])
+        accrued_interruptions = msg.get("accrued_point_interruptions", [])
         accrued_interruptions.append(self)
 
-        # dynamics, initial_state, tspan = msg["args"]
-        # if tspan[0] < self.time < tspan[-1]:
-        #     # Get a tspan that goes from tspan[0] to self.time
-        #
-        #     tspan1 = torch.cat((tspan[tspan < self.time], self.time[..., None]), dim=-1)
-        #     tspan2 = torch.cat(
-        #         (self.time[..., None], tspan[tspan >= self.time[..., None]]), dim=-1
-        #     )
-        #     msg["args"] = (dynamics, initial_state, tspan1)
-        #     msg["remaining_tspan"] = tspan2
-        #     msg["stop"] = True
-        #
-        #     # push_simulation((dynamics, initial_state, (self.time, tspan[-1])))
-
-    def _pyro_post_simulate(self, msg) -> None:
-        dynamics = msg["args"][0]
-        soln1 = msg["value"]
-        remaining_init = msg["remaining_init"] if "remaining_init" in msg else soln1[-1]
-
-        if "remaining_tspan" in msg:
-            # This just prevents this handler from being "seen" in the handler
-            #  stack in contained simulate call — thereby preventing recursion
-            #  into this specific handler. -AZ (?)
-            with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-                soln2 = simulate(dynamics, remaining_init, msg["remaining_tspan"])
-                msg["value"] = concatenate(soln1, soln2)
+    # This isn't needed here, as the default PointInterruption doesn't need to
+    #  affect the simulation of the span. This can be implemented in other
+    #  handlers, however, see e.g. PointIntervention._pyro_simulate_span.
+    # def _pyro_simulate_span(self, msg) -> None:
 
 
 @intervene.register(State)
@@ -218,15 +171,13 @@ class PointIntervention(PointInterruption):
         super().__init__(time, eps)
         self.intervention = intervention
 
-    def _pyro_simulate_section(self, msg):
+    def _pyro_simulate_span(self, msg):
+        # TODO needs to swap the starting state in args with an intervene starting state.
+        raise NotImplementedError("Raj do this PLEASE")
         start_time = msg["kwargs"]["start_time"]
         end_time = msg["kwargs"]["end_time"]
         if start_time <= self.time < end_time:
             msg["kwargs"]["start_state"] = intervene(msg["kwargs"]["start_state"], self.intervention)
-
-    def _pyro_post_simulate(self, msg) -> None:
-        msg["remaining_init"] = intervene(msg["value"][-1], self.intervention)
-        return super()._pyro_post_simulate(msg)
 
 
 class PointObservation(PointInterruption):

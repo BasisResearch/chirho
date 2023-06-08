@@ -64,15 +64,12 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
-@pyro.poutine.runtime.effectful(type="simulate_step")
-def simulate_step(dynamics, curr_state: State[T], dt) -> None:
-    pass
-
-
-@pyro.poutine.runtime.effectful(type="get_dt")
-def get_dt(dynamics, curr_state: State[T]):
-    pass
-
+@functools.singledispatch
+def simulate_span(dynamics: Dynamics[S, T], curr_state: State[T], timespan, **kwargs) -> Trajectory[T]:
+    """
+    Simulate a fixed timespan of a dynamical system.
+    """
+    raise NotImplementedError(f"simulate_span not implemented for type {type(dynamics)}")
 
 @functools.singledispatch
 def simulate(
@@ -82,24 +79,3 @@ def simulate(
     Simulate a dynamical system.
     """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
-
-
-@functools.singledispatch
-def concatenate(input1, input2):
-    """
-    Concatenate two Ts.
-    """
-    raise NotImplementedError(f"concatenate not implemented for type {type(input1)}")
-
-
-@concatenate.register
-def trajectory_concatenate(state1: Trajectory, state2: Trajectory) -> Trajectory:
-    """
-    Concatenate two states.
-    """
-    return Trajectory(
-        **{
-            k: torch.cat([getattr(state1, k)[:-1], getattr(state2, k)[1:]])
-            for k in state1.keys
-        }
-    )
