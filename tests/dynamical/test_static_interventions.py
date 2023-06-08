@@ -50,6 +50,11 @@ eps = 1e-3
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", intervene_times)
 def test_point_intervention_causes_difference(sir_ode, init_state, tspan, intervene_state, intervene_time):
+
+    if intervene_time < tspan[0]:
+        # TODO do the error thing suggested below.
+        pytest.skip("Intervention time is before the start of the timespan. Right now this intervention gets ignored,"
+                    " but we may want to change this behavior in the future, or explicitly raise an error.")
     
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
@@ -61,6 +66,9 @@ def test_point_intervention_causes_difference(sir_ode, init_state, tspan, interv
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_single_pint)
 
 
+# TODO test what happens when the intervention time is exactly at the start of the time span.
+
+
 # TODO get rid of some entries cz this test takes too long to run w/ all permutations.
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
@@ -70,6 +78,11 @@ def test_point_intervention_causes_difference(sir_ode, init_state, tspan, interv
 @pytest.mark.parametrize("intervene_time2", intervene_times)
 def test_nested_point_interventions_cause_difference(
         sir_ode, init_state, tspan, intervene_state1, intervene_time1, intervene_state2, intervene_time2):
+
+    if intervene_time2 == intervene_time1:
+        # TODO do the error thing suggested below.
+        pytest.skip("This returns an error because the solver requires strictly increasing stop times. We should"
+                    " probably return an error here.")
 
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
@@ -89,3 +102,6 @@ def test_nested_point_interventions_cause_difference(
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_nested_pint)
 
     # Don't need to flip order b/c the argument permutation will effectively do this for us.
+
+
+# TODO test that we're getting the exactly right answer, instead of just "a different answer" as we are now.
