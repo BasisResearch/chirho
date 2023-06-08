@@ -17,6 +17,7 @@ from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
     PointIntervention,
+    SimulatorEventLoop,
     simulate,
 )
 
@@ -46,15 +47,17 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # Test with standard point interruptions within timespan.
-    with PointInterruption(time=tspan[-1] / 2. + eps):
-        result_pint = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointInterruption(time=tspan[-1] / 2. + eps):
+            result_pint = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_pint)
 
     # Test with two standard point interruptions.
-    with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/4 of the way through the timespan
-        with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
-            result_double_pint1 = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/4 of the way through the timespan
+            with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
+                result_double_pint1 = simulate(sir_ode, init_state, tspan)
 
     # FIXME AZ-yu28184 This test fails rn because the state of the system at the the point interruption is included in the
     #  returned vector of measurements. TODO parse that out so that user gets what they ask for?
@@ -62,9 +65,10 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
     assert check_trajectories_match(observational_execution_result, result_double_pint1)
 
     # Test with two standard point interruptions, in a different order.
-    with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
-        with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/3
-            result_double_pint2 = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointInterruption(time=(tspan[-1] / 4.) * 3 + eps):  # roughly 3/4
+            with PointInterruption(time=tspan[-1] / 4. + eps):  # roughly 1/3
+                result_double_pint2 = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pint2)
 
@@ -85,21 +89,24 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # Test a single point intervention.
-    with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-        result_single_pi = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+            result_single_pi = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_single_pi)
 
     # Test two point interventions out of scope.
-    with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-        with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
-            result_double_pi1 = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+            with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
+                result_double_pi1 = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi1)
 
     # Test with two point interventions out of scope, in a different order.
-    with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
-        with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-            result_double_pi2 = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
+            with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+                result_double_pi2 = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi2)

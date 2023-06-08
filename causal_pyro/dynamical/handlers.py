@@ -19,7 +19,7 @@ from causal_pyro.dynamical.ops import (
     State,
     Dynamics,
     simulate,
-    concatenate
+    concatenate,
     simulate_span,
     Trajectory,
 )
@@ -83,61 +83,66 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         return super().__enter__()
 
     def _pyro_simulate(self, msg) -> None:
-        dynamics, current_state, full_timespan = msg["args"]
+        dynamics, initial_state, full_timespan = msg["args"]
         point_interruptions = sorted(
-            msg["accrued_point_interruptions"], key=lambda x: x.time
+            msg.get("accrued_point_interruptions", []), key=lambda x: x.time
         )
+
+        if not len(point_interruptions):
+            with pyro.poutine.messenger.block_messengers(lambda m: isinstance(m, PointInterruption)):
+                msg["value"] = simulate_span(dynamics, initial_state, full_timespan)
+                msg["done"] = True
+                return
 
         # Handle initial timspan with no interruptions
         span_start = full_timespan[0]
         span_end = point_interruptions[0].time
         timespan = torch.cat(
-            (
-                span_start[..., None],
-                full_timespan[span_start < full_timespan < span_end],
-                span_end[..., None],
-            ),
+            (span_start[..., None],
+            full_timespan[(span_start < full_timespan) & (full_timespan < span_end)],
+            span_end[..., None],),
             dim=-1,
         )
 
-        with pyro.poutine.messenger.block_messengers(
-            lambda m: isinstance(m, PointInterruption)
-        ):
-            span_traj = simulate_span(dynamics, current_state, timespan)
+        with pyro.poutine.messenger.block_messengers(lambda m: isinstance(m, PointInterruption)):
+            span_traj = simulate_span(dynamics, initial_state, timespan)
 
-        span_traj = span_traj[:-1]  # remove the point interruption time
-        span_trajectories = [span_traj]
+        current_state = span_traj[-1]
+        # remove the point interruption time
+        span_trajectories = [span_traj[:-1]]
 
+        final_i = len(point_interruptions) - 1
         # Simulate between each point interruption
-        for i, curr_interuption in enumerate(point_interruptions):
-            span_start = curr_interuption.time
+        for i, curr_interruption in enumerate(point_interruptions):
+            span_start = curr_interruption.time
             span_end = (
                 point_interruptions[i + 1].time
-                if i < len(point_interruptions) - 1
+                if i < final_i
                 else full_timespan[-1]
             )
             timespan = torch.cat(
                 (
                     span_start[..., None],
-                    full_timespan[span_start < full_timespan < span_end],
+                    full_timespan[(span_start < full_timespan) & (full_timespan < span_end)],
                     span_end[..., None],
                 ),
                 dim=-1,
             )
+
             with pyro.poutine.messenger.block_messengers(
                 lambda m: isinstance(m, PointInterruption)
-                and (m is not curr_interuption)
+                and (m is not curr_interruption)
             ):
                 span_traj = simulate_span(dynamics, current_state, timespan)
 
             current_state = span_traj[-1]
-            if i < len(point_interruptions) - 1:
-                span_traj = span_traj[1:][:-1]  # remove interruption times at endpoints
+            if i < final_i:
+                span_traj = span_traj[1:-1]  # remove interruption times at endpoints
             else:
                 span_traj = span_traj[1:] # remove interruption time at start
             span_trajectories.append(span_traj)
 
-        full_trajectory = concatenate(span_trajectories)
+        full_trajectory = concatenate(*span_trajectories)
         msg["value"] = full_trajectory
         msg["done"] = True
 
@@ -162,8 +167,11 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
         self.eps = eps
 
     def _pyro_simulate(self, msg) -> None:
-        accrued_interruptions = msg.get("accrued_point_interruptions", [])
-        accrued_interruptions.append(self)
+        dynamics, initial_state, full_timespan = msg["args"]
+        if full_timespan[0] < self.time < full_timespan[-1]:
+            accrued_interruptions = msg.get("accrued_point_interruptions", [])
+            accrued_interruptions.append(self)
+            msg["accrued_point_interruptions"] = accrued_interruptions
 
     # This isn't needed here, as the default PointInterruption doesn't need to
     #  affect the simulation of the span. This can be implemented in other
@@ -194,14 +202,9 @@ class PointIntervention(PointInterruption):
         self.intervention = intervention
 
     def _pyro_simulate_span(self, msg):
-        # TODO needs to swap the starting state in args with an intervene starting state.
-        raise NotImplementedError("Raj do this PLEASE")
-        start_time = msg["kwargs"]["start_time"]
-        end_time = msg["kwargs"]["end_time"]
-        if start_time <= self.time < end_time:
-            msg["kwargs"]["start_state"] = intervene(
-                msg["kwargs"]["start_state"], self.intervention
-            )
+        dynamics, current_state, full_timespan = msg["args"]
+        intervened_state = intervene(current_state, self.intervention)
+        msg["args"] = (dynamics, intervened_state, full_timespan)
 
 
 class PointObservation(PointInterruption):

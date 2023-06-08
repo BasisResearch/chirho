@@ -52,20 +52,16 @@ class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
 
-    def __getitem__(self, key: int) -> State[T]:
-        if isinstance(key, int):
-            state = State()
-            for k, v in self.__dict__["_values"].keys():
-                setattr(state, k, v[key])
-            return state
-        elif isinstance(key, slice):
-            state = State()
-            start, end = key
-            for k, v in self.__dict__["_values"].keys():
-                setattr(state, k, v[start:end])
-            return state
-        else:
-            raise TypeError(f"Expected type int or slice, got {type(key)}")
+    def __getitem__(self, key: Union[int, slice]) -> State[T]:
+
+        if isinstance(key, str):
+            raise ValueError("Trajectory does not support string indexing, use getattr instead if"
+                             " you want to access a specific state variable.")
+
+        state = State() if isinstance(key, int) else Trajectory()
+        for k, v in self.__dict__["_values"].items():
+            setattr(state, k, v[key])
+        return state
 
 
 @runtime_checkable
@@ -86,7 +82,7 @@ def simulate_span(
 
 
 @functools.singledispatch
-def concatenate(inputs):
+def concatenate(*inputs):
     """
     Concatenate multiple inputs of type T into a single output of type T.
     """
@@ -94,7 +90,7 @@ def concatenate(inputs):
 
 
 @concatenate.register
-def trajectory_concatenate(trajectories: List[Trajectory]) -> Trajectory:
+def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """

@@ -16,6 +16,7 @@ from causal_pyro.dynamical.ops import State, simulate, Trajectory
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
+    SimulatorEventLoop,
     PointIntervention,
     simulate,
 )
@@ -53,8 +54,9 @@ def test_point_intervention_causes_difference(sir_ode, init_state, tspan, interv
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with PointIntervention(time=intervene_time, intervention=intervene_state):
-        result_single_pint = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointIntervention(time=intervene_time, intervention=intervene_state):
+            result_single_pint = simulate(sir_ode, init_state, tspan)
     
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_single_pint)
 
@@ -79,9 +81,10 @@ def test_nested_point_interventions_cause_difference(
     #     pytest.skip("DEBUG")
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with PointIntervention(time=intervene_time1, intervention=intervene_state1):
-        with PointIntervention(time=intervene_time2, intervention=intervene_state2):
-            result_nested_pint = simulate(sir_ode, init_state, tspan)
+    with SimulatorEventLoop():
+        with PointIntervention(time=intervene_time1, intervention=intervene_state1):
+            with PointIntervention(time=intervene_time2, intervention=intervene_state2):
+                result_nested_pint = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_nested_pint)
 
