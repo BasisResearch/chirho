@@ -51,12 +51,20 @@ class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
 
-    def __getitem__(self, item: int) -> State[T]:
-        assert isinstance(item, int), "We don't support slicing trajectories."
-        state = State()
-        for k, v in self.__dict__["_values"].items():
-            setattr(state, k, v[item])
-        return state
+    def __getitem__(self, key: int) -> State[T]:
+        if isinstance(key, int):
+            state = State()
+            for k, v in self.__dict__["_values"].keys():
+                setattr(state, k, v[key])
+            return state
+        elif isinstance(key, slice):
+            state = State()
+            start, end = slice
+            for k, v in self.__dict__["_values"].keys():
+                setattr(state, k, v[start:end])
+            return state
+        else:
+            raise TypeError(f"Expected type int or slice, got {type(key)}")
 
 
 @runtime_checkable
@@ -65,11 +73,43 @@ class Dynamics(Protocol[S, T]):
 
 
 @functools.singledispatch
-def simulate_span(dynamics: Dynamics[S, T], curr_state: State[T], timespan, **kwargs) -> Trajectory[T]:
+def simulate_span(
+    dynamics: Dynamics[S, T], curr_state: State[T], timespan, **kwargs
+) -> Trajectory[T]:
     """
     Simulate a fixed timespan of a dynamical system.
     """
-    raise NotImplementedError(f"simulate_span not implemented for type {type(dynamics)}")
+    raise NotImplementedError(
+        f"simulate_span not implemented for type {type(dynamics)}"
+    )
+
+
+@functools.singledispatch
+def concatenate(inputs):
+    """
+    Concatenate multiple inputs of type T into a single output of type T.
+    """
+    raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
+
+
+@concatenate.register
+def trajectory_concatenate(trajectories: List[Trajectory]) -> Trajectory:
+    """
+    Concatenate multiple trajectories into a single trajectory.
+    """
+    full_trajectory = Trajectory()
+    for trajectory in trajectories:
+        for k in trajectory.keys:
+            if k not in full_trajectory.keys:
+                setattr(full_trajectory, k, getattr(trajectory, k))
+            else:
+                setattr(
+                    full_trajectory,
+                    k,
+                    torch.cat([getattr(full_trajectory, k), getattr(trajectory, k)]),
+                )
+    return full_trajectory
+
 
 @functools.singledispatch
 def simulate(

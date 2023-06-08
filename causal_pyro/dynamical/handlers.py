@@ -58,7 +58,9 @@ def ode_simulate(
 
 @simulate_span.register(ODEDynamics)
 @pyro.poutine.runtime.effectful(type="simulate_span")
-def ode_simulate_span(dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs):
+def ode_simulate_span(
+    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+):
     var_order = tuple(sorted(initial_state.keys))  # arbitrary, but fixed
 
     solns = torchdiffeq.odeint(
@@ -76,46 +78,62 @@ def ode_simulate_span(dynamics: ODEDynamics, initial_state: State[torch.Tensor],
 
 
 class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
-
     def __enter__(self):
         return super().__enter__()
 
     def _pyro_simulate(self, msg) -> None:
-        sorted_point_interruptions = sorted(msg["accrued_point_interruptions"], key=lambda x: x.time)
-
-        # dynamic_interruptions = msg["accrued_dynamic_interruptions"]
-
         dynamics, current_state, full_timespan = msg["args"]
-        
-        span_trajectories = []
+        point_interruptions = sorted(
+            msg["accrued_point_interruptions"], key=lambda x: x.time
+        )
 
-        prepended_sorted_point_interruptions = [None] + [*sorted_point_interruptions]
-        lpspi = len(prepended_sorted_point_interruptions)
-
-        for i in range(lpspi):
-
-            curr_interruption = prepended_sorted_point_interruptions[i]
-
-            span_start = curr_interruption.time if curr_interruption is not None else timespan[0]
-            span_end = prepended_sorted_point_interruptions[i + 1].time if i < len(lpspi) - 1 else timespan[-1]
-
-            timespan = torch.cat(
-                (span_start[..., None],
+        # Handle initial timspan with no interruptions
+        span_start = full_timespan[0]
+        span_end = point_interruptions[0].time
+        timespan = torch.cat(
+            (
+                span_start[..., None],
                 full_timespan[span_start < full_timespan < span_end],
-                span_end[..., None]), dim=-1)
+                span_end[..., None],
+            ),
+            dim=-1,
+        )
 
+        with pyro.poutine.messenger.block_messengers(
+            lambda m: isinstance(m, PointInterruption)
+        ):
+            span_traj = simulate_span(dynamics, current_state, timespan)
+
+        span_traj = span_traj[:-1]  # remove the point interruption time
+        span_trajectories = [span_traj]
+
+        # Simulate between each point interruption
+        for i, curr_interuption in enumerate(point_interruptions):
+            span_start = curr_interuption.time
+            span_end = (
+                point_interruptions[i + 1].time
+                if i < len(point_interruptions) - 1
+                else full_timespan[-1]
+            )
+            timespan = torch.cat(
+                (
+                    span_start[..., None],
+                    full_timespan[span_start < full_timespan < span_end],
+                    span_end[..., None],
+                ),
+                dim=-1,
+            )
             with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, PointInterruption) and ((m is not curr_interruption) or (curr_interruption is None))):
-                
+                lambda m: isinstance(m, PointInterruption)
+                and (m is not curr_interuption)
+            ):
                 span_traj = simulate_span(dynamics, current_state, timespan)
-                
+
             current_state = span_traj[-1]
-
-            # FIXME this needs to slice the point interruption times away so the user gets what they asked for in the original tspan.
+            span_traj = span_traj[1:][:-1]  # remove interruption times at endpoints
             span_trajectories.append(span_traj)
-        # TODO: Raj implement me.
-        full_trajectory = concatenate(span_trajectories)
 
+        full_trajectory = concatenate(span_trajectories)
         msg["value"] = full_trajectory
         msg["done"] = True
 
@@ -177,7 +195,9 @@ class PointIntervention(PointInterruption):
         start_time = msg["kwargs"]["start_time"]
         end_time = msg["kwargs"]["end_time"]
         if start_time <= self.time < end_time:
-            msg["kwargs"]["start_state"] = intervene(msg["kwargs"]["start_state"], self.intervention)
+            msg["kwargs"]["start_state"] = intervene(
+                msg["kwargs"]["start_state"], self.intervention
+            )
 
 
 class PointObservation(PointInterruption):
