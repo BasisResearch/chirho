@@ -14,6 +14,7 @@ import functools
 import pyro
 import torch
 import torchdiffeq
+import warnings
 
 from causal_pyro.dynamical.ops import (
     State,
@@ -87,6 +88,16 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         point_interruptions = sorted(
             msg.get("accrued_point_interruptions", []), key=lambda x: x.time
         )
+
+        # Check if the user specified two interventions at the same time.
+        # Iterate all the adjacent pairs of the sorted point interruptions and check torch.isclose
+        # on the time attribute.
+        all_times = torch.tensor([interruption.time for interruption in point_interruptions])
+        # Offset by one and hstack to get pairs.
+        all_times = torch.stack([all_times[:-1], all_times[1:]], dim=-1)
+        # Check if any of the pairs are close.
+        if torch.any(torch.isclose(all_times[..., 0], all_times[..., 1])):
+            raise ValueError("Two point interruptions cannot occur at the same time.")
 
         if not len(point_interruptions):
             with pyro.poutine.messenger.block_messengers(lambda m: isinstance(m, PointInterruption)):
@@ -172,6 +183,22 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
             accrued_interruptions = msg.get("accrued_point_interruptions", [])
             accrued_interruptions.append(self)
             msg["accrued_point_interruptions"] = accrued_interruptions
+
+        # Throw an error if the intervention time occurs before the timespan, as the simulator
+        #  won't simulate before the first time in the timespan, but the user might expect
+        #  the intervention to affect the execution regardless.
+        if self.time < full_timespan[0]:
+            raise ValueError(
+                f"Intervention time {self.time} is before the first time in the timespan {full_timespan[0]}. If you'd"
+                f" like to include this intervention, explicitly include the earlier intervention time within the"
+                f" range of the timespan.")
+
+        # Throw a warning if the intervention time occurs after the timespan, as the user likely made a mistake
+        #  on the intervention time.
+        if self.time > full_timespan[-1]:
+            warnings.warn(
+                f"Intervention time {self.time} is after the last time in the timespan {full_timespan[-1]}."
+                f" This intervention will have no effect on the simulation.", UserWarning)
 
     # This isn't needed here, as the default PointInterruption doesn't need to
     #  affect the simulation of the span. This can be implemented in other

@@ -89,24 +89,27 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # Test a single point intervention.
-    with SimulatorEventLoop():
-        with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-            result_single_pi = simulate(sir_ode, init_state, tspan)
+    with pytest.warns(expected_warning=UserWarning, match="is after the last time in the timespan"):
+        with SimulatorEventLoop():
+            with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+                result_single_pi = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_single_pi)
 
     # Test two point interventions out of scope.
-    with SimulatorEventLoop():
-        with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-            with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
-                result_double_pi1 = simulate(sir_ode, init_state, tspan)
+    with pytest.warns(expected_warning=UserWarning, match="is after the last time in the timespan"):
+        with SimulatorEventLoop():
+            with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+                with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
+                    result_double_pi1 = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi1)
 
     # Test with two point interventions out of scope, in a different order.
-    with SimulatorEventLoop():
-        with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
-            with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
-                result_double_pi2 = simulate(sir_ode, init_state, tspan)
+    with pytest.warns(expected_warning=UserWarning, match="is after the last time in the timespan"):
+        with SimulatorEventLoop():
+            with PointIntervention(time=post_measurement_intervention_time + 1.0, intervention=intervene_state):
+                with PointIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+                    result_double_pi2 = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi2)

@@ -50,18 +50,21 @@ eps = 1e-3
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", intervene_times)
 def test_point_intervention_causes_difference(sir_ode, init_state, tspan, intervene_state, intervene_time):
-
-    if intervene_time < tspan[0]:
-        # TODO do the error thing suggested below.
-        pytest.skip("Intervention time is before the start of the timespan. Right now this intervention gets ignored,"
-                    " but we may want to change this behavior in the future, or explicitly raise an error.")
     
     observational_execution_result = simulate(sir_ode, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
-            result_single_pint = simulate(sir_ode, init_state, tspan)
+    # TODO use pytest.raises here.
+    try:
+        with SimulatorEventLoop():
+            with PointIntervention(time=intervene_time, intervention=intervene_state):
+                result_single_pint = simulate(sir_ode, init_state, tspan)
+                if intervene_time < tspan[0]:
+                    assert False, "This should have raised an error."
+    except ValueError as e:
+        assert "is before the first time in the timespan" in str(e)
+        assert intervene_time < tspan[0]
+        return
     
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_single_pint)
 
@@ -79,25 +82,22 @@ def test_point_intervention_causes_difference(sir_ode, init_state, tspan, interv
 def test_nested_point_interventions_cause_difference(
         sir_ode, init_state, tspan, intervene_state1, intervene_time1, intervene_state2, intervene_time2):
 
-    if intervene_time2 == intervene_time1:
-        # TODO do the error thing suggested below.
-        pytest.skip("This returns an error because the solver requires strictly increasing stop times. We should"
-                    " probably return an error here.")
-
     observational_execution_result = simulate(sir_ode, init_state, tspan)
-
-    # # DELETE THIS. debugging. If this is active, then we pass everything except those that fail
-    # #  due to the length bug.
-    # if intervene_time1 == intervene_time2:
-    #     pytest.skip("DEBUG")
-    # if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
-    #     pytest.skip("DEBUG")
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
         with PointIntervention(time=intervene_time1, intervention=intervene_state1):
             with PointIntervention(time=intervene_time2, intervention=intervene_state2):
-                result_nested_pint = simulate(sir_ode, init_state, tspan)
+                # FIXME this is borked atm
+                if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
+                    with pytest.raises(ValueError, match="is before the first time in the timespan"):
+                        simulate(sir_ode, init_state, tspan)
+                elif torch.isclose(intervene_time1, intervene_time2):
+                    with pytest.raises(ValueError, match="Two point interruptions cannot occur at the same time."):
+                        simulate(sir_ode, init_state, tspan)
+                    return
+                else:
+                    result_nested_pint = simulate(sir_ode, init_state, tspan)
 
     assert check_trajectories_match_in_all_but_values(observational_execution_result, result_nested_pint)
 
