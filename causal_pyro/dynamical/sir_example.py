@@ -41,7 +41,7 @@ if __name__ == "__main__":
     init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
     tspan = torch.tensor([1.0, 2.0, 3.0, 4.0])
 
-    new_state = State(S=torch.tensor(10.0))
+    new_state = State(S=torch.tensor(4.3232))
     S_obs = torch.tensor(10.0)
 
     data1 = {"S_obs": S_obs}
@@ -49,9 +49,10 @@ if __name__ == "__main__":
 
     with pyro.poutine.trace() as tr:
         with SimulatorEventLoop():
-            with PointObservation(time=3.1, data=data2):
-                with PointObservation(time=2.9, data=data1):
-                    result = simulate(SIR_simple_model, init_state, tspan)
+            with PointIntervention(time=2.1, intervention=new_state):
+                with PointObservation(time=3.1, data=data2):
+                    with PointObservation(time=2.9, data=data1):
+                        result = simulate(SIR_simple_model, init_state, tspan)
 
     print(result)
 
