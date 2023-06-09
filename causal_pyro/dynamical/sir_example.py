@@ -28,8 +28,11 @@ class SimpleSIRDynamics(ODEDynamics):
         dX.R = self.gamma * X.I
 
     def observation(self, X: State[torch.Tensor]):
-        S_true = pyro.sample("S_true", Normal(X.S, 1))
-        S_obs = pyro.sample("S_obs", Normal(S_true, 1))
+        S_obs = pyro.sample(f"S_obs", Normal(X.S, 1))
+        I_obs = pyro.sample(f"I_obs", Normal(X.I, 1))
+        R_obs = pyro.sample(f"R_obs", Normal(X.R, 1))
+        usa_expected_cost = torch.relu(S_obs + 2 * I_obs - R_obs, 0)
+        usa_cost = pyro.sample(f"usa_cost", Normal(usa_expected_cost, 1))
 
 
 if __name__ == "__main__":
