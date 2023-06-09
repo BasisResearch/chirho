@@ -92,7 +92,9 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         # Check if the user specified two interventions at the same time.
         # Iterate all the adjacent pairs of the sorted point interruptions and check torch.isclose
         # on the time attribute.
-        all_times = torch.tensor([interruption.time for interruption in point_interruptions])
+        all_times = torch.tensor(
+            [interruption.time for interruption in point_interruptions]
+        )
         # Offset by one and hstack to get pairs.
         all_times = torch.stack([all_times[:-1], all_times[1:]], dim=-1)
         # Check if any of the pairs are close.
@@ -100,7 +102,9 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
             raise ValueError("Two point interruptions cannot occur at the same time.")
 
         if not len(point_interruptions):
-            with pyro.poutine.messenger.block_messengers(lambda m: isinstance(m, PointInterruption)):
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: isinstance(m, PointInterruption)
+            ):
                 msg["value"] = simulate_span(dynamics, initial_state, full_timespan)
                 msg["done"] = True
                 return
@@ -109,13 +113,19 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         span_start = full_timespan[0]
         span_end = point_interruptions[0].time
         timespan = torch.cat(
-            (span_start[..., None],
-            full_timespan[(span_start < full_timespan) & (full_timespan < span_end)],
-            span_end[..., None],),
+            (
+                span_start[..., None],
+                full_timespan[
+                    (span_start < full_timespan) & (full_timespan < span_end)
+                ],
+                span_end[..., None],
+            ),
             dim=-1,
         )
 
-        with pyro.poutine.messenger.block_messengers(lambda m: isinstance(m, PointInterruption)):
+        with pyro.poutine.messenger.block_messengers(
+            lambda m: isinstance(m, PointInterruption)
+        ):
             span_traj = simulate_span(dynamics, initial_state, timespan)
 
         current_state = span_traj[-1]
@@ -127,14 +137,14 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         for i, curr_interruption in enumerate(point_interruptions):
             span_start = curr_interruption.time
             span_end = (
-                point_interruptions[i + 1].time
-                if i < final_i
-                else full_timespan[-1]
+                point_interruptions[i + 1].time if i < final_i else full_timespan[-1]
             )
             timespan = torch.cat(
                 (
                     span_start[..., None],
-                    full_timespan[(span_start < full_timespan) & (full_timespan < span_end)],
+                    full_timespan[
+                        (span_start < full_timespan) & (full_timespan < span_end)
+                    ],
                     span_end[..., None],
                 ),
                 dim=-1,
@@ -150,7 +160,7 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
             if i < final_i:
                 span_traj = span_traj[1:-1]  # remove interruption times at endpoints
             else:
-                span_traj = span_traj[1:] # remove interruption time at start
+                span_traj = span_traj[1:]  # remove interruption time at start
             span_trajectories.append(span_traj)
 
         full_trajectory = concatenate(*span_trajectories)
@@ -191,14 +201,17 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
             raise ValueError(
                 f"Intervention time {self.time} is before the first time in the timespan {full_timespan[0]}. If you'd"
                 f" like to include this intervention, explicitly include the earlier intervention time within the"
-                f" range of the timespan.")
+                f" range of the timespan."
+            )
 
         # Throw a warning if the intervention time occurs after the timespan, as the user likely made a mistake
         #  on the intervention time.
         if self.time > full_timespan[-1]:
             warnings.warn(
                 f"Intervention time {self.time} is after the last time in the timespan {full_timespan[-1]}."
-                f" This intervention will have no effect on the simulation.", UserWarning)
+                f" This intervention will have no effect on the simulation.",
+                UserWarning,
+            )
 
     # This isn't needed here, as the default PointInterruption doesn't need to
     #  affect the simulation of the span. This can be implemented in other

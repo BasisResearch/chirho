@@ -53,10 +53,10 @@ class Trajectory(State[T]):
         super().__init__(**values)
 
     def __getitem__(self, key: Union[int, slice]) -> State[T]:
-
         if isinstance(key, str):
-            raise ValueError("Trajectory does not support string indexing, use getattr instead if"
-                             " you want to access a specific state variable.")
+            raise ValueError(
+                "Trajectory does not support string indexing, use getattr instead if you want to access a specific state variable."
+            )
 
         state = State() if isinstance(key, int) else Trajectory()
         for k, v in self.__dict__["_values"].items():
