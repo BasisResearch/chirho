@@ -39,10 +39,10 @@ class ODEDynamics(pyro.nn.PyroModule):
 
     def _deriv(
         dynamics: "ODEDynamics",
-        var_order: tuple[str, ...],
+        var_order: Tuple[str, ...],
         time: torch.Tensor,
-        state: tuple[T, ...],
-    ) -> tuple[T, ...]:
+        state: Tuple[T, ...],
+    ) -> Tuple[T, ...]:
         ddt, env = State(), State()
         for var, value in zip(var_order, state):
             setattr(env, var, value)
