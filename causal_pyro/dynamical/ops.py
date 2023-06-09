@@ -12,7 +12,10 @@ from typing import (
     TypeVar,
     Union,
     runtime_checkable,
+    TYPE_CHECKING,
 )
+if TYPE_CHECKING:
+    from .handlers import DynamicInterruption, PointInterruption
 
 import functools
 import pyro
@@ -105,6 +108,22 @@ def simulate_span(
     """
     raise NotImplementedError(
         f"simulate_span not implemented for type {type(dynamics)}"
+    )
+
+
+@functools.singledispatch
+def simulate_to_interruption(
+        dynamics: Dynamics[S, T],
+        start_state: State[T],
+        timespan,  # The first element of timespan is assumed to be the starting time.
+        next_static_interruption: PointInterruption = None,
+        dynamic_interruptions: List[DynamicInterruption] = None, **kwargs
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system until the next interruption.
+    """
+    raise NotImplementedError(
+        f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )
 
 

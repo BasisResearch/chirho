@@ -24,6 +24,7 @@ from causal_pyro.dynamical.ops import (
     concatenate,
     simulate_span,
     Trajectory,
+    simulate_to_interruption
 )
 from causal_pyro.interventional.ops import intervene
 from causal_pyro.interventional.handlers import do
@@ -95,6 +96,26 @@ def ode_simulate_span(
 
     return trajectory
 
+@simulate_to_interruption.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate_to_interruption")
+def torchdiffeq_ode_simulate_to_interruption(
+        dynamics: Dynamics[S, T],
+        start_state: State[T],
+        timespan,  # The first element of timespan is assumed to be the starting time.
+        next_static_interruption: 'PointInterruption' = None,
+        dynamic_interruptions: List['DynamicInterruption'] = None, **kwargs
+) -> Trajectory[T]:
+    # TODO this needs to
+    # 1. Create the combined event function from the dynamic interruptions.
+    # 2. Simulate out, with odeint_event, to either the end of the timespan or the static interruption.
+    #   2.1 Do this by adding a terminal event function that triggers when terminal.
+    # 3. If the end point fired, re-execute and return the tspan.
+    # 4. If a dynamic interruption fired, re-run just that part and return the tspan.
+    # 5. Also need to return something to let the caller know which event(s) was(/were) triggered so that the relevant
+    #     executions and state/dynamics adjustments can happen.
+
+    raise NotImplementedError("TODO")
+
 
 class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
     def __enter__(self):
@@ -141,6 +162,28 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         #  the times of the dynamics, so that's far less bookkeeping that originally...
 
         pass
+
+    def _pyro_simulate2(self, msg) -> None:
+        # TODO
+        # 1. Execute simulate_to_interruption repeatedly.
+        #   1.5 We can let the dynamic and point interruptions accrue themselves on this if we want? Or have simulate
+        #    accrue them once and pass them in here? The former is slower but maybe more effectful...
+        # 2. Slice the part of the tspan off that was simulated.
+        # 3. Get the results and concat them all together into a trajectory.
+
+        # Within simulate_to_interruption preprocs, things can accrue themselves to the message args (dynamics all
+        #  accrue, while statics just accrue the min that's after the start time).
+        # The interventions are more of a challenge in this context. Statics can just check if they're at the start of
+        #  the tspan and apply their intervention.
+        # Dynamics, however, have to know whether they were the ones who triggered the last interruption.
+        #  Maybe the dynamics can check the return value of the simulate_to_interruption call, see if they were
+        #   the ones responsible for the interruption, and then set a hidden _time flag that records the time of their
+        #   execution? Then on the next simulate_to_interruption call they can check if they triggered it in the same
+        #   way the static interruptions do: seeing if their time is the start time. Then, they'll trigger their
+        #   intervention in the same way.
+        # Better yet, would just be to have a flag for both that says "you triggered the last interruption!", and then
+        #  they can check if that's true, and apply their intervention.
+        raise NotImplementedError("TODO")
 
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
@@ -356,8 +399,12 @@ class PointObservation(PointInterruption):
         pyro.factor(f"obs_{self.time}", self.loglikelihood(current_state))
 
 
+class DynamicInterruption(pyro.poutine.messenger.Messenger):
+    pass
+
+
 # TODO AZ dji1820- I can't see any reason to abstract out a parent "DynamicInterruption" here?
-class DynamicIntervention(pyro.poutine.messenger.Messenger, _InterventionMixin):
+class DynamicIntervention(DynamicInterruption, _InterventionMixin):
     def __init__(
             self,
             event_f: Callable[[torch.tensor, State[torch.tensor]], torch.tensor],
