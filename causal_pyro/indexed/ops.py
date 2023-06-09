@@ -1,4 +1,5 @@
 import functools
+import operator
 from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import pyro
@@ -261,6 +262,34 @@ def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwarg
     assert all(isinstance(k, IndexSet) for k in values)
     for indices, value in values.items():
         result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
+@functools.singledispatch
+def cond(fst, snd: T, case, **kwargs):
+    """
+    Selection operation that is the sum-type analogue of :func:`scatter`
+    in the sense that where :func:`scatter` propagates both of its arguments,
+    :func:`cond` propagates only one, depending on the value of a boolean ``case`` .
+    For a given fst, snd, and case, :func:`cond` returns
+    snd if the case is true, and fst otherwise,
+    analogous to a Python conditional expression ``snd if case else fst`` .
+    Unlike a Python conditional expression, however, the case may be a tensor,
+    and both branches evaluated, as with :func:`torch.where` .
+    """
+    raise NotImplementedError(f"cond not implemented for {type(fst)}")
+
+
+@cond.register(dict)
+@pyro.poutine.runtime.effectful(type="cond_n")
+def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kwargs):
+    assert len(values) > 0
+    assert all(isinstance(k, IndexSet) for k in values.keys())
+    for indices, value in values.items():
+        tst = functools.reduce(
+            operator.or_, [case == index for index in next(iter(indices.values()))]
+        )
+        result = cond(result if result is not None else value, value, tst, **kwargs)
     return result
 
 
