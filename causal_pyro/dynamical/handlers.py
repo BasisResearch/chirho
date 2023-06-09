@@ -257,7 +257,6 @@ class PointObservation(PointInterruption):
         super().__init__(time, eps)
         self.loglikelihood = loglikelihood
 
-    def _pyro_post_simulate(self, msg) -> None:
-        curr_state = msg["value"][-1]
-        pyro.factor(f"obs_{self.time}", self.loglikelihood(curr_state))
-        return super()._pyro_post_simulate(msg)
+    def _pyro_simulate_span(self, msg) -> None:
+        _, current_state, _ = msg["args"]
+        pyro.factor(f"obs_{self.time}", self.loglikelihood(current_state))
