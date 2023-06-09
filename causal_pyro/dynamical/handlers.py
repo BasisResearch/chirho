@@ -34,6 +34,9 @@ class ODEDynamics(pyro.nn.PyroModule):
     def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
         raise NotImplementedError
 
+    def observation(self, X: State[torch.Tensor]):
+        raise NotImplementedError
+
     def forward(self, initial_state: State[torch.Tensor], timespan, **kwargs):
         return simulate(self, initial_state, timespan, **kwargs)
 

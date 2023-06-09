@@ -27,6 +27,10 @@ class SimpleSIRDynamics(ODEDynamics):
         dX.I = self.beta * X.S * X.I - self.gamma * X.I
         dX.R = self.gamma * X.I
 
+    def observation(self, X: State[torch.Tensor]):
+        S_true = pyro.sample("S_true", Normal(X.S, 1))
+        S_obs = pyro.sample("S_obs", Normal(S_true, 1))
+
 
 if __name__ == "__main__":
     SIR_simple_model = SimpleSIRDynamics()
@@ -36,11 +40,9 @@ if __name__ == "__main__":
 
     new_state = State(S=torch.tensor(10.0))
     S_obs = torch.tensor(10.0)
-    loglikelihood = lambda state: Normal(state.S, 1).log_prob(S_obs)
 
     with SimulatorEventLoop():
-        with PointObservation(time=2.9, loglikelihood=loglikelihood):
-            # with PointIntervention(time=2.99, intervention=new_state):
+        with PointIntervention(time=2.9, intervention=new_state):
             result1 = simulate(SIR_simple_model, init_state, tspan)
 
     result2 = simulate(SIR_simple_model, init_state, tspan)
@@ -48,9 +50,9 @@ if __name__ == "__main__":
     print(result1)
     print(result2)
 
-    with pyro.poutine.trace() as tr:
-        with SimulatorEventLoop():
-            with PointObservation(time=2.9, loglikelihood=loglikelihood):
-                simulate(SIR_simple_model, init_state, tspan)
+    # with pyro.poutine.trace() as tr:
+    #     with SimulatorEventLoop():
+    #         with PointObservation(time=2.9, loglikelihood=loglikelihood):
+    #             simulate(SIR_simple_model, init_state, tspan)
 
-    print(tr.trace.nodes)
+    # print(tr.trace.nodes)
