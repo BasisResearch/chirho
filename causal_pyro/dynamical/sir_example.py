@@ -28,11 +28,11 @@ class SimpleSIRDynamics(ODEDynamics):
         dX.R = self.gamma * X.I
 
     def observation(self, X: State[torch.Tensor]):
-        S_obs = pyro.sample(f"S_obs", Normal(X.S, 1))
-        I_obs = pyro.sample(f"I_obs", Normal(X.I, 1))
-        R_obs = pyro.sample(f"R_obs", Normal(X.R, 1))
-        usa_expected_cost = torch.relu(S_obs + 2 * I_obs - R_obs, 0)
-        usa_cost = pyro.sample(f"usa_cost", Normal(usa_expected_cost, 1))
+        S_obs = pyro.sample("S_obs", Normal(X.S, 1))
+        I_obs = pyro.sample("I_obs", Normal(X.I, 1))
+        R_obs = pyro.sample("R_obs", Normal(X.R, 1))
+        usa_expected_cost = torch.relu(S_obs + 2 * I_obs - R_obs)
+        pyro.sample("usa_cost", Normal(usa_expected_cost, 1))
 
 
 if __name__ == "__main__":
@@ -44,18 +44,20 @@ if __name__ == "__main__":
     new_state = State(S=torch.tensor(10.0))
     S_obs = torch.tensor(10.0)
 
-    with SimulatorEventLoop():
-        with PointIntervention(time=2.9, intervention=new_state):
-            result1 = simulate(SIR_simple_model, init_state, tspan)
+    data1 = {"S_obs": S_obs}
+    data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
 
-    result2 = simulate(SIR_simple_model, init_state, tspan)
+    with pyro.poutine.trace() as tr:
+        with SimulatorEventLoop():
+            with PointObservation(time=3.1, data=data2):
+                with PointObservation(time=2.9, data=data1):
+                    result = simulate(SIR_simple_model, init_state, tspan)
 
-    print(result1)
-    print(result2)
+    print(result)
 
     # with pyro.poutine.trace() as tr:
     #     with SimulatorEventLoop():
     #         with PointObservation(time=2.9, loglikelihood=loglikelihood):
     #             simulate(SIR_simple_model, init_state, tspan)
 
-    # print(tr.trace.nodes)
+    print(tr.trace.nodes)

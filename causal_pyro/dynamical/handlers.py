@@ -1,4 +1,5 @@
 from typing import (
+    Dict,
     Any,
     Callable,
     Generic,
@@ -186,9 +187,8 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
     and tspan2 = (time, tspan[-1]].
     """
 
-    def __init__(self, time: Union[float, torch.Tensor], eps: float = 1e-10):
+    def __init__(self, time: Union[float, torch.Tensor]):
         self.time = torch.as_tensor(time)
-        self.eps = eps
 
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
@@ -240,8 +240,8 @@ class PointIntervention(PointInterruption):
     and tspan2 = (time, tspan[-1]].
     """
 
-    def __init__(self, time: float, intervention: State[torch.Tensor], eps=1e-10):
-        super().__init__(time, eps)
+    def __init__(self, time: float, intervention: State[torch.Tensor]):
+        super().__init__(time)
         self.intervention = intervention
 
     def _pyro_simulate_span(self, msg):
@@ -254,12 +254,21 @@ class PointObservation(PointInterruption):
     def __init__(
         self,
         time: float,
-        loglikelihood: Callable[[State[torch.Tensor]], torch.Tensor],
-        eps: float = 1e-10,
+        data: Dict[str, torch.Tensor],
+        round_digits: int = 4,
     ):
-        super().__init__(time, eps)
-        self.loglikelihood = loglikelihood
+        self.data = data
+        super().__init__(time)
 
     def _pyro_simulate_span(self, msg) -> None:
-        _, current_state, _ = msg["args"]
-        pyro.factor(f"obs_{self.time}", self.loglikelihood(current_state))
+        dynamics, current_state, _ = msg["args"]
+
+        with pyro.condition(data=self.data):
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: isinstance(m, PointInterruption) and (m is not self)
+            ):
+                dynamics.observation(current_state)
+
+    def _pyro_sample(self, msg):
+        # modify observed site names to handle multiple time points
+        msg["name"] = msg["name"] + "_" + str(self.time.item())
