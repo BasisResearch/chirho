@@ -35,11 +35,15 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape, x_folde
         # y --> z
         X_base_dist = dist.Normal(0.0, 1)
         if x_folded:
-            X_dist = dist.FoldedDistribution(X_base_dist).expand(event_shape).to_event(event_dim)
+            X_dist = (
+                dist.FoldedDistribution(X_base_dist)
+                .expand(event_shape)
+                .to_event(event_dim)
+            )
         else:
             X_dist = dist.TransformedDistribution(
                 X_base_dist.expand(event_shape).to_event(event_dim),
-                [dist.transforms.ExpTransform()]
+                [dist.transforms.ExpTransform()],
             )
         X = pyro.sample("x", X_dist)
         Y = pyro.sample(
