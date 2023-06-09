@@ -1,6 +1,7 @@
 from typing import Any, Dict, Optional, TypeVar
 
 import pyro
+import torch
 
 from causal_pyro.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
@@ -34,6 +35,14 @@ class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
             acts = (acts,) if not isinstance(acts, tuple) else acts
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
             msg["done"] = True
+
+    @staticmethod
+    def _pyro_preempt(msg: Dict[str, Any]) -> None:
+        obs, acts, case = msg["args"]
+        msg["kwargs"]["name"] = f"__split_{msg['name']}"
+        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1))
+        case = pyro.sample(msg["kwargs"]["name"], case_dist.mask(False), obs=case)
+        msg["args"] = (obs, acts, case)
 
 
 class SingleWorldCounterfactual(BaseCounterfactualMessenger):
