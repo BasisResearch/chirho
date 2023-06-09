@@ -1,7 +1,6 @@
-from typing import Any, Dict, Generic, Hashable, Mapping, Optional, TypeVar
+from typing import Any, Dict, Optional, TypeVar
 
 import pyro
-import torch
 
 from causal_pyro.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
