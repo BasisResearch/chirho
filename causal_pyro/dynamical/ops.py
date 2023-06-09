@@ -28,6 +28,10 @@ class State(Generic[T]):
             setattr(self, k, v)
 
     @property
+    def var_order(self):
+        return tuple(sorted(self.keys))
+
+    @property
     def keys(self) -> Set[str]:
         return frozenset(self.__dict__["_values"].keys())
 
@@ -47,7 +51,29 @@ class State(Generic[T]):
             return self.__dict__["_values"][__name]
         return super().__getattr__(__name)
 
+    # TODO doesn't allow for explicitly handling mismatched keys.
+    # def __sub__(self, other: 'State[T]') -> 'State[T]':
+    #     # TODO throw errors if keys don't match, or if shapes don't match...but that should be the job of traj?
+    #     return State(**{k: getattr(self, k) - getattr(other, k) for k in self.keys})
 
+    def subtract_shared_variables(self, other: 'State[T]'):
+        shared_keys = self.keys.intersection(other.keys)
+        return State(**{k: getattr(self, k) - getattr(other, k) for k in shared_keys})
+
+    def l2(self) -> torch.Tensor:
+        """
+        Compute the L2 norm of the state. This is useful e.g. after taking the difference between two states.
+        :return: The L2 norm of the vectorized state.
+        """
+        return torch.sqrt(
+            torch.sum(
+                torch.square(
+                    torch.tensor([getattr(self, k) for k in self.keys]))))
+
+
+# TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
+#  we expect multiple vs. a single state in the vectors, but it's likely confusing/not useful for the user? Maybe,
+#  maybe not. If we do keep it we need more explicit guarantees that the State won't have more than a single entry?
 class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
@@ -71,7 +97,8 @@ class Dynamics(Protocol[S, T]):
 
 @functools.singledispatch
 def simulate_span(
-    dynamics: Dynamics[S, T], curr_state: State[T], timespan, **kwargs
+        dynamics: Dynamics[S, T], curr_state: State[T], timespan,
+        event_fn: Optional[Callable[[torch.tensor, torch.tensor], torch.tensor]] = None, **kwargs
 ) -> Trajectory[T]:
     """
     Simulate a fixed timespan of a dynamical system.
