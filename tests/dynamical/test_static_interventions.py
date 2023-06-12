@@ -1,29 +1,17 @@
 import logging
 
-import causal_pyro
-import pyro
 import pytest
 import torch
 
-from pyro.distributions import Normal, Uniform
-
-
-import pyro
-import torch
-from pyro.distributions import constraints
-
-from causal_pyro.dynamical.ops import State, simulate, Trajectory
 from causal_pyro.dynamical.handlers import (
-    ODEDynamics,
-    PointInterruption,
-    SimulatorEventLoop,
     PointIntervention,
+    SimulatorEventLoop,
     simulate,
 )
+from causal_pyro.dynamical.ops import State
 
 from .dynamical_fixtures import (
-    sir_ode,
-    check_trajectories_match,
+    SimpleSIRDynamics,
     check_trajectories_match_in_all_but_values,
 )
 
@@ -51,14 +39,15 @@ intervene_times = tspan_values - 0.5
 eps = 1e-3
 
 
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", intervene_times)
 def test_point_intervention_causes_difference(
-    sir_ode, init_state, tspan, intervene_state, intervene_time
+    model, init_state, tspan, intervene_state, intervene_time
 ):
-    observational_execution_result = simulate(sir_ode, init_state, tspan)
+    observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
@@ -67,10 +56,10 @@ def test_point_intervention_causes_difference(
                 with pytest.raises(
                     ValueError, match="is before the first time in the timespan"
                 ):
-                    simulate(sir_ode, init_state, tspan)
+                    simulate(model, init_state, tspan)
                 return
             else:
-                result_single_pint = simulate(sir_ode, init_state, tspan)
+                result_single_pint = simulate(model, init_state, tspan)
 
     assert check_trajectories_match_in_all_but_values(
         observational_execution_result, result_single_pint
@@ -81,6 +70,7 @@ def test_point_intervention_causes_difference(
 
 
 # TODO get rid of some entries cz this test takes too long to run w/ all permutations.
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state1", intervene_states)
@@ -88,7 +78,7 @@ def test_point_intervention_causes_difference(
 @pytest.mark.parametrize("intervene_state2", intervene_states)
 @pytest.mark.parametrize("intervene_time2", intervene_times)
 def test_nested_point_interventions_cause_difference(
-    sir_ode,
+    model,
     init_state,
     tspan,
     intervene_state1,
@@ -96,7 +86,7 @@ def test_nested_point_interventions_cause_difference(
     intervene_state2,
     intervene_time2,
 ):
-    observational_execution_result = simulate(sir_ode, init_state, tspan)
+    observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
@@ -106,17 +96,17 @@ def test_nested_point_interventions_cause_difference(
                     with pytest.raises(
                         ValueError, match="is before the first time in the timespan"
                     ):
-                        simulate(sir_ode, init_state, tspan)
+                        simulate(model, init_state, tspan)
                     return
                 elif torch.isclose(intervene_time1, intervene_time2):
                     with pytest.raises(
                         ValueError,
                         match="Two point interruptions cannot occur at the same time.",
                     ):
-                        simulate(sir_ode, init_state, tspan)
+                        simulate(model, init_state, tspan)
                     return
                 else:
-                    result_nested_pint = simulate(sir_ode, init_state, tspan)
+                    result_nested_pint = simulate(model, init_state, tspan)
 
     assert check_trajectories_match_in_all_but_values(
         observational_execution_result, result_nested_pint

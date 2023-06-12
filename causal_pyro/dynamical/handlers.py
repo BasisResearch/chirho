@@ -1,34 +1,24 @@
-from typing import (
-    Dict,
-    Any,
-    Callable,
-    Generic,
-    Hashable,
-    Mapping,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from __future__ import annotations
 
 import functools
+import warnings
+from typing import Dict, Tuple, TypeVar, Union
+
 import pyro
 import torch
 import torchdiffeq
-import warnings
 
 from causal_pyro.dynamical.ops import (
     State,
-    Dynamics,
-    simulate,
-    concatenate,
-    simulate_span,
     Trajectory,
+    concatenate,
+    simulate,
+    simulate_span,
 )
 from causal_pyro.interventional.ops import intervene
-from causal_pyro.interventional.handlers import do
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 class ODEDynamics(pyro.nn.PyroModule):
@@ -42,16 +32,17 @@ class ODEDynamics(pyro.nn.PyroModule):
         return simulate(self, initial_state, timespan, **kwargs)
 
     def _deriv(
-        dynamics: "ODEDynamics",
+        dynamics: ODEDynamics,
         var_order: Tuple[str, ...],
         time: torch.Tensor,
-        state: Tuple[T, ...],
-    ) -> Tuple[T, ...]:
-        ddt, env = State(), State()
+        state: Tuple[torch.Tensor, ...],
+    ) -> Tuple[torch.Tensor, ...]:
+        ddt: State[torch.Tensor] = State()
+        env: State[torch.Tensor] = State()
         for var, value in zip(var_order, state):
             setattr(env, var, value)
         dynamics.diff(ddt, env)
-        return tuple(getattr(ddt, var, 0.0) for var in var_order)
+        return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
 @simulate.register(ODEDynamics)
@@ -76,7 +67,7 @@ def ode_simulate_span(
         **kwargs,
     )
 
-    trajectory = Trajectory()
+    trajectory: Trajectory[torch.Tensor] = Trajectory()
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -162,10 +153,12 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
 
             current_state = span_traj[-1]
             if i < final_i:
-                span_traj = span_traj[1:-1]  # remove interruption times at endpoints
+                trunc_span_traj = span_traj[
+                    1:-1
+                ]  # remove interruption times at endpoints
             else:
-                span_traj = span_traj[1:]  # remove interruption time at start
-            span_trajectories.append(span_traj)
+                trunc_span_traj = span_traj[1:]  # remove interruption time at start
+            span_trajectories.append(trunc_span_traj)
 
         full_trajectory = concatenate(*span_trajectories)
         msg["value"] = full_trajectory
@@ -230,7 +223,7 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
 
 @intervene.register(State)
 def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
-    new_state = State()
+    new_state: State[T] = State()
     for k in obs.keys:
         setattr(
             new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)

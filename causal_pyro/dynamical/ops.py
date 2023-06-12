@@ -1,34 +1,29 @@
+import functools
 from typing import (
-    Any,
-    List,
     Callable,
+    FrozenSet,
     Generic,
-    Hashable,
-    Mapping,
-    Optional,
     Protocol,
-    Set,
-    Tuple,
     TypeVar,
     Union,
     runtime_checkable,
 )
 
-import functools
 import pyro
 import torch
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 class State(Generic[T]):
     def __init__(self, **values: T):
-        self.__dict__["_values"]: dict[str, T] = {}
+        self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
 
     @property
-    def keys(self) -> Set[str]:
+    def keys(self) -> FrozenSet[str]:
         return frozenset(self.__dict__["_values"].keys())
 
     def __repr__(self) -> str:
@@ -45,7 +40,8 @@ class State(Generic[T]):
     def __getattr__(self, __name: str) -> T:
         if __name in self.__dict__["_values"]:
             return self.__dict__["_values"][__name]
-        return super().__getattr__(__name)
+        else:
+            raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
 class Trajectory(State[T]):
@@ -55,13 +51,16 @@ class Trajectory(State[T]):
     def __getitem__(self, key: Union[int, slice]) -> State[T]:
         if isinstance(key, str):
             raise ValueError(
-                "Trajectory does not support string indexing, use getattr instead if you want to access a specific state variable."
+                "Trajectory does not support string indexing, use getattr instead if you want to access \
+                    a specific state variable."
             )
 
-        state = State() if isinstance(key, int) else Trajectory()
+        item: Union[State[T], Trajectory[T]] = (
+            State() if isinstance(key, int) else Trajectory()
+        )
         for k, v in self.__dict__["_values"].items():
-            setattr(state, k, v[key])
-        return state
+            setattr(item, k, v[key])
+        return item
 
 
 @runtime_checkable
@@ -94,7 +93,7 @@ def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """
-    full_trajectory = Trajectory()
+    full_trajectory: Trajectory[T] = Trajectory()
     for trajectory in trajectories:
         for k in trajectory.keys:
             if k not in full_trajectory.keys:
