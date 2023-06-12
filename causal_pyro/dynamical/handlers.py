@@ -197,17 +197,23 @@ class PointInterruption(pyro.poutine.messenger.Messenger):
             accrued_interruptions.append(self)
             msg["accrued_point_interruptions"] = accrued_interruptions
 
-        # Throw an error if the intervention time occurs before the timespan, as the simulator
+        # Throw an error if the interruption time occurs before the timespan, as the simulator
         #  won't simulate before the first time in the timespan, but the user might expect
         #  the intervention to affect the execution regardless.
         if self.time < full_timespan[0]:
             raise ValueError(
                 f"Intervention time {self.time} is before the first time in the timespan {full_timespan[0]}. If you'd"
-                f" like to include this intervention, explicitly include the earlier intervention time within the"
+                f" like to include this interruption, explicitly include the earlier interruption time within the"
                 f" range of the timespan."
             )
 
-        # Throw a warning if the intervention time occurs after the timespan, as the user likely made a mistake
+        # Throw an error if the interruption time occurs exactly at any point in the timepsan to catch collisions early.
+        if torch.any(self.time == full_timespan).item():
+            raise ValueError(
+                f"Intervention time {self.time} is exactly equal to a time in the timespan {full_timespan}."
+            )
+
+        # Throw a warning if the interruption time occurs after the timespan, as the user likely made a mistake
         #  on the intervention time.
         if self.time > full_timespan[-1]:
             warnings.warn(
