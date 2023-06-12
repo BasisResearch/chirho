@@ -7,30 +7,23 @@ from causal_pyro.counterfactual.handlers.ambiguity import (
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import gen_intervene_name, split
+from causal_pyro.counterfactual.ops import split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import IndexSet, get_index_plates, scatter
+from causal_pyro.indexed.ops import get_index_plates
 from causal_pyro.interventional.ops import intervene
 
 T = TypeVar("T")
 
 
-class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
+class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
     """
     Base class for counterfactual handlers.
     """
-
-    default_name: str = "intervened"
 
     def __init__(self, config: Optional[CondStrategy] = None):
         if config is None:
             config = AutoFactualConditioning()
         super().__init__(config=config)
-
-    @staticmethod
-    def _pyro_get_index_plates(msg: Dict[str, Any]) -> None:
-        msg["stop"], msg["done"] = True, True
-        msg["value"] = {}
 
     @staticmethod
     def _pyro_intervene(msg: Dict[str, Any]) -> None:
@@ -42,32 +35,8 @@ class BaseCounterfactual(AmbiguousConditioningReparamMessenger):
             msg["value"] = split(obs, acts, name=msg["name"], **msg["kwargs"])
             msg["done"] = True
 
-    @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        if not msg["done"]:
-            (name,) = msg["args"]
-            msg["value"] = name if name is not None else cls.default_name
-            msg["done"] = True
 
-    @pyro.poutine.block(hide_types=["intervene"])
-    def _pyro_split(self, msg: Dict[str, Any]) -> None:
-        if msg["done"]:
-            return
-
-        obs, acts = msg["args"]
-        name = gen_intervene_name(msg["name"])
-
-        act_values = {IndexSet(**{name: {0}}): obs}
-        for i, act in enumerate(acts):
-            act_values[IndexSet(**{name: {i + 1}})] = intervene(
-                obs, act, **msg["kwargs"]
-            )
-
-        msg["value"] = scatter(act_values, event_dim=msg["kwargs"].get("event_dim", 0))
-        msg["done"] = True
-
-
-class SingleWorldCounterfactual(BaseCounterfactual):
+class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the intervened value.
     """
@@ -80,7 +49,7 @@ class SingleWorldCounterfactual(BaseCounterfactual):
         msg["stop"] = True
 
 
-class SingleWorldFactual(BaseCounterfactual):
+class SingleWorldFactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the observed value.
     """
@@ -93,21 +62,21 @@ class SingleWorldFactual(BaseCounterfactual):
         msg["stop"] = True
 
 
-class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
+class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    default_name: str = "intervened"
+
     @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        (name,) = msg["args"]
-        if name is None:
-            name = cls.default_name
+    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+        name = msg["name"] if msg["name"] is not None else cls.default_name
         index_plates = get_index_plates()
         if name in index_plates:
             name = f"{name}_{len(index_plates)}"
-        msg["value"] = name
-        msg["done"] = True
+        msg["kwargs"]["name"] = msg["name"] = name
 
 
-class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactual):
+class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    default_name: str = "intervened"
+
     @classmethod
-    def _pyro_gen_intervene_name(cls, msg: Dict[str, Any]) -> None:
-        msg["value"] = cls.default_name
-        msg["done"] = True
+    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+        msg["kwargs"]["name"] = msg["name"] = cls.default_name
