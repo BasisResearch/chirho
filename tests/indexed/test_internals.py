@@ -367,10 +367,12 @@ def test_persistent_index_state(batch_shape, event_shape):
 
 
 def test_index_plate_names():
-    with IndexPlatesMessenger():
+    with IndexPlatesMessenger(-1):
         add_indices(IndexSet(a={0, 1}))
         index_plates = get_index_plates()
+        x_ind = indices_of(torch.randn(2))
 
+    assert "a" in x_ind
     assert len(index_plates) == 1
     for name, frame in index_plates.items():
         assert name != frame.name
