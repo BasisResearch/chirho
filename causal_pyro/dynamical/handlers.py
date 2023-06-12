@@ -255,10 +255,12 @@ class PointObservation(PointInterruption):
         self,
         time: float,
         data: Dict[str, torch.Tensor],
-        round_digits: int = 4,
+        eps: float = 1e-6,
     ):
         self.data = data
-        super().__init__(time)
+        # Add a small amount of time to the observation time to ensure that
+        # the observation occurs after the logging period.
+        super().__init__(time + eps)
 
     def _pyro_simulate_span(self, msg) -> None:
         dynamics, current_state, _ = msg["args"]
