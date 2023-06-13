@@ -85,7 +85,7 @@ class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
 
-    def __getitem__(self, key: Union[int, slice]) -> State[T]:
+    def __getitem__(self, key: Union[int, slice]) -> Union[State[T], 'Trajectory[T]']:
         if isinstance(key, str):
             raise ValueError(
                 "Trajectory does not support string indexing, use getattr instead if you want to access a specific "

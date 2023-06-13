@@ -76,6 +76,18 @@ def test_point_intervention_causes_difference(
         observational_execution_result, result_single_pint
     )
 
+    # Make sure the intervention only causes a difference after the intervention time.
+    after = intervene_time < tspan
+    before = ~after
+
+    observational_result_before_int = observational_execution_result[before]
+    result_before_int = result_single_pint[before]
+    assert check_trajectories_match(observational_result_before_int, result_before_int)
+
+    observational_result_after_int = observational_execution_result[after]
+    result_after_int = result_single_pint[after]
+    assert check_trajectories_match_in_all_but_values(observational_result_after_int, result_after_int)
+
 
 # TODO test what happens when the intervention time is exactly at the start of the time span.
 
