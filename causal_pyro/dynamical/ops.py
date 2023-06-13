@@ -15,7 +15,7 @@ from typing import (
     TYPE_CHECKING,
 )
 if TYPE_CHECKING:
-    from .handlers import DynamicInterruption, PointInterruption
+    from .handlers import DynamicInterruption, PointInterruption, Interruption
 
 import functools
 import pyro
@@ -116,11 +116,18 @@ def simulate_to_interruption(
         dynamics: Dynamics[S, T],
         start_state: State[T],
         timespan,  # The first element of timespan is assumed to be the starting time.
-        next_static_interruption: PointInterruption = None,
-        dynamic_interruptions: List[DynamicInterruption] = None, **kwargs
-) -> Trajectory[T]:
+        *,
+        next_static_interruption: Optional['PointInterruption'] = None,
+        dynamic_interruptions: Optional[List['DynamicInterruption']] = None, **kwargs
+) -> Tuple[Trajectory[T], Tuple['Interruption', ...], float, State[T]]:
     """
-    Simulate a dynamical system until the next interruption.
+    Simulate a dynamical system until the next interruption. Return the state at the requested time points, and
+     a collection of interruptions that ended the simulation (this will usually just be a single interruption).
+    This will be either one of the passed dynamic interruptions or the next static interruption, whichever comes
+     first.
+    :returns: the state at the requested time points, the interruption that ended the simulation, the time at which
+     the simulation ended, and the end state. The initial trajectory object does not include state measurements at
+     the end-point.
     """
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"

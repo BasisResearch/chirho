@@ -62,9 +62,6 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
             with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
                 result_double_pint1 = simulate(sir_ode, init_state, tspan)
 
-    # FIXME AZ-yu28184 This test fails rn because the state of the system at the the point interruption is included in the
-    #  returned vector of measurements. TODO parse that out so that user gets what they ask for?
-    #  Odd that this only procs for the double point interruption case
     assert check_trajectories_match(observational_execution_result, result_double_pint1)
 
     # Test with two standard point interruptions, in a different order.
