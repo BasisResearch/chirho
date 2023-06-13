@@ -58,7 +58,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor]):
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("trigger_state", [trigger_state])
 @pytest.mark.parametrize("intervene_state", [intervene_state])
-def test_dynamic_intervention_runtime(
+def test_dynamic_intervention_causes_change(
         sir_ode, init_state, tspan, trigger_state, intervene_state):
 
     with SimulatorEventLoop():
@@ -69,4 +69,10 @@ def test_dynamic_intervention_runtime(
                 num_applications=1):
             res = simulate(sir_ode, init_state, tspan)
 
-    assert True
+    total = init_state.S + init_state.I + init_state.R
+
+    assert torch.isclose(res[0].S + res[0].I + res[0].R, total)
+    # The intervention just "adds" (sets) 50 "people" to the susceptible population, around
+    #  it happens that the susceptible population is roughly 0 at the intervention point,
+    #  so this serves to make sure the intervention actually causes that population influx.
+    assert res[-1].S + res[-1].I + res[-1].R > total + (50 * 0.9)
