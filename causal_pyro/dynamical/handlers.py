@@ -116,16 +116,24 @@ def torchdiffeq_ode_simulate_to_interruption(
 
     else:
 
-        # TODO this needs to
-        # 1. Create the combined event function from the dynamic interruptions.
-        # 2. Simulate out, with odeint_event, to either the end of the timespan or the static interruption.
-        #   2.1 Do this by adding a terminal event function that triggers when terminal.
-        # 3. If the end point fired, re-execute and return the tspan.
-        # 4. If a dynamic interruption fired, re-run just that part and return the tspan.
-        # 5. Also need to return something to let the caller know which event(s) was(/were) triggered so that the relevant
-        #     executions and state/dynamics adjustments can happen.
+        # Create the event function combining all dynamic events and the terminal (next) static interruption.
+        combined_event_f = torchdiffeq_combined_event_f(next_static_interruption, dynamic_interruptions)
 
-        raise NotImplementedError("TODO")
+        # Simulate to the event execution.
+        raise NotImplementedError
+
+        # Check which event(s) fired, and put the triggered events in a list.
+        raise NotImplementedError
+
+        # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
+        raise NotImplementedError
+
+        # Execute a standard, non-event based simulation on the new timespan.
+        raise NotImplementedError
+
+        # Return that trajectory (with interruption time separated out into the end state), the list of triggered
+        #  events, the time of the triggered event, and the state at the time of the triggered event.
+        raise NotImplementedError
 
 
 # TODO AZ — maybe to multiple dispatch on the interruption type and state type?
@@ -143,7 +151,7 @@ def torchdiffeq_point_interruption_flattened_event_f(
     return event_f
 
 
-# TODO AZ — maybe to multiple dispatch on the interruption type and state type?
+# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_dynamic_interruption_flattened_event_f(
         di: 'DynamicInterruption') -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
     """
