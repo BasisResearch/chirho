@@ -40,29 +40,14 @@ class Runtime(Generic[T]):
         self.interpretation = interpretation
 
 
-def define_define(Operation, constructors: Interpretation[T]):
-
+@functools.lru_cache(maxsize=None)
+def define(m: Type[T]) -> Callable[..., Type[T]]:
     # define is the embedding function from host syntax to embedded syntax
-    def define(m: Type[T] | Hashable) -> Callable[..., Type[T]]:
-        try:
-            return constructors[m]
-        except KeyError:
-            return m
-
-    def metadef(m: Type[T] | Hashable, fn: Optional[Callable[..., Type[T]]] = None):
-        if fn is None:  # curry
-            return lambda fn: metadef(m, fn)
-
-        constructors[m] = define(Operation)(fn)
-        return define(m)
-
-    RUNTIME = Runtime(constructors)
-
-    metadef(define, metadef)
-    return RUNTIME, define
+    return Operation(m) if m is Operation else define(Operation)(m)
 
 
-RUNTIME, define = define_define(Operation, Interpretation())
+RUNTIME = Runtime(Interpretation())
+define = define(Operation)(define)
 
 
 @define(Operation)
@@ -96,7 +81,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 def compose_op_interpretation(intp1: OpInterpretation[T], intp2: OpInterpretation[T]) -> OpInterpretation[T]:
-    return ComposeOpInterpretation(intp1, intp2)
+    return ResetOpInterpretation(fwd, intp1, intp2)
 
 
 @define(Operation)
@@ -105,7 +90,7 @@ def fwd(result: Optional[T]) -> T:
 
 
 @contextlib.contextmanager
-def handle(intp: Interpretation[T]):
+def handler(intp: Interpretation[T]):
     old_intp = swap_interpretation(compose(get_interpretation(), intp))
     try:
         yield intp
@@ -115,31 +100,39 @@ def handle(intp: Interpretation[T]):
 
 ##################################################
 
-class FwdInterpretation(Generic[T], _OpInterpretation[T]):
+class ShiftInterpretation(Generic[T], _OpInterpretation[T]):
     rest: OpInterpretation[T]
 
     def __init__(self, rest: OpInterpretation[T], args: tuple[T, ...]):
         self.rest = rest
         self._active_args = args
+        self._ran = False
 
-    def interpret(self, fwd_res: Optional[T], result: Optional[T]) -> T:
-        return self.rest(result, *self._active_args)
+    def interpret(self, prompt_res: Optional[T], result: Optional[T]) -> T:
+        if self._ran:
+            if prompt_res is not None:
+                return prompt_res
+            else:
+                raise RuntimeError(f"Continuation {self.rest} can only be run once")
+
+        try:
+            return self.rest(result, *self._active_args)
+        finally:
+            self._ran = True
 
 
-class ComposeOpInterpretation(Generic[T], _OpInterpretation[T]):
+class ResetOpInterpretation(Generic[T], _OpInterpretation[T]):
+    prompt_op: Operation[T]
     rest: OpInterpretation[T]
     fst: OpInterpretation[T]
 
-    def __init__(self, rest, fst):
+    def __init__(self, prompt_op, rest, fst):
+        self.prompt_op = prompt_op
         self.rest = rest
         self.fst = fst
 
     def interpret(self, result: Optional[T], *args: T) -> T:
-        # reduces to call by:
-        # 1. creating interpretation for fwd() that calls rest
-        # 2. right-composing that with the active interpretation
-        # 3. calling the op interpretation
-        with handle(Interpretation(((fwd, FwdInterpretation(self.rest, args)),))):
+        with handler(Interpretation(((self.prompt_op, ShiftInterpretation(self.rest, args)),))):
             return self.fst(result, *args)
 
 
@@ -160,7 +153,12 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 def product_op_interpretation(intp1: Interpretation[T], refl: OpInterpretation[T], intp2: OpInterpretation[T]) -> OpInterpretation[T]:
-    return ProductOpInterpretation(intp1, refl, intp2)
+    # reduces to compose by:
+    # 1. creating interpretation that reflect()s each included op
+    # 2. creating interpretation for reflect() that switches the active interpretation to other
+    # 3. right-composing these with the active interpretation
+    # 4. calling the op interpretation
+    return ResetOpInterpretation(reflect, handler(intp1)(refl), intp2)
 
 
 @define(Operation)
@@ -169,48 +167,12 @@ def reflect(result: Optional[T]) -> T:
 
 
 @contextlib.contextmanager
-def runtime(intp: Interpretation[T]):
+def runner(intp: Interpretation[T]):
     old_intp = swap_interpretation(product(get_interpretation(), intp))
     try:
         yield intp
     finally:
         swap_interpretation(old_intp)
-
-
-##################################################
-
-class ReflectInterpretation(Generic[T], _OpInterpretation[T]):
-    other: Interpretation[T]
-    rest: OpInterpretation[T]
-
-    def __init__(self, other: Interpretation[T], rest: OpInterpretation[T], args: tuple[T, ...]):
-        self.other = other
-        self.rest = rest
-        self._active_args = args
-
-    def interpret(self, ref_result: Optional[T], result: Optional[T]) -> T:
-        with handle(self.other):
-            return self.rest(result, *self._active_args)
-
-
-class ProductOpInterpretation(Generic[T], _OpInterpretation[T]):
-    other: Interpretation[T]
-    rest: OpInterpretation[T]
-    fst: OpInterpretation[T]
-
-    def __init__(self, other, rest, fst):
-        self.other = other
-        self.rest = rest
-        self.fst = fst
-
-    def interpret(self, result: Optional[T], *args: T) -> T:
-        # reduces to compose by:
-        # 1. creating interpretation that reflect()s each included op
-        # 2. creating interpretation for reflect() that switches the active interpretation to other
-        # 3. right-composing these with the active interpretation
-        # 4. calling the op interpretation
-        with handle(Interpretation(((reflect, ReflectInterpretation(self.other, self.rest, args)),))):
-            return self.fst(result, *args)
 
 
 ##################################################
@@ -255,7 +217,7 @@ if __name__ == "__main__":
     print(add(3, 4))
     print(add3(3, 4, 5))
 
-    with handle(printme3) as h:
+    with handler(printme3) as h:
         print(add(3, 4))
 
 
@@ -263,8 +225,8 @@ if __name__ == "__main__":
     # when reflect is called, it should jump to the next runtime
     # i.e. re-invoke the operation under the next runtime interpretation
 
-    with runtime(default):
-        with handle(compose(printme1, printme2)) as h:
+    with runner(default):
+        with handler(compose(printme1, printme2)) as h:
             print(add(3, 4))
 
     language = product(default, compose(printme1, printme2))
