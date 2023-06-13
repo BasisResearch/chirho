@@ -55,9 +55,8 @@ class ODEDynamics(pyro.nn.PyroModule):
 
 
 # <Torchdiffeq Implementations>
-@simulate.register(ODEDynamics)
-@pyro.poutine.runtime.effectful(type="simulate")
-def torchdiffeq_ode_simulate(
+
+def _torchdiffeq_ode_simulate_inner(
         dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
     var_order = initial_state.var_order  # arbitrary, but fixed
@@ -76,6 +75,14 @@ def torchdiffeq_ode_simulate(
     return trajectory
 
 
+@simulate.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate")
+def torchdiffeq_ode_simulate(
+        dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+):
+    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+
+
 @simulate_to_interruption.register(ODEDynamics)
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def torchdiffeq_ode_simulate_to_interruption(
@@ -91,49 +98,51 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = torchdiffeq_ode_simulate(dynamics, start_state, timespan, **kwargs)
+        trajectory = _torchdiffeq_ode_simulate_inner(dynamics, start_state, timespan, **kwargs)
         return trajectory, (), timespan[-1], trajectory[-1]
 
-    elif nodyn:
-        # TODO AZ just implementing this block for testing rn. Dynamic interruption will actually fold this stuff in.
-        preinterrupt_tspan = torch.tensor(
-            [*timespan[timespan < next_static_interruption.time], next_static_interruption.time])
+    # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
+    #  for the many possibilities, this can be optimized.
+    # TODO AZ if no dynamic events, just skip the event function pass.
 
-        var_order = start_state.var_order  # arbitrary, but fixed
+    if dynamic_interruptions is None:
+        dynamic_interruptions = []
 
-        solns = torchdiffeq.odeint(
-            functools.partial(dynamics._deriv, var_order),
-            tuple(getattr(start_state, v) for v in var_order),
-            preinterrupt_tspan,
-            **kwargs,
-        )
+    if nostat:
+        # This is required because torchdiffeq.odeint_event appears to just go on and on forever without a terminal
+        #  event.
+        raise ValueError("No static terminal interruption provided, but about to perform an event sim.")
 
-        trajectory = Trajectory()
-        for var, soln in zip(var_order, solns):
-            setattr(trajectory, var, soln)
+    # Create the event function combining all dynamic events and the terminal (next) static interruption.
+    combined_event_f = torchdiffeq_combined_event_f(next_static_interruption, dynamic_interruptions)
 
-        return trajectory[:-1], (next_static_interruption,), next_static_interruption.time, trajectory[-1]
+    # Simulate to the event execution.
+    event_time, event_state = torchdiffeq.odeint_event(
+        functools.partial(dynamics._deriv, start_state.var_order),
+        tuple(getattr(start_state, v) for v in start_state.var_order),
+        timespan[0],
+        event_fn=combined_event_f
+    )
 
-    else:
+    # Check which event(s) fired, and put the triggered events in a list.
+    fired_mask = torch.isclose(combined_event_f(event_time, event_state), torch.tensor(0.))
 
-        # Create the event function combining all dynamic events and the terminal (next) static interruption.
-        combined_event_f = torchdiffeq_combined_event_f(next_static_interruption, dynamic_interruptions)
+    if len(fired_mask) != len(dynamic_interruptions) + 1:
+        raise RuntimeError("The event function returned an unexpected number of events.")
 
-        # Simulate to the event execution.
-        raise NotImplementedError
+    triggered_events = [de for de, fm in zip(dynamic_interruptions, fired_mask[:-1]) if fm]
+    if fired_mask[-1]:
+        triggered_events.append(next_static_interruption)
 
-        # Check which event(s) fired, and put the triggered events in a list.
-        raise NotImplementedError
+    # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
+    timespan_2nd_pass = torch.tensor([*timespan[timespan < event_time], event_time])
 
-        # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
-        raise NotImplementedError
+    # Execute a standard, non-event based simulation on the new timespan.
+    trajectory = _torchdiffeq_ode_simulate_inner(dynamics, start_state, timespan_2nd_pass, **kwargs)
 
-        # Execute a standard, non-event based simulation on the new timespan.
-        raise NotImplementedError
-
-        # Return that trajectory (with interruption time separated out into the end state), the list of triggered
-        #  events, the time of the triggered event, and the state at the time of the triggered event.
-        raise NotImplementedError
+    # Return that trajectory (with interruption time separated out into the end state), the list of triggered
+    #  events, the time of the triggered event, and the state at the time of the triggered event.
+    return trajectory[:-1], tuple(triggered_events), event_time, trajectory[-1]
 
 
 # TODO AZ — maybe to multiple dispatch on the interruption type and state type?
@@ -169,6 +178,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
     return event_f
 
 
+# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_combined_event_f(
     next_static_interruption: 'PointInterruption',
     dynamic_interruptions: List['DynamicInterruption']
