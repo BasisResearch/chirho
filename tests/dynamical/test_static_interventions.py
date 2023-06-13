@@ -1,30 +1,24 @@
 import logging
 
-import causal_pyro
 import pyro
 import pytest
 import torch
+from pyro.distributions import Normal, Uniform, constraints
 
-from pyro.distributions import Normal, Uniform
-
-
-import pyro
-import torch
-from pyro.distributions import constraints
-
-from causal_pyro.dynamical.ops import State, simulate, Trajectory
+import causal_pyro
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
-    SimulatorEventLoop,
     PointIntervention,
+    SimulatorEventLoop,
     simulate,
 )
+from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import (
-    sir_ode,
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
+    sir_ode,
 )
 
 logger = logging.getLogger(__name__)
@@ -86,7 +80,9 @@ def test_point_intervention_causes_difference(
 
     observational_result_after_int = observational_execution_result[after]
     result_after_int = result_single_pint[after]
-    assert check_trajectories_match_in_all_but_values(observational_result_after_int, result_after_int)
+    assert check_trajectories_match_in_all_but_values(
+        observational_result_after_int, result_after_int
+    )
 
 
 # TODO test what happens when the intervention time is exactly at the start of the time span.

@@ -1,8 +1,7 @@
 import pyro
 import torch
-from pyro.distributions import constraints, Normal
+from pyro.distributions import Normal, constraints
 
-from causal_pyro.dynamical.ops import State, simulate
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
@@ -11,6 +10,7 @@ from causal_pyro.dynamical.handlers import (
     SimulatorEventLoop,
     simulate,
 )
+from causal_pyro.dynamical.ops import State, simulate
 
 
 class SimpleSIRDynamics(ODEDynamics):

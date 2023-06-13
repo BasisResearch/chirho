@@ -1,18 +1,11 @@
 import logging
 
-import causal_pyro
 import pyro
 import pytest
 import torch
+from pyro.distributions import Normal, Uniform, constraints
 
-from pyro.distributions import Normal, Uniform
-
-
-import pyro
-import torch
-from pyro.distributions import constraints
-
-from causal_pyro.dynamical.ops import State, simulate, Trajectory
+import causal_pyro
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
@@ -20,8 +13,9 @@ from causal_pyro.dynamical.handlers import (
     SimulatorEventLoop,
     simulate,
 )
+from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
-from .dynamical_fixtures import sir_ode, check_trajectories_match
+from .dynamical_fixtures import check_trajectories_match, sir_ode
 
 logger = logging.getLogger(__name__)
 

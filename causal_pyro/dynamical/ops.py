@@ -1,9 +1,10 @@
 from typing import (
+    TYPE_CHECKING,
     Any,
-    List,
     Callable,
     Generic,
     Hashable,
+    List,
     Mapping,
     Optional,
     Protocol,
@@ -12,12 +13,13 @@ from typing import (
     TypeVar,
     Union,
     runtime_checkable,
-    TYPE_CHECKING,
 )
+
 if TYPE_CHECKING:
     from .handlers import DynamicInterruption, PointInterruption, Interruption
 
 import functools
+
 import pyro
 import torch
 
@@ -57,7 +59,7 @@ class State(Generic[T]):
     #     # TODO throw errors if keys don't match, or if shapes don't match...but that should be the job of traj?
     #     return State(**{k: getattr(self, k) - getattr(other, k) for k in self.keys})
 
-    def subtract_shared_variables(self, other: 'State[T]'):
+    def subtract_shared_variables(self, other: "State[T]"):
         shared_keys = self.keys.intersection(other.keys)
         return State(**{k: getattr(self, k) - getattr(other, k) for k in shared_keys})
 
@@ -68,10 +70,11 @@ class State(Generic[T]):
         """
         return torch.sqrt(
             torch.sum(
-                torch.square(
-                    torch.tensor(*[getattr(self, k) for k in self.keys]))))
+                torch.square(torch.tensor(*[getattr(self, k) for k in self.keys]))
+            )
+        )
 
-    def trajectorify(self) -> 'Trajectory[T]':
+    def trajectorify(self) -> "Trajectory[T]":
         ret = Trajectory(**{k: torch.unsqueeze(getattr(self, k), 0) for k in self.keys})
         return ret
 
@@ -83,7 +86,7 @@ class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
 
-    def __getitem__(self, key: Union[int, slice]) -> Union[State[T], 'Trajectory[T]']:
+    def __getitem__(self, key: Union[int, slice]) -> Union[State[T], "Trajectory[T]"]:
         if isinstance(key, str):
             raise ValueError(
                 "Trajectory does not support string indexing, use getattr instead if you want to access a specific "
@@ -103,8 +106,11 @@ class Dynamics(Protocol[S, T]):
 
 @functools.singledispatch
 def simulate_span(
-        dynamics: Dynamics[S, T], curr_state: State[T], timespan,
-        event_fn: Optional[Callable[[torch.tensor, torch.tensor], torch.tensor]] = None, **kwargs
+    dynamics: Dynamics[S, T],
+    curr_state: State[T],
+    timespan,
+    event_fn: Optional[Callable[[torch.tensor, torch.tensor], torch.tensor]] = None,
+    **kwargs,
 ) -> Trajectory[T]:
     """
     Simulate a fixed timespan of a dynamical system.
@@ -116,13 +122,14 @@ def simulate_span(
 
 @functools.singledispatch
 def simulate_to_interruption(
-        dynamics: Dynamics[S, T],
-        start_state: State[T],
-        timespan,  # The first element of timespan is assumed to be the starting time.
-        *,
-        next_static_interruption: Optional['PointInterruption'] = None,
-        dynamic_interruptions: Optional[List['DynamicInterruption']] = None, **kwargs
-) -> Tuple[Trajectory[T], Tuple['Interruption', ...], float, State[T]]:
+    dynamics: Dynamics[S, T],
+    start_state: State[T],
+    timespan,  # The first element of timespan is assumed to be the starting time.
+    *,
+    next_static_interruption: Optional["PointInterruption"] = None,
+    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    **kwargs,
+) -> Tuple[Trajectory[T], Tuple["Interruption", ...], float, State[T]]:
     """
     Simulate a dynamical system until the next interruption. Return the state at the requested time points, and
      a collection of interruptions that ended the simulation (this will usually just be a single interruption).

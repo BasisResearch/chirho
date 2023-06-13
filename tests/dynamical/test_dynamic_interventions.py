@@ -1,32 +1,26 @@
 import logging
 
-import causal_pyro
+import numpy as np
 import pyro
 import pytest
 import torch
+from pyro.distributions import Normal, Uniform, constraints
 
-from pyro.distributions import Normal, Uniform
-import numpy as np
-
-
-import pyro
-import torch
-from pyro.distributions import constraints
-
-from causal_pyro.dynamical.ops import State, simulate, Trajectory
+import causal_pyro
 from causal_pyro.dynamical.handlers import (
+    DynamicIntervention,
     ODEDynamics,
     PointInterruption,
-    SimulatorEventLoop,
     PointIntervention,
-    DynamicIntervention,
+    SimulatorEventLoop,
     simulate,
 )
+from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import (
-    sir_ode,
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
+    sir_ode,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,7 +39,6 @@ intervene_state = State(S=torch.tensor(50.0))
 
 
 def get_state_reached_event_f(target_state: State[torch.tensor]):
-
     def event_f(t: torch.tensor, state: State[torch.tensor]):
         # ret = target_state.subtract_shared_variables(state).l2()
 
@@ -59,14 +52,15 @@ def get_state_reached_event_f(target_state: State[torch.tensor]):
 @pytest.mark.parametrize("trigger_state", [trigger_state])
 @pytest.mark.parametrize("intervene_state", [intervene_state])
 def test_dynamic_intervention_causes_change(
-        sir_ode, init_state, tspan, trigger_state, intervene_state):
-
+    sir_ode, init_state, tspan, trigger_state, intervene_state
+):
     with SimulatorEventLoop():
         with DynamicIntervention(
-                event_f=get_state_reached_event_f(trigger_state),
-                intervention=intervene_state,
-                var_order=init_state.var_order,
-                num_applications=1):
+            event_f=get_state_reached_event_f(trigger_state),
+            intervention=intervene_state,
+            var_order=init_state.var_order,
+            num_applications=1,
+        ):
             res = simulate(sir_ode, init_state, tspan)
 
     total = init_state.S + init_state.I + init_state.R
@@ -75,4 +69,4 @@ def test_dynamic_intervention_causes_change(
     # The intervention just "adds" (sets) 50 "people" to the susceptible population, around
     #  it happens that the susceptible population is roughly 0 at the intervention point,
     #  so this serves to make sure the intervention actually causes that population influx.
-    assert res[-1].S + res[-1].I + res[-1].R > total + (50 * 0.9)
+    assert res[-1].S + res[-1].I + res[-1].R > total + (intervene_state.S * 0.9)
