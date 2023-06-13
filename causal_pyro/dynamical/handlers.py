@@ -29,6 +29,8 @@ from causal_pyro.dynamical.ops import (
 from causal_pyro.interventional.ops import intervene
 from causal_pyro.interventional.handlers import do
 
+from enum import Enum
+
 S, T = TypeVar("S"), TypeVar("T")
 
 
@@ -124,8 +126,16 @@ def torchdiffeq_ode_simulate_to_interruption(
         event_fn=combined_event_f
     )
 
+    # event_state has both the first and final state of the interrupted simulation. We just want the last.
+    event_state = tuple(s[-1] for s in event_state)
+
     # Check which event(s) fired, and put the triggered events in a list.
-    fired_mask = torch.isclose(combined_event_f(event_time, event_state), torch.tensor(0.))
+    fired_mask = torch.isclose(combined_event_f(event_time, event_state), torch.tensor(0.0), rtol=1e-02, atol=1e-03)
+
+    if not torch.any(fired_mask):
+        # TODO AZ figure out the tolerance of the odeint_event function and use that above.
+        raise RuntimeError("The solve terminated but no element of the event function output was within "
+                           "tolerance of zero.")
 
     if len(fired_mask) != len(dynamic_interruptions) + 1:
         raise RuntimeError("The event function returned an unexpected number of events.")
@@ -169,10 +179,10 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
     :return: The constructed event function.
     """
 
-    def event_f(t: torch.tensor, state: torch.tensor):
+    def event_f(t: torch.tensor, flat_state: torch.tensor):
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
-        state = State(**{k: v for k, v in zip(state.var_order, state)})
+        state = State(**{k: v for k, v in zip(di.var_order, flat_state)})
         return di.event_f(t, state)
 
     return event_f
@@ -193,8 +203,8 @@ def torchdiffeq_combined_event_f(
     terminal_event_f = torchdiffeq_point_interruption_flattened_event_f(next_static_interruption)
     dynamic_event_fs = [torchdiffeq_dynamic_interruption_flattened_event_f(di) for di in dynamic_interruptions]
 
-    def combined_event_f(t: torch.tensor, state: torch.tensor):
-        return torch.tensor([*[f(t, state) for f in dynamic_event_fs], terminal_event_f(t, state)])
+    def combined_event_f(t: torch.tensor, flat_state: torch.tensor):
+        return torch.tensor([*[f(t, flat_state) for f in dynamic_event_fs], terminal_event_f(t, flat_state)])
 
     return combined_event_f
 # <Torchdiffeq Implementations>
@@ -253,6 +263,8 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
                 break
 
             # Construct the next timespan so that we simulate from the prevous interruption time.
+            # TODO AZ — we should be able to detect when this eps is too small, as it will repeatedly trigger
+            #  the same event at the same time.
             span_timespan = torch.tensor([end_time, *full_timespan[full_timespan > end_time]])
 
             # Update the starting state.
@@ -399,8 +411,11 @@ class DynamicInterruption(Interruption):
         if dynamic_interruptions is None:
             dynamic_interruptions = []
 
+        msg["kwargs"]["dynamic_interruptions"] = dynamic_interruptions
+
         # Add self to the collection of dynamic interruptions.
-        msg["kwargs"]["dynamic_interruptions"] = dynamic_interruptions + [self]
+        if self not in msg.get("ignored_dynamic_interruptions", []):
+            dynamic_interruptions.append(self)
 
         super()._pyro_simulate_to_interruption(msg)
 
@@ -410,4 +425,30 @@ class DynamicIntervention(DynamicInterruption, _InterventionMixin):
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time.
     """
-    pass
+
+    def __init__(self, num_applications: Optional[int], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.num_applications = num_applications
+
+        if num_applications is None or num_applications > 1:
+            # This implies an infinite number of applications, but we don't support that yet, as we need some way
+            #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
+            #  it will just repeatedly trigger and the sim won't advance.
+            raise NotImplementedError("Infinite applications not yet implemented.")
+
+        self.applied = 0
+
+    def _pyro_simulate(self, msg) -> None:
+        # Reset on every call to the primary simulate.
+        self.applied = 0
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        # If this interruption triggered last time, increment the counter.
+        if self in self._last_interruptions:
+            self.applied += 1
+
+        if self.applied >= self.num_applications:
+            ignored_dynamic_interruptions = msg.get("ignored_dynamic_interruptions", [])
+            msg["ignored_dynamic_interruptions"] = ignored_dynamic_interruptions + [self]
+
+        super()._pyro_simulate_to_interruption(msg)

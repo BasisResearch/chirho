@@ -44,11 +44,9 @@ class State(Generic[T]):
     def __str__(self) -> str:
         return f"State({self.__dict__['_values']})"
 
-    @pyro.poutine.runtime.effectful(type="state_setattr")
     def __setattr__(self, __name: str, __value: T) -> None:
         self.__dict__["_values"][__name] = __value
 
-    @pyro.poutine.runtime.effectful(type="state_getattr")
     def __getattr__(self, __name: str) -> T:
         if __name in self.__dict__["_values"]:
             return self.__dict__["_values"][__name]
@@ -71,7 +69,7 @@ class State(Generic[T]):
         return torch.sqrt(
             torch.sum(
                 torch.square(
-                    torch.tensor([getattr(self, k) for k in self.keys]))))
+                    torch.tensor(*[getattr(self, k) for k in self.keys]))))
 
     def trajectorify(self) -> 'Trajectory[T]':
         ret = Trajectory(**{k: torch.unsqueeze(getattr(self, k), 0) for k in self.keys})
