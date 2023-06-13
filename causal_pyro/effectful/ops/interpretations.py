@@ -23,6 +23,11 @@ class Operation(Generic[T]):
             args = (None,) + args
         except KeyError:
             interpret = self.body
+        except NameError as e:  # bootstrapping case
+            if e.args[0] == "name 'get_interpretation' is not defined":
+                interpret = self.body if self.body is not Operation else lambda x: x
+            else:
+                raise
         return interpret(*args, **kwargs)
 
 
@@ -40,14 +45,14 @@ class Runtime(Generic[T]):
         self.interpretation = interpretation
 
 
-@functools.lru_cache(maxsize=None)
-def define(m: Type[T]) -> Callable[..., Type[T]]:
+@Operation
+@functools.cache
+def define(m: Type[T]) -> T | Type[T] | Callable[..., T] | Callable[..., Callable[..., T]]:
     # define is the embedding function from host syntax to embedded syntax
     return Operation(m) if m is Operation else define(Operation)(m)
 
 
 RUNTIME = Runtime(Interpretation())
-define = define(Operation)(define)
 
 
 @define(Operation)
@@ -219,16 +224,12 @@ if __name__ == "__main__":
 
     with handler(printme3) as h:
         print(add(3, 4))
+        print(add3(3, 4, 5))
 
+    # what should happen with runner?
+    # when reflect is called, it should jump to the next runner
+    # i.e. re-invoke the operation under the next product interpretation
 
-    # what should happen with runtime?
-    # when reflect is called, it should jump to the next runtime
-    # i.e. re-invoke the operation under the next runtime interpretation
-
-    with runner(default):
+    with runner(default) as r:
         with handler(compose(printme1, printme2)) as h:
             print(add(3, 4))
-
-    language = product(default, compose(printme1, printme2))
-
-    assert False
