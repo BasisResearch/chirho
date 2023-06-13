@@ -59,14 +59,23 @@ def test_dynamic_intervention_causes_change(
             event_f=get_state_reached_event_f(trigger_state),
             intervention=intervene_state,
             var_order=init_state.var_order,
-            num_applications=1,
+            max_applications=1,
         ):
             res = simulate(sir_ode, init_state, tspan)
 
-    total = init_state.S + init_state.I + init_state.R
+    preint_total = init_state.S + init_state.I + init_state.R
 
-    assert torch.isclose(res[0].S + res[0].I + res[0].R, total)
-    # The intervention just "adds" (sets) 50 "people" to the susceptible population, around
-    #  it happens that the susceptible population is roughly 0 at the intervention point,
+    # The intervention just "adds" (sets) 50 "people" to the susceptible population.
+    #  It happens that the susceptible population is roughly 0 at the intervention point,
     #  so this serves to make sure the intervention actually causes that population influx.
-    assert res[-1].S + res[-1].I + res[-1].R > total + (intervene_state.S * 0.9)
+
+    postint_mask = res.R > trigger_state.R
+    postint_traj = res[postint_mask]
+    preint_traj = res[~postint_mask]
+
+    # Make sure all points before the intervention maintain the same total population.
+    assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
+
+    # Make sure all points after the intervention include the added population.
+    # noinspection PyTypeChecker
+    assert torch.all(postint_traj.S + postint_traj.I + postint_traj.R > (preint_total + intervene_state.S) * 0.95)

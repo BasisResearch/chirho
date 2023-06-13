@@ -121,6 +121,19 @@ def simulate_span(
 
 
 @functools.singledispatch
+@pyro.poutine.runtime.effectful(type="apply_interruptions")
+def apply_interruptions(
+    dynamics: Dynamics[S, T],
+    start_state: State[T]
+) -> Tuple[Dynamics[S, T], State[T]]:
+    """
+    Apply the effects of an interruption to a dynamical system.
+    """
+    # Default is to do nothing.
+    return dynamics, start_state
+
+
+@functools.singledispatch
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],

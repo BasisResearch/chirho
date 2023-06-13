@@ -26,6 +26,7 @@ from causal_pyro.dynamical.ops import (
     simulate,
     simulate_span,
     simulate_to_interruption,
+    apply_interruptions
 )
 from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
@@ -265,26 +266,44 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         full_trajs = []
         first = True
 
+        last_terminal_interruptions = tuple()
+        interruption_counts = dict()
+
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
         while True:
-            # This call gets handled by interruption handlers.
-            (
-                span_traj,
-                terminal_interruptions,
-                end_time,
-                end_state,
-            ) = simulate_to_interruption(
-                dynamics,
-                span_start_state,
-                span_timespan,
-                # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
-                #  interruption handlers may replace this with themselves if they happen before the end.
-                next_static_interruption=default_terminal_interruption,
-                # We just pass nothing here, as any interruption handlers will be responsible for
-                #  accruing themselves to the message. Leaving explicit for documentation.
-                dynamic_interruptions=None,
-            )  # type: Trajectory[T], Tuple['Interruption', ...], float, State[T]
+            # Block any interruption's application that wouldn't be the result of an interruption that ended the last
+            #  simulation.
+            with pyro.poutine.messenger.block_messengers(
+                    lambda m: isinstance(m, Interruption) and m not in last_terminal_interruptions):
+                dynamics, span_start_state = apply_interruptions(dynamics, span_start_state)
+
+            # Block dynamic interventions that have triggered and applied more than the specified number of times.
+            # This will prevent them from percolating up to the simulate_to_interruption execution.
+            with pyro.poutine.messenger.block_messengers(
+                    lambda m: isinstance(m, DynamicIntervention) and m.max_applications <= interruption_counts.get(m, 0)):
+                (
+                    span_traj,
+                    terminal_interruptions,
+                    end_time,
+                    end_state,
+                ) = simulate_to_interruption(  # This call gets handled by interruption handlers.
+                    dynamics,
+                    span_start_state,
+                    span_timespan,
+                    # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
+                    #  interruption handlers may replace this with themselves if they happen before the end.
+                    next_static_interruption=default_terminal_interruption,
+                    # We just pass nothing here, as any interruption handlers will be responsible for
+                    #  accruing themselves to the message. Leaving explicit for documentation.
+                    dynamic_interruptions=None,
+                )  # type: Trajectory[T], Tuple['Interruption', ...], float, State[T]
+
+            if len(terminal_interruptions) > 1:
+                warnings.warn("Multiple events fired simultaneously. This results in undefined behavior.", UserWarning)
+
+            for interruption in terminal_interruptions:
+                interruption_counts[interruption] = interruption_counts.get(interruption, 0) + 1
 
             last = default_terminal_interruption in terminal_interruptions
 
@@ -310,6 +329,9 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
 
             # Update the starting state.
             span_start_state = end_state
+
+            # Use these to block interruption handlers that weren't responsible for the last interruption.
+            last_terminal_interruptions = terminal_interruptions
 
             first = False
 
@@ -390,26 +412,12 @@ class _InterventionMixin(Interruption):
         super().__init__(**kwargs)
         self.intervention = intervention
 
-        self._last_interruptions = tuple()
-
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        # If this interruption was responsible for ending the previous simulation, apply its intervention.
-        if self in self._last_interruptions:
-            dynamics, initial_state, timespan = msg["args"]
-            msg["args"] = (
-                dynamics,
-                intervene(initial_state, self.intervention),
-                timespan,
-            )
-
-        super()._pyro_simulate_to_interruption(msg)
-
-    def _pyro_post_simulate_to_interruption(self, msg) -> None:
-        # Parse out the returned tuple from the simulate_to_interruption call.
-        _, triggered_interruptions, _, _ = msg["value"]
-
-        # Record the collection of interruptions that stopped the last simulation.
-        self._last_interruptions = triggered_interruptions
+    def _pyro_apply_interruptions(self, msg) -> None:
+        dynamics, initial_state = msg["args"]
+        msg["args"] = (
+            dynamics,
+            intervene(initial_state, self.intervention)
+        )
 
 
 class PointIntervention(PointInterruption, _InterventionMixin):
@@ -474,31 +482,12 @@ class DynamicIntervention(DynamicInterruption, _InterventionMixin):
     applies an intervention to the state at that time.
     """
 
-    def __init__(self, num_applications: Optional[int], *args, **kwargs):
+    def __init__(self, max_applications: Optional[int], *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.num_applications = num_applications
+        self.max_applications = max_applications
 
-        if num_applications is None or num_applications > 1:
+        if max_applications is None or max_applications > 1:
             # This implies an infinite number of applications, but we don't support that yet, as we need some way
             #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
             #  it will just repeatedly trigger and the sim won't advance.
-            raise NotImplementedError("Infinite applications not yet implemented.")
-
-        self.applied = 0
-
-    def _pyro_simulate(self, msg) -> None:
-        # Reset on every call to the primary simulate.
-        self.applied = 0
-
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        # If this interruption triggered last time, increment the counter.
-        if self in self._last_interruptions:
-            self.applied += 1
-
-        if self.applied >= self.num_applications:
-            ignored_dynamic_interruptions = msg.get("ignored_dynamic_interruptions", [])
-            msg["ignored_dynamic_interruptions"] = ignored_dynamic_interruptions + [
-                self
-            ]
-
-        super()._pyro_simulate_to_interruption(msg)
+            raise NotImplementedError("More than one application is not yet implemented.")
