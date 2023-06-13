@@ -73,6 +73,10 @@ class State(Generic[T]):
                 torch.square(
                     torch.tensor([getattr(self, k) for k in self.keys]))))
 
+    def trajectorify(self) -> 'Trajectory[T]':
+        ret = Trajectory(**{k: torch.unsqueeze(getattr(self, k), 0) for k in self.keys})
+        return ret
+
 
 # TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
 #  we expect multiple vs. a single state in the vectors, but it's likely confusing/not useful for the user? Maybe,
@@ -84,7 +88,8 @@ class Trajectory(State[T]):
     def __getitem__(self, key: Union[int, slice]) -> State[T]:
         if isinstance(key, str):
             raise ValueError(
-                "Trajectory does not support string indexing, use getattr instead if you want to access a specific state variable."
+                "Trajectory does not support string indexing, use getattr instead if you want to access a specific "
+                "state variable."
             )
 
         state = State() if isinstance(key, int) else Trajectory()

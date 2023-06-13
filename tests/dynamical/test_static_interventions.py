@@ -65,7 +65,7 @@ def test_point_intervention_causes_difference(
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             if intervene_time < tspan[0]:
                 with pytest.raises(
-                    ValueError, match="is before the first time in the timespan"
+                    ValueError, match="occurred before the start of the timespan"
                 ):
                     simulate(sir_ode, init_state, tspan)
                 return
@@ -104,17 +104,19 @@ def test_nested_point_interventions_cause_difference(
             with PointIntervention(time=intervene_time2, intervention=intervene_state2):
                 if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
                     with pytest.raises(
-                        ValueError, match="is before the first time in the timespan"
+                        ValueError, match="occurred before the start of the timespan"
                     ):
                         simulate(sir_ode, init_state, tspan)
                     return
-                elif torch.isclose(intervene_time1, intervene_time2):
-                    with pytest.raises(
-                        ValueError,
-                        match="Two point interruptions cannot occur at the same time.",
-                    ):
-                        simulate(sir_ode, init_state, tspan)
-                    return
+                # AZ - We've decided to support this case and have interventions apply sequentially in the order
+                #  they are handled.
+                # elif torch.isclose(intervene_time1, intervene_time2):
+                #     with pytest.raises(
+                #         ValueError,
+                #         match="Two point interruptions cannot occur at the same time.",
+                #     ):
+                #         simulate(sir_ode, init_state, tspan)
+                #     return
                 else:
                     result_nested_pint = simulate(sir_ode, init_state, tspan)
 

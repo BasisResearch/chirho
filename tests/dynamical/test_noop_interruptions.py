@@ -90,7 +90,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
 
     # Test a single point intervention.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(
@@ -102,7 +102,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
 
     # Test two point interventions out of scope.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(
@@ -118,7 +118,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
 
     # Test with two point interventions out of scope, in a different order.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(
