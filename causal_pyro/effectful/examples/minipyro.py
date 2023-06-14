@@ -7,9 +7,9 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, StatefulInterpretation, \
+from causal_pyro.effectful.ops.bootstrap import Operation, StatefulInterpretation, \
     define, register
-from causal_pyro.effectful.ops.interpretations import compose, fwd, handler, product, reflect, runner
+from causal_pyro.effectful.ops.interpretations import fwd, handler, reflect, runner
 
 
 S, T = TypeVar("S"), TypeVar("T")
