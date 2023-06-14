@@ -1,10 +1,29 @@
-from typing import Generic, List, Type, TypeVar
+from typing import Generic, List, Protocol, Type, TypeVar
 
-from .terms import Computation, Operation, Symbol, Term, Environment, Operation, define, get_head, get_args, get_ctx, get_value
+from .terms import Operation, Symbol, Term, Environment, Operation, define, get_head, get_args, get_ctx, get_value
 from .interpretations import Interpretation, get_name, read
 
 
 S, T = TypeVar("S"), TypeVar("T")
+
+
+class Computation(Protocol[T]):
+    __ctx__: Environment[T]
+    __value__: Term[T]
+
+
+@define(Operation)
+def get_ctx(obj: Computation[T]) -> Environment[T]:
+    if hasattr(obj, "__ctx__"):
+        return obj.__ctx__
+    raise TypeError(f"Object {obj} has no context")
+
+
+@define(Operation)
+def get_value(obj: Computation[T]) -> Term[T]:
+    if hasattr(obj, "__value__"):
+        return obj.__value__
+    raise TypeError(f"Object {obj} has no value")
 
 
 # @define(Operation)  # TODO self-hosting

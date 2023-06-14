@@ -3,7 +3,7 @@ from typing import Callable, Generic, Hashable, List, Mapping, Optional, Protoco
 import contextlib
 import functools
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, OpInterpretation, Operation, \
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
     define, get_interpretation, swap_interpretation
 
 
@@ -16,9 +16,9 @@ def set_prompt(prompt_op: Operation[T], rest: Callable, fst: Callable) -> Callab
 
 
 class ResetInterpretation(Generic[T]):
-    rest: OpInterpretation[T]
+    rest: Callable[..., T]
 
-    def __init__(self, rest: OpInterpretation[T], args: tuple[T, ...]):
+    def __init__(self, rest: Callable[..., T], args: tuple[T, ...]):
         self.rest = rest
         self._active_args = args
 
@@ -41,7 +41,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return intp
     elif len(intps) == 1:
         intp2, = intps
-        return Interpretation(
+        return define(Interpretation)(
             [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())] +
             [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())] +
             [(op, set_prompt(fwd, intp[op], intp2[op])) for op in set(intp.keys()) & set(intp2.keys())]
@@ -77,9 +77,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         # 2. creating interpretation for reflect() that switches the active interpretation to other
         # 3. right-composing these with the active interpretation
         # 4. calling the op interpretation
-        reflector = Interpretation(((op, lambda res, *args: reflect(res)) for op in intp.keys()))
+        reflector = define(Interpretation)(((op, lambda res, *args: reflect(res)) for op in intp.keys()))
         intp2 = compose(reflector, *intps)
-        return Interpretation(
+        return define(Interpretation)(
             ((op, set_prompt(reflect, handler(intp)(intp.get(op, op.body)), intp2[op]))
              for op in intp2.keys())
         )

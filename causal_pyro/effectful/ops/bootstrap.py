@@ -5,20 +5,7 @@ import functools
 
 T = TypeVar("T")
 
-
-Environment = dict[Hashable, T]
-OpInterpretation = Callable[..., T]
-Interpretation = Environment[OpInterpretation[T]]
-
-
-class Runtime(Generic[T]):
-    interpretation: Interpretation[T]
-
-    def __init__(self, interpretation: Interpretation[T]):
-        self.interpretation = interpretation
-
-
-RUNTIME = Runtime(Interpretation())
+Interpretation = Mapping[Hashable, Callable[..., T]]
 
 
 class Operation(Generic[T]):
@@ -40,6 +27,16 @@ class Operation(Generic[T]):
         return interpret(*args, **kwargs)
 
 
+class Runtime(Generic[T]):
+    interpretation: Interpretation[T]
+
+    def __init__(self, interpretation: Interpretation[T]):
+        self.interpretation = interpretation
+
+
+RUNTIME = Runtime(dict())
+
+
 @Operation
 @functools.cache
 def define(m: Type[T]) -> T | Type[T] | Callable[..., T] | Callable[..., Callable[..., T]]:
@@ -47,12 +44,12 @@ def define(m: Type[T]) -> T | Type[T] | Callable[..., T] | Callable[..., Callabl
     return Operation(m) if m is Operation else define(Operation)(m)
 
 
-@define(Operation)
+@Operation
 def get_interpretation() -> Interpretation[T]:
     return RUNTIME.interpretation
 
 
-@define(Operation)
+@Operation
 def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
     old_intp = RUNTIME.interpretation
     RUNTIME.interpretation = intp

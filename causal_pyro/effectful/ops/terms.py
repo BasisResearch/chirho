@@ -1,7 +1,6 @@
 from typing import Any, Callable, Container, ContextManager, Generic, Iterable, NamedTuple, Optional, Protocol, Set, TypeVar, Union, runtime_checkable
 
-import functools
-
+from .bootstrap import Operation as BaseOperation
 from .bootstrap import define
 
 
@@ -15,6 +14,11 @@ class Symbol(Generic[T]):
 class Operation(Protocol[T]):
     __symbol__: Symbol[T]
     __signature__: tuple[Symbol[T], ...]
+
+    def __call__(self, *args: T, **kwargs) -> T: ...
+
+
+setattr(define(Operation), "body", BaseOperation)
 
 
 @define(Operation)
@@ -81,22 +85,3 @@ def contains(ctx: Environment[T], key: Symbol[T]) -> bool:
 
 class Interpretation(Generic[T], Environment[Operation[T]]):
     pass
-
-
-class Computation(Protocol[T]):
-    __ctx__: Environment[T]
-    __value__: Term[T]
-
-
-@define(Operation)
-def get_ctx(obj: Computation[T]) -> Environment[T]:
-    if hasattr(obj, "__ctx__"):
-        return obj.__ctx__
-    raise TypeError(f"Object {obj} has no context")
-
-
-@define(Operation)
-def get_value(obj: Computation[T]) -> Term[T]:
-    if hasattr(obj, "__value__"):
-        return obj.__value__
-    raise TypeError(f"Object {obj} has no value")

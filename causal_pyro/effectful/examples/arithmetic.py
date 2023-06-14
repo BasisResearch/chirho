@@ -1,4 +1,4 @@
-from typing import Any, Callable, Container, ContextManager, Generic, List, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Callable
 
 from ..ops.bootstrap import Interpretation, Operation, define
 from ..ops.interpretations import \
@@ -11,15 +11,18 @@ def add(x: int, y: int) -> int:
     print("C")
     return x + y
 
+
 @define(Operation)
 def add3(x: int, y: int, z: int) -> int:
     return add(x, add(y, z))
+
 
 @define(Operation)
 def mul(x: int, y: int) -> int:
     return x * y
 
-def print_wrap(fn, name="A"):
+
+def print_wrap(fn: Callable, name="A"):
     def wrapped(result, *args, **kwargs):
         print(f"{name} calling {fn} with {args} {kwargs}")
         result = fwd(result)
