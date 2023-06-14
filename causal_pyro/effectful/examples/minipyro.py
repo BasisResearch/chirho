@@ -1,4 +1,4 @@
-from typing import Any, Callable, Container, ContextManager, Generic, List, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Any, Callable, Container, ContextManager, Generic, Hashable, List, NamedTuple, Optional, Type, TypeVar, Union
 
 import collections
 import contextlib
@@ -7,14 +7,13 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from ..ops.terms import Environment, Operation, Term, define
-from ..ops.forms import Return
-from ..ops.interpretations import Interpretation, cont
-from ..ops.interpretations import reflect
+from ..ops.bootstrap import Interpretation, Operation, define
+from ..ops.interpretations import compose, fwd, handler, product, reflect, runner
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
+Environment = dict[Hashable, T]  # TODO define and import from terms
 
 
 @define(Operation)
@@ -23,7 +22,7 @@ def sample(
     distribution: Distribution,
     obs: Optional[T] = None
 ) -> T:
-    ...
+    raise NotImplementedError
 
 
 @define(Operation)
@@ -33,7 +32,7 @@ def param(
     constraint=torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
-    ...
+    raise NotImplementedError
 
 
 ParamStore = collections.OrderedDict[str, tuple[torch.Tensor, Constraint, Optional[int]]]
@@ -73,26 +72,26 @@ def default_param(
     return init_value
 
 
-class Plate(NamedTuple):
+class PlateData(NamedTuple):
     name: str
     size: int
     dim: Optional[int]
 
 
 @define(Operation)
-def enter_plate(p: ContextManager[Plate]) -> Plate:
-    ...
+def enter_plate(p: PlateData) -> PlateData:
+    return p
 
 
 @define(Operation)
-def exit_plate(p: Plate):
-    ...
+def exit_plate(p: PlateData):
+    pass
 
 
 @define(Operation)
 @contextlib.contextmanager
-def plate(name: str, size: int, dim: Optional[int] = None) -> ContextManager[Plate]:
-    p = Plate(name, size, dim)
+def plate(name: str, size: int, dim: Optional[int] = None):
+    p = PlateData(name, size, dim)
     try:
         yield enter_plate(p)
     finally:
@@ -134,7 +133,7 @@ def trace_sample(
     distribution: Distribution,
     obs: Optional[T] = None
 ) -> T:
-    result = cont(ctx, result)
+    result = fwd(ctx, result)
     trace[name] = SampleTraceNode(name, result, distribution, obs is not None)
     return result
 
@@ -149,7 +148,7 @@ def trace_param(
     constraint=torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
-    ctx, result = cont(ctx, result)
+    ctx, result = fwd(ctx, result)
     tr[name] = TraceNode(name, result, constraint, event_dim)
     return result
 
@@ -169,7 +168,7 @@ def replay_sample(
 ) -> T:
     if result is None and name in tr:
         result = tr[name].value
-    return cont(ctx, result)
+    return fwd(ctx, result)
 
 
 Observations = collections.OrderedDict[str, torch.Tensor]
@@ -192,7 +191,7 @@ def condition_sample(
         result = state[name]
     except KeyError:
         pass
-    return cont(ctx, result)
+    return fwd(ctx, result)
 
 
 class block(Interpretation[Container[str]]):
@@ -200,28 +199,22 @@ class block(Interpretation[Container[str]]):
 
 
 @block.define(sample)
-def block_sample(
-    blocked: Container[str],
-    ctx: Environment[T],
-    result: Optional[T],
-    name: str,
-    distribution: Distribution,
-    obs: Optional[T] = None
-) -> T:
-    if name in blocked:
-        return reflect(ctx, result)
-    return cont(ctx, result)
+def block_sample(blocked: Container[str], ctx: Environment[T], result: Optional[T], name: str, *args) -> T:
+    return reflect(result) if name in blocked else fwd(ctx, result)
 
 
-def elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+@block.define(param)
+def block_param(blocked: Container[str], ctx: Environment[T], result: Optional[T], name: str, *args, **kwargs) -> T:
+    return reflect(result) if name in blocked else fwd(ctx, result)
 
-    runtime = DefaultModel()
 
-    with handle(trace(Trace()), runtime=runtime) as guide_trace:
+@runner(DefaultModel())
+def trace_elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
+
+    with handler(trace(Trace())) as guide_trace:
         guide(*args, **kwargs)
 
-    with handle(replay(guide_trace), runtime=runtime), \
-            handle(trace(Trace()), runtime=runtime) as model_trace:
+    with handler(replay(guide_trace)), handler(trace(Trace())) as model_trace:
         pyro_model(*args, **kwargs)
 
     elbo = 0.0

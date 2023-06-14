@@ -44,12 +44,12 @@ def define(m: Type[T]) -> T | Type[T] | Callable[..., T] | Callable[..., Callabl
     return Operation(m) if m is Operation else define(Operation)(m)
 
 
-@Operation
+@define(Operation)
 def get_interpretation() -> Interpretation[T]:
     return RUNTIME.interpretation
 
 
-@Operation
+@define(Operation)
 def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
     old_intp = RUNTIME.interpretation
     RUNTIME.interpretation = intp
