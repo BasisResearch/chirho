@@ -20,7 +20,7 @@ from causal_pyro.dynamical.ops import State, Trajectory, simulate
 from .dynamical_fixtures import (
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
-    sir_ode,
+    SimpleSIRDynamics,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,12 +47,13 @@ def get_state_reached_event_f(target_state: State[torch.tensor]):
     return event_f
 
 
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("trigger_state", [trigger_state])
 @pytest.mark.parametrize("intervene_state", [intervene_state])
 def test_dynamic_intervention_causes_change(
-    sir_ode, init_state, tspan, trigger_state, intervene_state
+    model, init_state, tspan, trigger_state, intervene_state
 ):
     with SimulatorEventLoop():
         with DynamicIntervention(
@@ -61,7 +62,7 @@ def test_dynamic_intervention_causes_change(
             var_order=init_state.var_order,
             max_applications=1,
         ):
-            res = simulate(sir_ode, init_state, tspan)
+            res = simulate(model, init_state, tspan)
 
     preint_total = init_state.S + init_state.I + init_state.R
 

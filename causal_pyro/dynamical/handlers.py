@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import warnings
 from enum import Enum
@@ -12,6 +14,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    Dict
 )
 
 import pyro
@@ -19,24 +22,30 @@ import torch
 import torchdiffeq
 
 from causal_pyro.dynamical.ops import (
+    State,
+    Trajectory,
     Dynamics,
     State,
     Trajectory,
     concatenate,
-    simulate,
     simulate_span,
+    simulate,
     simulate_to_interruption,
     apply_interruptions
 )
 from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 # noinspection PyPep8Naming
 class ODEDynamics(pyro.nn.PyroModule):
     def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+        raise NotImplementedError
+
+    def observation(self, X: State[torch.Tensor]):
         raise NotImplementedError
 
     def forward(self, initial_state: State[torch.Tensor], timespan, **kwargs):
@@ -47,13 +56,14 @@ class ODEDynamics(pyro.nn.PyroModule):
         dynamics: "ODEDynamics",
         var_order: Tuple[str, ...],
         time: torch.Tensor,
-        state: Tuple[T, ...],
-    ) -> Tuple[T, ...]:
-        ddt, env = State(), State()
+        state: Tuple[torch.Tensor, ...],
+    ) -> Tuple[torch.Tensor, ...]:
+        ddt: State[torch.Tensor] = State()
+        env: State[torch.Tensor] = State()
         for var, value in zip(var_order, state):
             setattr(env, var, value)
         dynamics.diff(ddt, env)
-        return tuple(getattr(ddt, var, 0.0) for var in var_order)
+        return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
 # <Torchdiffeq Implementations>
@@ -71,7 +81,7 @@ def _torchdiffeq_ode_simulate_inner(
         **kwargs,
     )
 
-    trajectory = Trajectory()
+    trajectory: Trajectory[torch.Tensor] = Trajectory()
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -394,7 +404,7 @@ class PointInterruption(Interruption):
 
 @intervene.register(State)
 def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
-    new_state = State()
+    new_state: State[T] = State()
     for k in obs.keys:
         setattr(
             new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
@@ -431,14 +441,28 @@ class PointIntervention(PointInterruption, _InterventionMixin):
 
 class PointObservation(PointInterruption):
     def __init__(
-        self, time: float, loglikelihood: Callable[[State[torch.Tensor]], torch.Tensor]
+        self,
+        time: float,
+        data: Dict[str, torch.Tensor],
+        eps: float = 1e-6,
     ):
-        super().__init__(time)
-        self.loglikelihood = loglikelihood
+        self.data = data
+        # Add a small amount of time to the observation time to ensure that
+        # the observation occurs after the logging period.
+        super().__init__(time + eps)
 
     def _pyro_simulate_span(self, msg) -> None:
-        _, current_state, _ = msg["args"]
-        pyro.factor(f"obs_{self.time}", self.loglikelihood(current_state))
+        dynamics, current_state, _ = msg["args"]
+
+        with pyro.condition(data=self.data):
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: isinstance(m, PointInterruption) and (m is not self)
+            ):
+                dynamics.observation(current_state)
+
+    def _pyro_sample(self, msg):
+        # modify observed site names to handle multiple time points
+        msg["name"] = msg["name"] + "_" + str(self.time.item())
 
 
 class DynamicInterruption(Interruption):

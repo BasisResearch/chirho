@@ -2,6 +2,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    FrozenSet,
     Generic,
     Hashable,
     List,
@@ -23,12 +24,13 @@ import functools
 import pyro
 import torch
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 class State(Generic[T]):
     def __init__(self, **values: T):
-        self.__dict__["_values"]: dict[str, T] = {}
+        self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
 
@@ -37,7 +39,7 @@ class State(Generic[T]):
         return tuple(sorted(self.keys))
 
     @property
-    def keys(self) -> Set[str]:
+    def keys(self) -> FrozenSet[str]:
         return frozenset(self.__dict__["_values"].keys())
 
     def __repr__(self) -> str:
@@ -52,7 +54,8 @@ class State(Generic[T]):
     def __getattr__(self, __name: str) -> T:
         if __name in self.__dict__["_values"]:
             return self.__dict__["_values"][__name]
-        return super().__getattr__(__name)
+        else:
+            raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
     # TODO doesn't allow for explicitly handling mismatched keys.
     # def __sub__(self, other: 'State[T]') -> 'State[T]':
@@ -93,10 +96,12 @@ class Trajectory(State[T]):
                 "state variable."
             )
 
-        state = State() if isinstance(key, int) else Trajectory()
+        item: Union[State[T], Trajectory[T]] = (
+            State() if isinstance(key, int) else Trajectory()
+        )
         for k, v in self.__dict__["_values"].items():
-            setattr(state, k, v[key])
-        return state
+            setattr(item, k, v[key])
+        return item
 
 
 @runtime_checkable
@@ -104,6 +109,7 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
+# noinspection PyUnusedLocal
 @functools.singledispatch
 def simulate_span(
     dynamics: Dynamics[S, T],
@@ -133,6 +139,7 @@ def apply_interruptions(
     return dynamics, start_state
 
 
+# noinspection PyUnusedLocal
 @functools.singledispatch
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
@@ -170,7 +177,7 @@ def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """
-    full_trajectory = Trajectory()
+    full_trajectory: Trajectory[T] = Trajectory()
     for trajectory in trajectories:
         for k in trajectory.keys:
             if k not in full_trajectory.keys:
@@ -184,6 +191,7 @@ def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
     return full_trajectory
 
 
+# noinspection PyUnusedLocal
 @functools.singledispatch
 def simulate(
     dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs

@@ -1,8 +1,10 @@
 import logging
 
+import causal_pyro
 import pyro
 import pytest
 import torch
+
 from pyro.distributions import Normal, Uniform, constraints
 
 import causal_pyro
@@ -15,7 +17,7 @@ from causal_pyro.dynamical.handlers import (
 )
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
-from .dynamical_fixtures import check_trajectories_match, sir_ode
+from .dynamical_fixtures import SimpleSIRDynamics, check_trajectories_match
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +38,16 @@ intervene_states = [
 ]
 
 
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
-def test_noop_point_interruptions(sir_ode, init_state, tspan):
-    observational_execution_result = simulate(sir_ode, init_state, tspan)
+def test_noop_point_interruptions(model, init_state, tspan):
+    observational_execution_result = simulate(model, init_state, tspan)
 
     # Test with standard point interruptions within timespan.
     with SimulatorEventLoop():
         with PointInterruption(time=tspan[-1] / 2.0 + eps):
-            result_pint = simulate(sir_ode, init_state, tspan)
+            result_pint = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_pint)
 
@@ -54,7 +57,7 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
             time=tspan[-1] / 4.0 + eps
         ):  # roughly 1/4 of the way through the timespan
             with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
-                result_double_pint1 = simulate(sir_ode, init_state, tspan)
+                result_double_pint1 = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pint1)
 
@@ -62,17 +65,18 @@ def test_noop_point_interruptions(sir_ode, init_state, tspan):
     with SimulatorEventLoop():
         with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
             with PointInterruption(time=tspan[-1] / 4.0 + eps):  # roughly 1/3
-                result_double_pint2 = simulate(sir_ode, init_state, tspan)
+                result_double_pint2 = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pint2)
 
     # TODO test pointinterruptions when they are out of scope of the timespan
 
 
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
-def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
+def test_noop_point_interventions(model, init_state, tspan, intervene_state):
     """
     Test whether point interruptions that don't intervene match the unhandled ("observatonal") default simulation.
     :return:
@@ -80,7 +84,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
 
     post_measurement_intervention_time = tspan_values.max() + 1.0
 
-    observational_execution_result = simulate(sir_ode, init_state, tspan)
+    observational_execution_result = simulate(model, init_state, tspan)
 
     # Test a single point intervention.
     with pytest.warns(
@@ -90,7 +94,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
             with PointIntervention(
                 time=post_measurement_intervention_time, intervention=intervene_state
             ):
-                result_single_pi = simulate(sir_ode, init_state, tspan)
+                result_single_pi = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_single_pi)
 
@@ -106,7 +110,7 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
                     time=post_measurement_intervention_time + 1.0,
                     intervention=intervene_state,
                 ):
-                    result_double_pi1 = simulate(sir_ode, init_state, tspan)
+                    result_double_pi1 = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi1)
 
@@ -123,6 +127,6 @@ def test_noop_point_interventions(sir_ode, init_state, tspan, intervene_state):
                     time=post_measurement_intervention_time,
                     intervention=intervene_state,
                 ):
-                    result_double_pi2 = simulate(sir_ode, init_state, tspan)
+                    result_double_pi2 = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi2)
