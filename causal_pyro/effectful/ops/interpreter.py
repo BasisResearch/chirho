@@ -1,7 +1,8 @@
 from typing import Generic, List, Protocol, Type, TypeVar
 
-from .terms import Operation, Symbol, Term, Environment, Operation, define, get_head, get_args, get_ctx, get_value
-from .interpretations import Interpretation, get_name, read
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define, get_interpretation, register
+from causal_pyro.effectful.ops.interpretations import fwd, handler, reflect, runner
+from causal_pyro.effectful.ops.terms import Term, Environment, Operation, Variable, head_of, args_of, union
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -12,41 +13,47 @@ class Computation(Protocol[T]):
     __value__: Term[T]
 
 
+@register(None, define(Computation))
+class BaseComputation(Generic[T], Computation[T]):
+    __ctx__: Environment[T]
+    __value__: Term[T]
+
+    def __init__(self, ctx: Environment[T], value: Term[T]):
+        self.__ctx__ = ctx
+        self.__value__ = value
+
+    def __repr__(self) -> str:
+        return f"{self.__value__} @ {self.__ctx__}"
+
+
 @define(Operation)
-def get_ctx(obj: Computation[T]) -> Environment[T]:
+def ctx_of(obj: Computation[T]) -> Environment[T]:
     if hasattr(obj, "__ctx__"):
         return obj.__ctx__
     raise TypeError(f"Object {obj} has no context")
 
 
 @define(Operation)
-def get_value(obj: Computation[T]) -> Term[T]:
+def value_of(obj: Computation[T]) -> Term[T]:
     if hasattr(obj, "__value__"):
         return obj.__value__
     raise TypeError(f"Object {obj} has no value")
 
 
-# @define(Operation)  # TODO self-hosting
-def apply(interpretation: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
-    ctx = sum(*(get_ctx(arg) for arg in args), Environment())
-    return read(interpretation, get_name(op))(
-        *(traverse(interpretation, arg) for arg in args)
-    )
+@define(Operation)
+def apply(intp: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
+    return intp[op](*(traverse(intp, arg) for arg in args))
 
 
-# @define(Operation)  # TODO self-hosting
-def traverse(interpretation: Interpretation[S], obj: Computation[T]) -> Computation[S]:
+@define(Operation)
+def traverse(intp: Interpretation[S], obj: Computation[T]) -> Computation[S]:
     """
     Generic meta-circular transformation of a term in a context.
     Use for evaluation, substitution, typechecking, etc.
     """
-    ctx: Environment[T] = get_ctx(obj)
-    term: Term[T] = get_value(obj)
-    return read(interpretation, get_name(apply))(
-        interpretation,
-        get_head(term),
-        *(Computation(ctx, arg) for arg in get_args(term))
-    )
+    ctx, term = ctx_of(obj), value_of(obj)
+    op, args = head_of(term), args_of(term)
+    return apply(intp, op, *(define(Computation)(ctx, arg) for arg in args))
 
 
 #########################################################
@@ -75,7 +82,7 @@ def substitute(term: Term[T], ctx: Environment[T]) -> Term[T]:
 
 
 @define(Operation)
-def rename(term: Term[T], ctx: Environment[Symbol[T]]) -> Term[T]:
+def rename(term: Term[T], ctx: Environment[Variable[T]]) -> Term[T]:
     return substitute(term, ctx)
 
 

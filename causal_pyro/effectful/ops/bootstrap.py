@@ -96,7 +96,7 @@ def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
 
 @define(Operation)
 def register(
-    intp: Optional[Interpretation[T] | Type[StatefulInterpretation[S, T]]],
+    intp: Optional[Interpretation[T]],
     op: Operation[T],
     interpret_op: Optional[Callable[..., T]] = None
 ):
