@@ -1,10 +1,8 @@
 import logging
 
-import causal_pyro
 import pyro
 import pytest
 import torch
-
 from pyro.distributions import Normal, Uniform, constraints
 
 import causal_pyro

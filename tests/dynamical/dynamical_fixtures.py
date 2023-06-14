@@ -9,7 +9,7 @@ import causal_pyro
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
-    PointIntervention
+    PointIntervention,
 )
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
 

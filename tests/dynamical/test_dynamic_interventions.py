@@ -18,9 +18,9 @@ from causal_pyro.dynamical.handlers import (
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import (
+    SimpleSIRDynamics,
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
-    SimpleSIRDynamics,
 )
 
 logger = logging.getLogger(__name__)
@@ -79,4 +79,7 @@ def test_dynamic_intervention_causes_change(
 
     # Make sure all points after the intervention include the added population.
     # noinspection PyTypeChecker
-    assert torch.all(postint_traj.S + postint_traj.I + postint_traj.R > (preint_total + intervene_state.S) * 0.95)
+    assert torch.all(
+        postint_traj.S + postint_traj.I + postint_traj.R
+        > (preint_total + intervene_state.S) * 0.95
+    )

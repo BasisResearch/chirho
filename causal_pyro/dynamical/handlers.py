@@ -6,6 +6,7 @@ from enum import Enum
 from typing import (
     Any,
     Callable,
+    Dict,
     Generic,
     Hashable,
     List,
@@ -14,7 +15,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    Dict
 )
 
 import pyro
@@ -22,16 +22,14 @@ import torch
 import torchdiffeq
 
 from causal_pyro.dynamical.ops import (
-    State,
-    Trajectory,
     Dynamics,
     State,
     Trajectory,
+    apply_interruptions,
     concatenate,
-    simulate_span,
     simulate,
+    simulate_span,
     simulate_to_interruption,
-    apply_interruptions
 )
 from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
@@ -285,13 +283,19 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
             # Block any interruption's application that wouldn't be the result of an interruption that ended the last
             #  simulation.
             with pyro.poutine.messenger.block_messengers(
-                    lambda m: isinstance(m, Interruption) and m not in last_terminal_interruptions):
-                dynamics, span_start_state = apply_interruptions(dynamics, span_start_state)
+                lambda m: isinstance(m, Interruption)
+                and m not in last_terminal_interruptions
+            ):
+                dynamics, span_start_state = apply_interruptions(
+                    dynamics, span_start_state
+                )
 
             # Block dynamic interventions that have triggered and applied more than the specified number of times.
             # This will prevent them from percolating up to the simulate_to_interruption execution.
             with pyro.poutine.messenger.block_messengers(
-                    lambda m: isinstance(m, DynamicIntervention) and m.max_applications <= interruption_counts.get(m, 0)):
+                lambda m: isinstance(m, DynamicIntervention)
+                and m.max_applications <= interruption_counts.get(m, 0)
+            ):
                 (
                     span_traj,
                     terminal_interruptions,
@@ -310,10 +314,15 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
                 )  # type: Trajectory[T], Tuple['Interruption', ...], float, State[T]
 
             if len(terminal_interruptions) > 1:
-                warnings.warn("Multiple events fired simultaneously. This results in undefined behavior.", UserWarning)
+                warnings.warn(
+                    "Multiple events fired simultaneously. This results in undefined behavior.",
+                    UserWarning,
+                )
 
             for interruption in terminal_interruptions:
-                interruption_counts[interruption] = interruption_counts.get(interruption, 0) + 1
+                interruption_counts[interruption] = (
+                    interruption_counts.get(interruption, 0) + 1
+                )
 
             last = default_terminal_interruption in terminal_interruptions
 
@@ -424,10 +433,7 @@ class _InterventionMixin(Interruption):
 
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics, initial_state = msg["args"]
-        msg["args"] = (
-            dynamics,
-            intervene(initial_state, self.intervention)
-        )
+        msg["args"] = (dynamics, intervene(initial_state, self.intervention))
 
 
 class PointIntervention(PointInterruption, _InterventionMixin):
@@ -514,4 +520,6 @@ class DynamicIntervention(DynamicInterruption, _InterventionMixin):
             # This implies an infinite number of applications, but we don't support that yet, as we need some way
             #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
             #  it will just repeatedly trigger and the sim won't advance.
-            raise NotImplementedError("More than one application is not yet implemented.")
+            raise NotImplementedError(
+                "More than one application is not yet implemented."
+            )
