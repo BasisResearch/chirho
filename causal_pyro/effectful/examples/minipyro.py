@@ -7,8 +7,9 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from ..ops.bootstrap import Interpretation, Operation, define
-from ..ops.interpretations import compose, fwd, handler, product, reflect, runner
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, StatefulInterpretation, \
+    define, register
+from causal_pyro.effectful.ops.interpretations import compose, fwd, handler, product, reflect, runner
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -38,15 +39,14 @@ def param(
 ParamStore = collections.OrderedDict[str, tuple[torch.Tensor, Constraint, Optional[int]]]
 
 
-@define(StatefulInterpretation)
-class DefaultInterpretation(Interpretation[ParamStore]):
+class DefaultInterpretation(Generic[T], StatefulInterpretation[ParamStore, T]):
     state: ParamStore
 
 
-@DefaultInterpretation.define(sample)
+@register(DefaultInterpretation, sample)
 def default_sample(
     param_store: ParamStore,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -55,10 +55,10 @@ def default_sample(
     return distribution.sample()
 
 
-@DefaultInterpretation.define(param)
+@register(DefaultInterpretation, param)
 def default_param(
     param_store: ParamStore,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
@@ -121,49 +121,47 @@ class ParamTraceNode(TraceNode):
 Trace = collections.OrderedDict[str, TraceNode]
 
 
-@define(StatefulInterpretation)
-class trace(Interpretation[Trace]):
+class trace(Generic[T], StatefulInterpretation[Trace, T]):
     state: Trace
 
 
-@trace.define(sample)
+@register(trace, sample)
 def trace_sample(
     tr: Trace,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
     obs: Optional[T] = None
 ) -> T:
-    result = fwd(ctx, result)
+    result = fwd(result)
     tr[name] = SampleTraceNode(name, result, distribution, obs is not None)
     return result
 
 
-@trace.define(param)
+@register(trace, param)
 def trace_param(
     tr: Trace,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
     constraint=torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
-    ctx, result = fwd(ctx, result)
+    result = fwd(result)
     tr[name] = TraceNode(name, result, constraint, event_dim)
     return result
 
 
-@define(StatefulInterpretation)
-class replay(Interpretation[Trace]):
+class replay(Generic[T], StatefulInterpretation[Trace, T]):
     state: Trace
 
 
-@replay.define(sample)
+@register(replay, sample)
 def replay_sample(
     tr: Trace,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -171,21 +169,20 @@ def replay_sample(
 ) -> T:
     if result is None and name in tr:
         result = tr[name].value
-    return fwd(ctx, result)
+    return fwd(result)
 
 
 Observations = collections.OrderedDict[str, torch.Tensor]
 
 
-@define(StatefulInterpretation)
-class condition(Interpretation[Observations]):
+class condition(Generic[T], StatefulInterpretation[Observations, T]):
     state: Observations
 
 
-@condition.define(sample)
+@register(condition, sample)
 def condition_sample(
     state: Observations,
-    ctx: Environment[T],
+    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -195,25 +192,36 @@ def condition_sample(
         result = state[name]
     except KeyError:
         pass
-    return fwd(ctx, result)
+    return fwd(result)
 
 
-@define(StatefulInterpretation)
-class block(Interpretation[Container[str]]):
+class block(Generic[T], StatefulInterpretation[Container[str], T]):
     state: Container[str]
 
 
-@block.define(sample)
-def block_sample(blocked: Container[str], ctx: Environment[T], result: Optional[T], name: str, *args) -> T:
-    return reflect(result) if name in blocked else fwd(ctx, result)
+@register(block, sample)
+def block_sample(
+    blocked: Container[str],
+    # ctx: Environment[T],
+    result: Optional[T],
+    name: str,
+    *args
+) -> T:
+    return reflect(result) if name in blocked else fwd(result)
 
 
-@block.define(param)
-def block_param(blocked: Container[str], ctx: Environment[T], result: Optional[T], name: str, *args, **kwargs) -> T:
-    return reflect(result) if name in blocked else fwd(ctx, result)
+@register(block, param)
+def block_param(
+    blocked: Container[str],
+    # ctx: Environment[T],
+    result: Optional[T],
+    name: str,
+    *args
+) -> T:
+    return reflect(result) if name in blocked else fwd(result)
 
 
-@runner(DefaultInterpretation())
+@runner(DefaultInterpretation(ParamStore()))
 def trace_elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
 
     with handler(trace(Trace())) as guide_trace:
