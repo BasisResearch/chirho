@@ -8,7 +8,9 @@ T = TypeVar("T")
 def expectation(
     model: Callable[..., T],
     name: str,
+    # added axis here (?)
     model_args,
+    axis: int = 0,
     model_kwargs: Dict = {},
     *args,
     **kwargs
