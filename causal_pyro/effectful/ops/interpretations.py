@@ -3,7 +3,7 @@ from typing import Callable, Generic, Hashable, List, Mapping, Optional, Protoco
 import contextlib
 import functools
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, StatefulInterpretation, \
     define, get_interpretation, swap_interpretation
 
 
@@ -12,7 +12,7 @@ T = TypeVar("T")
 
 @define(Operation)
 def set_prompt(prompt_op: Operation[T], rest: Callable, fst: Callable) -> Callable[..., T]:
-    return handler({prompt_op: ResetInterpretation(rest)})(fst)
+    return lambda res, *args: handler({prompt_op: ResetInterpretation(rest, args)})(fst)(res, *args)
 
 
 class ResetInterpretation(Generic[T]):
@@ -22,15 +22,8 @@ class ResetInterpretation(Generic[T]):
         self.rest = rest
         self._active_args = args
 
-    @staticmethod
-    def _fail(rest, prompt_res: Optional[T], result: Optional[T]):
-        raise RuntimeError(f"Continuation {rest} can only be run once")
-
     def __call__(self, prompt_res: Optional[T], result: Optional[T]) -> T:
-        try:
-            return self.rest(result, *self._active_args)
-        finally:
-            self.rest = functools.partial(self._fail, self.rest)
+        return self.rest(result, *self._active_args)
 
 
 ##################################################

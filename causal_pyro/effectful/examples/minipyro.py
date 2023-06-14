@@ -38,11 +38,12 @@ def param(
 ParamStore = collections.OrderedDict[str, tuple[torch.Tensor, Constraint, Optional[int]]]
 
 
-class DefaultModel(Interpretation[ParamStore]):
+@define(StatefulInterpretation)
+class DefaultInterpretation(Interpretation[ParamStore]):
     state: ParamStore
 
 
-@DefaultModel.define(sample)
+@DefaultInterpretation.define(sample)
 def default_sample(
     param_store: ParamStore,
     ctx: Environment[T],
@@ -54,7 +55,7 @@ def default_sample(
     return distribution.sample()
 
 
-@DefaultModel.define(param)
+@DefaultInterpretation.define(param)
 def default_param(
     param_store: ParamStore,
     ctx: Environment[T],
@@ -120,13 +121,14 @@ class ParamTraceNode(TraceNode):
 Trace = collections.OrderedDict[str, TraceNode]
 
 
+@define(StatefulInterpretation)
 class trace(Interpretation[Trace]):
     state: Trace
 
 
 @trace.define(sample)
 def trace_sample(
-    state: Trace,
+    tr: Trace,
     ctx: Environment[T],
     result: Optional[T],
     name: str,
@@ -134,7 +136,7 @@ def trace_sample(
     obs: Optional[T] = None
 ) -> T:
     result = fwd(ctx, result)
-    trace[name] = SampleTraceNode(name, result, distribution, obs is not None)
+    tr[name] = SampleTraceNode(name, result, distribution, obs is not None)
     return result
 
 
@@ -153,6 +155,7 @@ def trace_param(
     return result
 
 
+@define(StatefulInterpretation)
 class replay(Interpretation[Trace]):
     state: Trace
 
@@ -174,6 +177,7 @@ def replay_sample(
 Observations = collections.OrderedDict[str, torch.Tensor]
 
 
+@define(StatefulInterpretation)
 class condition(Interpretation[Observations]):
     state: Observations
 
@@ -194,6 +198,7 @@ def condition_sample(
     return fwd(ctx, result)
 
 
+@define(StatefulInterpretation)
 class block(Interpretation[Container[str]]):
     state: Container[str]
 
@@ -208,7 +213,7 @@ def block_param(blocked: Container[str], ctx: Environment[T], result: Optional[T
     return reflect(result) if name in blocked else fwd(ctx, result)
 
 
-@runner(DefaultModel())
+@runner(DefaultInterpretation())
 def trace_elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
 
     with handler(trace(Trace())) as guide_trace:

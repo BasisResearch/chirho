@@ -1,7 +1,7 @@
 from typing import Callable
 
-from ..ops.bootstrap import Interpretation, Operation, define
-from ..ops.interpretations import \
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define
+from causal_pyro.effectful.ops.interpretations import \
     compose, fwd, handler, \
     product, reflect, runner
 
@@ -33,32 +33,31 @@ def print_wrap(fn: Callable, name="A"):
 
 if __name__ == "__main__":
 
-    printme1 = Interpretation({
+    printme1 = define(Interpretation)({
         add: print_wrap(add.body, name="A"),
     })
 
-    printme2 = Interpretation({
+    printme2 = define(Interpretation)({
         add: print_wrap(add.body, name="B"),
     })
 
-    default = Interpretation({add: lambda res, *args: res if res is not None else add.body(*args)})
-
-    # printme3 = compose(compose(default, printme1), printme2)
-    # printme3 = compose(default, compose(printme1, printme2))
-    printme3 = compose(default, printme1, printme2)
+    default = define(Interpretation)({add: lambda res, *args: res if res is not None else add.body(*args)})
 
     print(add(3, 4))
     print(add3(3, 4, 5))
 
-    with handler(printme3) as h:
-        print(add(3, 4))
-        print(add3(3, 4, 5))
+    # with handler(printme2) as h:
+    #     print(add(3, 4))
+    #     print(add3(3, 4, 5))
 
-    # what should happen with runner?
-    # when reflect is called, it should jump to the next runner
-    # i.e. re-invoke the operation under the next product interpretation
+    # with handler(compose(printme1, printme2)) as h:
+    #     print(add(3, 4))
+    #     print(add3(3, 4, 5))
 
-    with runner(printme1) as r:
+    # with handler(compose(default, printme1, printme2)) as h:
+    #     print(add(3, 4))
+    #     print(add3(3, 4, 5))
+
+    with runner(compose(default, printme1)) as r:
         with handler(printme2) as h:
             print(add(3, 4))
-
