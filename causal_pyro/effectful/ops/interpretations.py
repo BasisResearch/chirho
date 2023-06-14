@@ -17,13 +17,14 @@ def set_prompt(prompt_op: Operation[T], rest: Callable, fst: Callable) -> Callab
 
 class ResetInterpretation(Generic[T]):
     rest: Callable[..., T]
+    active_args: tuple[T, ...]
 
-    def __init__(self, rest: Callable[..., T], args: tuple[T, ...]):
+    def __init__(self, rest: Callable[..., T], active_args: tuple[T, ...]):
         self.rest = rest
-        self._active_args = args
+        self.active_args = active_args
 
     def __call__(self, prompt_res: Optional[T], result: Optional[T]) -> T:
-        return self.rest(result, *self._active_args)
+        return self.rest(result, *self.active_args)
 
 
 ##################################################
