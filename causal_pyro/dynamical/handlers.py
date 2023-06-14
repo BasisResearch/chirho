@@ -451,8 +451,8 @@ class PointObservation(PointInterruption):
         # the observation occurs after the logging period.
         super().__init__(time + eps)
 
-    def _pyro_simulate_span(self, msg) -> None:
-        dynamics, current_state, _ = msg["args"]
+    def _pyro_apply_interruptions(self, msg) -> None:
+        dynamics, current_state = msg["args"]
 
         with pyro.condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
