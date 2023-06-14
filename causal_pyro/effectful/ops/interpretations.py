@@ -60,6 +60,13 @@ def handler(intp: Interpretation[T]):
 
 ##################################################
 
+def res_wrap(fn: Callable[..., T]) -> Callable[..., T]:
+    @functools.wraps(fn)
+    def wrapped(res: Optional[T], *args: T, **kwargs: T) -> T:
+        return res if res is not None else fn(*args, **kwargs)
+    return wrapped
+
+
 @define(Operation)
 def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
     if len(intps) == 0:
@@ -73,7 +80,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         reflector = define(Interpretation)(((op, lambda res, *args: reflect(res)) for op in intp.keys()))
         intp2 = compose(reflector, *intps)
         return define(Interpretation)(
-            ((op, set_prompt(reflect, handler(intp)(intp.get(op, op.body)), intp2[op]))
+            ((op, set_prompt(reflect, handler(intp)(intp.get(op, res_wrap(op.body))), intp2[op]))
              for op in intp2.keys())
         )
     else:

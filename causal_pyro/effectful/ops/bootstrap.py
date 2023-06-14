@@ -107,12 +107,8 @@ def register(
         if isinstance(op, BaseOperation):
             setattr(op, "body", interpret_op)
             return interpret_op
-    elif isinstance(intp, type):
-        if issubclass(intp, StatefulInterpretation):
-            intp.__setitem__(op, interpret_op)
-            return interpret_op
     elif isinstance(intp, Interpretation):
-        intp[op] = interpret_op
+        intp.__setitem__(op, interpret_op)
         return interpret_op
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
