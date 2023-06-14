@@ -1,6 +1,24 @@
-from typing import Any, Callable, Container, ContextManager, Generic, Hashable, Mapping, NamedTuple, Protocol, Optional, Set, Type, TypeVar, Union, runtime_checkable
+from typing import Callable, Generic, Hashable, List, Mapping, Optional, Protocol, Type, TypeVar
 
-S, T = TypeVar("S"), TypeVar("T")
+import functools
+
+
+T = TypeVar("T")
+
+
+Environment = dict[Hashable, T]
+OpInterpretation = Callable[..., T]
+Interpretation = Environment[OpInterpretation[T]]
+
+
+class Runtime(Generic[T]):
+    interpretation: Interpretation[T]
+
+    def __init__(self, interpretation: Interpretation[T]):
+        self.interpretation = interpretation
+
+
+RUNTIME = Runtime(Interpretation())
 
 
 class Operation(Generic[T]):
@@ -9,42 +27,33 @@ class Operation(Generic[T]):
         self.body = body
 
     def __call__(self, *args: T, **kwargs: T) -> T:
-        return apply(self, *args, **kwargs)
+        try:
+            interpret = get_interpretation()[self]
+            args = (None,) + args
+        except KeyError:
+            interpret = self.body
+        except NameError as e:  # bootstrapping case
+            if e.args[0] == "name 'get_interpretation' is not defined":
+                interpret = self.body if self.body is not Operation else lambda x: x
+            else:
+                raise
+        return interpret(*args, **kwargs)
 
 
-def get_op_body(op: Operation[T]) -> Callable[..., T]:
-    return op.body
-
-
-def apply(op: Operation[T], *args: T, **kwargs: T) -> T:
-    return get_op_body(op)(*args, **kwargs)
-
-
-def define_define(constructors: Mapping[Hashable, Callable]):
-
+@Operation
+@functools.cache
+def define(m: Type[T]) -> T | Type[T] | Callable[..., T] | Callable[..., Callable[..., T]]:
     # define is the embedding function from host syntax to embedded syntax
-    def define(m: Type[T] | Hashable) -> Callable[..., Type[T]]:
-        return constructors.get(m, m)
-
-    def metadef(m: Type[T] | Hashable, fn: Optional[Callable[..., Type[T]]] = None):
-        if fn is None:  # curry
-            return lambda fn: metadef(m, fn)
-
-        constructors[m] = define(Operation)(fn)
-        return define(m)
-
-    metadef(define, metadef)
-    return define
+    return Operation(m) if m is Operation else define(Operation)(m)
 
 
-define = define_define({})
+@define(Operation)
+def get_interpretation() -> Interpretation[T]:
+    return RUNTIME.interpretation
 
 
-@define(define)(Operation)
-def defop(fn: Callable[..., T]) -> Operation[T]:
-    return Operation(fn)
-
-
-# TODO self-hosting
-# apply = define(Operation)(apply)
-# get_op_body = define(Operation)(get_op_body)
+@define(Operation)
+def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
+    old_intp = RUNTIME.interpretation
+    RUNTIME.interpretation = intp
+    return old_intp
