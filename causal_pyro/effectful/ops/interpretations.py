@@ -96,7 +96,7 @@ def handler(intp: Interpretation[T]):
 
 @define(Operation)
 def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
-    if len(intps) == 0:body
+    if len(intps) == 0:
         return intp
     elif len(intps) == 1:
         # reduces to compose by:
