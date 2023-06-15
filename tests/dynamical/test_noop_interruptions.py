@@ -13,6 +13,7 @@ from causal_pyro.dynamical.handlers import (
     PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
+    DynamicInterruption,
     simulate,
 )
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
@@ -130,3 +131,35 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
                     result_double_pi2 = simulate(model, init_state, tspan)
 
     assert check_trajectories_match(observational_execution_result, result_double_pi2)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state_values])
+@pytest.mark.parametrize("tspan", [tspan_values])
+def test_point_interruption_at_start(model, init_state, tspan):
+    observational_execution_result = simulate(model, init_state, tspan)
+
+    with SimulatorEventLoop():
+        with PointInterruption(time=1.0):
+            result_pint = simulate(model, init_state, tspan)
+
+    assert check_trajectories_match(observational_execution_result, result_pint)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state_values])
+@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("intervene_state", intervene_states)
+def test_noop_dynamic_interruption(model, init_state, tspan, intervene_state):
+    observational_execution_result = simulate(model, init_state, tspan)
+
+    with SimulatorEventLoop():
+        tt = (tspan[-1] - tspan[0]) / 2.
+        with DynamicInterruption(
+            event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
+            var_order=init_state.var_order,
+            max_applications=1
+        ):
+            result_dint = simulate(model, init_state, tspan)
+
+    assert check_trajectories_match(observational_execution_result, result_dint)

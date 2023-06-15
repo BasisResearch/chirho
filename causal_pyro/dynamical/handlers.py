@@ -291,7 +291,7 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
             # Block dynamic interventions that have triggered and applied more than the specified number of times.
             # This will prevent them from percolating up to the simulate_to_interruption execution.
             with pyro.poutine.messenger.block_messengers(
-                    lambda m: isinstance(m, DynamicIntervention) and m.max_applications <= interruption_counts.get(m, 0)):
+                    lambda m: isinstance(m, DynamicInterruption) and m.max_applications <= interruption_counts.get(m, 0)):
                 (
                     span_traj,
                     terminal_interruptions,
@@ -394,10 +394,9 @@ class PointInterruption(Interruption):
                 f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
-        # Note AZiusld10 — This case is actually okay here, as simulate_to_interruption calls may be specified for
-        # the latter half of a particular timespan, and start only after some previous interruptions. So,
-        # we put it in the simulate preprocess call instead, to get the full timespan.
-        # elif self.time < start_time:
+        # Note AZiusld10 — This case is actually okay here within simulate_to_interruption, as calls may be specified
+        # for the latter half of a particular timespan, and start only after some previous interruptions. So,
+        # we put it in the simulate preprocess call instead, to get the full timespan. elif self.time < start_time:
 
         super()._pyro_simulate_to_interruption(msg)
 
@@ -469,21 +468,31 @@ class DynamicInterruption(Interruption):
     def __init__(
         self,
         event_f: Callable[[T, State[T]], T],
-        intervention: State[T],
         var_order: Tuple[str, ...],
+        max_applications: Optional[int] = None,
+        **kwargs,
     ):
         """
         :param event_f: An event trigger function that approaches and returns 0.0 when the event should be triggered.
          This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
          element of the state exceeds some threshold, etc. It takes both the current time and current state.
-        :param intervention: The instantaneous intervention applied to the state when the event is triggered.
         :param var_order: The full State.var_order. This could be intervention.var_order if the intervention applies
          to the full state.
+        :param max_applications: The maximum number of times this dynamic interruption can be applied. If None, there
+            is no limit.
         """
 
-        super().__init__(intervention=intervention)
+        super().__init__(**kwargs)
         self.event_f = event_f
         self.var_order = var_order
+
+        if max_applications is None or max_applications > 1:
+            # This implies an infinite number of applications, but we don't support that yet, as we need some way
+            #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
+            #  it will just repeatedly trigger and the sim won't advance.
+            raise NotImplementedError("More than one application is not yet implemented.")
+
+        self.max_applications = max_applications
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
         dynamic_interruptions = msg["kwargs"]["dynamic_interruptions"]
@@ -505,13 +514,11 @@ class DynamicIntervention(DynamicInterruption, _InterventionMixin):
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time.
     """
+    def __int__(self, intervention: State[T], event_f: Callable[[T, State[T]], T],
+                var_order: Tuple[str, ...], max_applications: Optional[int] = None,):
+        """
+        :param intervention: The instantaneous intervention applied to the state when the event is triggered.
+        """
 
-    def __init__(self, max_applications: Optional[int], *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.max_applications = max_applications
-
-        if max_applications is None or max_applications > 1:
-            # This implies an infinite number of applications, but we don't support that yet, as we need some way
-            #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
-            #  it will just repeatedly trigger and the sim won't advance.
-            raise NotImplementedError("More than one application is not yet implemented.")
+        super().__init__(event_f=event_f, var_order=var_order,
+                         max_applications=max_applications, intervention=intervention)

@@ -32,10 +32,12 @@ tspan_values = torch.arange(0.0, 3.0, 0.03)
 init_state = State(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
 
 # State at which the dynamic intervention will trigger.
-trigger_state = State(R=torch.tensor(30.0))
+trigger_state1 = State(R=torch.tensor(30.0))
+trigger_state2 = State(R=torch.tensor(50.0))
 
 # State we'll switch to when the dynamic intervention triggers.
-intervene_state = State(S=torch.tensor(50.0))
+intervene_state1 = State(S=torch.tensor(50.0))
+intervene_state2 = State(S=torch.tensor(30.0))
 
 
 def get_state_reached_event_f(target_state: State[torch.tensor]):
@@ -50,8 +52,64 @@ def get_state_reached_event_f(target_state: State[torch.tensor]):
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
-@pytest.mark.parametrize("trigger_state", [trigger_state])
-@pytest.mark.parametrize("intervene_state", [intervene_state])
+@pytest.mark.parametrize("trigger_states", [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)])
+@pytest.mark.parametrize("intervene_states", [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)])
+def test_nested_dynamic_intervention_causes_change(
+    model, init_state, tspan, trigger_states, intervene_states
+):
+    ts1, ts2 = trigger_states
+    is1, is2 = intervene_states
+
+    with SimulatorEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+            var_order=init_state.var_order,
+            max_applications=1,
+        ):
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                res = simulate(model, init_state, tspan)
+
+    preint_total = init_state.S + init_state.I + init_state.R
+
+    # Each intervention just adds a certain amount of susceptible people after the recovered count exceeds some amount
+
+    postint_mask1 = res.R > ts1.R
+    postint_mask2 = res.R > ts2.R
+    preint_mask = ~(postint_mask1 | postint_mask2)
+
+    # Make sure all points before the intervention maintain the same total population.
+    preint_traj = res[preint_mask]
+    assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
+
+    # Make sure all points after the first intervention, but before the second, include the added population of that
+    #  first intervention.
+    postfirst_int_mask, postsec_int_mask = (postint_mask1, postint_mask2) if ts1.R < ts2.R else (postint_mask2, postint_mask1)
+    firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
+
+    postfirst_int_presec_int_traj = res[postfirst_int_mask & ~postsec_int_mask]
+    # noinspection PyTypeChecker
+    assert torch.all(
+        postfirst_int_presec_int_traj.S + postfirst_int_presec_int_traj.I + postfirst_int_presec_int_traj.R
+        > (preint_total + firstis.S) * 0.95)
+
+    postsec_int_traj = res[postsec_int_mask]
+    # noinspection PyTypeChecker
+    assert torch.all(
+        postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
+        > (preint_total + firstis.S + secondis.S) * 0.95)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("trigger_state", [trigger_state1])
+@pytest.mark.parametrize("intervene_state", [intervene_state1])
 def test_dynamic_intervention_causes_change(
     model, init_state, tspan, trigger_state, intervene_state
 ):
