@@ -1,5 +1,7 @@
 from typing import Callable
 
+import functools
+
 from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define
 from causal_pyro.effectful.ops.interpretations import \
     compose, fwd, handler, \
@@ -28,7 +30,7 @@ def print_wrap(fn: Callable, name="A"):
         result = fwd(result)
         print(f"result: {result}")
         return result
-    return wrapped
+    return functools.wraps(fn)(wrapped)
 
 
 if __name__ == "__main__":
@@ -41,7 +43,7 @@ if __name__ == "__main__":
         add: print_wrap(add.body, name="B"),
     })
 
-    default = define(Interpretation)({add: lambda res, *args: res if res is not None else add.body(*args)})
+    default = define(Interpretation)({add: add.default})
 
     print(add(3, 4))
     print(add3(3, 4, 5))

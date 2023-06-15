@@ -17,15 +17,21 @@ class BaseOperation(Generic[T]):
     def __init__(self, body: Callable[..., T]):
         self.body = body
 
+    @property
+    def default(self) -> Callable[..., T]:
+        return functools.wraps(self.body)(
+            lambda res, *args, **kwargs: res if res is not None else self.body(*args, **kwargs)
+        )
+
     def __call__(self, *args: T, **kwargs: T) -> T:
+        args = (None,) + args
         try:
             interpret = get_interpretation()[self]
-            args = (None,) + args
         except KeyError:
-            interpret = self.body
+            interpret = self.default
         except NameError as e:
             if e.args[0] == "name 'get_interpretation' is not defined":
-                interpret = self.body if self.body is not BaseOperation else lambda x: x
+                interpret = self.default if self.body is not BaseOperation else lambda _, x: x
             else:
                 raise
         return interpret(*args, **kwargs)

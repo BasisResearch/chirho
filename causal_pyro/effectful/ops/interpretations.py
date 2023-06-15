@@ -29,6 +29,10 @@ class StatefulInterpretation(Generic[S, T]):
     def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
         cls._op_interpretations[op] = interpret_op
 
+    @classmethod
+    def __contains__(cls, op: Operation[T]) -> bool:
+        return op in cls._op_interpretations
+
     def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
         return functools.partial(self._op_interpretations[op], self.state)
 
@@ -90,16 +94,9 @@ def handler(intp: Interpretation[T]):
 
 ##################################################
 
-def res_wrap(fn: Callable[..., T]) -> Callable[..., T]:
-    @functools.wraps(fn)
-    def wrapped(res: Optional[T], *args: T, **kwargs: T) -> T:
-        return res if res is not None else fn(*args, **kwargs)
-    return wrapped
-
-
 @define(Operation)
 def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
-    if len(intps) == 0:
+    if len(intps) == 0:body
         return intp
     elif len(intps) == 1:
         # reduces to compose by:
@@ -110,7 +107,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         reflector = define(Interpretation)(((op, lambda res, *args: reflect(res)) for op in intp.keys()))
         intp2 = compose(reflector, *intps)
         return define(Interpretation)(
-            ((op, set_prompt(reflect, handler(intp)(intp.get(op, res_wrap(op.body))), intp2[op]))
+            ((op, set_prompt(reflect, handler(intp)(intp[op] if op in intp else op.default), intp2[op]))
              for op in intp2.keys())
         )
     else:
