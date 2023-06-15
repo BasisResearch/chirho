@@ -74,10 +74,15 @@ def test_tspan_collision(model):
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
 def test_svi_composition(model):
-    data1 = {"S_obs": torch.tensor(10.0)}
-    data2 = {
+    data1 = {
+        "S_obs": torch.tensor(10.0),
         "I_obs": torch.tensor(5.0),
         "R_obs": torch.tensor(5.0),
+    }
+    data2 = {
+        "S_obs": torch.tensor(8.0),
+        "I_obs": torch.tensor(6.0),
+        "R_obs": torch.tensor(6.0),
     }
 
     def conditioned_sir():
