@@ -1,15 +1,21 @@
 import logging
 
+import causal_pyro
+import pyro
 import pytest
 import torch
 
+from pyro.distributions import Normal, Uniform, constraints
+
+import causal_pyro
 from causal_pyro.dynamical.handlers import (
+    ODEDynamics,
     PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
     simulate,
 )
-from causal_pyro.dynamical.ops import State
+from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import SimpleSIRDynamics, check_trajectories_match
 
@@ -53,10 +59,6 @@ def test_noop_point_interruptions(model, init_state, tspan):
             with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
                 result_double_pint1 = simulate(model, init_state, tspan)
 
-    # FIXME AZ-yu28184 This test fails rn because the state of the system at the the point
-    # interruption is included in the returned vector of measurements.
-    # TODO parse that out so that user gets what they ask for?
-    # Odd that this only procs for the double point interruption case
     assert check_trajectories_match(observational_execution_result, result_double_pint1)
 
     # Test with two standard point interruptions, in a different order.
@@ -86,7 +88,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
 
     # Test a single point intervention.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(
@@ -98,7 +100,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
 
     # Test two point interventions out of scope.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(
@@ -114,7 +116,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
 
     # Test with two point interventions out of scope, in a different order.
     with pytest.warns(
-        expected_warning=UserWarning, match="is after the last time in the timespan"
+        expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
         with SimulatorEventLoop():
             with PointIntervention(

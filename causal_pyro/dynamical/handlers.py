@@ -2,7 +2,20 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import Dict, Tuple, TypeVar, Union
+from enum import Enum
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Hashable,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+    Dict
+)
 
 import pyro
 import torch
@@ -11,16 +24,23 @@ import torchdiffeq
 from causal_pyro.dynamical.ops import (
     State,
     Trajectory,
+    Dynamics,
+    State,
+    Trajectory,
     concatenate,
-    simulate,
     simulate_span,
+    simulate,
+    simulate_to_interruption,
+    apply_interruptions
 )
+from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
+# noinspection PyPep8Naming
 class ODEDynamics(pyro.nn.PyroModule):
     def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
         raise NotImplementedError
@@ -31,8 +51,9 @@ class ODEDynamics(pyro.nn.PyroModule):
     def forward(self, initial_state: State[torch.Tensor], timespan, **kwargs):
         return simulate(self, initial_state, timespan, **kwargs)
 
+    # noinspection PyMethodParameters
     def _deriv(
-        dynamics: ODEDynamics,
+        dynamics: "ODEDynamics",
         var_order: Tuple[str, ...],
         time: torch.Tensor,
         state: Tuple[torch.Tensor, ...],
@@ -45,20 +66,13 @@ class ODEDynamics(pyro.nn.PyroModule):
         return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
-@simulate.register(ODEDynamics)
-@pyro.poutine.runtime.effectful(type="simulate")
-def ode_simulate(
-    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
-):
-    return ode_simulate_span(dynamics, initial_state, timespan, **kwargs)
+# <Torchdiffeq Implementations>
 
 
-@simulate_span.register(ODEDynamics)
-@pyro.poutine.runtime.effectful(type="simulate_span")
-def ode_simulate_span(
+def _torchdiffeq_ode_simulate_inner(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
-    var_order = tuple(sorted(initial_state.keys))  # arbitrary, but fixed
+    var_order = initial_state.var_order  # arbitrary, but fixed
 
     solns = torchdiffeq.odeint(
         functools.partial(dynamics._deriv, var_order),
@@ -74,151 +88,318 @@ def ode_simulate_span(
     return trajectory
 
 
+@simulate.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate")
+def torchdiffeq_ode_simulate(
+    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+):
+    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+
+
+@simulate_to_interruption.register(ODEDynamics)
+@pyro.poutine.runtime.effectful(type="simulate_to_interruption")
+def torchdiffeq_ode_simulate_to_interruption(
+    dynamics: ODEDynamics,
+    start_state: State[torch.tensor],
+    timespan,  # The first element of timespan is assumed to be the starting time.
+    *,
+    next_static_interruption: Optional["PointInterruption"] = None,
+    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    **kwargs,
+) -> Tuple[
+    Trajectory[torch.tensor], Tuple["Interruption", ...], float, State[torch.tensor]
+]:
+    nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
+    nostat = next_static_interruption is None
+
+    if nostat and nodyn:
+        trajectory = _torchdiffeq_ode_simulate_inner(
+            dynamics, start_state, timespan, **kwargs
+        )
+        return trajectory, (), timespan[-1], trajectory[-1]
+
+    # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
+    #  for the many possibilities, this can be optimized.
+    # TODO AZ if no dynamic events, just skip the event function pass.
+
+    if dynamic_interruptions is None:
+        dynamic_interruptions = []
+
+    if nostat:
+        # This is required because torchdiffeq.odeint_event appears to just go on and on forever without a terminal
+        #  event.
+        raise ValueError(
+            "No static terminal interruption provided, but about to perform an event sim."
+        )
+
+    # Create the event function combining all dynamic events and the terminal (next) static interruption.
+    combined_event_f = torchdiffeq_combined_event_f(
+        next_static_interruption, dynamic_interruptions
+    )
+
+    # Simulate to the event execution.
+    event_time, event_state = torchdiffeq.odeint_event(
+        functools.partial(dynamics._deriv, start_state.var_order),
+        tuple(getattr(start_state, v) for v in start_state.var_order),
+        timespan[0],
+        event_fn=combined_event_f,
+    )
+
+    # event_state has both the first and final state of the interrupted simulation. We just want the last.
+    event_state = tuple(s[-1] for s in event_state)
+
+    # Check which event(s) fired, and put the triggered events in a list.
+    fired_mask = torch.isclose(
+        combined_event_f(event_time, event_state),
+        torch.tensor(0.0),
+        rtol=1e-02,
+        atol=1e-03,
+    )
+
+    if not torch.any(fired_mask):
+        # TODO AZ figure out the tolerance of the odeint_event function and use that above.
+        raise RuntimeError(
+            "The solve terminated but no element of the event function output was within "
+            "tolerance of zero."
+        )
+
+    if len(fired_mask) != len(dynamic_interruptions) + 1:
+        raise RuntimeError(
+            "The event function returned an unexpected number of events."
+        )
+
+    triggered_events = [
+        de for de, fm in zip(dynamic_interruptions, fired_mask[:-1]) if fm
+    ]
+    if fired_mask[-1]:
+        triggered_events.append(next_static_interruption)
+
+    # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
+    timespan_2nd_pass = torch.tensor([*timespan[timespan < event_time], event_time])
+
+    # Execute a standard, non-event based simulation on the new timespan.
+    trajectory = _torchdiffeq_ode_simulate_inner(
+        dynamics, start_state, timespan_2nd_pass, **kwargs
+    )
+
+    # Return that trajectory (with interruption time separated out into the end state), the list of triggered
+    #  events, the time of the triggered event, and the state at the time of the triggered event.
+    return trajectory[:-1], tuple(triggered_events), event_time, trajectory[-1]
+
+
+# TODO AZ — maybe to multiple dispatch on the interruption type and state type?
+def torchdiffeq_point_interruption_flattened_event_f(
+    pi: "PointInterruption",
+) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+    """
+    Construct a flattened event function for a point interruption.
+    :param pi: The point interruption for which to build the event function.
+    :return: The constructed event function.
+    """
+
+    def event_f(t: torch.tensor, _):
+        return torch.where(t < pi.time, pi.time - t, torch.tensor(0.0))
+
+    return event_f
+
+
+# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
+def torchdiffeq_dynamic_interruption_flattened_event_f(
+    di: "DynamicInterruption",
+) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+    """
+    Construct a flattened event function for a dynamic interruption.
+    :param di: The dynamic interruption for which to build the event function.
+    :return: The constructed event function.
+    """
+
+    def event_f(t: torch.tensor, flat_state: torch.tensor):
+        # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
+        #  user-provided event function of time and State.
+        state = State(**{k: v for k, v in zip(di.var_order, flat_state)})
+        return di.event_f(t, state)
+
+    return event_f
+
+
+# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
+def torchdiffeq_combined_event_f(
+    next_static_interruption: "PointInterruption",
+    dynamic_interruptions: List["DynamicInterruption"],
+) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+    """
+    Construct a combined event function from a list of dynamic interruptions and a single terminal static interruption.
+    :param next_static_interruption: The next static interruption. Viewed as terminal in the context of this event func.
+    :param dynamic_interruptions: The dynamic interruptions.
+    :return: The combined event function, taking in state and time, and returning a vector of floats. When any element
+     of this vector is zero, the corresponding event terminates the simulation.
+    """
+    terminal_event_f = torchdiffeq_point_interruption_flattened_event_f(
+        next_static_interruption
+    )
+    dynamic_event_fs = [
+        torchdiffeq_dynamic_interruption_flattened_event_f(di)
+        for di in dynamic_interruptions
+    ]
+
+    def combined_event_f(t: torch.tensor, flat_state: torch.tensor):
+        return torch.tensor(
+            [
+                *[f(t, flat_state) for f in dynamic_event_fs],
+                terminal_event_f(t, flat_state),
+            ]
+        )
+
+    return combined_event_f
+
+
+# <Torchdiffeq Implementations>
+
+
 class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
     def __enter__(self):
         return super().__enter__()
 
+    # noinspection PyMethodMayBeStatic
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
-        point_interruptions = sorted(
-            msg.get("accrued_point_interruptions", []), key=lambda x: x.time
+
+        # Initial values. These will be updated in the loop below.
+        span_start_state = initial_state
+        span_timespan = full_timespan
+
+        # We use interruption mechanics to stop the timespan at the right point.
+        default_terminal_interruption = PointInterruption(
+            time=span_timespan[-1],
         )
 
-        # Check if the user specified two interventions at the same time.
-        # Iterate all the adjacent pairs of the sorted point interruptions and check torch.isclose
-        # on the time attribute.
-        all_times = torch.tensor(
-            [interruption.time for interruption in point_interruptions]
-        )
-        # Offset by one and hstack to get pairs.
-        all_times = torch.stack([all_times[:-1], all_times[1:]], dim=-1)
-        # Check if any of the pairs are close.
-        if torch.any(torch.isclose(all_times[..., 0], all_times[..., 1])):
-            raise ValueError("Two point interruptions cannot occur at the same time.")
+        full_trajs = []
+        first = True
 
-        if not len(point_interruptions):
+        last_terminal_interruptions = tuple()
+        interruption_counts = dict()
+
+        # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
+        #  a chance to modify the state and/or dynamics before the next span is simulated.
+        while True:
+            # Block any interruption's application that wouldn't be the result of an interruption that ended the last
+            #  simulation.
             with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, PointInterruption)
-            ):
-                msg["value"] = simulate_span(dynamics, initial_state, full_timespan)
-                msg["done"] = True
-                return
+                    lambda m: isinstance(m, Interruption) and m not in last_terminal_interruptions):
+                dynamics, span_start_state = apply_interruptions(dynamics, span_start_state)
 
-        # Handle initial timspan with no interruptions
-        span_start = full_timespan[0]
-        span_end = point_interruptions[0].time
-        timespan = torch.cat(
-            (
-                span_start[..., None],
-                full_timespan[
-                    (span_start < full_timespan) & (full_timespan < span_end)
-                ],
-                span_end[..., None],
-            ),
-            dim=-1,
-        )
-
-        with pyro.poutine.messenger.block_messengers(
-            lambda m: isinstance(m, PointInterruption)
-        ):
-            span_traj = simulate_span(dynamics, initial_state, timespan)
-
-        current_state = span_traj[-1]
-        # remove the point interruption time
-        span_trajectories = [span_traj[:-1]]
-
-        final_i = len(point_interruptions) - 1
-        # Simulate between each point interruption
-        for i, curr_interruption in enumerate(point_interruptions):
-            span_start = curr_interruption.time
-            span_end = (
-                point_interruptions[i + 1].time if i < final_i else full_timespan[-1]
-            )
-            timespan = torch.cat(
+            # Block dynamic interventions that have triggered and applied more than the specified number of times.
+            # This will prevent them from percolating up to the simulate_to_interruption execution.
+            with pyro.poutine.messenger.block_messengers(
+                    lambda m: isinstance(m, DynamicIntervention) and m.max_applications <= interruption_counts.get(m, 0)):
                 (
-                    span_start[..., None],
-                    full_timespan[
-                        (span_start < full_timespan) & (full_timespan < span_end)
-                    ],
-                    span_end[..., None],
-                ),
-                dim=-1,
+                    span_traj,
+                    terminal_interruptions,
+                    end_time,
+                    end_state,
+                ) = simulate_to_interruption(  # This call gets handled by interruption handlers.
+                    dynamics,
+                    span_start_state,
+                    span_timespan,
+                    # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
+                    #  interruption handlers may replace this with themselves if they happen before the end.
+                    next_static_interruption=default_terminal_interruption,
+                    # We just pass nothing here, as any interruption handlers will be responsible for
+                    #  accruing themselves to the message. Leaving explicit for documentation.
+                    dynamic_interruptions=None,
+                )  # type: Trajectory[T], Tuple['Interruption', ...], float, State[T]
+
+            if len(terminal_interruptions) > 1:
+                warnings.warn("Multiple events fired simultaneously. This results in undefined behavior.", UserWarning)
+
+            for interruption in terminal_interruptions:
+                interruption_counts[interruption] = interruption_counts.get(interruption, 0) + 1
+
+            last = default_terminal_interruption in terminal_interruptions
+
+            # Update the full trajectory.
+            if first:
+                full_trajs.append(span_traj)
+            else:
+                # Hack off the end time of the previous simulate_to_interruption, as the user didn't request this.
+                full_trajs.append(span_traj[1:])
+
+            # If we've reached the end of the timespan, break.
+            if last:
+                # The end state in this case will be the final tspan requested by the user, so we need to include.
+                full_trajs.append(end_state.trajectorify())
+                break
+
+            # Construct the next timespan so that we simulate from the prevous interruption time.
+            # TODO AZ — we should be able to detect when this eps is too small, as it will repeatedly trigger
+            #  the same event at the same time.
+            span_timespan = torch.tensor(
+                [end_time, *full_timespan[full_timespan > end_time]]
             )
 
-            with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, PointInterruption)
-                and (m is not curr_interruption)
-            ):
-                span_traj = simulate_span(dynamics, current_state, timespan)
+            # Update the starting state.
+            span_start_state = end_state
 
-            current_state = span_traj[-1]
-            if i < final_i:
-                trunc_span_traj = span_traj[
-                    1:-1
-                ]  # remove interruption times at endpoints
-            else:
-                trunc_span_traj = span_traj[1:]  # remove interruption time at start
-            span_trajectories.append(trunc_span_traj)
+            # Use these to block interruption handlers that weren't responsible for the last interruption.
+            last_terminal_interruptions = terminal_interruptions
 
-        full_trajectory = concatenate(*span_trajectories)
-        msg["value"] = full_trajectory
+            first = False
+
+        msg["value"] = concatenate(*full_trajs)
         msg["done"] = True
 
 
-class DynamicInterruption(pyro.poutine.messenger.Messenger):
-    # TODO AZ - I don't think this should subclass from PointInterruption, because
-    #  it doesn't take a known time.
-    #  Maybe we want a kind of noop abstraction though to make type checking easier?
-    def __init__(self):
-        raise NotImplementedError
+class Interruption(pyro.poutine.messenger.Messenger):
+    # This is required so that the multiple inheritance works properly and super calls to this method execute the
+    #  next implementation in the method resolution order.
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        pass
 
 
-class PointInterruption(pyro.poutine.messenger.Messenger):
-    """
-    This effect handler interrupts a simulation at a given time, and
-    splits it into two separate calls to `simulate` with tspan1 = [tspan[0], time]
-    and tspan2 = (time, tspan[-1]].
-    """
-
-    def __init__(self, time: Union[float, torch.Tensor]):
+# TODO AZ - rename to static interruption?
+class PointInterruption(Interruption):
+    def __init__(self, time: Union[float, torch.Tensor], **kwargs):
         self.time = torch.as_tensor(time)
+        super().__init__(**kwargs)
 
     def _pyro_simulate(self, msg) -> None:
-        dynamics, initial_state, full_timespan = msg["args"]
-        if full_timespan[0] < self.time < full_timespan[-1]:
-            accrued_interruptions = msg.get("accrued_point_interruptions", [])
-            accrued_interruptions.append(self)
-            msg["accrued_point_interruptions"] = accrued_interruptions
+        dynamics, initial_state, timespan = msg["args"]
+        start_time = timespan[0]
 
-        # Throw an error if the interruption time occurs before the timespan, as the simulator
-        #  won't simulate before the first time in the timespan, but the user might expect
-        #  the intervention to affect the execution regardless.
-        if self.time < full_timespan[0]:
+        # See note tagged AZiusld10 below.
+        if self.time < start_time:
             raise ValueError(
-                f"Intervention time {self.time} is before the first time in the timespan {full_timespan[0]}. If you'd"
-                f" like to include this interruption, explicitly include the earlier interruption time within the"
-                f" range of the timespan."
+                f"{PointInterruption.__name__} time {self.time} occurred before the start of the "
+                f"timespan {start_time}. This interruption will have no effect."
             )
 
-        # Throw an error if the interruption time occurs exactly at any point in the timepsan to catch collisions early.
-        if torch.any(self.time == full_timespan).item():
-            raise ValueError(
-                f"Intervention time {self.time} is exactly equal to a time in the timespan {full_timespan}."
-            )
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        dynamics, initial_state, timespan = msg["args"]
+        next_static_interruption = msg["kwargs"]["next_static_interruption"]
 
-        # Throw a warning if the interruption time occurs after the timespan, as the user likely made a mistake
-        #  on the intervention time.
-        if self.time > full_timespan[-1]:
+        start_time = timespan[0]
+        end_time = timespan[-1]
+
+        # If this interruption occurs within the timespan...
+        if start_time < self.time < end_time:
+            # Usurp the next static interruption if this one occurs earlier.
+            if (
+                next_static_interruption is None
+                or self.time < next_static_interruption.time
+            ):
+                msg["kwargs"]["next_static_interruption"] = self
+        elif self.time >= end_time:
             warnings.warn(
-                f"Intervention time {self.time} is after the last time in the timespan {full_timespan[-1]}."
-                f" This intervention will have no effect on the simulation.",
+                f"{PointInterruption.__name__} time {self.time} occurred after the end of the timespan "
+                f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
+        # Note AZiusld10 — This case is actually okay here, as simulate_to_interruption calls may be specified for
+        # the latter half of a particular timespan, and start only after some previous interruptions. So,
+        # we put it in the simulate preprocess call instead, to get the full timespan.
+        # elif self.time < start_time:
 
-    # This isn't needed here, as the default PointInterruption doesn't need to
-    #  affect the simulation of the span. This can be implemented in other
-    #  handlers, however, see e.g. PointIntervention._pyro_simulate_span.
-    # def _pyro_simulate_span(self, msg) -> None:
+        super()._pyro_simulate_to_interruption(msg)
 
 
 @intervene.register(State)
@@ -231,22 +412,31 @@ def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
     return new_state
 
 
-class PointIntervention(PointInterruption):
+class _InterventionMixin(Interruption):
     """
-    This effect handler interrupts a simulation at a given time, and
-    applies an intervention to the state at that time. The simulation
-    is then split into two separate calls to `simulate` with tspan1 = [tspan[0], time]
-    and tspan2 = (time, tspan[-1]].
+    We use this to provide the same functionality to both PointIntervention and the DynamicIntervention,
+     while allowing DynamicIntervention to not inherit PointInterruption functionality.
     """
 
-    def __init__(self, time: float, intervention: State[torch.Tensor]):
-        super().__init__(time)
+    def __init__(self, intervention: State[torch.Tensor], **kwargs):
+        super().__init__(**kwargs)
         self.intervention = intervention
 
-    def _pyro_simulate_span(self, msg):
-        dynamics, current_state, full_timespan = msg["args"]
-        intervened_state = intervene(current_state, self.intervention)
-        msg["args"] = (dynamics, intervened_state, full_timespan)
+    def _pyro_apply_interruptions(self, msg) -> None:
+        dynamics, initial_state = msg["args"]
+        msg["args"] = (
+            dynamics,
+            intervene(initial_state, self.intervention)
+        )
+
+
+class PointIntervention(PointInterruption, _InterventionMixin):
+    """
+    This effect handler interrupts a simulation at a given time, and
+    applies an intervention to the state at that time.
+    """
+
+    pass
 
 
 class PointObservation(PointInterruption):
@@ -261,8 +451,8 @@ class PointObservation(PointInterruption):
         # the observation occurs after the logging period.
         super().__init__(time + eps)
 
-    def _pyro_simulate_span(self, msg) -> None:
-        dynamics, current_state, _ = msg["args"]
+    def _pyro_apply_interruptions(self, msg) -> None:
+        dynamics, current_state = msg["args"]
 
         with pyro.condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
@@ -273,3 +463,55 @@ class PointObservation(PointInterruption):
     def _pyro_sample(self, msg):
         # modify observed site names to handle multiple time points
         msg["name"] = msg["name"] + "_" + str(self.time.item())
+
+
+class DynamicInterruption(Interruption):
+    def __init__(
+        self,
+        event_f: Callable[[T, State[T]], T],
+        intervention: State[T],
+        var_order: Tuple[str, ...],
+    ):
+        """
+        :param event_f: An event trigger function that approaches and returns 0.0 when the event should be triggered.
+         This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
+         element of the state exceeds some threshold, etc. It takes both the current time and current state.
+        :param intervention: The instantaneous intervention applied to the state when the event is triggered.
+        :param var_order: The full State.var_order. This could be intervention.var_order if the intervention applies
+         to the full state.
+        """
+
+        super().__init__(intervention=intervention)
+        self.event_f = event_f
+        self.var_order = var_order
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        dynamic_interruptions = msg["kwargs"]["dynamic_interruptions"]
+
+        if dynamic_interruptions is None:
+            dynamic_interruptions = []
+
+        msg["kwargs"]["dynamic_interruptions"] = dynamic_interruptions
+
+        # Add self to the collection of dynamic interruptions.
+        if self not in msg.get("ignored_dynamic_interruptions", []):
+            dynamic_interruptions.append(self)
+
+        super()._pyro_simulate_to_interruption(msg)
+
+
+class DynamicIntervention(DynamicInterruption, _InterventionMixin):
+    """
+    This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
+    applies an intervention to the state at that time.
+    """
+
+    def __init__(self, max_applications: Optional[int], *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_applications = max_applications
+
+        if max_applications is None or max_applications > 1:
+            # This implies an infinite number of applications, but we don't support that yet, as we need some way
+            #  of disabling a dynamic event proc for some time epsilon after it is triggered each time, otherwise
+            #  it will just repeatedly trigger and the sim won't advance.
+            raise NotImplementedError("More than one application is not yet implemented.")

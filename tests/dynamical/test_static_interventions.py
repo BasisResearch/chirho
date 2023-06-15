@@ -1,17 +1,32 @@
 import logging
 
+import causal_pyro
+import pyro
 import pytest
 import torch
 
+from pyro.distributions import Normal, Uniform, constraints
+
+
+import pyro
+import torch
+from pyro.distributions import constraints
+import causal_pyro
+
+from causal_pyro.dynamical.ops import State, simulate, Trajectory
 from causal_pyro.dynamical.handlers import (
+    ODEDynamics,
+    PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
+    PointIntervention,
     simulate,
 )
-from causal_pyro.dynamical.ops import State
+from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import (
     SimpleSIRDynamics,
+    check_trajectories_match,
     check_trajectories_match_in_all_but_values,
 )
 
@@ -54,7 +69,7 @@ def test_point_intervention_causes_difference(
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             if intervene_time < tspan[0]:
                 with pytest.raises(
-                    ValueError, match="is before the first time in the timespan"
+                    ValueError, match="occurred before the start of the timespan"
                 ):
                     simulate(model, init_state, tspan)
                 return
@@ -63,6 +78,20 @@ def test_point_intervention_causes_difference(
 
     assert check_trajectories_match_in_all_but_values(
         observational_execution_result, result_single_pint
+    )
+
+    # Make sure the intervention only causes a difference after the intervention time.
+    after = intervene_time < tspan
+    before = ~after
+
+    observational_result_before_int = observational_execution_result[before]
+    result_before_int = result_single_pint[before]
+    assert check_trajectories_match(observational_result_before_int, result_before_int)
+
+    observational_result_after_int = observational_execution_result[after]
+    result_after_int = result_single_pint[after]
+    assert check_trajectories_match_in_all_but_values(
+        observational_result_after_int, result_after_int
     )
 
 
@@ -94,17 +123,19 @@ def test_nested_point_interventions_cause_difference(
             with PointIntervention(time=intervene_time2, intervention=intervene_state2):
                 if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
                     with pytest.raises(
-                        ValueError, match="is before the first time in the timespan"
+                        ValueError, match="occurred before the start of the timespan"
                     ):
                         simulate(model, init_state, tspan)
                     return
-                elif torch.isclose(intervene_time1, intervene_time2):
-                    with pytest.raises(
-                        ValueError,
-                        match="Two point interruptions cannot occur at the same time.",
-                    ):
-                        simulate(model, init_state, tspan)
-                    return
+                # AZ - We've decided to support this case and have interventions apply sequentially in the order
+                #  they are handled.
+                # elif torch.isclose(intervene_time1, intervene_time2):
+                #     with pytest.raises(
+                #         ValueError,
+                #         match="Two point interruptions cannot occur at the same time.",
+                #     ):
+                #         simulate(model, init_state, tspan)
+                #     return
                 else:
                     result_nested_pint = simulate(model, init_state, tspan)
 
