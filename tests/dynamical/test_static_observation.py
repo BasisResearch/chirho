@@ -139,7 +139,7 @@ def test_svi_composition_test_two(model):
     guide = AutoMultivariateNormal(conditioned_sir)
     adam = pyro.optim.Adam({"lr": 0.03})
     svi = SVI(conditioned_sir, guide, adam, loss=Trace_ELBO())
-    n_steps = 2
+    n_steps = 25
 
     # Do gradient steps
     pyro.clear_param_store()
