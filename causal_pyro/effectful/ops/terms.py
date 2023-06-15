@@ -11,7 +11,7 @@ class Variable(Protocol[T]):
     __variable_type__: Type[T]
 
 
-@register(None, define(Variable))
+@register(define(Variable))
 class BaseVariable(Generic[T], Variable[T]):
     __variable_name__: Hashable
     __variable_type__: Type[T]
@@ -29,7 +29,7 @@ class Term(Protocol[T]):
     __args__: tuple["Term[T]" | T, ...]
 
 
-@register(None, define(Term))
+@register(define(Term))
 class BaseTerm(Generic[T], Term[T]):
     __head__: Operation[T]
     __args__: tuple["Term[T]" | T, ...]
@@ -48,7 +48,7 @@ class Environment(Protocol[T]):
     def keys(self) -> Iterable[Hashable]: ...
 
 
-@register(None, define(Environment))
+@register(define(Environment))
 class BaseEnvironment(Generic[T], dict[Hashable, T]):
     pass
 

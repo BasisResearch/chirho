@@ -5,7 +5,8 @@ from causal_pyro.effectful.ops.interpretations import fwd, handler, reflect, run
 from causal_pyro.effectful.ops.terms import Term, Environment, Operation, Variable, head_of, args_of, union
 
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 class Computation(Protocol[T]):
@@ -13,7 +14,7 @@ class Computation(Protocol[T]):
     __value__: Term[T]
 
 
-@register(None, define(Computation))
+@register(define(Computation))
 class BaseComputation(Generic[T], Computation[T]):
     __ctx__: Environment[T]
     __value__: Term[T]
@@ -28,21 +29,20 @@ class BaseComputation(Generic[T], Computation[T]):
 
 @define(Operation)
 def ctx_of(obj: Computation[T]) -> Environment[T]:
-    if hasattr(obj, "__ctx__"):
-        return obj.__ctx__
-    raise TypeError(f"Object {obj} has no context")
+    return obj.__ctx__
 
 
 @define(Operation)
 def value_of(obj: Computation[T]) -> Term[T]:
-    if hasattr(obj, "__value__"):
-        return obj.__value__
-    raise TypeError(f"Object {obj} has no value")
+    return obj.__value__
 
 
 @define(Operation)
 def apply(intp: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
-    return intp[op](*(traverse(intp, arg) for arg in args))
+    return define(Computation)(
+        union(*(ctx_of(arg) for arg in args)),
+        intp[op](*(traverse(intp, arg) for arg in args))
+    )
 
 
 @define(Operation)
@@ -73,7 +73,7 @@ def typeof(ctx: Environment[Type[T]], judgements: Interpretation[Type[T]], term:
 
 @define(Operation)
 def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Environment[Type[T]]:
-    return get_ctx(typeof(judgements, term))
+    return ctx_of(typeof(judgements, term))
 
 
 @define(Operation)

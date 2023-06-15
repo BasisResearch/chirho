@@ -7,9 +7,9 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from causal_pyro.effectful.ops.bootstrap import Operation, StatefulInterpretation, \
-    define, register
-from causal_pyro.effectful.ops.interpretations import fwd, handler, reflect, runner
+from causal_pyro.effectful.ops.bootstrap import Operation, define, register
+from causal_pyro.effectful.ops.interpretations import StatefulInterpretation, \
+    fwd, handler, reflect, runner
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -43,7 +43,7 @@ class DefaultInterpretation(Generic[T], StatefulInterpretation[ParamStore, T]):
     state: ParamStore
 
 
-@register(DefaultInterpretation, sample)
+@register(sample, DefaultInterpretation)
 def default_sample(
     param_store: ParamStore,
     # ctx: Environment[T],
@@ -55,7 +55,7 @@ def default_sample(
     return distribution.sample()
 
 
-@register(DefaultInterpretation, param)
+@register(sample, DefaultInterpretation)
 def default_param(
     param_store: ParamStore,
     # ctx: Environment[T],
@@ -125,7 +125,7 @@ class trace(Generic[T], StatefulInterpretation[Trace, T]):
     state: Trace
 
 
-@register(trace, sample)
+@register(sample, trace)
 def trace_sample(
     tr: Trace,
     # ctx: Environment[T],
@@ -139,7 +139,7 @@ def trace_sample(
     return result
 
 
-@register(trace, param)
+@register(param, trace)
 def trace_param(
     tr: Trace,
     # ctx: Environment[T],
@@ -158,7 +158,7 @@ class replay(Generic[T], StatefulInterpretation[Trace, T]):
     state: Trace
 
 
-@register(replay, sample)
+@register(sample, replay)
 def replay_sample(
     tr: Trace,
     # ctx: Environment[T],
@@ -179,7 +179,7 @@ class condition(Generic[T], StatefulInterpretation[Observations, T]):
     state: Observations
 
 
-@register(condition, sample)
+@register(sample, condition)
 def condition_sample(
     state: Observations,
     # ctx: Environment[T],
@@ -199,7 +199,7 @@ class block(Generic[T], StatefulInterpretation[Container[str], T]):
     state: Container[str]
 
 
-@register(block, sample)
+@register(sample, block)
 def block_sample(
     blocked: Container[str],
     # ctx: Environment[T],
@@ -210,7 +210,7 @@ def block_sample(
     return reflect(result) if name in blocked else fwd(result)
 
 
-@register(block, param)
+@register(param, block)
 def block_param(
     blocked: Container[str],
     # ctx: Environment[T],

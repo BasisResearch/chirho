@@ -1,14 +1,43 @@
-from typing import Callable, Generic, Hashable, List, Mapping, Optional, Protocol, Type, TypeVar
+from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mapping, Optional, Protocol, Type, TypeVar
 
 import contextlib
 import functools
+import weakref
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, StatefulInterpretation, \
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
     define, get_interpretation, swap_interpretation
 
 
+S = TypeVar("S")
 T = TypeVar("T")
 
+
+class StatefulInterpretation(Generic[S, T]):
+    state: S
+
+    _op_interpretations: ClassVar[dict[Operation, Callable]] = weakref.WeakKeyDictionary()
+
+    def __init_subclass__(cls) -> None:
+        cls._op_interpretations: weakref.WeakKeyDictionary[Operation[T], Callable[..., T]] = \
+            weakref.WeakKeyDictionary()
+        return super().__init_subclass__()
+
+    def __init__(self, state: S):
+        self.state = state
+
+    @classmethod
+    def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
+        cls._op_interpretations[op] = interpret_op
+
+    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
+        return functools.partial(self._op_interpretations[op], self.state)
+
+    @classmethod
+    def keys(cls) -> Iterable[Operation[T]]:
+        return cls._op_interpretations.keys()
+
+
+##################################################
 
 @define(Operation)
 def set_prompt(prompt_op: Operation[T], rest: Callable, fst: Callable) -> Callable[..., T]:

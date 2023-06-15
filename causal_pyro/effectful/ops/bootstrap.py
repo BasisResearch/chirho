@@ -1,7 +1,6 @@
 from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mapping, Optional, Protocol, Type, TypeVar, runtime_checkable
 
 import functools
-import weakref
 
 
 S = TypeVar("S")
@@ -11,14 +10,6 @@ T = TypeVar("T")
 @runtime_checkable
 class Operation(Protocol[T]):
     def __call__(self, *args: T, **kwargs) -> T: ...
-
-
-@runtime_checkable
-class Interpretation(Protocol[T]):
-    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
-    # def __contains__(self, op: Operation[T]) -> bool: ...
-    def keys(self) -> Iterable[Operation[T]]: ...
 
 
 class BaseOperation(Generic[T]):
@@ -40,29 +31,15 @@ class BaseOperation(Generic[T]):
         return interpret(*args, **kwargs)
 
 
-class StatefulInterpretation(Generic[S, T]):
-    state: S
+@runtime_checkable
+class Interpretation(Protocol[T]):
+    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
+    def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
+    # def __contains__(self, op: Operation[T]) -> bool: ...
+    def keys(self) -> Iterable[Operation[T]]: ...
 
-    _op_interpretations: ClassVar[dict[Operation, Callable]] = weakref.WeakKeyDictionary()
 
-    def __init_subclass__(cls) -> None:
-        cls._op_interpretations: weakref.WeakKeyDictionary[Operation[T], Callable[..., T]] = \
-            weakref.WeakKeyDictionary()
-        return super().__init_subclass__()
-
-    def __init__(self, state: S):
-        self.state = state
-
-    @classmethod
-    def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
-        cls._op_interpretations[op] = interpret_op
-
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
-        return functools.partial(self._op_interpretations[op], self.state)
-
-    @classmethod
-    def keys(cls) -> Iterable[Operation[T]]:
-        return cls._op_interpretations.keys()
+BaseInterpretation = dict[Operation[T], Callable[..., T]]
 
 
 class Runtime(Generic[T]):
@@ -72,7 +49,7 @@ class Runtime(Generic[T]):
         self.interpretation = interpretation
 
 
-RUNTIME = Runtime(dict[Operation[T], Callable[..., T]]())
+RUNTIME = Runtime(BaseInterpretation())
 
 
 @BaseOperation
@@ -96,12 +73,12 @@ def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
 
 @define(Operation)
 def register(
-    intp: Optional[Interpretation[T]],
     op: Operation[T],
+    intp: Optional[Interpretation[T]] = None,
     interpret_op: Optional[Callable[..., T]] = None
 ):
     if interpret_op is None:
-        return functools.partial(register, intp, op)
+        return functools.partial(register, op, intp=intp)
 
     if intp is None:
         if isinstance(op, BaseOperation):
@@ -113,4 +90,4 @@ def register(
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
-register(None, define(Interpretation))(dict[Operation[T], Callable[..., T]])
+register(define(Interpretation))(BaseInterpretation)
