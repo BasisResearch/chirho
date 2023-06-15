@@ -119,7 +119,7 @@ def test_svi_composition_test_two(model):
     }
 
     data = dict()
-    data[0] = [torch.tensor(2.9), data1]
+    data[0] = [torch.tensor(0.0), data1]
     data[1] = [torch.tensor(3.1), data2]
 
     def conditioned_sir(data):
