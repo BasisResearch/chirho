@@ -8,10 +8,11 @@ class MonteCarloIntegration(pyro.poutine.messenger.Messenger):
         self.parallel = parallel
 
     def _pyro_expectation(self, msg):
-
         model, name, axis, model_args, model_kwargs = msg["args"]
 
-        pred = pyro.infer.Predictive(model, num_samples=self.sample_size, parallel=self.parallel)
+        pred = pyro.infer.Predictive(
+            model, num_samples=self.sample_size, parallel=self.parallel
+        )
         sim = pred(*model_args, **model_kwargs)
         msg["value"] = sim[name].mean(dim=axis)
 
