@@ -3,6 +3,8 @@ import logging
 import pyro
 import pytest
 import torch
+from pyro.infer.autoguide import AutoMultivariateNormal
+from pyro.infer import SVI, Trace_ELBO
 
 from causal_pyro.dynamical.handlers import (
     PointObservation,
@@ -11,7 +13,7 @@ from causal_pyro.dynamical.handlers import (
 )
 from causal_pyro.dynamical.ops import State
 
-from .dynamical_fixtures import SimpleSIRDynamics
+from .dynamical_fixtures import SimpleSIRDynamics, bayes_sir_model
 
 logger = logging.getLogger(__name__)
 
@@ -68,3 +70,30 @@ def test_tspan_collision(model):
     assert result.S.shape[0] == 4
     assert result.I.shape[0] == 4
     assert result.R.shape[0] == 4
+
+
+@pytest.mark.parametrize("model", [bayes_sir_model])
+def test_svi_composition(model):
+    data1 = {"S_obs": torch.tensor(10.0)}
+    data2 = {
+        "I_obs": torch.tensor(5.0),
+        "R_obs": torch.tensor(5.0),
+    }
+
+    def conditioned_sir():
+        sir = model()
+        with SimulatorEventLoop():
+            with PointObservation(time=2.9, data=data1):
+                with PointObservation(time=3.1, data=data2):
+                    traj = simulate(sir, init_state, tspan)
+        return traj
+
+    guide = AutoMultivariateNormal(conditioned_sir)
+    adam = pyro.optim.Adam({"lr": 0.03})
+    svi = SVI(conditioned_sir, guide, adam, loss=Trace_ELBO())
+    n_steps = 2
+
+    # Do gradient steps
+    pyro.clear_param_store()
+    for step in range(n_steps):
+        loss = svi.step()

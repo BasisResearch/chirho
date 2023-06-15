@@ -3,13 +3,13 @@ import logging
 import pyro
 import pytest
 import torch
-from pyro.distributions import Normal, Uniform, constraints
+from pyro.distributions import Poisson, Normal, Uniform, constraints
 
 import causal_pyro
 from causal_pyro.dynamical.handlers import (
     ODEDynamics,
     PointInterruption,
-    PointIntervention
+    PointIntervention,
 )
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
@@ -34,6 +34,31 @@ class SimpleSIRDynamics(ODEDynamics):
         R_obs = pyro.sample("R_obs", Normal(X.R, 1))
         usa_expected_cost = torch.relu(S_obs + 2 * I_obs - R_obs)
         pyro.sample("usa_cost", Normal(usa_expected_cost, 1))
+
+
+class SimpleSIRDynamicsBayes(ODEDynamics):
+    def __init__(self, beta, gamma):
+        super().__init__()
+        self.beta = beta
+        self.gamma = gamma
+
+    def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+        dX.S = -self.beta * X.S * X.I
+        dX.I = self.beta * X.S * X.I - self.gamma * X.I  # noqa
+        dX.R = self.gamma * X.I
+
+    def observation(self, X: State[torch.Tensor]):
+        S_obs = pyro.sample("S_obs", Poisson(X.S))
+        I_obs = pyro.sample("I_obs", Poisson(X.I))
+        R_obs = pyro.sample("R_obs", Poisson(X.R))
+        return {"S_obs": S_obs, "I_obs": I_obs, "R_obs": R_obs}
+
+
+def bayes_sir_model():
+    beta = pyro.sample("beta", Uniform(0, 1))
+    gamma = pyro.sample("gamma", Uniform(0, 1))
+    sir = SimpleSIRDynamicsBayes(beta, gamma)
+    return sir
 
 
 def check_trajectory_keys_match(
