@@ -77,7 +77,8 @@ class State(Generic[T]):
             )
         )
 
-    def trajectorify(self) -> "Trajectory[T]":
+    # TODO AZ - this is a non-generic method in a generic class...
+    def trajectorify(self) -> "Trajectory[torch.Tensor]":
         ret = Trajectory(**{k: torch.unsqueeze(getattr(self, k), 0) for k in self.keys})
         return ret
 
@@ -107,23 +108,6 @@ class Trajectory(State[T]):
 @runtime_checkable
 class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
-
-
-# noinspection PyUnusedLocal
-@functools.singledispatch
-def simulate_span(
-    dynamics: Dynamics[S, T],
-    curr_state: State[T],
-    timespan,
-    event_fn: Optional[Callable[[torch.tensor, torch.tensor], torch.tensor]] = None,
-    **kwargs,
-) -> Trajectory[T]:
-    """
-    Simulate a fixed timespan of a dynamical system.
-    """
-    raise NotImplementedError(
-        f"simulate_span not implemented for type {type(dynamics)}"
-    )
 
 
 @functools.singledispatch

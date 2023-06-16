@@ -15,6 +15,7 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
+    cast,
 )
 
 import pyro
@@ -28,7 +29,6 @@ from causal_pyro.dynamical.ops import (
     apply_interruptions,
     concatenate,
     simulate,
-    simulate_span,
     simulate_to_interruption,
 )
 from causal_pyro.interventional.handlers import do
@@ -98,14 +98,14 @@ def torchdiffeq_ode_simulate(
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def torchdiffeq_ode_simulate_to_interruption(
     dynamics: ODEDynamics,
-    start_state: State[torch.tensor],
+    start_state: State[torch.Tensor],
     timespan,  # The first element of timespan is assumed to be the starting time.
     *,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
 ) -> Tuple[
-    Trajectory[torch.tensor], Tuple["Interruption", ...], float, State[torch.tensor]
+    Trajectory[torch.Tensor], Tuple["Interruption", ...], float, State[torch.Tensor]
 ]:
     nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
@@ -129,6 +129,8 @@ def torchdiffeq_ode_simulate_to_interruption(
         raise ValueError(
             "No static terminal interruption provided, but about to perform an event sim."
         )
+    # for linter, because it's not deducing this from the if statement above.
+    assert next_static_interruption is not None
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
@@ -188,14 +190,14 @@ def torchdiffeq_ode_simulate_to_interruption(
 # TODO AZ — maybe to multiple dispatch on the interruption type and state type?
 def torchdiffeq_point_interruption_flattened_event_f(
     pi: "PointInterruption",
-) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
     """
     Construct a flattened event function for a point interruption.
     :param pi: The point interruption for which to build the event function.
     :return: The constructed event function.
     """
 
-    def event_f(t: torch.tensor, _):
+    def event_f(t: torch.Tensor, _):
         return torch.where(t < pi.time, pi.time - t, torch.tensor(0.0))
 
     return event_f
@@ -204,14 +206,14 @@ def torchdiffeq_point_interruption_flattened_event_f(
 # TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_dynamic_interruption_flattened_event_f(
     di: "DynamicInterruption",
-) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
     """
     Construct a flattened event function for a dynamic interruption.
     :param di: The dynamic interruption for which to build the event function.
     :return: The constructed event function.
     """
 
-    def event_f(t: torch.tensor, flat_state: torch.tensor):
+    def event_f(t: torch.Tensor, flat_state: torch.Tensor):
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
         state = State(**{k: v for k, v in zip(di.var_order, flat_state)})
@@ -224,7 +226,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
 def torchdiffeq_combined_event_f(
     next_static_interruption: "PointInterruption",
     dynamic_interruptions: List["DynamicInterruption"],
-) -> Callable[[torch.tensor, torch.tensor], torch.tensor]:
+) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
     """
     Construct a combined event function from a list of dynamic interruptions and a single terminal static interruption.
     :param next_static_interruption: The next static interruption. Viewed as terminal in the context of this event func.
@@ -240,7 +242,7 @@ def torchdiffeq_combined_event_f(
         for di in dynamic_interruptions
     ]
 
-    def combined_event_f(t: torch.tensor, flat_state: torch.tensor):
+    def combined_event_f(t: torch.Tensor, flat_state: torch.Tensor):
         return torch.tensor(
             [
                 *[f(t, flat_state) for f in dynamic_event_fs],
@@ -274,8 +276,8 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
         full_trajs = []
         first = True
 
-        last_terminal_interruptions = tuple()
-        interruption_counts = dict()
+        last_terminal_interruptions = tuple()  # type: Tuple[Interruption, ...]
+        interruption_counts = dict()  # type: Dict[Interruption, int]
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
