@@ -16,6 +16,10 @@ import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
+from causal_pyro.indexed.ops import IndexSet, gather, indexset_as_mask
+from causal_pyro.indexed.handlers import add_indices
+
+
 T = TypeVar("T")
 
 Kernel = Callable[[T, T], torch.Tensor]
@@ -292,23 +296,29 @@ class PlateCutModule(pyro.poutine.messenger.Messenger):
             msg["mask"] = (
                 msg["mask"] if msg["mask"] is not None else True
             ) & cut_mask.expand(msg["fn"].batch_shape)
-        else:
-            # value of latent in module two should agree with module one
-            pass
 
     def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
         if (not msg["is_observed"]) and (msg["name"] in self.vars):
             # TODO: enforce this constraint exactly
             value_one = msg["value"][
-                ..., 0:1, (slice(),) * (1 - self._plate.dim + msg["fn"].event_dim)
+                (..., slice(0, 1))
+                + (slice(None),) * (2 - self._plate.dim + msg["fn"].event_dim)
             ]
             value_two = msg["value"][
-                ..., 1:, (slice(),) * (1 - self._plate.dim + msg["fn"].event_dim)
+                (..., slice(1, 2))
+                + (slice(None),) * (2 - self._plate.dim + msg["fn"].event_dim)
             ]
-            pyro.factor(
-                "name_equality_contraint",
-                -torch.abs(msg["value"][0].detach() - msg["value"][1]).sum(),
+            eq_constraint = (
+                -torch.abs(value_one.detach() - value_two)
+                .reshape(msg["fn"].batch_shape + (-1,))
+                .mean(-1)
             )
+            cut_mask = msg["name"] in self.vars
+            cut_mask = torch.tensor([cut_mask, ~cut_mask])[
+                ..., (None,) * (1 - self._plate.dim)
+            ]
+            with pyro.poutine.mask(mask=cut_mask):
+                pyro.factor("name_equality_contraint", eq_constraint)
 
     def __enter__(self):
         self._plate.__enter__()
@@ -317,3 +327,65 @@ class PlateCutModule(pyro.poutine.messenger.Messenger):
     def __exit__(self, *args):
         super().__exit__(*args)
         self._plate.__exit__(*args)
+
+
+class IndexCutModule(
+    pyro.poutine.messenger.Messenger
+):  # TODO subclass DependentMaskMessenger
+    """
+    Represent module and complement in a single Pyro model using plates
+    """
+
+    vars: Set[str]
+    name: str
+
+    def __init__(self, vars: Set[str], *, name: str = "__cut_plate"):
+        self.vars = vars
+        self.name = name
+        super().__init__()
+
+    def __enter__(self):
+        add_indices(IndexSet(**{self.name: {0, 1}}))
+        return super().__enter__()
+
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+        # There are 4 cases to consider for a sample site:
+        # 1. The site appears in self.vars and is observed
+        # 2. The site appears in self.vars and is not observed
+        # 3. The site does not appear in self.vars and is observed
+        # 4. The site does not appear in self.vars and is not observed
+
+        # TODO inherit this logic from indexed.handlers.DependentMaskMessenger
+        # use mask to remove the contribution of this observed site to the model log-joint
+        cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
+        mask = indexset_as_mask(cut_index) | msg["is_observed"]  # TODO device
+        msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
+
+        # expand distribution to make sure two copies of a variable are sampled
+        msg["fn"] = msg["fn"].expand(
+            torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
+        )
+
+    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+        if (not msg["is_observed"]) and (msg["name"] in self.vars):
+            # TODO: enforce this constraint exactly
+            value_one = gather(
+                msg["value"],
+                IndexSet(**{self.name: {0}}),
+                event_dim=msg["fn"].event_dim,
+            )
+            value_two = gather(
+                msg["value"],
+                IndexSet(**{self.name: {1}}),
+                event_dim=msg["fn"].event_dim,
+            )
+            eq_constraint = (
+                -torch.abs(value_one.detach() - value_two)
+                .expand(msg["value"].shape)
+                .reshape(msg["fn"].batch_shape + (-1,))
+                .mean(-1)
+            )
+
+            cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
+            with pyro.poutine.mask(mask=indexset_as_mask(cut_index)):  # TODO device
+                pyro.factor("name_equality_contraint", eq_constraint)

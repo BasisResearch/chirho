@@ -4,9 +4,11 @@ import pyro.infer.reparam
 import pytest
 import torch
 
+from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.observational.handlers import (
     CutModule,
     CutComplementModule,
+    IndexCutModule,
     cut,
 )
 
@@ -40,6 +42,14 @@ def test_simple_two_module_example():
     with pyro.poutine.trace() as tr2:
         module_two_post()
 
-    assert 1 == 0
 
-def test_c
+# TODO: test with VI cut posterior approach in Yu et al (2022) on several simple examples
+
+
+def test_plate_cut_module():
+    conditioned_model = pyro.condition(
+        model, data={"z": torch.tensor(1.0), "w": torch.tensor(1.0)}
+    )
+    module_one_vars = ["eta", "w"]
+    with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
+        conditioned_model()
