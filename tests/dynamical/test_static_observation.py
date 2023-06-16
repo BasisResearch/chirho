@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-tspan = torch.tensor([1.0, 2.0, 3.0, 4.0])
+tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
@@ -36,9 +36,9 @@ def test_multiple_point_observations(model):
             with PointObservation(time=2.9, data=data1):
                 result = simulate(model, init_state, tspan)
 
-    assert result.S.shape[0] == 4
-    assert result.I.shape[0] == 4
-    assert result.R.shape[0] == 4
+    assert result.S.shape[0] == 5
+    assert result.I.shape[0] == 5
+    assert result.R.shape[0] == 5
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
@@ -68,9 +68,9 @@ def test_tspan_collision(model):
         with PointObservation(time=tspan[1], data=data):
             result = simulate(model, init_state, tspan)
 
-    assert result.S.shape[0] == 4
-    assert result.I.shape[0] == 4
-    assert result.R.shape[0] == 4
+    assert result.S.shape[0] == 5
+    assert result.I.shape[0] == 5
+    assert result.R.shape[0] == 5
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
