@@ -450,6 +450,20 @@ class PointObservation(PointInterruption):
         # the observation occurs after the logging period.
         super().__init__(time + eps)
 
+    def _pyro_simulate(self, msg) -> None:
+        # Raise an error if the observation time is close to the start of the timespan. This is a temporary measure
+        #  until issues arising from this case are understood and adressed.
+
+        dynamics, initial_state, timespan = msg["args"]
+
+        if torch.isclose(self.time, timespan[0], atol=1e-3, rtol=1e-3):
+            raise ValueError(
+                f"{PointObservation.__name__} time {self.time} occurred at the start of the timespan {timespan[0]}. "
+                f"This is not currently supported."
+            )
+
+        super()._pyro_simulate(msg)
+
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics, current_state = msg["args"]
 

@@ -105,6 +105,21 @@ def test_svi_composition_test_one(model):
         loss = svi.step()
 
 
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("tspan", [tspan])
+def test_point_observation_at_tspan_start_excepts(model, init_state, tspan):
+    """
+    This test requires that we raise an explicit exception when a PointObservation occurs at the beginning of the tspan.
+    This occurs right now due to an undiagnosed error, so this test is a stand-in until that can be fixed.
+    """
+
+    with SimulatorEventLoop():
+        with pytest.raises(ValueError, match="occurred at the start of the timespan"):
+            with PointObservation(time=tspan[0], data={"S_obs": torch.tensor(10.0)}):
+                simulate(model, init_state, tspan)
+
+
 @pytest.mark.parametrize("model", [bayes_sir_model])
 def test_svi_composition_test_two(model):
     data1 = {
@@ -119,7 +134,7 @@ def test_svi_composition_test_two(model):
     }
 
     data = dict()
-    data[0] = [torch.tensor(0.0), data1]
+    data[0] = [torch.tensor(0.1), data1]
     data[1] = [torch.tensor(3.1), data2]
 
     def conditioned_sir(data):
