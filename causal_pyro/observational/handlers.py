@@ -1,6 +1,16 @@
 import functools
 import operator
-from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    Protocol,
+    Set,
+    TypedDict,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -189,3 +199,94 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         raise NotImplementedError(
             f"Could not reparameterize deterministic site {msg['name']}"
         )
+
+
+class CutModule(pyro.poutine.messenger.Messenger):
+    """
+    Converts a Pyro model into a module using the "cut" operation
+    """
+
+    vars: Set[str]
+
+    def __init__(self, vars: Set[str]):
+        self.vars = vars
+        super().__init__()
+
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+        # There are 4 cases to consider for a sample site:
+        # 1. The site appears in self.vars and is observed
+        # 2. The site appears in self.vars and is not observed
+        # 3. The site does not appear in self.vars and is observed
+        # 4. The site does not appear in self.vars and is not observed
+        if msg["name"] not in self.vars:
+            if msg["is_observed"]:
+                # use mask to remove the contribution of this observed site to the model log-joint
+                msg["mask"] &= torch.tensor(False, dtype=torch.bool).expand(
+                    msg["fn"].batch_shape
+                )
+            else:
+                pass
+
+
+class CutComplementModule(pyro.poutine.messenger.Messenger):
+    vars: Set[str]
+
+    def __init__(self, vars: Set[str]):
+        self.vars = vars
+        super().__init__()
+
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+        # There are 4 cases to consider for a sample site:
+        # 1. The site appears in self.vars and is observed
+        # 2. The site appears in self.vars and is not observed
+        # 3. The site does not appear in self.vars and is observed
+        # 4. The site does not appear in self.vars and is not observed
+        if msg["name"] in self.vars:
+            if msg["is_observed"]:
+                # use mask to remove the contribution of this observed site to the model log-joint
+                msg["mask"] &= torch.tensor(False, dtype=torch.bool).expand(
+                    msg["fn"].batch_shape
+                )
+            else:
+                # the module and its complement must be glued together at module latent sites
+                raise ValueError(
+                    f"Complement should not have latent variables from the module: {msg['name']}"
+                )
+
+
+def cut(
+    model: Optional[Callable] = None, *, vars: Set[str] = set()
+) -> tuple[Callable, Callable]:
+    if model is None:
+        return functools.partial(cut, vars=vars)
+
+    return CutModule(vars)(model), CutComplementModule(vars)(model)
+
+
+class PlateCutModule(pyro.poutine.messenger.Messenger):
+    """
+    Represent module and complement in a single Pyro model using plates
+    """
+
+    vars: Set[str]
+
+    def __init__(self, vars: Set[str]):
+        self.vars = vars
+        super().__init__()
+
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+        # There are 4 cases to consider for a sample site:
+        # 1. The site appears in self.vars and is observed
+        # 2. The site appears in self.vars and is not observed
+        # 3. The site does not appear in self.vars and is observed
+        # 4. The site does not appear in self.vars and is not observed
+        if msg["name"] in self.vars:
+            if msg["is_observed"]:
+                ...  # TODO
+            else:
+                ...  # TODO
+        else:
+            if msg["is_observed"]:
+                ...  # TODO
+            else:
+                ...  # TODO
