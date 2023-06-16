@@ -221,11 +221,15 @@ class CutModule(pyro.poutine.messenger.Messenger):
         if msg["name"] not in self.vars:
             if msg["is_observed"]:
                 # use mask to remove the contribution of this observed site to the model log-joint
-                msg["mask"] &= torch.tensor(False, dtype=torch.bool).expand(
-                    msg["fn"].batch_shape
-                )
+                msg["mask"] = (
+                    msg["mask"] if msg["mask"] is not None else True
+                ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
             else:
                 pass
+
+        # For sites that do not appear in module, rename them to avoid naming conflict
+        if msg["name"] not in self.vars:
+            msg["name"] = f"{msg['name']}_nuisance"
 
 
 class CutComplementModule(pyro.poutine.messenger.Messenger):
@@ -242,16 +246,14 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
         # 3. The site does not appear in self.vars and is observed
         # 4. The site does not appear in self.vars and is not observed
         if msg["name"] in self.vars:
-            if msg["is_observed"]:
-                # use mask to remove the contribution of this observed site to the model log-joint
-                msg["mask"] &= torch.tensor(False, dtype=torch.bool).expand(
-                    msg["fn"].batch_shape
-                )
-            else:
-                # the module and its complement must be glued together at module latent sites
-                raise ValueError(
-                    f"Complement should not have latent variables from the module: {msg['name']}"
-                )
+            # use mask to remove the contribution of this observed site to the model log-joint
+            msg["mask"] = (
+                msg["mask"] if msg["mask"] is not None else True
+            ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
+
+    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+        if msg["name"] in self.vars:
+            assert msg["is_observed"]
 
 
 def cut(
@@ -270,9 +272,10 @@ class PlateCutModule(pyro.poutine.messenger.Messenger):
 
     vars: Set[str]
 
-    def __init__(self, vars: Set[str]):
+    def __init__(self, vars: Set[str], *, dim: int = -5):
         self.vars = vars
         super().__init__()
+        self._plate = pyro.plate("__cut_plate", size=2, dim=dim)
 
     def _pyro_sample(self, msg: dict[str, Any]) -> None:
         # There are 4 cases to consider for a sample site:
@@ -280,13 +283,37 @@ class PlateCutModule(pyro.poutine.messenger.Messenger):
         # 2. The site appears in self.vars and is not observed
         # 3. The site does not appear in self.vars and is observed
         # 4. The site does not appear in self.vars and is not observed
-        if msg["name"] in self.vars:
-            if msg["is_observed"]:
-                ...  # TODO
-            else:
-                ...  # TODO
+        if msg["is_observed"]:
+            # use mask to remove the contribution of this observed site to the model log-joint
+            cut_mask = msg["name"] in self.vars
+            cut_mask = torch.tensor([cut_mask, ~cut_mask])[
+                ..., (None,) * (1 - self._plate.dim)
+            ]
+            msg["mask"] = (
+                msg["mask"] if msg["mask"] is not None else True
+            ) & cut_mask.expand(msg["fn"].batch_shape)
         else:
-            if msg["is_observed"]:
-                ...  # TODO
-            else:
-                ...  # TODO
+            # value of latent in module two should agree with module one
+            pass
+
+    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+        if (not msg["is_observed"]) and (msg["name"] in self.vars):
+            # TODO: enforce this constraint exactly
+            value_one = msg["value"][
+                ..., 0:1, (slice(),) * (1 - self._plate.dim + msg["fn"].event_dim)
+            ]
+            value_two = msg["value"][
+                ..., 1:, (slice(),) * (1 - self._plate.dim + msg["fn"].event_dim)
+            ]
+            pyro.factor(
+                "name_equality_contraint",
+                -torch.abs(msg["value"][0].detach() - msg["value"][1]).sum(),
+            )
+
+    def __enter__(self):
+        self._plate.__enter__()
+        return super().__enter__()
+
+    def __exit__(self, *args):
+        super().__exit__(*args)
+        self._plate.__exit__(*args)
