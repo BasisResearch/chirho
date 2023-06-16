@@ -328,4 +328,4 @@ class IndexCutModule(
 
             cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
             with pyro.poutine.mask(mask=indexset_as_mask(cut_index)):  # TODO device
-                pyro.factor("name_equality_contraint", eq_constraint)
+                pyro.factor(f"{msg['name']}_equality_contraint", eq_constraint)
