@@ -1,11 +1,11 @@
 import logging
+from contextlib import ExitStack
 
 import pyro
 import pytest
 import torch
-from contextlib import ExitStack
-from pyro.infer.autoguide import AutoMultivariateNormal
 from pyro.infer import SVI, Trace_ELBO
+from pyro.infer.autoguide import AutoMultivariateNormal
 
 from causal_pyro.dynamical.handlers import (
     PointObservation,

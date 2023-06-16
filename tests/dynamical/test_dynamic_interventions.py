@@ -18,9 +18,9 @@ from causal_pyro.dynamical.handlers import (
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import (
+    SimpleSIRDynamics,
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
-    SimpleSIRDynamics,
 )
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,14 @@ def get_state_reached_event_f(target_state: State[torch.tensor]):
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
-@pytest.mark.parametrize("trigger_states", [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)])
-@pytest.mark.parametrize("intervene_states", [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)])
+@pytest.mark.parametrize(
+    "trigger_states",
+    [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
+)
+@pytest.mark.parametrize(
+    "intervene_states",
+    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+)
 def test_nested_dynamic_intervention_causes_change(
     model, init_state, tspan, trigger_states, intervene_states
 ):
@@ -89,20 +95,28 @@ def test_nested_dynamic_intervention_causes_change(
 
     # Make sure all points after the first intervention, but before the second, include the added population of that
     #  first intervention.
-    postfirst_int_mask, postsec_int_mask = (postint_mask1, postint_mask2) if ts1.R < ts2.R else (postint_mask2, postint_mask1)
+    postfirst_int_mask, postsec_int_mask = (
+        (postint_mask1, postint_mask2)
+        if ts1.R < ts2.R
+        else (postint_mask2, postint_mask1)
+    )
     firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
 
     postfirst_int_presec_int_traj = res[postfirst_int_mask & ~postsec_int_mask]
     # noinspection PyTypeChecker
     assert torch.all(
-        postfirst_int_presec_int_traj.S + postfirst_int_presec_int_traj.I + postfirst_int_presec_int_traj.R
-        > (preint_total + firstis.S) * 0.95)
+        postfirst_int_presec_int_traj.S
+        + postfirst_int_presec_int_traj.I
+        + postfirst_int_presec_int_traj.R
+        > (preint_total + firstis.S) * 0.95
+    )
 
     postsec_int_traj = res[postsec_int_mask]
     # noinspection PyTypeChecker
     assert torch.all(
         postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
-        > (preint_total + firstis.S + secondis.S) * 0.95)
+        > (preint_total + firstis.S + secondis.S) * 0.95
+    )
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
@@ -137,4 +151,7 @@ def test_dynamic_intervention_causes_change(
 
     # Make sure all points after the intervention include the added population.
     # noinspection PyTypeChecker
-    assert torch.all(postint_traj.S + postint_traj.I + postint_traj.R > (preint_total + intervene_state.S) * 0.95)
+    assert torch.all(
+        postint_traj.S + postint_traj.I + postint_traj.R
+        > (preint_total + intervene_state.S) * 0.95
+    )

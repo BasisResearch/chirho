@@ -3,7 +3,7 @@ import logging
 import pyro
 import pytest
 import torch
-from pyro.distributions import Poisson, Normal, Uniform, constraints
+from pyro.distributions import Normal, Poisson, Uniform, constraints
 
 import causal_pyro
 from causal_pyro.dynamical.handlers import (

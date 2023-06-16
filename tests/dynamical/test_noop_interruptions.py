@@ -1,19 +1,17 @@
 import logging
 
-import causal_pyro
 import pyro
 import pytest
 import torch
-
 from pyro.distributions import Normal, Uniform, constraints
 
 import causal_pyro
 from causal_pyro.dynamical.handlers import (
+    DynamicInterruption,
     ODEDynamics,
     PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
-    DynamicInterruption,
     simulate,
 )
 from causal_pyro.dynamical.ops import State, Trajectory, simulate
@@ -154,11 +152,11 @@ def test_noop_dynamic_interruption(model, init_state, tspan, intervene_state):
     observational_execution_result = simulate(model, init_state, tspan)
 
     with SimulatorEventLoop():
-        tt = (tspan[-1] - tspan[0]) / 2.
+        tt = (tspan[-1] - tspan[0]) / 2.0
         with DynamicInterruption(
             event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
             var_order=init_state.var_order,
-            max_applications=1
+            max_applications=1,
         ):
             result_dint = simulate(model, init_state, tspan)
 
