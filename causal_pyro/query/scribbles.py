@@ -56,13 +56,13 @@ class ATEestimation(pyro.poutine.messenger.Messenger):
         treatment_model = do(model, treatment)
         alternative_model = do(model, alternative)
 
-        with MonteCarloIntegration(self.sample_size, self.parallel):
-            avg_outcome_treated = expectation(
-                treatment_model, outcome, axis, model_args, model_kwargs
-            )
-            avg_outcome_alternative = expectation(
-                alternative_model, outcome, axis, model_args, model_kwargs
-            )
+        # with MonteCarloIntegration(self.sample_size, self.parallel):
+        avg_outcome_treated = expectation(
+            treatment_model, outcome, axis, model_args, model_kwargs
+        )
+        avg_outcome_alternative = expectation(
+            alternative_model, outcome, axis, model_args, model_kwargs
+        )
 
         msg["value"] = avg_outcome_treated - avg_outcome_alternative
 
@@ -75,35 +75,33 @@ def model():
     return y
 
 
-with ATEestimation(1000, parallel=True):
-    ate_result = ate(model, {"x": 1}, {"x": 0}, "y", 0, tuple(), {})
+with MonteCarloIntegration(self.sample_size, self.parallel):
+    with ATEestimation(1000, parallel=True):
+        ate_result = ate(model, {"x": 1}, {"x": 0}, "y", 0, tuple(), {})
 
-print(ate_result)
+    print(ate_result)  # exact value: 1
 
+    stress_pt = torch.tensor([0.5])
+    smokes_cpt = torch.tensor([0.2, 0.8])
+    cancer_cpt = torch.tensor([[0.1, 0.15], [0.8, 0.85]])
+    probs = (stress_pt, smokes_cpt, cancer_cpt)
 
-stress_pt = torch.tensor([0.5])
-smokes_cpt = torch.tensor([0.2, 0.8])
-cancer_cpt = torch.tensor([[0.1, 0.15], [0.8, 0.85]])
-probs = (stress_pt, smokes_cpt, cancer_cpt)
+    def smoking_model(stress_pt, smokes_cpt, cancer_cpt):
+        stress = pyro.sample("stress", Bernoulli(stress_pt)).long()
+        smokes = pyro.sample(
+            "smokes", Bernoulli(smokes_cpt[stress])
+        )  # needed to remove .long(), not sure if that's ok
+        cancer = pyro.sample(
+            "cancer", Bernoulli(cancer_cpt[stress, smokes])
+        ).long()
+        return cancer
 
+    with ATEestimation(1000, parallel=True):
+        ate_cancer_result = ate(
+            smoking_model, {"smokes": 1}, {"smokes": 0}, "cancer", 0, probs, {}
+        )
 
-def smoking_model(stress_pt, smokes_cpt, cancer_cpt):
-    stress = pyro.sample("stress", Bernoulli(stress_pt)).long()
-    smokes = pyro.sample(
-        "smokes", Bernoulli(smokes_cpt[stress])
-    )  # needed to remove .long(), not sure if that's ok
-    cancer = pyro.sample(
-        "cancer", Bernoulli(cancer_cpt[stress, smokes])
-    ).long()
-    return cancer
-
-
-with ATEestimation(1000, parallel=True):
-    ate_cancer_result = ate(
-        smoking_model, {"smokes": 1}, {"smokes": 0}, "cancer", 0, probs, {}
-    )
-
-print(ate_cancer_result)  # exact: 0.05 (.5 - .45   )
+    print(ate_cancer_result)  # exact: 0.05 (.5 - .45   )
 
 
 # QUESTION: FOR CONDITIONAL VARIANTS (CONDITIONAL/ON TREATED/...), SEEMS LIKE WE NEED TO BUILD IN THE INFERENCE STEP?

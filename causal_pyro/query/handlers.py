@@ -19,6 +19,5 @@ class MonteCarloIntegration(pyro.poutine.messenger.Messenger):
         # TODO: make sure that you're taking the mean over the right axis in the case of multivariate distributions.
         # @SAM: Done, check, I modified the ops file adding axis as an argument.
 
-        # TODO: To avoid the `NotImplementedError` use `msg["stop"] = True` or `msg["done"] = True`. Not sure which one...
-        # @SAM: seems like both work, I used msg["stop"].
+        # TODO compose with a plate in both settings
         msg["done"] = True  # don't run the defaults

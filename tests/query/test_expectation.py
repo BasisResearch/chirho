@@ -7,8 +7,9 @@ from causal_pyro.query.ops import expectation
 from causal_pyro.query.handlers import MonteCarloIntegration
 
 
+# TODO change seed
 class TestExpectation(unittest.TestCase):
-    def test_MoteCarloIntegration_simple(self):
+    def test_MonteCarloIntegration_simple(self):
         def model():
             x = pyro.sample("x", Normal(1, 1))
             y = pyro.sample("y", Normal(x - 1, 1))
@@ -21,7 +22,7 @@ class TestExpectation(unittest.TestCase):
         self.assertTrue(math.isclose(result_x, 1, abs_tol=0.1))
         self.assertTrue(math.isclose(result_y, 0, abs_tol=0.1))
 
-    def test_MoteCarloIntegration_cancer_with_args(self):
+    def test_MonteCarloIntegration_cancer_with_args(self):
         stress_pt = torch.tensor([0.5])
         smokes_cpt = torch.tensor([0.2, 0.8])
         cancer_cpt = torch.tensor([[0.1, 0.15], [0.8, 0.85]])
@@ -45,3 +46,6 @@ class TestExpectation(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# TODO add test with a plate within a model
