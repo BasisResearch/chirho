@@ -269,66 +269,6 @@ def cut(
     return CutModule(vars)(model), CutComplementModule(vars)(model)
 
 
-class PlateCutModule(pyro.poutine.messenger.Messenger):
-    """
-    Represent module and complement in a single Pyro model using plates
-    """
-
-    vars: Set[str]
-
-    def __init__(self, vars: Set[str], *, dim: int = -5):
-        self.vars = vars
-        super().__init__()
-        self._plate = pyro.plate("__cut_plate", size=2, dim=dim)
-
-    def _pyro_sample(self, msg: dict[str, Any]) -> None:
-        # There are 4 cases to consider for a sample site:
-        # 1. The site appears in self.vars and is observed
-        # 2. The site appears in self.vars and is not observed
-        # 3. The site does not appear in self.vars and is observed
-        # 4. The site does not appear in self.vars and is not observed
-        if msg["is_observed"]:
-            # use mask to remove the contribution of this observed site to the model log-joint
-            cut_mask = msg["name"] in self.vars
-            cut_mask = torch.tensor([cut_mask, ~cut_mask])[
-                ..., (None,) * (1 - self._plate.dim)
-            ]
-            msg["mask"] = (
-                msg["mask"] if msg["mask"] is not None else True
-            ) & cut_mask.expand(msg["fn"].batch_shape)
-
-    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
-        if (not msg["is_observed"]) and (msg["name"] in self.vars):
-            # TODO: enforce this constraint exactly
-            value_one = msg["value"][
-                (..., slice(0, 1))
-                + (slice(None),) * (2 - self._plate.dim + msg["fn"].event_dim)
-            ]
-            value_two = msg["value"][
-                (..., slice(1, 2))
-                + (slice(None),) * (2 - self._plate.dim + msg["fn"].event_dim)
-            ]
-            eq_constraint = (
-                -torch.abs(value_one.detach() - value_two)
-                .reshape(msg["fn"].batch_shape + (-1,))
-                .mean(-1)
-            )
-            cut_mask = msg["name"] in self.vars
-            cut_mask = torch.tensor([cut_mask, ~cut_mask])[
-                ..., (None,) * (1 - self._plate.dim)
-            ]
-            with pyro.poutine.mask(mask=cut_mask):
-                pyro.factor("name_equality_contraint", eq_constraint)
-
-    def __enter__(self):
-        self._plate.__enter__()
-        return super().__enter__()
-
-    def __exit__(self, *args):
-        super().__exit__(*args)
-        self._plate.__exit__(*args)
-
-
 class IndexCutModule(
     pyro.poutine.messenger.Messenger
 ):  # TODO subclass DependentMaskMessenger
