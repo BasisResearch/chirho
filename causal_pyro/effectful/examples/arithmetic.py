@@ -28,9 +28,10 @@ def print_wrap(fn: Callable, name="A"):
     def wrapped(result, *args, **kwargs):
         print(f"{name} calling {fn} with {args} {kwargs}")
         result = fwd(result)
+        assert result is not None, "result is None" 
         print(f"result: {result}")
         return result
-    return functools.wraps(fn)(wrapped)
+    return wrapped
 
 
 if __name__ == "__main__":
@@ -48,18 +49,29 @@ if __name__ == "__main__":
     print(add(3, 4))
     print(add3(3, 4, 5))
 
-    # with handler(printme2) as h:
-    #     print(add(3, 4))
-    #     print(add3(3, 4, 5))
+    with handler(default) as h:
+        print(add(3, 4))
+        print(add3(3, 4, 5))
 
-    # with handler(compose(printme1, printme2)) as h:
-    #     print(add(3, 4))
-    #     print(add3(3, 4, 5))
+    with handler(compose(default, printme1)):
+        print(add(3, 4))
+        print(add3(3, 4, 5))
 
-    # with handler(compose(default, printme1, printme2)) as h:
-    #     print(add(3, 4))
-    #     print(add3(3, 4, 5))
+    with handler(default), handler(printme1):
+        print(add(3, 4))
+        print(add3(3, 4, 5))
 
-    with runner(compose(default, printme1)) as r:
-        with handler(printme2) as h:
-            print(add(3, 4))
+    with handler(default), handler(compose(printme1, printme2)):
+        print(add(3, 4))
+        print(add3(3, 4, 5))
+
+    with handler(compose(printme1, printme2)):
+        print(add(3, 4))
+        print(add3(3, 4, 5))
+
+    with handler(compose(default, printme1, printme2)) as h:
+        print(add(3, 4))
+        print(add3(3, 4, 5))
+
+    with handler(product(default, printme2)) as h:
+        print(add(3, 4))

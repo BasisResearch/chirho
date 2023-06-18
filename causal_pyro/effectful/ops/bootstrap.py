@@ -96,4 +96,4 @@ def register(
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
-register(define(Interpretation))(BaseInterpretation)
+register(define(Interpretation), None, BaseInterpretation)

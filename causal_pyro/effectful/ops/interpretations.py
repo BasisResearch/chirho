@@ -44,20 +44,16 @@ class StatefulInterpretation(Generic[S, T]):
 ##################################################
 
 @define(Operation)
-def set_prompt(prompt_op: Operation[T], rest: Callable, fst: Callable) -> Callable[..., T]:
-    return lambda res, *args: handler({prompt_op: ResetInterpretation(rest, args)})(fst)(res, *args)
+def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[..., T]) -> Callable[..., T]:
 
+    def _wrapped_fst(res, *args, **kwargs):
+        # TODO switch to runners?
+        # cont_ = runner({prompt_op: lambda _, res: prompt_op(res)})(cont)
+        # fst_ = runner({prompt_op: lambda _, res: cont_(res, *args, **kwargs)})(fst)
+        fst_ = handler({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
+        return fst_(res, *args, **kwargs)
 
-class ResetInterpretation(Generic[T]):
-    rest: Callable[..., T]
-    active_args: tuple[T, ...]
-
-    def __init__(self, rest: Callable[..., T], active_args: tuple[T, ...]):
-        self.rest = rest
-        self.active_args = active_args
-
-    def __call__(self, prompt_res: Optional[T], result: Optional[T]) -> T:
-        return self.rest(result, *self.active_args)
+    return _wrapped_fst
 
 
 ##################################################
@@ -71,7 +67,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return define(Interpretation)(
             [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())] +
             [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())] +
-            [(op, set_prompt(fwd, intp[op], intp2[op])) for op in set(intp.keys()) & set(intp2.keys())]
+            [(op, shift_prompt(fwd, intp[op], intp2[op])) for op in set(intp.keys()) & set(intp2.keys())]
         )
     else:
         return compose(intp, compose(*intps))
@@ -79,13 +75,17 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 def fwd(result: Optional[T]) -> T:
+    import pdb; pdb.set_trace()
     return result
 
 
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[T]):
-    old_intp = swap_interpretation(compose(get_interpretation(), intp))
+    defaults = define(Interpretation)({
+        op: op.default for op in intp.keys() if op not in get_interpretation()
+    })
+    old_intp = swap_interpretation(compose(defaults, get_interpretation(), intp))
     try:
         yield intp
     finally:
@@ -94,22 +94,29 @@ def handler(intp: Interpretation[T]):
 
 ##################################################
 
+def reflections(*ops: Operation[T]) -> Interpretation[T]:
+    return define(Interpretation)({
+        op: lambda res, *args, **kwargs: reflect(res)
+        for op in set(ops)
+    })
+
+
 @define(Operation)
 def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
     if len(intps) == 0:
         return intp
     elif len(intps) == 1:
-        # reduces to compose by:
-        # 1. creating interpretation that reflect()s each included op
-        # 2. creating interpretation for reflect() that switches the active interpretation to other
-        # 3. right-composing these with the active interpretation
-        # 4. calling the op interpretation
-        reflector = define(Interpretation)(((op, lambda res, *args: reflect(res)) for op in intp.keys()))
-        intp2 = compose(reflector, *intps)
-        return define(Interpretation)(
-            ((op, set_prompt(reflect, handler(intp)(intp[op] if op in intp else op.default), intp2[op]))
-             for op in intp2.keys())
-        )
+        intp2, = intps
+
+        # compose interpretations with reflections to ensure compatibility with compose
+        intp_ = compose(reflections(*intp.keys()), reflections(*intp2.keys()), intp)
+        intp2_ = compose(reflections(*intp.keys()), intp2)
+
+        # on reflect, jump to the outer interpretation and interpret it using itself
+        return define(Interpretation)({
+            op: shift_prompt(reflect, handler(intp_)(intp_[op]), intp2_[op])
+            for op in intp2.keys()
+        })
     else:
         return product(intp, product(*intps))
 
@@ -122,7 +129,8 @@ def reflect(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T]):
-    old_intp = swap_interpretation(product(get_interpretation(), intp))
+    new_intp = product(intp, get_interpretation())
+    old_intp = swap_interpretation(new_intp)
     try:
         yield intp
     finally:
