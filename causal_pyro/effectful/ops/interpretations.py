@@ -75,7 +75,6 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 def fwd(result: Optional[T]) -> T:
-    import pdb; pdb.set_trace()
     return result
 
 
