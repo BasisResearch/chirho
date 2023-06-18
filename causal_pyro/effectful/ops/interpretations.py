@@ -129,6 +129,7 @@ def reflect(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T]):
+    # TODO this is incorrect, leads to composition in the wrong direction
     new_intp = product(intp, get_interpretation())
     old_intp = swap_interpretation(new_intp)
     try:
