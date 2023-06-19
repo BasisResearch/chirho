@@ -73,7 +73,8 @@ def interpreter(intp: Interpretation[T]):
 def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[..., T]) -> Callable[..., T]:
 
     def _wrapped_fst(res, *args, **kwargs):
-        fst_ = interpreter({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
+        # fst_ = interpreter({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)  # TODO why is this wrong??
+        fst_ = handler({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
         return fst_(res, *args, **kwargs)
 
     return _wrapped_fst
@@ -160,7 +161,9 @@ def reflect(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T]):
-    new_host = product(get_host(), compose(reflections(*set(get_host().keys()) - set(intp.keys())), intp))
+    curr_host: Interpretation[T] = get_host()
+    new_host = product(curr_host, compose(reflections(*set(curr_host.keys()) - set(intp.keys())), intp))
+
     new_intp = product(new_host, compose(reflections(*intp.keys()), get_interpretation()))
 
     prev_host = swap_host(new_host)
