@@ -105,6 +105,7 @@ def fwd(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[T]):
+    # TODO defaults should not be necessary here - this should be handled by shift_prompt
     defaults = define(Interpretation)({
         op: op.default for op in intp.keys() if op not in get_interpretation()
     })
@@ -138,7 +139,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         intp2, = intps
 
         # compose interpretations with reflections to ensure compatibility with compose
-        refls1 = compose(reflections(*intp.keys()), intp2)
+        refls1 = compose(reflections(*intp.keys()), {op: intp2[op] for op in intp2.keys() if op in intp})
         refls2 = compose(reflections(*intp.keys(), *intp2.keys()), intp)
 
         # cases:
