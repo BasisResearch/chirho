@@ -84,8 +84,11 @@ def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[Comput
     def apply(
         op_intp: Callable[..., S], res: Optional[T], *args: Computation[T], **kwargs
     ) -> Computation[S]:
-        args_: Computation[S] = tuple(traverse(arg) for arg in args)
+
+        args_: tuple[Computation[S], ...] = tuple(traverse(arg) for arg in args)
+
         ctx: Environment[S] = union(*(ctx_of(arg) for arg in args_))
+
         value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
             if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
             else reflect(res)
