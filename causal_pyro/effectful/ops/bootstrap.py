@@ -23,6 +23,9 @@ class _BaseOperation(Generic[T]):
             lambda res, *args, **kwargs: res if res is not None else self.body(*args, **kwargs)
         )
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({getattr(self.body, '__name__', self.body)}"
+
     def __call__(self, *args: T, **kwargs: T) -> T:
         return self.default(None, *args, **kwargs)
 

@@ -37,12 +37,12 @@ class BaseTerm(Generic[T], Term[T]):
     __head__: Operation[T]
     __args__: tuple["Term[T]" | Variable[T] | T, ...]
 
-    def __init__(self, head: Operation[T], args: Iterable["Term[T]" | Variable[T] | T]):
+    def __init__(self, head: Operation[T], args: Iterable[Term[T] | Variable[T] | T]):
         self.__head__ = head
         self.__args__ = tuple(args)
 
     def __repr__(self) -> str:
-        return f"{self.__head__.__name__}({', '.join(map(repr, self.__args__))})"
+        return f"{self.__head__}({', '.join(map(repr, self.__args__))})"
 
 
 @define(Operation)
@@ -57,6 +57,7 @@ def args_of(term: Term[T]) -> Iterable[Term[T] | Variable[T] | T]:
 
 @define(Operation)
 def LazyInterpretation(*ops: Operation[T]) -> Interpretation[T | Term[T] | Variable[T]]:
-    return product(reflections(define(Term)), define(Interpretation)({
-        op: functools.partial(define(Term), op) for op in ops
-    }))
+    return define(Interpretation)({
+        op: lambda _, *args: define(Term)(op, args)
+        for op in ops
+    })
