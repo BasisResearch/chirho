@@ -49,7 +49,7 @@ def register(
     interpret_op: Optional[Callable[..., T]] = None
 ):
     if interpret_op is None:
-        return functools.partial(register, op, intp=intp)
+        return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
         if isinstance(op, _BaseOperation):

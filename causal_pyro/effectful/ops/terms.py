@@ -35,9 +35,9 @@ class Term(Protocol[T]):
 @register(define(Term))
 class BaseTerm(Generic[T], Term[T]):
     __head__: Operation[T]
-    __args__: tuple["Term[T]" | T, ...]
+    __args__: tuple["Term[T]" | Variable[T] | T, ...]
 
-    def __init__(self, head: Operation[T], args: Iterable["Term[T]" | T]):
+    def __init__(self, head: Operation[T], args: Iterable["Term[T]" | Variable[T] | T]):
         self.__head__ = head
         self.__args__ = tuple(args)
 
@@ -51,7 +51,7 @@ def head_of(term: Term[T]) -> Operation[T]:
 
 
 @define(Operation)
-def args_of(term: Term[T]) -> Iterable[Term[T] | T]:
+def args_of(term: Term[T]) -> Iterable[Term[T] | Variable[T] | T]:
     return term.__args__
 
 

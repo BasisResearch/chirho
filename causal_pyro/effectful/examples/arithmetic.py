@@ -4,8 +4,8 @@ import functools
 
 from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define
 from causal_pyro.effectful.ops.interpretations import \
-    compose, fwd, handler, \
-    product, reflect, runner
+    compose, fwd, handler, product, reflect, runner
+from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
 
 
 @define(Operation)
@@ -75,3 +75,7 @@ if __name__ == "__main__":
 
     with handler(product(default, printme2)) as h:
         print(add(3, 4))
+
+    with handler(LazyInterpretation(add)) as h:
+        print(add(3, 4))
+        print(add3(3, 4, 5))
