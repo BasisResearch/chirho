@@ -1,10 +1,12 @@
-import unittest
 import math
-import torch
+import unittest
+
 import pyro
-from pyro.distributions import Normal, Bernoulli
-from causal_pyro.query.ops import expectation
+import torch
+from pyro.distributions import Bernoulli, Normal
+
 from causal_pyro.query.handlers import MonteCarloIntegration
+from causal_pyro.query.ops import expectation
 
 
 stress_pt = torch.tensor([0.5])
