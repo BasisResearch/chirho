@@ -1,91 +1,93 @@
-from typing import Generic, List, Protocol, Type, TypeVar
+from typing import Callable, Generic, List, Optional, Protocol, Type, TypeVar
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define, get_interpretation, register
-from causal_pyro.effectful.ops.interpretations import fwd, handler, reflect, runner
-from causal_pyro.effectful.ops.terms import Term, Environment, Operation, Variable, head_of, args_of, union
+import functools
+
+from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define
+from causal_pyro.effectful.ops.interpretations import fwd, handler, interpreter, product, reflect, reflections, runner
+from causal_pyro.effectful.ops.terms import Term, Environment, Variable, Computation, \
+    ctx_of, value_of, head_of, args_of, union
 
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-class Computation(Protocol[T]):
-    __ctx__: Environment[T]
-    __value__: Term[T]
+LazyVal = T | Term[T] | Variable[T]
 
-
-@register(define(Computation))
-class BaseComputation(Generic[T], Computation[T]):
-    __ctx__: Environment[T]
-    __value__: Term[T]
-
-    def __init__(self, ctx: Environment[T], value: Term[T]):
-        self.__ctx__ = ctx
-        self.__value__ = value
-
-    def __repr__(self) -> str:
-        return f"{self.__value__} @ {self.__ctx__}"
+@define(Operation)
+def LazyInterpretation(*ops: Operation[T]) -> Interpretation[LazyVal[T]]:
+    return product(reflections(define(Term)), define(Interpretation)({
+        op: functools.partial(define(Term), op) for op in ops
+    }))
 
 
 @define(Operation)
-def ctx_of(obj: Computation[T]) -> Environment[T]:
-    return obj.__ctx__
+def match(op_intp: Callable, res: Optional[T], *args: LazyVal[T], **kwargs) -> bool:
+    return res is not None or len(args) == 0 or \
+        any(isinstance(arg, (Variable, Term)) for arg in args)
 
 
 @define(Operation)
-def value_of(obj: Computation[T]) -> Term[T]:
-    return obj.__value__
-
-
-@define(Operation)
-def apply(intp: Interpretation[S], op: Operation[T], *args: Computation[T]) -> Computation[S]:
-    return define(Computation)(
-        union(*(ctx_of(arg) for arg in args)),
-        intp[op](*(traverse(intp, arg) for arg in args))
-    )
-
-
-@define(Operation)
-def traverse(intp: Interpretation[S], obj: Computation[T]) -> Computation[S]:
+def traverse(obj: Computation[T]) -> Computation[S]:
     """
     Generic meta-circular transformation of a term in a context.
     Use for evaluation, substitution, typechecking, etc.
     """
-    ctx, term = ctx_of(obj), value_of(obj)
-    op, args = head_of(term), args_of(term)
-    return apply(intp, op, *(define(Computation)(ctx, arg) for arg in args))
+    ctx, op, args = ctx_of(obj), head_of(value_of(obj)), args_of(value_of(obj))
+    return op(*(define(Computation)(ctx, arg) for arg in args))
+
+
+@define(Operation)
+def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[Computation[T]]:
+
+    def apply(
+        op_intp: Callable[..., S], res: Optional[T], *args: Computation[T], **kwargs
+    ) -> Computation[S]:
+        args_: Computation[S] = tuple(traverse(arg) for arg in args)
+        ctx: Environment[S] = union(*(ctx_of(arg) for arg in args_))
+        value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
+            if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
+            else reflect(res)
+        return define(Computation)(ctx, value)
+
+    return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
+        op: functools.partial(apply, intp[op]) for op in intp.keys()
+    }))
 
 
 #########################################################
 # Special built-in interpretations
 #########################################################
 
-
-@define(Operation)
-def evaluate(ctx: Environment[T], interpretation: Interpretation[T], term: Term[T]) -> T:
-    return traverse(interpretation, Computation(ctx, term))
-
-
-@define(Operation)
-def typeof(ctx: Environment[Type[T]], judgements: Interpretation[Type[T]], term: Term[T]) -> Type[T]:
-    return traverse(judgements, Computation(ctx, term))
-
-
-@define(Operation)
-def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Environment[Type[T]]:
-    return ctx_of(typeof(judgements, term))
-
-
-@define(Operation)
-def substitute(term: Term[T], ctx: Environment[T]) -> Term[T]:
-    return traverse((), Computation(ctx, term))
-
-
-@define(Operation)
-def rename(term: Term[T], ctx: Environment[Variable[T]]) -> Term[T]:
-    return substitute(term, ctx)
-
-
-@define(Operation)
-def pprint(reprs: Interpretation[str], term: Term[T]) -> str:
-    return traverse(reprs, term)
+# @define(Operation)
+# def evaluate(interpretation: Interpretation[T], term: Term[T], ctx: Optional[Environment[T]] = None) -> T:
+#     if ctx is None:
+#         ctx = define(Environment)()
+#     return interpreter(interpretation)(traverse(define(Computation)(ctx, term)))
+# 
+# 
+# @define(Operation)
+# def typeof(judgements: Interpretation[Type[T]], term: Term[T], ctx: Optional[Environment[Type[T]]] = None) -> Type[T]:
+#     if ctx is None:
+#         ctx = define(Environment)()
+#     return traverse(judgements, define(Computation)(ctx, term))
+# 
+# 
+# @define(Operation)
+# def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Environment[Type[T]]:
+#     return ctx_of(typeof(judgements, term))
+# 
+# 
+# @define(Operation)
+# def substitute(term: Term[T], ctx: Environment[T]) -> Term[T]:
+#     return traverse(define(Computation)(ctx, term))
+# 
+# 
+# @define(Operation)
+# def rename(term: Term[T], ctx: Environment[Variable[T]]) -> Term[T]:
+#     return substitute(term, ctx)
+# 
+# 
+# @define(Operation)
+# def pprint(reprs: Interpretation[str], term: Term[T]) -> str:
+#     return interpreter(reprs)(traverse)(term)
