@@ -83,3 +83,7 @@ if __name__ == "__main__":
     with handler(compose(LazyInterpretation(add), printme2)) as h:
         print(add(3, 4))
         print(add3(3, 4, 5))
+
+    with handler(compose(LazyInterpretation(add, add3), printme2)) as h:
+        print(add(3, 4))
+        print(add3(3, 4, 5))
