@@ -8,7 +8,6 @@ from pyro.distributions import Bernoulli, Normal
 from causal_pyro.query.handlers import MonteCarloIntegration
 from causal_pyro.query.ops import expectation
 
-
 stress_pt = torch.tensor([0.5])
 smokes_cpt = torch.tensor([0.2, 0.8])
 cancer_cpt = torch.tensor([[0.1, 0.15], [0.8, 0.85]])
