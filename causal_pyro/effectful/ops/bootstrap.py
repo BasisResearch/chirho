@@ -99,5 +99,5 @@ get_runtime()
 @functools.wraps(_BaseOperation.__call__)
 def _op_call(op: Operation[T], *args: T, **kwargs) -> S:
     intp = op.default(None) if op is get_interpretation else get_interpretation()
-    interpret = intp[op] if op in intp else getattr(op, "default")
+    interpret = intp[op] if op in intp else getattr(op, "default")  # TODO abstract or codify default?
     return interpret(None, *args, **kwargs)
