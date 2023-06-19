@@ -5,7 +5,7 @@ import functools
 import weakref
 
 from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
-    define, get_interpretation, swap_interpretation, get_host, swap_host
+    define, get_interpretation, swap_interpretation, get_runtime
 
 
 S = TypeVar("S")
@@ -117,6 +117,12 @@ def handler(intp: Interpretation[T]):
 
 ##################################################
 
+
+@define(Operation)
+def reflect(result: Optional[T]) -> T:
+    return result
+
+
 def reflections(*ops: Operation[T]) -> Interpretation[T]:
     return define(Interpretation)({
         op: lambda res, *args, **kwargs: reflect(res)
@@ -153,9 +159,25 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return product(intp, product(*intps))
 
 
+############################################################
+
+
 @define(Operation)
-def reflect(result: Optional[T]) -> T:
-    return result
+def get_host() -> Interpretation[T]:
+    if "host_interpretation" not in get_runtime():
+        get_runtime()["host_interpretation"] = define(Interpretation)()
+
+    return get_runtime()["host_interpretation"]
+
+
+@define(Operation)
+def swap_host(intp: Interpretation[S]) -> Interpretation[T]:
+    if "host_interpretation" not in get_runtime():
+        get_runtime()["host_interpretation"] = define(Interpretation)()
+ 
+    old_host = get_runtime()["host_interpretation"]
+    get_runtime()["host_interpretation"] = intp
+    return old_host
 
 
 @define(Operation)

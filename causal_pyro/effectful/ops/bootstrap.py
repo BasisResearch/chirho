@@ -71,15 +71,11 @@ register(define(Interpretation), None, dict[Operation[T], Callable[..., T]])
 
 class Runtime(TypedDict):
     interpretation: Interpretation
-    host_interpretation: Interpretation
 
 
 @functools.cache
 def get_runtime() -> Runtime:
-    return Runtime(
-        interpretation=define(Interpretation)(),
-        host_interpretation=define(Interpretation)()
-    )
+    return Runtime(interpretation=define(Interpretation)())
 
 
 @define(Operation)
@@ -92,18 +88,6 @@ def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
     old_intp = get_runtime()["interpretation"]
     get_runtime()["interpretation"] = intp
     return old_intp
-
-
-@define(Operation)
-def get_host() -> Interpretation[T]:
-    return get_runtime()["host_interpretation"]
-
-
-@define(Operation)
-def swap_host(intp: Interpretation[S]) -> Interpretation[T]:
-    old_host = get_runtime()["host_interpretation"]
-    get_runtime()["host_interpretation"] = intp
-    return old_host
 
 
 # set cached initial runtime state

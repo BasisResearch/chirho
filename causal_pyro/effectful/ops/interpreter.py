@@ -92,6 +92,7 @@ def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[Comput
         value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
             if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
             else reflect(res)
+
         return define(Computation)(ctx, value)
 
     return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
