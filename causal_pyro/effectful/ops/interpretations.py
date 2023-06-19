@@ -44,13 +44,36 @@ class StatefulInterpretation(Generic[S, T]):
 ##################################################
 
 @define(Operation)
+def union(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
+    if len(intps) == 0:
+        return intp
+    elif len(intps) == 1:
+        intp2, = intps
+        return define(Interpretation)({
+            op: intp2[op] if op in intp2 else intp[op]
+            for op in set(intp.keys()) | set(intp2.keys())
+        })
+    else:
+        return union(intp, *intps)
+
+
+@define(Operation)
+@contextlib.contextmanager
+def interpreter(intp: Interpretation[T]):
+    old_intp = swap_interpretation(union(get_interpretation(), intp))
+    try:
+        yield intp
+    finally:
+        swap_interpretation(old_intp)
+
+
+##################################################
+
+@define(Operation)
 def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[..., T]) -> Callable[..., T]:
 
     def _wrapped_fst(res, *args, **kwargs):
-        # TODO switch to runners?
-        # cont_ = runner({prompt_op: lambda _, res: prompt_op(res)})(cont)
-        # fst_ = runner({prompt_op: lambda _, res: cont_(res, *args, **kwargs)})(fst)
-        fst_ = handler({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
+        fst_ = interpreter({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
         return fst_(res, *args, **kwargs)
 
     return _wrapped_fst

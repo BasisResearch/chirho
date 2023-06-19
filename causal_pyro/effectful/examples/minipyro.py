@@ -221,22 +221,23 @@ def block_param(
     return reflect(result) if name in blocked else fwd(result)
 
 
-@runner(DefaultInterpretation(ParamStore()))
-def trace_elbo(pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
+def trace_elbo(param_store: ParamStore, pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
 
-    with handler(trace(Trace())) as guide_trace:
-        guide(*args, **kwargs)
+    with runner(DefaultInterpretation(param_store)):
 
-    with handler(replay(guide_trace)), handler(trace(Trace())) as model_trace:
-        pyro_model(*args, **kwargs)
+        with handler(trace(Trace())) as guide_trace:
+            guide(*args, **kwargs)
 
-    elbo = 0.0
-    for name, node in model_trace.items():
-        if isinstance(node, SampleTraceNode):
-            elbo = elbo + node.distribution.log_prob(node.value).sum()
+        with handler(replay(guide_trace)), handler(trace(Trace())) as model_trace:
+            pyro_model(*args, **kwargs)
 
-    for name, node in guide_trace.items():
-        if isinstance(node, SampleTraceNode):
-            elbo = elbo - node.distribution.log_prob(node.value).sum()
+        elbo = 0.0
+        for name, node in model_trace.items():
+            if isinstance(node, SampleTraceNode):
+                elbo = elbo + node.distribution.log_prob(node.value).sum()
 
-    return -elbo
+        for name, node in guide_trace.items():
+            if isinstance(node, SampleTraceNode):
+                elbo = elbo - node.distribution.log_prob(node.value).sum()
+
+        return -elbo
