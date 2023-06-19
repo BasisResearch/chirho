@@ -108,12 +108,16 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         intp2, = intps
 
         # compose interpretations with reflections to ensure compatibility with compose
-        intp_ = compose(reflections(*intp.keys()), reflections(*intp2.keys()), intp)
-        intp2_ = compose(reflections(*intp.keys()), intp2)
+        refls1 = compose(reflections(*intp.keys()), intp2)
+        refls2 = compose(reflections(*intp.keys(), *intp2.keys()), intp)
 
         # on reflect, jump to the outer interpretation and interpret it using itself
         return define(Interpretation)({
-            op: shift_prompt(reflect, handler(intp_)(intp_[op]), intp2_[op])
+            op: shift_prompt(
+                reflect,
+                handler(refls2)(intp[op] if op in intp else op.default),
+                handler(refls1)(intp2[op])
+            )
             for op in intp2.keys()
         })
     else:
