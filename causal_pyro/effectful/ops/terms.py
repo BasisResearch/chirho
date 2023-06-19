@@ -9,9 +9,27 @@ from .interpretations import product, reflect, reflections
 S, T = TypeVar("S"), TypeVar("T")
 
 
+class Variable(Protocol[T]):
+    __variable_name__: Hashable
+    __variable_type__: Optional[Type[T]]
+
+
+@register(define(Variable))
+class BaseVariable(Generic[T], Variable[T]):
+    __variable_name__: Hashable
+    __variable_type__: Optional[Type[T]]
+
+    def __init__(self, name: Hashable, type: Optional[Type[T]] = None):
+        self.__variable_name__ = name
+        self.__variable_type__ = type
+
+    def __repr__(self) -> str:
+        return f"{self.__variable_name__}: {getattr(self, '__variable_type___', None)}"
+
+
 class Term(Protocol[T]):
     __head__: Operation[T]
-    __args__: tuple["Term[T]" | T, ...]
+    __args__: tuple["Term[T]" | Variable[T] | T, ...]
 
 
 @register(define(Term))
@@ -37,28 +55,8 @@ def args_of(term: Term[T]) -> Iterable[Term[T] | T]:
     return term.__args__
 
 
-class Variable(Protocol[T]):
-    __variable_name__: Hashable
-    __variable_type__: Optional[Type[T]]
-
-
-@register(define(Variable))
-class BaseVariable(Generic[T], Variable[T]):
-    __variable_name__: Hashable
-    __variable_type__: Optional[Type[T]]
-
-    def __init__(self, name: Hashable, type: Optional[Type[T]] = None):
-        self.__variable_name__ = name
-        self.__variable_type__ = type
-
-    def __repr__(self) -> str:
-        return f"{self.__variable_name__}: {getattr(self, '__variable_type___', None)}"
-
-
-LazyVal = T | Term[T] | Variable[T]
-
 @define(Operation)
-def LazyInterpretation(*ops: Operation[T]) -> Interpretation[LazyVal[T]]:
+def LazyInterpretation(*ops: Operation[T]) -> Interpretation[T | Term[T] | Variable[T]]:
     return product(reflections(define(Term)), define(Interpretation)({
         op: functools.partial(define(Term), op) for op in ops
     }))

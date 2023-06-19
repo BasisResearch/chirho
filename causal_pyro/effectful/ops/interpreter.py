@@ -4,7 +4,7 @@ import functools
 
 from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, define, register
 from causal_pyro.effectful.ops.interpretations import fwd, handler, interpreter, product, reflect, reflections, runner
-from causal_pyro.effectful.ops.terms import Term, Variable, LazyVal, LazyInterpretation, head_of, args_of
+from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
 
 
 S = TypeVar("S")
@@ -63,7 +63,7 @@ def value_of(obj: Computation[T]) -> Term[T]:
 ###########################################################
 
 @define(Operation)
-def match(op_intp: Callable, res: Optional[T], *args: LazyVal[T], **kwargs) -> bool:
+def match(op_intp: Callable, res: Optional[T], *args: T | Term[T] | Variable[T], **kwargs) -> bool:
     return res is not None or len(args) == 0 or \
         any(isinstance(arg, (Variable, Term)) for arg in args)
 
