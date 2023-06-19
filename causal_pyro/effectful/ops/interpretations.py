@@ -128,8 +128,8 @@ def reflect(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T]):
-    # TODO this is incorrect, leads to composition in the wrong direction
-    new_intp = product(intp, get_interpretation())
+    # return handler(product(intp, reflections(*intp.keys()))
+    new_intp = compose(get_interpretation(), product(intp, reflections(*intp.keys())))
     old_intp = swap_interpretation(new_intp)
     try:
         yield intp
