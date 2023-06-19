@@ -5,7 +5,7 @@ import functools
 import weakref
 
 from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
-    define, get_interpretation, swap_interpretation
+    define, get_interpretation, swap_interpretation, get_host, swap_host
 
 
 S = TypeVar("S")
@@ -134,11 +134,16 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         refls1 = compose(reflections(*intp.keys()), intp2)
         refls2 = compose(reflections(*intp.keys(), *intp2.keys()), intp)
 
+        # cases:
+        # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
+        # 2. op in intp but not intp2: don't expose in user code
+        # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
+
         # on reflect, jump to the outer interpretation and interpret it using itself
         return define(Interpretation)({
             op: shift_prompt(
                 reflect,
-                handler(refls2)(intp[op] if op in intp else op.default),
+                handler(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs)),
                 handler(refls1)(intp2[op])
             )
             for op in intp2.keys()
@@ -155,10 +160,13 @@ def reflect(result: Optional[T]) -> T:
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T]):
-    # return handler(product(intp, reflections(*intp.keys()))
-    new_intp = compose(get_interpretation(), product(intp, reflections(*intp.keys())))
-    old_intp = swap_interpretation(new_intp)
+    new_host = product(get_host(), compose(reflections(*set(get_host().keys()) - set(intp.keys())), intp))
+    new_intp = product(new_host, compose(reflections(*intp.keys()), get_interpretation()))
+
+    prev_host = swap_host(new_host)
+    prev_intp = swap_interpretation(new_intp)
     try:
         yield intp
     finally:
-        swap_interpretation(old_intp)
+        swap_interpretation(prev_intp)
+        swap_host(prev_host)

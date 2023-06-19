@@ -1,4 +1,4 @@
-from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mapping, Optional, Protocol, Type, TypeVar, runtime_checkable
+from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mapping, Optional, Protocol, Type, TypedDict, TypeVar, runtime_checkable
 
 import functools
 
@@ -48,14 +48,11 @@ class Interpretation(Protocol[T]):
 BaseInterpretation = dict[Operation[T], Callable[..., T]]
 
 
-class Runtime(Generic[T]):
-    interpretation: Interpretation[T]
-
-    def __init__(self, interpretation: Interpretation[T]):
-        self.interpretation = interpretation
+class Runtime(TypedDict):
+    interpretation: Interpretation
 
 
-RUNTIME = Runtime(BaseInterpretation())
+RUNTIME = Runtime(interpretation=BaseInterpretation())
 
 
 @BaseOperation
@@ -67,13 +64,13 @@ def define(m: Type[T]) -> Operation[T]:
 
 @define(Operation)
 def get_interpretation() -> Interpretation[T]:
-    return RUNTIME.interpretation
+    return RUNTIME["interpretation"]
 
 
 @define(Operation)
 def swap_interpretation(intp: Interpretation[T]) -> Interpretation[T]:
-    old_intp = RUNTIME.interpretation
-    RUNTIME.interpretation = intp
+    old_intp = get_interpretation()
+    RUNTIME["interpretation"] = intp
     return old_intp
 
 
@@ -97,3 +94,31 @@ def register(
 
 
 register(define(Interpretation), None, BaseInterpretation)
+
+#####################################################################
+
+@define(Operation)
+def get_host() -> Interpretation[T]:
+    try:
+        return RUNTIME["host_interpretation"]
+    except KeyError:
+        return RUNTIME.setdefault("host_interpretation", define(Interpretation)())
+
+
+@define(Operation)
+def swap_host(intp: Interpretation[S]) -> Interpretation[T]:
+    old_intp = get_host()
+    RUNTIME["host_interpretation"] = intp
+    return old_intp
+
+
+@define(Operation)
+def apply(op: Operation[T], res: Optional[S], *args: T, **kwargs) -> S:
+    curr_intp: Interpretation[S] = get_interpretation()
+    interpret: Callable[..., S] = curr_intp[op] if op in curr_intp else getattr(op, "default")
+    return interpret(res, *args, **kwargs)
+
+
+@functools.partial(setattr, BaseOperation, "__call__")
+def _op_call(self, *args: T, **kwargs) -> S:
+    return apply(self, None, *args, **kwargs)
