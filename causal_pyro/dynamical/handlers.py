@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import (
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch
@@ -16,7 +25,7 @@ from causal_pyro.dynamical.ops import (
     simulate,
     simulate_to_interruption,
 )
-from causal_pyro.interventional.ops import intervene
+from causal_pyro.interventional.handlers import intervene
 
 S = TypeVar("S")
 T = TypeVar("T")
