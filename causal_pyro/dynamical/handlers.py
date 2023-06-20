@@ -2,16 +2,7 @@ from __future__ import annotations
 
 import functools
 import warnings
-from typing import (
-    Callable,
-    Dict,
-    Generic,
-    List,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
