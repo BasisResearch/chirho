@@ -1,18 +1,13 @@
 from typing import (
     TYPE_CHECKING,
-    Any,
     Callable,
     FrozenSet,
     Generic,
-    Hashable,
     List,
-    Mapping,
     Optional,
     Protocol,
-    Set,
     Tuple,
     TypeVar,
-    Union,
     runtime_checkable,
 )
 
@@ -118,8 +113,8 @@ class Trajectory(State[T]):
     @functools.singledispatchmethod
     def __getitem__(self, key):
         raise NotImplementedError(
-            f"singledispatch __getitem__ has not been properly registered to Trajectory. This"
-            f" should never happen."
+            "singledispatch __getitem__ has not been properly registered to Trajectory. This"
+            / " should never happen."
         )
 
 

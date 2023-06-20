@@ -102,7 +102,7 @@ def test_svi_composition_test_one(model):
     # Do gradient steps
     pyro.clear_param_store()
     for step in range(n_steps):
-        loss = svi.step()
+        svi.step()
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
@@ -159,4 +159,4 @@ def test_svi_composition_test_two(model):
     # Do gradient steps
     pyro.clear_param_store()
     for step in range(n_steps):
-        loss = svi.step(data)
+        svi.step(data)

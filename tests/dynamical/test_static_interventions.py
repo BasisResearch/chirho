@@ -1,19 +1,14 @@
 import logging
 
-import pyro
 import pytest
 import torch
-from pyro.distributions import Normal, Uniform, constraints
 
-import causal_pyro
 from causal_pyro.dynamical.handlers import (
-    ODEDynamics,
-    PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
     simulate,
 )
-from causal_pyro.dynamical.ops import State, Trajectory, simulate
+from causal_pyro.dynamical.ops import State
 
 from .dynamical_fixtures import (
     SimpleSIRDynamics,

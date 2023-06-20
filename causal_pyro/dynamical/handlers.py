@@ -2,28 +2,13 @@ from __future__ import annotations
 
 import functools
 import warnings
-from enum import Enum
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generic,
-    Hashable,
-    List,
-    Mapping,
-    Optional,
-    Tuple,
-    TypeVar,
-    Union,
-    cast,
-)
+from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
 import torchdiffeq
 
 from causal_pyro.dynamical.ops import (
-    Dynamics,
     State,
     Trajectory,
     apply_interruptions,
@@ -31,7 +16,6 @@ from causal_pyro.dynamical.ops import (
     simulate,
     simulate_to_interruption,
 )
-from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
 
 S = TypeVar("S")
