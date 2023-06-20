@@ -152,8 +152,7 @@ def _getitem_torchmask(self, key: torch.Tensor) -> Trajectory[T]:
     return self._getitem(key)
 
 
-# noinspection PyUnresolvedReferences,PyTypeHints
-Trajectory.__getitem__ = __getitem__  # type: ignore [method-assign]
+setattr(Trajectory, "__getitem__", __getitem__)
 
 
 @runtime_checkable
