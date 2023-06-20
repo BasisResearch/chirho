@@ -79,24 +79,25 @@ def traverse(obj: Computation[T]) -> Computation[S]:
 
 
 @define(Operation)
+def apply(
+    op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: Computation[T], **kwargs
+) -> Computation[S]:
+
+    args_: tuple[Computation[S], ...] = tuple(traverse(arg) for arg in args)
+
+    ctx: Environment[S] = union(*(ctx_of(arg) for arg in args_))
+
+    value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
+        if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
+        else reflect(res)
+
+    return define(Computation)(ctx, value)
+
+
+@define(Operation)
 def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[Computation[T]]:
-
-    def apply(
-        op_intp: Callable[..., S], res: Optional[T], *args: Computation[T], **kwargs
-    ) -> Computation[S]:
-
-        args_: tuple[Computation[S], ...] = tuple(traverse(arg) for arg in args)
-
-        ctx: Environment[S] = union(*(ctx_of(arg) for arg in args_))
-
-        value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
-            if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
-            else reflect(res)
-
-        return define(Computation)(ctx, value)
-
     return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
-        op: functools.partial(apply, intp[op]) for op in intp.keys()
+        op: functools.partial(apply, op, intp[op]) for op in intp.keys()
     }))
 
 

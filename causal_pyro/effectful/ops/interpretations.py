@@ -151,8 +151,8 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return define(Interpretation)({
             op: shift_prompt(
                 reflect,
-                handler(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
-                handler(refls1)(intp2[op])
+                interpreter(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
+                interpreter(refls1)(intp2[op])
             )
             for op in intp2.keys()
         })
