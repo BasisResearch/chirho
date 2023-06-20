@@ -216,7 +216,9 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
     def event_f(t: torch.Tensor, flat_state: torch.Tensor):
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
-        state = State(**{k: v for k, v in zip(di.var_order, flat_state)})
+        state: State[torch.Tensor] = State(
+            **{k: v for k, v in zip(di.var_order, flat_state)}
+        )
         return di.event_f(t, state)
 
     return event_f
@@ -256,7 +258,7 @@ def torchdiffeq_combined_event_f(
 # <Torchdiffeq Implementations>
 
 
-class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
+class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def __enter__(self):
         return super().__enter__()
 
@@ -273,7 +275,7 @@ class SimulatorEventLoop(pyro.poutine.messenger.Messenger):
             time=span_timespan[-1],
         )
 
-        full_trajs = []
+        full_trajs = []  # type: List[Trajectory[T]]
         first = True
 
         last_terminal_interruptions = tuple()  # type: Tuple[Interruption, ...]
@@ -486,7 +488,7 @@ class PointObservation(PointInterruption):
         msg["name"] = msg["name"] + "_" + str(self.time.item())
 
 
-class DynamicInterruption(Interruption):
+class DynamicInterruption(Generic[T], Interruption):
     def __init__(
         self,
         event_f: Callable[[T, State[T]], T],

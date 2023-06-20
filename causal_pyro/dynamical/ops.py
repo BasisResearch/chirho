@@ -66,6 +66,7 @@ class State(Generic[T]):
         shared_keys = self.keys.intersection(other.keys)
         return State(**{k: getattr(self, k) - getattr(other, k) for k in shared_keys})
 
+    # FIXME AZ - non-generic method in generic class.
     def l2(self) -> torch.Tensor:
         """
         Compute the L2 norm of the state. This is useful e.g. after taking the difference between two states.
@@ -77,10 +78,21 @@ class State(Generic[T]):
             )
         )
 
-    # TODO AZ - this is a non-generic method in a generic class...
-    def trajectorify(self) -> "Trajectory[torch.Tensor]":
-        ret = Trajectory(**{k: torch.unsqueeze(getattr(self, k), 0) for k in self.keys})
+    def trajectorify(self) -> "Trajectory[T]":
+        ret: Trajectory[T] = Trajectory(
+            **{k: unsqueeze(getattr(self, k), 0) for k in self.keys}
+        )
         return ret
+
+
+@functools.singledispatch
+def unsqueeze(x, axis: int):
+    raise NotImplementedError(f"unsqueeze not implemented for type {type(x)}")
+
+
+@unsqueeze.register
+def _unsqueeze_torch(x: torch.Tensor, axis: int) -> torch.Tensor:
+    return torch.unsqueeze(x, axis)
 
 
 # TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
@@ -90,19 +102,58 @@ class Trajectory(State[T]):
     def __init__(self, **values: T):
         super().__init__(**values)
 
-    def __getitem__(self, key: Union[int, slice]) -> Union[State[T], "Trajectory[T]"]:
+    def _getitem(self, key):
         if isinstance(key, str):
             raise ValueError(
                 "Trajectory does not support string indexing, use getattr instead if you want to access a specific "
                 "state variable."
             )
 
-        item: Union[State[T], Trajectory[T]] = (
-            State() if isinstance(key, int) else Trajectory()
-        )
+        item = State() if isinstance(key, int) else Trajectory()
         for k, v in self.__dict__["_values"].items():
             setattr(item, k, v[key])
         return item
+
+    # This is needed so that mypy and other type checkers believe that Trajectory can be indexed into.
+    @functools.singledispatchmethod
+    def __getitem__(self, key):
+        raise NotImplementedError(
+            f"singledispatch __getitem__ has not been properly registered to Trajectory. This"
+            f" should never happen."
+        )
+
+
+# Note AZondsu192: Have to add this after the class is defined. Deferred annotations (e.g. 'Trajectory[
+# torch.Tensor]') for the return value of the _getitem_slice don't work here because the register decorator tries to
+# instantiate the class before it's defined.
+@functools.singledispatchmethod
+def __getitem__(self, key):
+    raise NotImplementedError(f"__getitem__ not implemented for type {type(key)}")
+
+
+# This method, that returns another object of the same type of self, is the reason for breaking this out of the
+#  class. See note AZondsu192 above.
+@__getitem__.register
+def _getitem_slice(self, key: slice) -> Trajectory[T]:
+    return self._getitem(key)
+
+
+@__getitem__.register
+def _getitem_int(self, key: int) -> State[T]:
+    return self._getitem(key)
+
+
+@__getitem__.register
+def _getitem_torchmask(self, key: torch.Tensor) -> Trajectory[T]:
+    if key.dtype != torch.bool:
+        raise ValueError(
+            f"__getitem__ with a torch.Tensor only supports boolean mask indexing, but got dtype {key.dtype}."
+        )
+    return self._getitem(key)
+
+
+# noinspection PyUnresolvedReferences,PyTypeHints
+Trajectory.__getitem__ = __getitem__  # type: ignore [method-assign]
 
 
 @runtime_checkable
