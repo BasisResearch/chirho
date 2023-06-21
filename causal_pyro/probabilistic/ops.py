@@ -1,4 +1,4 @@
-from typing import Callable, Container, Dict, Generic, Hashable, Iterable, List, Literal, Optional, Protocol, Set, Tuple, TypeVar, Union
+from typing import Callable, Generic, Optional, Protocol, TypeVar
 
 import functools
 import math
@@ -31,9 +31,7 @@ def measure_from(x, **kwargs) -> Measure[T]:
 
 
 @functools.singledispatch
-def log_density_of(m: Measure[T], other: Optional[Measure[T]] = None) -> Callable[[T], R]:
-    if other is not None:
-        return log_density_of(importance(m, other))
+def log_density_of(m: Measure[T]) -> Callable[[T], R]:
     raise NotImplementedError
 
 
@@ -63,12 +61,16 @@ def _base_measure_of_abstract(m: AbstractMeasure[T]) -> Measure[T]:
 
 
 class NewMeasure(Generic[T], AbstractMeasure[T]):
-    base_measure: Measure[T]
-    log_density: Callable[[T], R]
-
     def __init__(self, base_measure: Measure[T], log_density: Callable[[T], R]):
-        self.base_measure = base_measure
-        self.log_density = log_density
+        self._base_measure = base_measure
+        self._log_density = log_density
+
+    @property
+    def base_measure(self) -> Measure[T]:
+        return self._base_measure
+    
+    def log_density(self, x: T) -> R:
+        return self._log_density(x)
 
 
 class DiracMeasure(Generic[T], AbstractMeasure[T]):
@@ -103,7 +105,7 @@ class CountingMeasure(AbstractMeasure[int]):
         return -math.log(self.n)
 
 
-class GaussianMeasure(Measure[R]):
+class GaussianMeasure(AbstractMeasure[R]):
     loc: R
     scale: R
 
@@ -160,12 +162,19 @@ def _importance_lebesgue(p: LebesgueMeasure, q: LebesgueMeasure) -> LebesgueMeas
     return LebesgueMeasure(log_weight=p.log_weight - q.log_weight)
 
 
+@importance.register(CountingMeasure, CountingMeasure)
+def _importance_counting(p: CountingMeasure, q: CountingMeasure) -> CountingMeasure:
+    if p.n != q.n:
+        raise AbsoluteContinuityError
+    return CountingMeasure(p.n)
+
+
 ###########################################################################
 # Integration
 ###########################################################################
 
 @functools.singledispatch
-def integrate(m: Measure[T], f: Callable[[T], R]) -> R:
+def integrate(m: Measure[T], f: Optional[Callable[[T], R]] = None) -> R:
     raise NotImplementedError
 
 
