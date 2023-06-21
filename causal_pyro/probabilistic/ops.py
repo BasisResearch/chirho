@@ -97,15 +97,13 @@ def measure_from(x, **kwargs) -> Measure[T] | Kernel[S, T]:
 
 
 @functools.singledispatch
-def basemeasure_of(m: Measure[T]) -> Measure[T]:
+def base_measure_of(m: Measure[T]) -> Measure[T]:
     return m.base_measure if m.base_measure is not None else m
 
 
-@functools.singledispatch
-def logdensity_of(m: Measure[T], other: Optional[Measure[T]] = None) -> Callable[[T], R]:
-    if other is not None:
-        return log_density(importance(m, other))
-    return lambda x: log_density(base_measure(m))(x) + m.log_density(x)
+@multipledispatch.dispatch
+def log_density_of(m: Measure[T]) -> Callable[[T], R]:
+    return m.log_density
 
 
 @functools.singledispatch
@@ -122,17 +120,48 @@ def support_of(m: Measure[T]) -> Container[T]:
 # Importance combinators for weighting
 ###########################################################################
 
-@multipledispatch.dispatch
-def importance(p: Measure[T], q: Measure[T], **kwargs) -> Measure[T]:
-    log_densities = []
-    while base_measure(q) is not q:
-        p = base_measure(p_base)
-        q_base, q_logp = base_measure(q_base), log_density(q_base) + q_logp
+class AbsoluteContinuityError(Exception):
+    pass
 
-    return NewMeasure(
-        q_base if p_base is q_base else importance(p_base, q_base, **kwargs),
-        lambda x: log_density(p)(x) - log_density(q)(x)
-    )
+
+@multipledispatch.dispatch
+def log_density_rel(p: Measure[T], q: Measure[T]) -> Callable[[T], R]:
+    if base_measure_of(p) is not p:
+        return add(log_density_of(p), log_density_rel(base_measure_of(p), q))
+    elif base_measure_of(q) is not q:
+        return add(neg(log_density_of(q)), log_density_rel(p, base_measure_of(q)))
+    else:
+        raise AbsoluteContinuityError
+
+
+@multipledispatch.dispatch
+def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
+    return NewMeasure(q, log_density_rel(p, q))
+
+
+@functools.singledispatch
+def neg(x):
+    raise NotImplementedError
+
+
+@multipledispatch.dispatch
+def add(x, y):
+    raise NotImplementedError
+
+
+@functools.singledispatch
+def log(x):
+    raise NotImplementedError
+
+
+@functools.singledispatch
+def exp(x):
+    raise NotImplementedError
+
+
+@multipledispatch.dispatch
+def mul(x, y):
+    raise NotImplementedError
 
 
 ###########################################################################
@@ -140,9 +169,9 @@ def importance(p: Measure[T], q: Measure[T], **kwargs) -> Measure[T]:
 ###########################################################################
 
 @functools.singledispatch
-def integrate(m: Measure[T], f: Optional[Callable[[T], R]] = None, **kwargs) -> R:
-    if base_measure(m) is not m:
-        return integrate(base_measure(m), lambda x: torch.exp(log_density(m)(x)) * f(x))
+def integrate(m: Measure[T], f: Callable[[T], R]) -> R:
+    if base_measure_of(m) is not m:
+        return integrate(base_measure_of(m), mul(exp(log_density_of(m)), f))
     raise NotImplementedError
 
 
@@ -162,16 +191,22 @@ def normalize(p: Measure[T]) -> Measure[T]:
     raise NotImplementedError
 
 
-def log_normalizer(p: Measure[T]) -> R:
-    return 0. if is_normalized(p) else integrate(p)
-
-
 def expectation(p: Measure[T], f: Callable[[T], R]) -> R:
     return integrate(normalize(p), f)
 
 
+def kl(p: Measure[T], q: Measure[T]) -> R:
+    p, q = normalize(p), normalize(q)
+    return integrate(p, log_density_of(importance(p, q)))
+
+
+def elbo(p: Measure[T], q: Measure[T]) -> R:
+    q = normalize(q)
+    return integrate(q, log_density_of(importance(p, q)))
+
+
 ###########################################################################
-# Other combinators
+# Other measure combinators
 ###########################################################################
 
 @functools.singledispatch
