@@ -2,10 +2,9 @@ from typing import Callable, Container, Dict, Generic, Hashable, Iterable, List,
 
 import functools
 import math
-import numbers
+import typing
 
 import multipledispatch
-import pyro
 import torch
 
 R = torch.Tensor | float | int
@@ -17,12 +16,53 @@ T = TypeVar("T")
 # Types, constructors and accessors
 ###########################################################################
 
+@typing.runtime_checkable
 class Measure(Protocol[T]):
-    base_measure: Optional["Measure[T]"]
-    log_density: Callable[[T], R]
+
+    def log_density(self, x: T) -> R: ...
+
+    @property
+    def base_measure(self) -> "Measure[T]": ...
 
 
-class NewMeasure(Generic[T], Measure[T]):
+@functools.singledispatch
+def measure_from(x, **kwargs) -> Measure[T]:
+    raise NotImplementedError
+
+
+@functools.singledispatch
+def log_density_of(m: Measure[T], other: Optional[Measure[T]] = None) -> Callable[[T], R]:
+    if other is not None:
+        return log_density_of(importance(m, other))
+    raise NotImplementedError
+
+
+@functools.singledispatch
+def base_measure_of(m: Measure[T]) -> Measure[T]:
+    raise NotImplementedError
+
+
+class AbstractMeasure(Generic[T], Measure[T]):
+
+    def log_density(self, x: T) -> R:
+        raise NotImplementedError
+
+    @property
+    def base_measure(self) -> Measure[T]:
+        return self
+
+
+@log_density_of.register(AbstractMeasure)
+def _log_density_of_abstract(m: AbstractMeasure[T]) -> Callable[[T], R]:
+    return m.log_density
+
+
+@base_measure_of.register(AbstractMeasure)
+def _base_measure_of_abstract(m: AbstractMeasure[T]) -> Measure[T]:
+    return m.base_measure
+
+
+class NewMeasure(Generic[T], AbstractMeasure[T]):
     base_measure: Measure[T]
     log_density: Callable[[T], R]
 
@@ -31,8 +71,7 @@ class NewMeasure(Generic[T], Measure[T]):
         self.log_density = log_density
 
 
-class DiracMeasure(Generic[T], Measure[T]):
-    base_measure = None
+class DiracMeasure(Generic[T], AbstractMeasure[T]):
     value: T
 
     def __init__(self, value: T):
@@ -42,30 +81,29 @@ class DiracMeasure(Generic[T], Measure[T]):
         return 0. if x == self.value else -math.inf
 
 
-class LebesgueMeasure(Measure[R]):
-    base_measure = None
+class LebesgueMeasure(AbstractMeasure[R]):
     log_weight: R
+    d: int
 
-    def __init__(self, log_weight: R = 0.):
-        self.weight = log_weight
+    def __init__(self, log_weight: R = 0., d: int = 1):
+        self.log_weight = log_weight
+        self.d = d
 
-    def log_density(self, x: R) -> R:
+    def log_density(self, x) -> R:
         return self.log_weight
 
 
-class CountingMeasure(Measure[int]):
-    base_measure = None
+class CountingMeasure(AbstractMeasure[int]):
     n: int
 
     def __init__(self, n: int):
         self.n = n
 
     def log_density(self, x: int) -> R:
-        return 0. if x == self.n else -math.inf
+        return -math.log(self.n)
 
 
 class GaussianMeasure(Measure[R]):
-    base_measure: LebesgueMeasure = LebesgueMeasure(log_weight=-0.5 * math.log(2 * math.pi))
     loc: R
     scale: R
 
@@ -73,34 +111,26 @@ class GaussianMeasure(Measure[R]):
         self.loc = loc
         self.scale = scale
 
+    @property
+    def base_measure(self) -> LebesgueMeasure:
+        return LebesgueMeasure(log_weight=-0.5 * math.log(2 * math.pi), d=1)
+
     def log_density(self, x: R) -> R:
-        return -torch.log(torch.as_tensor(self.scale)) - (x - self.loc) ** 2 / (2 * self.scale ** 2)
+        return -math.log(self.scale) - (x - self.loc) ** 2 / (2 * self.scale ** 2)
 
 
-class BernoulliMeasure(Measure[bool]):
-    base_measure: CountingMeasure = CountingMeasure(2)
+class BernoulliMeasure(AbstractMeasure[bool]):
     p: R
 
     def __init__(self, p: R):
         self.p = p
 
+    @property
+    def base_measure(self) -> Measure[int]:
+        return CountingMeasure(2)
+
     def log_density(self, x: bool) -> R:
         return math.log(self.p) if x else math.log(1 - self.p)
-
-
-@functools.singledispatch
-def measure_from(x, **kwargs) -> Measure[T]:
-    raise NotImplementedError
-
-
-@functools.singledispatch
-def base_measure_of(m: Measure[T]) -> Measure[T]:
-    return m.base_measure if m.base_measure is not None else m
-
-
-@multipledispatch.dispatch
-def log_density_of(m: Measure[T]) -> Callable[[T], R]:
-    return m.log_density
 
 
 ###########################################################################
@@ -111,18 +141,23 @@ class AbsoluteContinuityError(Exception):
     pass
 
 
-@multipledispatch.dispatch
-def log_density_rel(p: Measure[T], q: Measure[T]) -> Callable[[T], R]:
+@multipledispatch.dispatch(AbstractMeasure, AbstractMeasure)
+def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
     if base_measure_of(p) is not p:
-        return lambda x: log_density_of(p)(x) + log_density_rel(base_measure_of(p), q)(x)
+        dp, ddq = log_density_of(p), log_density_of(importance(base_measure_of(p), q))
+        return NewMeasure(q, lambda x: ddq(x) + dp(x))
     elif base_measure_of(q) is not q:
-        return lambda x: -log_density_of(q)(x) + log_density_rel(p, base_measure_of(q))(x)
+        dq, ddp = log_density_of(q), log_density_of(importance(p, base_measure_of(q)))
+        return NewMeasure(q, lambda x: -dq(x) + ddp(x))
     else:
         raise AbsoluteContinuityError
 
 
-def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
-    return NewMeasure(q, log_density_rel(p, q))
+@importance.register(LebesgueMeasure, LebesgueMeasure)
+def _importance_lebesgue(p: LebesgueMeasure, q: LebesgueMeasure) -> LebesgueMeasure:
+    if p.d != q.d:
+        raise AbsoluteContinuityError
+    return LebesgueMeasure(log_weight=p.log_weight - q.log_weight)
 
 
 ###########################################################################
@@ -131,8 +166,6 @@ def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
 
 @functools.singledispatch
 def integrate(m: Measure[T], f: Callable[[T], R]) -> R:
-    if base_measure_of(m) is not m:
-        return integrate(base_measure_of(m), lambda x: math.exp(log_density_of(m)(x)) * f(x))
     raise NotImplementedError
 
 
