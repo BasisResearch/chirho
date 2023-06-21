@@ -289,6 +289,8 @@ class IndexCutModule(
         return super().__enter__()
 
     def _pyro_sample(self, msg: dict[str, Any]) -> None:
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
         # There are 4 cases to consider for a sample site:
         # 1. The site appears in self.vars and is observed
         # 2. The site appears in self.vars and is not observed
@@ -307,6 +309,9 @@ class IndexCutModule(
         )
 
     def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+
         if (not msg["is_observed"]) and (msg["name"] in self.vars):
             # TODO: enforce this constraint exactly
             value_one = gather(
