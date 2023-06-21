@@ -92,20 +92,30 @@ class BernoulliMeasure(Measure[bool]):
 
 
 @functools.singledispatch
-def as_measure(x, **kwargs) -> Measure[T] | Kernel[S, T]:
+def measure_from(x, **kwargs) -> Measure[T] | Kernel[S, T]:
     raise NotImplementedError
 
 
 @functools.singledispatch
-def base_measure(m: Measure[T]) -> Measure[T]:
+def basemeasure_of(m: Measure[T]) -> Measure[T]:
     return m.base_measure if m.base_measure is not None else m
 
 
 @functools.singledispatch
-def log_density(m: Measure[T], other: Optional[Measure[T]] = None) -> Callable[[T], R]:
+def logdensity_of(m: Measure[T], other: Optional[Measure[T]] = None) -> Callable[[T], R]:
     if other is not None:
         return log_density(importance(m, other))
     return lambda x: log_density(base_measure(m))(x) + m.log_density(x)
+
+
+@functools.singledispatch
+def tfm_of(m: Measure[T]) -> Callable[[S], T]:
+    raise NotImplementedError
+
+
+@functools.singledispatch
+def support_of(m: Measure[T]) -> Container[T]:
+    raise NotImplementedError
 
 
 ###########################################################################
@@ -125,18 +135,13 @@ def importance(p: Measure[T], q: Measure[T], **kwargs) -> Measure[T]:
     )
 
 
-@importance.register
-def _importance_pyro(p: PyroMeasure, q: PyroMeasure, **kwargs) -> PyroMeasure:
-    ...
-
-
 ###########################################################################
 # Elimination forms
 ###########################################################################
 
 @functools.singledispatch
 def integrate(m: Measure[T], f: Optional[Callable[[T], R]] = None, **kwargs) -> R:
-    if base_measure(m) is m:
+    if base_measure(m) is not m:
         return integrate(base_measure(m), lambda x: torch.exp(log_density(m)(x)) * f(x))
     raise NotImplementedError
 
@@ -151,10 +156,18 @@ def is_normalized(m: Measure[T]) -> bool:
 
 
 @functools.singledispatch
-def normalize(p: Measure[T], **kwargs) -> Measure[T]:
+def normalize(p: Measure[T]) -> Measure[T]:
     if is_normalized(p):
         return p
     raise NotImplementedError
+
+
+def log_normalizer(p: Measure[T]) -> R:
+    return 0. if is_normalized(p) else integrate(p)
+
+
+def expectation(p: Measure[T], f: Callable[[T], R]) -> R:
+    return integrate(normalize(p), f)
 
 
 ###########################################################################
