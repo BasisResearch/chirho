@@ -103,16 +103,6 @@ def log_density_of(m: Measure[T]) -> Callable[[T], R]:
     return m.log_density
 
 
-@functools.singledispatch
-def tfm_of(m: Measure[T]) -> Callable[[S], T]:
-    raise NotImplementedError
-
-
-@functools.singledispatch
-def support_of(m: Measure[T]) -> Container[T]:
-    raise NotImplementedError
-
-
 ###########################################################################
 # Importance combinators for weighting
 ###########################################################################
@@ -131,28 +121,12 @@ def log_density_rel(p: Measure[T], q: Measure[T]) -> Callable[[T], R]:
         raise AbsoluteContinuityError
 
 
-@multipledispatch.dispatch
 def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
     return NewMeasure(q, log_density_rel(p, q))
 
 
-@functools.singledispatch
-def log(x):
-    raise NotImplementedError
-
-
-@functools.singledispatch
-def exp(x):
-    raise NotImplementedError
-
-
-@multipledispatch.dispatch
-def mul(x, y):
-    raise NotImplementedError
-
-
 ###########################################################################
-# Elimination forms
+# Integration
 ###########################################################################
 
 @functools.singledispatch
@@ -168,7 +142,7 @@ def integrate(m: Measure[T], f: Callable[[T], R]) -> R:
 
 @functools.singledispatch
 def is_normalized(m: Measure[T]) -> bool:
-    return getattr(m, "__is_normalized__", False)
+    return getattr(m, "__normalized__", False)
 
 
 @functools.singledispatch
@@ -180,32 +154,3 @@ def normalize(p: Measure[T]) -> Measure[T]:
 
 def expectation(p: Measure[T], f: Callable[[T], R]) -> R:
     return integrate(normalize(p), f)
-
-
-def kl(p: Measure[T], q: Measure[T]) -> R:
-    p, q = normalize(p), normalize(q)
-    return integrate(p, log_density_of(importance(p, q)))
-
-
-def elbo(p: Measure[T], q: Measure[T]) -> R:
-    q = normalize(q)
-    return integrate(q, log_density_of(importance(p, q)))
-
-
-###########################################################################
-# Other measure combinators
-###########################################################################
-
-@functools.singledispatch
-def pushforward(p: Measure[S], f: Callable[[S], T]) -> Measure[T]:
-    ...
-
-
-@multipledispatch.dispatch
-def product(p: Measure[S], q: Measure[T]) -> Measure[tuple[S, T]]:
-    ...
-
-
-@multipledispatch.dispatch
-def mixture(p: Measure[S], q: Measure[T]) -> Measure[S | T]:
-    ...
