@@ -183,14 +183,7 @@ def integrate(m: Measure[T], f: Optional[Callable[[T], R]] = None) -> R:
 ###########################################################################
 
 @functools.singledispatch
-def is_normalized(m: Measure[T]) -> bool:
-    return getattr(m, "__normalized__", False)
-
-
-@functools.singledispatch
 def normalize(p: Measure[T]) -> Measure[T]:
-    if is_normalized(p):
-        return p
     raise NotImplementedError
 
 
