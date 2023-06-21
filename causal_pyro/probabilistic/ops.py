@@ -22,9 +22,6 @@ class Measure(Protocol[T]):
     log_density: Callable[[T], R]
 
 
-Kernel = Callable[[S], Measure[T]]
-
-
 class NewMeasure(Generic[T], Measure[T]):
     base_measure: Measure[T]
     log_density: Callable[[T], R]
@@ -92,7 +89,7 @@ class BernoulliMeasure(Measure[bool]):
 
 
 @functools.singledispatch
-def measure_from(x, **kwargs) -> Measure[T] | Kernel[S, T]:
+def measure_from(x, **kwargs) -> Measure[T]:
     raise NotImplementedError
 
 
@@ -127,9 +124,9 @@ class AbsoluteContinuityError(Exception):
 @multipledispatch.dispatch
 def log_density_rel(p: Measure[T], q: Measure[T]) -> Callable[[T], R]:
     if base_measure_of(p) is not p:
-        return add(log_density_of(p), log_density_rel(base_measure_of(p), q))
+        return lambda x: log_density_of(p)(x) + log_density_rel(base_measure_of(p), q)(x)
     elif base_measure_of(q) is not q:
-        return add(neg(log_density_of(q)), log_density_rel(p, base_measure_of(q)))
+        return lambda x: -log_density_of(q)(x) + log_density_rel(p, base_measure_of(q))(x)
     else:
         raise AbsoluteContinuityError
 
@@ -137,16 +134,6 @@ def log_density_rel(p: Measure[T], q: Measure[T]) -> Callable[[T], R]:
 @multipledispatch.dispatch
 def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
     return NewMeasure(q, log_density_rel(p, q))
-
-
-@functools.singledispatch
-def neg(x):
-    raise NotImplementedError
-
-
-@multipledispatch.dispatch
-def add(x, y):
-    raise NotImplementedError
 
 
 @functools.singledispatch
@@ -171,7 +158,7 @@ def mul(x, y):
 @functools.singledispatch
 def integrate(m: Measure[T], f: Callable[[T], R]) -> R:
     if base_measure_of(m) is not m:
-        return integrate(base_measure_of(m), mul(exp(log_density_of(m)), f))
+        return integrate(base_measure_of(m), lambda x: math.exp(log_density_of(m)(x)) * f(x))
     raise NotImplementedError
 
 
