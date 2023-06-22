@@ -7,11 +7,26 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-###########################################################################
-# Kernel combinators for deferred measure evaluation
-###########################################################################
-
 def defer_args(*tps: Type):
+    """
+    Decorator to allow the use of functions in place of values
+    in the arguments of a function. Kind of a hack.
+
+    Returns a function that takes the same arguments as the original,
+    but which returns a function of shared arguments to deferred values.
+
+    .. example::
+
+        .. code-block:: python
+
+            @defer_args(int)
+            def f(x: int, y: int) -> int:
+                return x + y
+
+            f_lazy: Callable[[int], int] = f(lambda x: x + 1, lambda x: x + 2)
+            f_lazy(1)  # returns 4
+
+    """
 
     if len(tps) == 0:
         raise ValueError("Must specify at least one type to defer")
