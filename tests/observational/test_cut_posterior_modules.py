@@ -100,7 +100,7 @@ def test_plate_cut_module_runs():
     conditioned_model = pyro.condition(linear_gaussian_model, data=data)
     module_one_vars = ["eta", "w"]
     with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
-        z = conditioned_model()
+        conditioned_model()
 
 
 def test_cut_module_discrete():
