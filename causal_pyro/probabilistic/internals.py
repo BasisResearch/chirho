@@ -1,5 +1,6 @@
 from typing import Callable, Generic, Optional, Type, TypeVar
 
+import functools
 import math
 import torch
 
@@ -17,10 +18,10 @@ T = TypeVar("T")
 def _as_measure_measure(
     m: Measure[T], *, log_density: Optional[Callable[[T], R]] = None,
 ) -> Measure[T]:
-    return m if log_density is None else _NewMeasure(m, log_density)
+    return m if log_density is None else WeightedMeasure(m, log_density)
 
 
-class _NewMeasure(Generic[T], Measure[T]):
+class WeightedMeasure(Generic[T], Measure[T]):
     def __init__(self, base_measure: Measure[T], log_density: Callable[[T], R]):
         self._base_measure = base_measure
         self._log_density = log_density
@@ -45,14 +46,11 @@ class DeltaMeasure(Generic[T], Measure[T]):
 
 class ArrayMeasure(Generic[T], Measure[T]):
     shape: tuple[int, ...]
-    dtype: Type[T]
+    dtype: Type[T] | torch.dtype
 
-    def __init__(self, shape: tuple[int, ...], dtype: Type[T]):
-        self.shape = shape
-        self.dtype = dtype
-
-    def log_density(self, x: T) -> R:
-        return -sum(map(math.log, self.shape))
+    @property
+    def numel(self) -> int:
+        return functools.reduce(lambda x, y: x * y, self.shape, 1)
 
 
 class LebesgueMeasure(Measure[R]):
