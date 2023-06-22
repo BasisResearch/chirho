@@ -34,6 +34,7 @@ setup(
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
         "pyro-ppl>=1.8.5",
+        "multipledispatch",
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
