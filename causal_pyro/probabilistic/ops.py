@@ -5,7 +5,7 @@ import functools
 import multipledispatch
 import torch
 
-from .defer_args import defer_args
+from .internals.defer_args import defer_args
 
 R = torch.Tensor | float | int
 S = TypeVar("S")

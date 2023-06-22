@@ -5,7 +5,7 @@ import math
 import torch
 
 from .defer_args import defer_args
-from .ops import AbsoluteContinuityError, Measure, as_measure, importance, integrate, normalize, sample
+from ..ops import AbsoluteContinuityError, Measure, as_measure, importance, integrate, normalize, sample
 
 
 R = torch.Tensor | float | int
