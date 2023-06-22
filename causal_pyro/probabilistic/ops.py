@@ -71,3 +71,13 @@ def normalize(p: Measure[T]) -> Measure[T]:
 @defer_args(Measure)
 def expectation(p: Measure[T], f: Callable[[T], R]) -> R:
     return integrate(normalize(p), f)
+
+
+###########################################################################
+# Sample for conversion to values
+###########################################################################
+
+@defer_args(Measure)
+@functools.singledispatch
+def sample(p: Measure[T], **kwargs) -> T:
+    raise NotImplementedError

@@ -4,7 +4,7 @@ import math
 import torch
 
 from .defer_args import defer_args
-from .ops import AbsoluteContinuityError, Measure, as_measure, importance, integrate, normalize
+from .ops import AbsoluteContinuityError, Measure, as_measure, importance, integrate, normalize, sample
 
 
 R = torch.Tensor | float | int
@@ -134,3 +134,8 @@ def _integrate_delta(m: DeltaMeasure[T], f: Callable[[T], R]) -> R:
 @normalize.register
 def _normalize_delta(m: DeltaMeasure[T]) -> DeltaMeasure[T]:
     return m  # TODO support non-normalized delta
+
+
+@sample.register
+def _sample_delta(m: DeltaMeasure[T]) -> T:
+    return m.value
