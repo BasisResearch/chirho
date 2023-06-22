@@ -17,14 +17,12 @@ def defer_args(*tps: Type):
 
     .. example::
 
-        .. code-block:: python
-
-            @defer_args(int)
-            def f(x: int, y: int) -> int:
-                return x + y
-
-            f_lazy: Callable[[int], int] = f(lambda x: x + 1, lambda x: x + 2)
-            f_lazy(1)  # returns 4
+        >>> @defer_args(int)
+        ... def f(x: int, y: int) -> int:
+        ...     return x + y
+        ...
+        >>> f_lazy = f(lambda x: x + 1, lambda x: x + 2)
+        >>> assert f_lazy(1) == 4
 
     """
 
