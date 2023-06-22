@@ -75,36 +75,6 @@ class CountingMeasure(Measure[int]):
         return -math.log(self.n)
 
 
-class GaussianMeasure(Measure[R]):
-    loc: R
-    scale: R
-
-    def __init__(self, loc: R, scale: R):
-        self.loc = loc
-        self.scale = scale
-
-    @property
-    def base_measure(self) -> LebesgueMeasure:
-        return LebesgueMeasure(log_weight=-0.5 * math.log(2 * math.pi), d=1)
-
-    def log_density(self, x: R) -> R:
-        return -math.log(self.scale) - (x - self.loc) ** 2 / (2 * self.scale ** 2)
-
-
-class BernoulliMeasure(Measure[bool]):
-    p: R
-
-    def __init__(self, p: R):
-        self.p = p
-
-    @property
-    def base_measure(self) -> Measure[int]:
-        return CountingMeasure(2)
-
-    def log_density(self, x: bool) -> R:
-        return math.log(self.p) if x else math.log(1 - self.p)
-
-
 @importance.register(Measure, DeltaMeasure)
 def _importance_delta(p: Measure[T], q: DeltaMeasure[T]) -> Measure[T]:
     return as_measure(p, log_density=lambda x: p.log_density(q.value) - q.log_density(x))
@@ -137,3 +107,37 @@ def _normalize_delta(m: DeltaMeasure[T]) -> DeltaMeasure[T]:
 @sample.register
 def _sample_delta(m: DeltaMeasure[T]) -> T:
     return m.value
+
+
+###################################################
+# Some simple concrete measure types for testing
+###################################################
+
+class GaussianMeasure(Measure[R]):
+    loc: R
+    scale: R
+
+    def __init__(self, loc: R, scale: R):
+        self.loc = loc
+        self.scale = scale
+
+    @property
+    def base_measure(self) -> LebesgueMeasure:
+        return LebesgueMeasure(log_weight=-0.5 * math.log(2 * math.pi), d=1)
+
+    def log_density(self, x: R) -> R:
+        return -math.log(self.scale) - (x - self.loc) ** 2 / (2 * self.scale ** 2)
+
+
+class BernoulliMeasure(Measure[bool]):
+    p: R
+
+    def __init__(self, p: R):
+        self.p = p
+
+    @property
+    def base_measure(self) -> Measure[int]:
+        return CountingMeasure(2)
+
+    def log_density(self, x: bool) -> R:
+        return math.log(self.p) if x else math.log(1 - self.p)
