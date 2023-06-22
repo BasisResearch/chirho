@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 
 @as_measure.register
-@defer_args
+@defer_args(Measure)
 def _as_measure_measure(
     m: Measure[T], *, log_density: Optional[Callable[[T], R]] = None,
 ) -> Measure[T]:
