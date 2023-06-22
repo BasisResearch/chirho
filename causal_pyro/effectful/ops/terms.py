@@ -2,7 +2,7 @@ from typing import Any, Callable, Container, ContextManager, Generic, Hashable, 
 
 import functools
 
-from .bootstrap import Interpretation, Operation, define, register
+from ._runtime import Interpretation, Operation, define, register
 from .interpretations import product, reflect, reflections
 
 

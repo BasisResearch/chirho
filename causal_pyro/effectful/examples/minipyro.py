@@ -7,7 +7,7 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from causal_pyro.effectful.ops.bootstrap import Operation, define, register
+from causal_pyro.effectful.ops._runtime import Operation, define, register
 from causal_pyro.effectful.ops.interpretations import StatefulInterpretation, \
     fwd, handler, reflect, runner
 

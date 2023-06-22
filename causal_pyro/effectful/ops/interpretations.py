@@ -2,10 +2,9 @@ from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mappin
 
 import contextlib
 import functools
-import weakref
 
-from causal_pyro.effectful.ops.bootstrap import Interpretation, Operation, \
-    define, get_interpretation, swap_interpretation, get_runtime
+from causal_pyro.effectful.ops.interpretation import Interpretation, Operation, define, interpreter
+from causal_pyro.effectful.ops._runtime import get_interpretation, swap_interpretation, get_runtime
 
 
 S = TypeVar("S")
@@ -15,9 +14,10 @@ T = TypeVar("T")
 class StatefulInterpretation(Generic[S, T]):
     state: S
 
-    _op_interpretations: ClassVar[dict[Operation, Callable]] = weakref.WeakKeyDictionary()
+    _op_interpretations: ClassVar[dict[Operation, Callable]]
 
     def __init_subclass__(cls) -> None:
+        import weakref
         cls._op_interpretations: weakref.WeakKeyDictionary[Operation[T], Callable[..., T]] = \
             weakref.WeakKeyDictionary()
         return super().__init_subclass__()
@@ -39,32 +39,6 @@ class StatefulInterpretation(Generic[S, T]):
     @classmethod
     def keys(cls) -> Iterable[Operation[T]]:
         return cls._op_interpretations.keys()
-
-
-##################################################
-
-@define(Operation)
-def union(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
-    if len(intps) == 0:
-        return intp
-    elif len(intps) == 1:
-        intp2, = intps
-        return define(Interpretation)({
-            op: intp2[op] if op in intp2 else intp[op]
-            for op in set(intp.keys()) | set(intp2.keys())
-        })
-    else:
-        return union(intp, *intps)
-
-
-@define(Operation)
-@contextlib.contextmanager
-def interpreter(intp: Interpretation[T]):
-    old_intp = swap_interpretation(union(get_interpretation(), intp))
-    try:
-        yield intp
-    finally:
-        swap_interpretation(old_intp)
 
 
 ##################################################
