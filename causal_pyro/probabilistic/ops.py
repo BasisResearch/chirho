@@ -1,8 +1,7 @@
-from typing import Callable, Generic, Optional, Protocol, TypeVar
+from typing import Callable, Generic, Optional, TypeVar
 
 import functools
 import math
-import typing
 
 import multipledispatch
 import torch
@@ -16,51 +15,29 @@ T = TypeVar("T")
 # Types, constructors and accessors
 ###########################################################################
 
-@typing.runtime_checkable
-class Measure(Protocol[T]):
-
-    def log_density(self, x: T) -> R: ...
-
-    @property
-    def base_measure(self) -> "Measure[T]": ...
-
-
-@functools.singledispatch
-def measure_from(x, **kwargs) -> Measure[T]:
-    raise NotImplementedError
-
-
-@functools.singledispatch
-def log_density_of(m: Measure[T]) -> Callable[[T], R]:
-    raise NotImplementedError
-
-
-@functools.singledispatch
-def base_measure_of(m: Measure[T]) -> Measure[T]:
-    raise NotImplementedError
-
-
-class AbstractMeasure(Generic[T], Measure[T]):
+class Measure(Generic[T]):
 
     def log_density(self, x: T) -> R:
         raise NotImplementedError
 
     @property
-    def base_measure(self) -> Measure[T]:
+    def base_measure(self) -> "Measure[T]":
         return self
 
 
-@log_density_of.register(AbstractMeasure)
-def _log_density_of_abstract(m: AbstractMeasure[T]) -> Callable[[T], R]:
-    return m.log_density
+@functools.singledispatch
+def as_measure(m, **kwargs) -> Measure:
+    raise NotImplementedError
 
 
-@base_measure_of.register(AbstractMeasure)
-def _base_measure_of_abstract(m: AbstractMeasure[T]) -> Measure[T]:
-    return m.base_measure
+@as_measure.register
+def _as_measure_measure(
+    m: Measure[T], *, log_density: Optional[Callable[[T], R]] = None,
+) -> Measure[T]:
+    return m if log_density is None else _NewMeasure(m, log_density)
 
 
-class NewMeasure(Generic[T], AbstractMeasure[T]):
+class _NewMeasure(Generic[T], Measure[T]):
     def __init__(self, base_measure: Measure[T], log_density: Callable[[T], R]):
         self._base_measure = base_measure
         self._log_density = log_density
@@ -68,12 +45,12 @@ class NewMeasure(Generic[T], AbstractMeasure[T]):
     @property
     def base_measure(self) -> Measure[T]:
         return self._base_measure
-    
+
     def log_density(self, x: T) -> R:
         return self._log_density(x)
 
 
-class DiracMeasure(Generic[T], AbstractMeasure[T]):
+class DiracMeasure(Generic[T], Measure[T]):
     value: T
 
     def __init__(self, value: T):
@@ -83,7 +60,7 @@ class DiracMeasure(Generic[T], AbstractMeasure[T]):
         return 0. if x == self.value else -math.inf
 
 
-class LebesgueMeasure(AbstractMeasure[R]):
+class LebesgueMeasure(Measure[R]):
     log_weight: R
     d: int
 
@@ -95,7 +72,7 @@ class LebesgueMeasure(AbstractMeasure[R]):
         return self.log_weight
 
 
-class CountingMeasure(AbstractMeasure[int]):
+class CountingMeasure(Measure[int]):
     n: int
 
     def __init__(self, n: int):
@@ -105,7 +82,7 @@ class CountingMeasure(AbstractMeasure[int]):
         return -math.log(self.n)
 
 
-class GaussianMeasure(AbstractMeasure[R]):
+class GaussianMeasure(Measure[R]):
     loc: R
     scale: R
 
@@ -121,7 +98,7 @@ class GaussianMeasure(AbstractMeasure[R]):
         return -math.log(self.scale) - (x - self.loc) ** 2 / (2 * self.scale ** 2)
 
 
-class BernoulliMeasure(AbstractMeasure[bool]):
+class BernoulliMeasure(Measure[bool]):
     p: R
 
     def __init__(self, p: R):
@@ -143,14 +120,14 @@ class AbsoluteContinuityError(Exception):
     pass
 
 
-@multipledispatch.dispatch(AbstractMeasure, AbstractMeasure)
+@multipledispatch.dispatch(Measure, Measure)
 def importance(p: Measure[T], q: Measure[T]) -> Measure[T]:
-    if base_measure_of(p) is not p:
-        dp, ddq = log_density_of(p), log_density_of(importance(base_measure_of(p), q))
-        return NewMeasure(q, lambda x: ddq(x) + dp(x))
-    elif base_measure_of(q) is not q:
-        dq, ddp = log_density_of(q), log_density_of(importance(p, base_measure_of(q)))
-        return NewMeasure(q, lambda x: -dq(x) + ddp(x))
+    if p.base_measure is not p:
+        dp, ddq = p.log_density, importance(p.base_measure, q).log_density
+        return as_measure(q, log_density=lambda x: ddq(x) + dp(x))
+    elif q.base_measure is not q:
+        dq, ddp = q.log_density, importance(p, q.base_measure).log_density
+        return as_measure(q, log_density=lambda x: -dq(x) + ddp(x))
     else:
         raise AbsoluteContinuityError
 
