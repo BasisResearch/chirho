@@ -66,3 +66,8 @@ def integrate(m: Measure[T], f: Optional[Callable[[T], R]] = None) -> R:
 @functools.singledispatch
 def normalize(p: Measure[T]) -> Measure[T]:
     raise NotImplementedError
+
+
+@defer_args(Measure)
+def expectation(p: Measure[T], f: Callable[[T], R]) -> R:
+    return integrate(normalize(p), f)
