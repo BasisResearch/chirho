@@ -93,7 +93,7 @@ def test_plate_cut_module_runs():
     conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
     module_one_vars = ["eta", "w"]
     with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
-        z = conditioned_model()
+        conditioned_model()
 
     # Runs for continous model
     data = linear_gaussian_model()
@@ -103,52 +103,52 @@ def test_plate_cut_module_runs():
         z = conditioned_model()
 
 
-# def test_cut_module_discrete():
-#     conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
-#     module_one_vars = ["eta", "w"]
-#     module_one, module_two = cut(conditioned_model, vars=module_one_vars)
-#     module_one_post = pyro.infer.infer_discrete(module_one, first_available_dim=-2)
-#     module_one_samples = []
+def test_cut_module_discrete():
+    conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
+    module_one_vars = ["eta", "w"]
+    module_one, module_two = cut(conditioned_model, vars=module_one_vars)
+    module_one_post = pyro.infer.infer_discrete(module_one, first_available_dim=-2)
+    module_one_samples = []
 
-#     # Module 1 check
-#     for _ in range(1000):
-#         with pyro.poutine.trace() as tr:
-#             module_one_post()
-#         module_one_samples.append(tr.trace.nodes["eta"]["value"].item())
+    # Module 1 check
+    for _ in range(1000):
+        with pyro.poutine.trace() as tr:
+            module_one_post()
+        module_one_samples.append(tr.trace.nodes["eta"]["value"].item())
 
-#     rand_error_tol = 3 * 0.5 / math.sqrt(1000)
-#     assert (
-#         torch.abs(torch.tensor(module_one_samples).mean() - 0.8).item() < rand_error_tol
-#     )
+    rand_error_tol = 3 * 0.5 / math.sqrt(1000)
+    assert (
+        torch.abs(torch.tensor(module_one_samples).mean() - 0.8).item() < rand_error_tol
+    )
 
-#     # Module 2 check (eta = 1)
-#     module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(1.0)})
-#     module_two_post = pyro.infer.infer_discrete(module_two_cond, first_available_dim=-2)
-#     module_two_samples = []
-#     for _ in range(1000):
-#         with pyro.poutine.trace() as tr:
-#             module_two_post()
-#         module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
+    # Module 2 check (eta = 1)
+    module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(1.0)})
+    module_two_post = pyro.infer.infer_discrete(module_two_cond, first_available_dim=-2)
+    module_two_samples = []
+    for _ in range(1000):
+        with pyro.poutine.trace() as tr:
+            module_two_post()
+        module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
 
-#     assert (
-#         torch.abs(torch.tensor(module_two_samples).mean() - 0.8).item() < rand_error_tol
-#     )
+    assert (
+        torch.abs(torch.tensor(module_two_samples).mean() - 0.8).item() < rand_error_tol
+    )
 
-#     # Module 2 check (eta = 0)
-#     module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(0.0)})
-#     module_two_post = pyro.infer.infer_discrete(module_two_cond, first_available_dim=-2)
-#     module_two_samples = []
-#     for _ in range(1000):
-#         with pyro.poutine.trace() as tr:
-#             module_two_post()
-#         module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
+    # Module 2 check (eta = 0)
+    module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(0.0)})
+    module_two_post = pyro.infer.infer_discrete(module_two_cond, first_available_dim=-2)
+    module_two_samples = []
+    for _ in range(1000):
+        with pyro.poutine.trace() as tr:
+            module_two_post()
+        module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
 
-#     assert (
-#         torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
-#     )
+    assert (
+        torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
+    )
 
 
-def compute_exact_elbo_discrete(psi):
+def compute_exact_elbo_discrete(model, psi):
     psi_one, psi_two, psi_three = psi
 
     # Compute probability of each configuration
@@ -167,15 +167,22 @@ def compute_exact_elbo_discrete(psi):
     )
 
     # Add E[log p(eta, theta, w=1, z=1)] term
-    cond_model = pyro.condition(bern_model, data=BERN_DATA)
-    tr00 = {"eta": torch.tensor(0), "theta": torch.tensor(0)}
-    tr01 = {"eta": torch.tensor(0), "theta": torch.tensor(1)}
-    tr10 = {"eta": torch.tensor(1), "theta": torch.tensor(0)}
-    tr11 = {"eta": torch.tensor(1), "theta": torch.tensor(1)}
-    log_p_00 = torch.log(torch.as_tensor(0.5 * 0.5 * 0.2 * 0.2))
-    log_p_01 = torch.log(torch.as_tensor(0.5 * 0.5 * 0.2 * 0.2))
-    log_p_10 = torch.log(torch.as_tensor(0.5 * 0.5 * 0.8 * 0.2))
-    log_p_11 = torch.log(torch.as_tensor(0.5 * 0.5 * 0.8 * 0.8))
+    tr00 = {"eta": torch.tensor(0.0), "theta": torch.tensor(0.0)}
+    tr01 = {"eta": torch.tensor(0.0), "theta": torch.tensor(1.0)}
+    tr10 = {"eta": torch.tensor(1.0), "theta": torch.tensor(0.0)}
+    tr11 = {"eta": torch.tensor(1.0), "theta": torch.tensor(1.0)}
+    log_p_00 = (
+        poutine.trace(poutine.condition(model, data=tr00)).get_trace().log_prob_sum()
+    )
+    log_p_01 = (
+        poutine.trace(poutine.condition(model, data=tr01)).get_trace().log_prob_sum()
+    )
+    log_p_10 = (
+        poutine.trace(poutine.condition(model, data=tr10)).get_trace().log_prob_sum()
+    )
+    log_p_11 = (
+        poutine.trace(poutine.condition(model, data=tr11)).get_trace().log_prob_sum()
+    )
     elbo += q_00 * log_p_00 + q_01 * log_p_01 + q_10 * log_p_10 + q_11 * log_p_11
 
     return elbo
@@ -185,19 +192,26 @@ def test_index_module_discrete():
     # psi_one = p(eta = 1)
     # psi_two = p(theta = 1 | eta = 0)
     # psi_three = p(theta = 1 | eta = 1)
-    psi_one_grid = torch.arange(0, 1, 0.02)
-    psi_two_grid = torch.arange(0, 1, 0.02)
-    psi_three_grid = torch.arange(0, 1, 0.02)
-    best_config = None
-    best_elbo = -float("inf")
-    for psi_one in psi_one_grid:
-        for psi_two in psi_two_grid:
-            for psi_three in psi_three_grid:
-                # Compute ELBO loss exactly
-                elbo = compute_exact_elbo_discrete((psi_one, psi_two, psi_three))
-                if elbo > best_elbo:
-                    best_elbo = elbo
-                    best_config = (psi_one, psi_two, psi_three)
+    module_one_vars = ["eta", "w"]
+    conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
+    with IndexPlatesMessenger():
+        with IndexCutModule(module_one_vars):
+            psi_one_grid = torch.arange(0, 1, 0.1)
+            psi_two_grid = torch.arange(0, 1, 0.1)
+            psi_three_grid = torch.arange(0, 1, 0.1)
+            best_config = None
+            best_elbo = -float("inf")
+            for psi_one in psi_one_grid:
+                for psi_two in psi_two_grid:
+                    for psi_three in psi_three_grid:
+                        # Compute ELBO loss exactly
+                        elbo = compute_exact_elbo_discrete(
+                            conditioned_model, (psi_one, psi_two, psi_three)
+                        )
+                        if elbo > best_elbo:
+                            best_elbo = elbo
+                            best_config = (psi_one, psi_two, psi_three)
 
-    assert 1 == 0
-    return best_config, best_elbo
+    assert torch.abs(best_config[0] - 0.8).item() < 0.025
+    assert torch.abs(best_config[1] - 0.5).item() < 0.025
+    assert torch.abs(best_config[2] - 0.8).item() < 0.025
