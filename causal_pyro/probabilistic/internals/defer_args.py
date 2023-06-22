@@ -22,7 +22,7 @@ def defer_args(*tps: Type):
         ...     return x + y
         ...
         >>> f_lazy = f(lambda x: x + 1, lambda x: x + 2)
-        >>> assert f_lazy(1) == 4
+        >>> assert f_lazy(1) == 5
 
     """
 
