@@ -2,7 +2,7 @@ from typing import Callable, Generic, Hashable, Iterable, List, Optional, Protoc
 
 import functools
 
-from causal_pyro.effectful.ops.environments import Environment, Computation, ctx_of, value_of
+from causal_pyro.effectful.ops.environments import Environment, Computation, ctx_of, value_of, union
 from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, register
 from causal_pyro.effectful.ops.interpretations import product, reflect
 from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
@@ -10,6 +10,8 @@ from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, 
 
 S = TypeVar("S")
 T = TypeVar("T")
+
+LazyComputation = Computation[Term[T]]
 
 
 @define(Operation)
@@ -19,7 +21,7 @@ def match(op_intp: Callable, res: Optional[T], *args: T | Term[T] | Variable[T],
 
 
 @define(Operation)
-def traverse(obj: Computation[T]) -> Computation[S]:
+def traverse(obj: LazyComputation[T]) -> LazyComputation[S]:
     """
     Generic meta-circular transformation of a term in a context.
     Use for evaluation, substitution, typechecking, etc.
@@ -30,12 +32,12 @@ def traverse(obj: Computation[T]) -> Computation[S]:
 
 @define(Operation)
 def apply(
-    op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: Computation[T], **kwargs
-) -> Computation[S]:
+    op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: LazyComputation[T], **kwargs
+) -> LazyComputation[S]:
 
-    args_: tuple[Computation[S], ...] = tuple(traverse(arg) for arg in args)
+    args_: tuple[LazyComputation[S], ...] = tuple(traverse(arg) for arg in args)
 
-    ctx: Environment[S] = union(*(ctx_of(arg) for arg in args_))
+    ctx: Environment[S | Term[S]] = union(*(ctx_of(arg) for arg in args_))
 
     value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
         if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
@@ -45,7 +47,7 @@ def apply(
 
 
 @define(Operation)
-def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[Computation[T]]:
+def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[LazyComputation[T]]:
     return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
         op: functools.partial(apply, op, intp[op]) for op in intp.keys()
     }))
