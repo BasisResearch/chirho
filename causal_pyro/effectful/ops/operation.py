@@ -24,14 +24,16 @@ class Interpretation(Protocol[T]):
 def define(m: Type[T]) -> Operation[T]:
     if m is Operation:
         from ._runtime import _BaseOperation, swap_interpretation, _op_call
-        swap_interpretation(define(Interpretation)())
-        setattr(_BaseOperation, "__call__", _op_call)
+        if _BaseOperation.__call__ is not _op_call:
+            swap_interpretation(define(Interpretation)())
+            setattr(_BaseOperation, "__call__", _op_call)
         return _BaseOperation(_BaseOperation)
     elif m is Interpretation:
-        from ._runtime import _BaseOperation, _BaseInterpretation
-        return _BaseOperation(_BaseInterpretation)
-    else:
-        return define(Operation)(m)
+        from ._runtime import _BaseOperation, _BaseInterpretation, _op_call
+        if _BaseOperation.__call__ is not _op_call:
+            return _BaseOperation(_BaseInterpretation)
+
+    return define(Operation)(m)
 
 
 # triggers bootstrapping of Operation, Interpretation
