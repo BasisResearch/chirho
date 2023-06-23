@@ -33,7 +33,7 @@ def traverse(obj: LazyComputation[T]) -> LazyComputation[S]:
 def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[LazyComputation[T]]:
 
     def apply(
-        op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: LazyComputation[T], **kwargs
+        op_intp: Callable[..., S], res: Optional[T], *args: LazyComputation[T], **kwargs
     ) -> LazyComputation[S]:
 
         args_: tuple[LazyComputation[S], ...] = tuple(traverse(arg) for arg in args)
@@ -47,7 +47,7 @@ def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[LazyCo
         return define(Computation)(ctx, value)
 
     return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
-        op: functools.partial(apply, op, intp[op]) for op in intp.keys()
+        op: functools.partial(apply, intp[op]) for op in intp.keys()
     }))
 
 
