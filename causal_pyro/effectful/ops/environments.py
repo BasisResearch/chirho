@@ -56,3 +56,17 @@ def ctx_of(obj: Computation[T]) -> Environment[T]:
 @define(Operation)
 def value_of(obj: Computation[T]) -> T:
     return obj.__value__
+
+
+def ContextualInterpretation(intp: Interpretation[T]) -> Interpretation[Computation[T]]:
+
+    def apply(
+        op_intp: Callable[..., T], res: Optional[S], *args: Computation[T], **kwargs
+    ) -> Computation[T]:
+        ctx: Environment[T] = union(*(ctx_of(arg) for arg in args))
+        value: T = op_intp(res, *(value_of(arg) for arg in args), **kwargs)
+        return define(Computation)(ctx, value)
+
+    return define(Interpretation)({
+        op: functools.partial(apply, intp[op]) for op in intp.keys()
+    })

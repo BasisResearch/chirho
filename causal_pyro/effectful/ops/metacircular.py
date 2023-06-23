@@ -30,24 +30,22 @@ def traverse(obj: LazyComputation[T]) -> LazyComputation[S]:
     return op(*(define(Computation)(ctx, arg) for arg in args))
 
 
-@define(Operation)
-def apply(
-    op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: LazyComputation[T], **kwargs
-) -> LazyComputation[S]:
-
-    args_: tuple[LazyComputation[S], ...] = tuple(traverse(arg) for arg in args)
-
-    ctx: Environment[S | Term[S]] = union(*(ctx_of(arg) for arg in args_))
-
-    value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
-        if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
-        else reflect(res)
-
-    return define(Computation)(ctx, value)
-
-
-@define(Operation)
 def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[LazyComputation[T]]:
+
+    def apply(
+        op: Operation[T], op_intp: Callable[..., S], res: Optional[T], *args: LazyComputation[T], **kwargs
+    ) -> LazyComputation[S]:
+
+        args_: tuple[LazyComputation[S], ...] = tuple(traverse(arg) for arg in args)
+
+        ctx: Environment[S | Term[S]] = union(*(ctx_of(arg) for arg in args_))
+
+        value = op_intp(res, *(value_of(arg) for arg in args_), **kwargs) \
+            if match(op_intp, res, *(value_of(arg) for arg in args_), **kwargs) \
+            else reflect(res)
+
+        return define(Computation)(ctx, value)
+
     return product(LazyInterpretation(*intp.keys()), define(Interpretation)({
         op: functools.partial(apply, op, intp[op]) for op in intp.keys()
     }))
