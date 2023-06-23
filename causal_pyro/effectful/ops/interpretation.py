@@ -48,9 +48,8 @@ def register(
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        if isinstance(op, Operation):
-            setattr(op, "body", interpret_op)  # TODO resolve confusion of body, default
-            return interpret_op
+        setattr(op, "body", interpret_op)  # TODO resolve confusion of body, default
+        return interpret_op
     elif isinstance(intp, Interpretation):
         intp.__setitem__(op, interpret_op)
         return interpret_op
@@ -58,25 +57,16 @@ def register(
 
 
 @define(Operation)
-def union(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
-    if len(intps) == 0:
-        return intp
-    elif len(intps) == 1:
-        intp2, = intps
-        return define(Interpretation)({
-            op: intp2[op] if op in intp2 else intp[op]
-            for op in set(intp.keys()) | set(intp2.keys())
-        })
-    else:
-        return union(intp, *intps)
-
-
-@define(Operation)
 @contextlib.contextmanager
 def interpreter(intp: Interpretation[T]):
     from ._runtime import get_interpretation, swap_interpretation
 
-    old_intp = swap_interpretation(union(get_interpretation(), intp))
+    old_intp = get_interpretation()
+    new_intp = define(Interpretation)({
+        op: intp[op] if op in intp else old_intp[op]
+        for op in set(intp.keys()) | set(old_intp.keys())
+    })
+    old_intp = swap_interpretation(new_intp)
     try:
         yield intp
     finally:
