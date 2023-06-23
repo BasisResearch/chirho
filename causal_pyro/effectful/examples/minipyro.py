@@ -7,9 +7,9 @@ import torch
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
 
-from causal_pyro.effectful.ops._runtime import Operation, define, register
+from causal_pyro.effectful.ops.interpretation import Operation, define, register
 from causal_pyro.effectful.ops.interpretations import StatefulInterpretation, \
-    fwd, handler, reflect, runner
+    fwd, handler, reflect, product, prompt_calls
 
 
 S, T = TypeVar("S"), TypeVar("T")
@@ -223,7 +223,7 @@ def block_param(
 
 def trace_elbo(param_store: ParamStore, pyro_model: Callable[..., T], guide: Callable[..., T], *args, **kwargs) -> torch.Tensor:
 
-    with runner(DefaultInterpretation(param_store)):
+    with handler(product(DefaultInterpretation(param_store), prompt_calls(reflect, sample, param))):
 
         with handler(trace(Trace())) as guide_trace:
             guide(*args, **kwargs)

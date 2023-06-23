@@ -4,7 +4,6 @@ import contextlib
 import functools
 
 from causal_pyro.effectful.ops.interpretation import Interpretation, Operation, define, interpreter
-from causal_pyro.effectful.ops._runtime import get_interpretation, swap_interpretation, get_runtime
 
 
 S = TypeVar("S")
@@ -43,6 +42,13 @@ class StatefulInterpretation(Generic[S, T]):
 
 ##################################################
 
+def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
+    return define(Interpretation)({
+        op: lambda res, *args, **kwargs: prompt_op(res)
+        for op in set(ops)
+    })
+
+
 @define(Operation)
 def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[..., T]) -> Callable[..., T]:
 
@@ -55,6 +61,11 @@ def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[
 
 
 ##################################################
+
+@define(Operation)
+def fwd(result: Optional[T]) -> T:
+    return result
+
 
 @define(Operation)
 def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
@@ -71,38 +82,11 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return compose(intp, compose(*intps))
 
 
-@define(Operation)
-def fwd(result: Optional[T]) -> T:
-    return result
-
-
-@define(Operation)
-@contextlib.contextmanager
-def handler(intp: Interpretation[T]):
-    # TODO defaults should not be necessary here - this should be handled by shift_prompt
-    defaults = define(Interpretation)({
-        op: op.default for op in intp.keys() if op not in get_interpretation()
-    })
-    old_intp = swap_interpretation(compose(defaults, get_interpretation(), intp))
-    try:
-        yield intp
-    finally:
-        swap_interpretation(old_intp)
-
-
 ##################################################
-
 
 @define(Operation)
 def reflect(result: Optional[T]) -> T:
     return result
-
-
-def reflections(*ops: Operation[T]) -> Interpretation[T]:
-    return define(Interpretation)({
-        op: lambda res, *args, **kwargs: reflect(res)
-        for op in set(ops)
-    })
 
 
 @define(Operation)
@@ -113,8 +97,11 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         intp2, = intps
 
         # compose interpretations with reflections to ensure compatibility with compose
-        refls1 = compose(reflections(*intp.keys()), {op: intp2[op] for op in intp2.keys() if op in intp})
-        refls2 = compose(reflections(*intp.keys(), *intp2.keys()), intp)
+        refls1 = compose(
+            prompt_calls(reflect, *intp.keys()),
+            define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp})
+        )
+        refls2 = compose(prompt_calls(reflect, *intp.keys(), *intp2.keys()), intp)
 
         # cases:
         # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
@@ -136,37 +123,18 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 ############################################################
 
-
-@define(Operation)
-def get_host() -> Interpretation[T]:
-    if "host_interpretation" not in get_runtime():
-        get_runtime()["host_interpretation"] = define(Interpretation)()
-
-    return get_runtime()["host_interpretation"]
-
-
-@define(Operation)
-def swap_host(intp: Interpretation[S]) -> Interpretation[T]:
-    if "host_interpretation" not in get_runtime():
-        get_runtime()["host_interpretation"] = define(Interpretation)()
- 
-    old_host = get_runtime()["host_interpretation"]
-    get_runtime()["host_interpretation"] = intp
-    return old_host
-
-
 @define(Operation)
 @contextlib.contextmanager
-def runner(intp: Interpretation[T]):
-    curr_host: Interpretation[T] = get_host()
-    new_host = product(curr_host, compose(reflections(*set(curr_host.keys()) - set(intp.keys())), intp))
+def handler(intp: Interpretation[T]):
+    from ._runtime import get_interpretation, swap_interpretation
 
-    new_intp = product(new_host, compose(reflections(*intp.keys()), get_interpretation()))
+    # TODO defaults should not be necessary here - this should be handled by shift_prompt
+    defaults = define(Interpretation)({
+        op: op.default for op in intp.keys() if op not in get_interpretation()
+    })
 
-    prev_host = swap_host(new_host)
-    prev_intp = swap_interpretation(new_intp)
+    old_intp = swap_interpretation(compose(defaults, get_interpretation(), intp))
     try:
         yield intp
     finally:
-        swap_interpretation(prev_intp)
-        swap_host(prev_host)
+        swap_interpretation(old_intp)
