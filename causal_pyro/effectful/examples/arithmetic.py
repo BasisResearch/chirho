@@ -2,9 +2,9 @@ from typing import Callable
 
 import functools
 
-from causal_pyro.effectful.ops._runtime import Interpretation, Operation, define
+from causal_pyro.effectful.ops.operation import Interpretation, Operation, define
 from causal_pyro.effectful.ops.interpretations import \
-    compose, fwd, handler, product, reflect, runner
+    compose, fwd, handler, product, reflect
 from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
 
 
