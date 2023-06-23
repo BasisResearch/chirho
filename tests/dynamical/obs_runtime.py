@@ -1,6 +1,8 @@
+import cProfile
 import time
 from contextlib import ExitStack
 
+import matplotlib.pyplot as plt
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform
@@ -98,8 +100,6 @@ if __name__ == "__main__":
     print(runtime_grid.std(axis=1))
 
     # Plot runtime as a function of number of observations
-    import matplotlib.pyplot as plt
-
     plt.plot(
         N_step_grid, runtime_grid.mean(axis=1), label="Avg. Runtime", color="black"
     )
@@ -114,3 +114,18 @@ if __name__ == "__main__":
     plt.xlabel("Number of observations")
     plt.ylabel("Runtime (s)")
     plt.show()
+
+    # Profile the runtime line by line
+    # import pprofile
+    # data = data_grid[1000]
+    # profiler = pprofile.Profile()
+    # with profiler:
+    #     conditioned_sir(data, init_state, time_period)
+    # profiler.print_stats()
+    #     profiler.dump_stats("pprofiler_stats.txt")
+
+    # Profile the runtime
+    data = data_grid[2000]
+    cProfile.run(
+        "conditioned_sir(data, init_state, time_period)", "cprofile_output.txt"
+    )
