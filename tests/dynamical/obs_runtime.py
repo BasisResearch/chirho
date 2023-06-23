@@ -8,6 +8,7 @@ import torch
 from pyro.distributions import Normal, Uniform
 
 from causal_pyro.dynamical.handlers import (
+    DynamicIntervention,
     ODEDynamics,
     PointObservation,
     SimulatorEventLoop,
@@ -41,16 +42,34 @@ def bayes_sir_model():
     return sir
 
 
-def conditioned_sir(data, init_state, tspan):
+def make_event_fn(target_state: State[torch.tensor]):
+    def event_f(t: torch.tensor, state: State[torch.tensor]):
+        return target_state.I - state.I
+
+    return event_f
+
+
+def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
     sir = bayes_sir_model()
-    observation_managers = []
+    managers = []
     for obs in data.values():
         obs_time = obs[0].item()
         obs_data = obs[1]
-        observation_managers.append(PointObservation(obs_time, obs_data))
+        managers.append(PointObservation(obs_time, obs_data))
+    if include_dynamic_intervention:
+        event_f = make_event_fn(State(I=torch.tensor(30.0)))
+        managers.append(
+            DynamicIntervention(
+                event_f=event_f,
+                intervention=State(I=torch.tensor(20.0)),
+                var_order=init_state.var_order,
+                max_applications=1,
+            )
+        )
+
     with SimulatorEventLoop():
         with ExitStack() as stack:
-            for manager in observation_managers:
+            for manager in managers:
                 stack.enter_context(manager)
             traj = simulate(sir, init_state, tspan)
     return traj
@@ -58,6 +77,8 @@ def conditioned_sir(data, init_state, tspan):
 
 if __name__ == "__main__":
     pyro.set_rng_seed(123)
+
+    INCLUDE_DYNAMIC_INTERVENTION = True
 
     init_state = State(S=torch.tensor(99.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
     time_period = torch.linspace(0, 3, steps=21)
@@ -90,7 +111,7 @@ if __name__ == "__main__":
         for _ in range(N_runs):
             data = data_grid[N_step]
             start_time = time.time()
-            conditioned_sir(data, init_state, time_period)
+            conditioned_sir(data, init_state, time_period, INCLUDE_DYNAMIC_INTERVENTION)
             end_time = time.time()
             elapsed_runs.append(end_time - start_time)
         runtime_grid.append(elapsed_runs)
@@ -113,7 +134,8 @@ if __name__ == "__main__":
     )
     plt.xlabel("Number of observations")
     plt.ylabel("Runtime (s)")
-    plt.show()
+    plt.savefig("num_obs_vs_runtime.png")
+    plt.close()
 
     # Profile the runtime line by line
     # import pprofile
@@ -127,5 +149,6 @@ if __name__ == "__main__":
     # Profile the runtime
     data = data_grid[2000]
     cProfile.run(
-        "conditioned_sir(data, init_state, time_period)", "cprofile_output.txt"
+        "conditioned_sir(data, init_state, time_period, INCLUDE_DYNAMIC_INTERVENTION)",
+        "cprofile_output.txt",
     )
