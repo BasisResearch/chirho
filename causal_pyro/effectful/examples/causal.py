@@ -1,7 +1,7 @@
 from typing import Generic, List, Optional, TypeVar
 
 from causal_pyro.effectful.ops.interpretations import StatefulInterpretation, fwd
-from causal_pyro.effectful.ops.operation import Operation, define, register
+from causal_pyro.effectful.ops.operations import Operation, define, register
 
 from .forms import Return
 from .minipyro import PlateData, enter_plate, exit_plate, plate

@@ -2,7 +2,7 @@ from typing import Callable, Generic, Hashable, Iterable, List, Optional, Protoc
 
 import functools
 
-from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, register
+from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, register
 
 
 S = TypeVar("S")

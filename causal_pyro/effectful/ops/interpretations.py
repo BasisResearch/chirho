@@ -3,7 +3,7 @@ from typing import Callable, ClassVar, Generic, Iterable, Optional, TypeVar
 import contextlib
 import functools
 
-from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, interpreter
+from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, interpreter
 
 
 S = TypeVar("S")
