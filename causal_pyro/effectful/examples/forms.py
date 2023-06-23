@@ -1,7 +1,7 @@
 from typing import TypeVar
 
 from ..ops.interpretations import Interpretation
-from ..ops.metacircular import evaluate
+from ..ops.rewrites import evaluate
 from ..ops.terms import Operation, Environment, Symbol, Term, define, union
 
 

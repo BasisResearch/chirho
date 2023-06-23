@@ -2,7 +2,7 @@ from typing import Generic, Hashable, Optional, TypeVar, List
 
 from ..ops.terms import Environment, Operation, Term, define, get_args, get_head
 from ..ops.interpretations import Interpretation, union, product, compose, quotient
-from ..ops.metacircular import evaluate, apply
+from ..ops.rewrites import evaluate, apply
 
 
 S, T = TypeVar("S"), TypeVar("T")
