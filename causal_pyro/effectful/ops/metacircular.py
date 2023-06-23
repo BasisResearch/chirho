@@ -62,30 +62,30 @@ def MetacircularInterpretation(intp: Interpretation[T]) -> Interpretation[LazyCo
 #     if ctx is None:
 #         ctx = define(Environment)()
 #     return interpreter(interpretation)(traverse(define(Computation)(ctx, term)))
-# 
-# 
+#
+#
 # @define(Operation)
 # def typeof(judgements: Interpretation[Type[T]], term: Term[T], ctx: Optional[Environment[Type[T]]] = None) -> Type[T]:
 #     if ctx is None:
 #         ctx = define(Environment)()
 #     return traverse(judgements, define(Computation)(ctx, term))
-# 
-# 
+#
+#
 # @define(Operation)
 # def fvs(judgements: Interpretation[Type[T]], term: Term[T]) -> Environment[Type[T]]:
 #     return ctx_of(typeof(judgements, term))
-# 
-# 
+#
+#
 # @define(Operation)
 # def substitute(term: Term[T], ctx: Environment[T]) -> Term[T]:
 #     return traverse(define(Computation)(ctx, term))
-# 
-# 
+#
+#
 # @define(Operation)
 # def rename(term: Term[T], ctx: Environment[Variable[T]]) -> Term[T]:
 #     return substitute(term, ctx)
-# 
-# 
+#
+#
 # @define(Operation)
 # def pprint(reprs: Interpretation[str], term: Term[T]) -> str:
 #     return interpreter(reprs)(traverse)(term)
