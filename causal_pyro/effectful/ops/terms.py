@@ -1,6 +1,6 @@
 from typing import Any, Callable, Container, ContextManager, Generic, Hashable, Iterable, NamedTuple, Optional, Protocol, Set, Type, TypeVar, Union, runtime_checkable
 
-from .interpretation import Interpretation, Operation, define, register
+from .operation import Interpretation, Operation, define, register
 
 
 S, T = TypeVar("S"), TypeVar("T")

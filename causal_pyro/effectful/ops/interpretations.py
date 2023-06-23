@@ -1,9 +1,9 @@
-from typing import Callable, ClassVar, Generic, Hashable, Iterable, List, Mapping, Optional, Protocol, Type, TypeVar
+from typing import Callable, ClassVar, Generic, Iterable, Optional, TypeVar
 
 import contextlib
 import functools
 
-from causal_pyro.effectful.ops.interpretation import Interpretation, Operation, define, interpreter
+from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, interpreter
 
 
 S = TypeVar("S")
@@ -13,12 +13,10 @@ T = TypeVar("T")
 class StatefulInterpretation(Generic[S, T]):
     state: S
 
-    _op_interpretations: ClassVar[dict[Operation, Callable]]
+    _op_interpretations: ClassVar[dict[Operation, Callable]] = {}
 
     def __init_subclass__(cls) -> None:
-        import weakref
-        cls._op_interpretations: weakref.WeakKeyDictionary[Operation[T], Callable[..., T]] = \
-            weakref.WeakKeyDictionary()
+        cls._op_interpretations = {}
         return super().__init_subclass__()
 
     def __init__(self, state: S):

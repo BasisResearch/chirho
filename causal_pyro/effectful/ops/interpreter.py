@@ -2,7 +2,7 @@ from typing import Callable, Generic, Hashable, Iterable, List, Optional, Protoc
 
 import functools
 
-from causal_pyro.effectful.ops.interpretation import Interpretation, Operation, define, register
+from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, register
 from causal_pyro.effectful.ops.interpretations import product, reflect
 from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
 
