@@ -2,6 +2,7 @@ from typing import Callable, Generic, Hashable, Iterable, List, Optional, Protoc
 
 import functools
 
+from causal_pyro.effectful.ops.environments import Environment, Computation, ctx_of, value_of
 from causal_pyro.effectful.ops.operation import Interpretation, Operation, define, register
 from causal_pyro.effectful.ops.interpretations import product, reflect
 from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
@@ -10,57 +11,6 @@ from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, 
 S = TypeVar("S")
 T = TypeVar("T")
 
-
-class Environment(Protocol[T]):
-    def __getitem__(self, key: Hashable) -> T: ...
-    def __contains__(self, key: Hashable) -> bool: ...
-    def keys(self) -> Iterable[Hashable]: ...
-
-
-@register(define(Environment))
-class BaseEnvironment(Generic[T], dict[Hashable, T]):
-    pass
-
-
-@define(Operation)
-def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
-    assert not set(ctx.keys()) & set(other.keys()), \
-        "union only defined for disjoint contexts"
-    return define(Environment)(
-        [(k, ctx[k]) for k in ctx.keys()] + \
-        [(k, other[k]) for k in other.keys()]
-    )
-
-
-class Computation(Protocol[T]):
-    __ctx__: Environment[T]
-    __value__: Term[T]
-
-
-@register(define(Computation))
-class BaseComputation(Generic[T], Computation[T]):
-    __ctx__: Environment[T]
-    __value__: Term[T]
-
-    def __init__(self, ctx: Environment[T], value: Term[T]):
-        self.__ctx__ = ctx
-        self.__value__ = value
-
-    def __repr__(self) -> str:
-        return f"{self.__value__} @ {self.__ctx__}"
-
-
-@define(Operation)
-def ctx_of(obj: Computation[T]) -> Environment[T]:
-    return obj.__ctx__
-
-
-@define(Operation)
-def value_of(obj: Computation[T]) -> Term[T]:
-    return obj.__value__
-
-
-###########################################################
 
 @define(Operation)
 def match(op_intp: Callable, res: Optional[T], *args: T | Term[T] | Variable[T], **kwargs) -> bool:
