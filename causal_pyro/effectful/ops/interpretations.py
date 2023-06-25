@@ -4,61 +4,12 @@ import contextlib
 import functools
 
 from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, interpreter
+from causal_pyro.effectful.ops.continuations import prompt_calls, shift_prompt
 
 
 S = TypeVar("S")
 T = TypeVar("T")
 
-
-class StatefulInterpretation(Generic[S, T]):
-    state: S
-
-    _op_interpretations: ClassVar[dict[Operation, Callable]] = {}
-
-    def __init_subclass__(cls) -> None:
-        cls._op_interpretations = {}
-        return super().__init_subclass__()
-
-    def __init__(self, state: S):
-        self.state = state
-
-    @classmethod
-    def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
-        cls._op_interpretations[op] = interpret_op
-
-    @classmethod
-    def __contains__(cls, op: Operation[T]) -> bool:
-        return op in cls._op_interpretations
-
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
-        return functools.partial(self._op_interpretations[op], self.state)
-
-    @classmethod
-    def keys(cls) -> Iterable[Operation[T]]:
-        return cls._op_interpretations.keys()
-
-
-##################################################
-
-def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
-    return define(Interpretation)({
-        op: lambda res, *args, **kwargs: prompt_op(res)
-        for op in set(ops)
-    })
-
-
-@define(Operation)
-def shift_prompt(prompt_op: Operation[T], cont: Callable[..., T], fst: Callable[..., T]) -> Callable[..., T]:
-
-    def _wrapped_fst(res, *args, **kwargs):
-        # fst_ = interpreter({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)  # TODO why is this wrong??
-        fst_ = handler({prompt_op: lambda _, res: cont(res, *args, **kwargs)})(fst)
-        return fst_(res, *args, **kwargs)
-
-    return _wrapped_fst
-
-
-##################################################
 
 @define(Operation)
 def fwd(result: Optional[T]) -> T:
@@ -126,13 +77,15 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 def handler(intp: Interpretation[T]):
     from ._runtime import get_interpretation, swap_interpretation
 
-    # TODO defaults should not be necessary here - this should be handled by shift_prompt
-    defaults = define(Interpretation)({
-        op: op.default for op in intp.keys() if op not in get_interpretation()
-    })
-
-    old_intp = swap_interpretation(compose(defaults, get_interpretation(), intp))
     try:
+        # TODO defaults should not be necessary here - this should be handled by shift_prompt
+        defaults = {}
+        # defaults = define(Interpretation)({
+        #     op: op.default for op in intp.keys() if op not in get_interpretation()
+        # })
+
+        new_intp = compose(defaults, get_interpretation(), intp)
+        old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
         swap_interpretation(old_intp)

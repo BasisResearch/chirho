@@ -63,13 +63,41 @@ def register(
 def interpreter(intp: Interpretation[T]):
     from ._runtime import get_interpretation, swap_interpretation
 
-    old_intp = get_interpretation()
-    new_intp = define(Interpretation)({
-        op: intp[op] if op in intp else old_intp[op]
-        for op in set(intp.keys()) | set(old_intp.keys())
-    })
-    old_intp = swap_interpretation(new_intp)
     try:
+        old_intp = get_interpretation()
+        new_intp = define(Interpretation)({
+            op: intp[op] if op in intp else old_intp[op]
+            for op in set(intp.keys()) | set(old_intp.keys())
+        })
+        old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
         swap_interpretation(old_intp)
+
+
+class StatefulInterpretation(Generic[S, T]):
+    state: S
+
+    _op_interpretations: ClassVar[dict[Operation, Callable]] = {}
+
+    def __init_subclass__(cls) -> None:
+        cls._op_interpretations = {}
+        return super().__init_subclass__()
+
+    def __init__(self, state: S):
+        self.state = state
+
+    @classmethod
+    def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
+        cls._op_interpretations[op] = interpret_op
+
+    @classmethod
+    def __contains__(cls, op: Operation[T]) -> bool:
+        return op in cls._op_interpretations
+
+    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
+        return functools.partial(self._op_interpretations[op], self.state)
+
+    @classmethod
+    def keys(cls) -> Iterable[Operation[T]]:
+        return cls._op_interpretations.keys()
