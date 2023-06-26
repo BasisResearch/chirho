@@ -36,7 +36,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 def reflect(result: Optional[T]) -> T:
-    return result
+    return result  # TODO reflect should default to op.default, somehow...
 
 
 @define(Operation)
