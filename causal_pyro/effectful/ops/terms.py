@@ -1,29 +1,13 @@
-from typing import Any, Callable, Container, ContextManager, Generic, Hashable, Iterable, NamedTuple, Optional, Protocol, Set, Type, TypeVar, Union, runtime_checkable
+from typing import Generic, Iterable, Protocol, TypeVar, runtime_checkable
 
 from .operations import Interpretation, Operation, define, register
+from .environments import Variable
 
 
 S, T = TypeVar("S"), TypeVar("T")
 
 
-class Variable(Protocol[T]):
-    __variable_name__: Hashable
-    __variable_type__: Optional[Type[T]]
-
-
-@register(define(Variable))
-class BaseVariable(Generic[T], Variable[T]):
-    __variable_name__: Hashable
-    __variable_type__: Optional[Type[T]]
-
-    def __init__(self, name: Hashable, type: Optional[Type[T]] = None):
-        self.__variable_name__ = name
-        self.__variable_type__ = type
-
-    def __repr__(self) -> str:
-        return f"{self.__variable_name__}: {getattr(self, '__variable_type___', None)}"
-
-
+@runtime_checkable
 class Term(Protocol[T]):
     __head__: Operation[T]
     __args__: tuple["Term[T]" | Variable[T] | T, ...]
