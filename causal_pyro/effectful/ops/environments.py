@@ -1,9 +1,8 @@
-from typing import Any, Callable, Generic, Hashable, Iterable, Optional, Protocol, Type, TypeVar
+from typing import Generic, Iterable, Optional, Protocol, Type, TypeVar
 
-import functools
 import typing
 
-from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, register
+from causal_pyro.effectful.ops.operations import StatefulInterpretation, Operation, define, register
 
 
 S = TypeVar("S")
@@ -62,43 +61,5 @@ def union(ctx: Environment[S], other: Environment[T]) -> Environment[S | T]:
     )
 
 
-class Computation(Protocol[T]):
-    __ctx__: Environment[T]
-    __value__: T
-
-
-@register(define(Computation))
-class _BaseComputation(Generic[T], Computation[T]):
-    __ctx__: Environment[T]
-    __value__: T
-
-    def __init__(self, ctx: Environment[T], value: T):
-        self.__ctx__ = ctx
-        self.__value__ = value
-
-    def __repr__(self) -> str:
-        return f"{self.__value__} @ {self.__ctx__}"
-
-
-@define(Operation)
-def ctx_of(obj: Computation[T]) -> Environment[T]:
-    return obj.__ctx__
-
-
-@define(Operation)
-def value_of(obj: Computation[T]) -> T:
-    return obj.__value__
-
-
-def ContextualInterpretation(intp: Interpretation[T]) -> Interpretation[Computation[T]]:
-
-    def apply(
-        op_intp: Callable[..., T], res: Optional[S], *args: Computation[T], **kwargs
-    ) -> Computation[T]:
-        ctx: Environment[T] = union(*(ctx_of(arg) for arg in args))
-        value: T = op_intp(res, *(value_of(arg) for arg in args), **kwargs)
-        return define(Computation)(ctx, value)
-
-    return define(Interpretation)({
-        op: functools.partial(apply, intp[op]) for op in intp.keys()
-    })
+class EnvInterpretation(Generic[T], StatefulInterpretation[Environment[T], T]):
+    state: Environment[T]
