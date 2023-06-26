@@ -65,16 +65,16 @@ if __name__ == "__main__":
         print(add(3, 4))
         print(add3(3, 4, 5))
 
-    with handler(compose(printme1, printme2)):
-        print(add(3, 4))
-        print(add3(3, 4, 5))
-
     with handler(compose(default, printme1, printme2)) as h:
         print(add(3, 4))
         print(add3(3, 4, 5))
 
     with handler(product(default, printme2)) as h:
         print(add(3, 4))
+
+    with handler(product(default, compose(printme1, printme2))):
+        print(add(3, 4))
+        print(add3(3, 4, 5))
 
     with handler(LazyInterpretation(add)) as h:
         print(add(3, 4))

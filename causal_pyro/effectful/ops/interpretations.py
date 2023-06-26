@@ -4,7 +4,7 @@ import contextlib
 import functools
 
 from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, interpreter
-from causal_pyro.effectful.ops.continuations import prompt_calls, shift_prompt
+from causal_pyro.effectful.ops.continuations import prompt_calls, reset_prompt
 
 
 S = TypeVar("S")
@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 @define(Operation)
 def fwd(result: Optional[T]) -> T:
-    return result
+    return reflect(result)
 
 
 @define(Operation)
@@ -25,7 +25,8 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         return define(Interpretation)(
             [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())] +
             [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())] +
-            [(op, shift_prompt(fwd, intp[op], intp2[op])) for op in set(intp.keys()) & set(intp2.keys())]
+            [(op, functools.partial(reset_prompt, fwd, intp[op], intp2[op]))
+             for op in set(intp.keys()) & set(intp2.keys())]
         )
     else:
         return compose(intp, compose(*intps))
@@ -59,7 +60,8 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
         # on reflect, jump to the outer interpretation and interpret it using itself
         return define(Interpretation)({
-            op: shift_prompt(
+            op: functools.partial(
+                reset_prompt,
                 reflect,
                 interpreter(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
                 interpreter(refls1)(intp2[op])
@@ -78,13 +80,7 @@ def handler(intp: Interpretation[T]):
     from ._runtime import get_interpretation, swap_interpretation
 
     try:
-        # TODO defaults should not be necessary here - this should be handled by shift_prompt
-        defaults = {}
-        # defaults = define(Interpretation)({
-        #     op: op.default for op in intp.keys() if op not in get_interpretation()
-        # })
-
-        new_intp = compose(defaults, get_interpretation(), intp)
+        new_intp = compose(get_interpretation(), intp)
         old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
