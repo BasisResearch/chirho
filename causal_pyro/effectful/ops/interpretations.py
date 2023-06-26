@@ -46,7 +46,8 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     elif len(intps) == 1:
         intp2, = intps
 
-        # compose interpretations with reflections to ensure compatibility with compose
+        # compose interpretations with reflections to ensure compatibility with compose()
+        # TODO use interpreter instead of compose here to disentangle compose and product
         refls1 = compose(
             prompt_calls(reflect, *intp.keys()),
             define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp})
@@ -63,6 +64,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
             op: functools.partial(
                 reset_prompt,
                 reflect,
+                # TODO is this call to interpret correct for nested products?
                 interpreter(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
                 interpreter(refls1)(intp2[op])
             )
