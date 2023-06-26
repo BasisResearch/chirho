@@ -4,7 +4,8 @@ from .operations import Interpretation, Operation, define, register
 from .environments import Variable
 
 
-S, T = TypeVar("S"), TypeVar("T")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 @runtime_checkable
@@ -14,7 +15,7 @@ class Term(Protocol[T]):
 
 
 @register(define(Term))
-class BaseTerm(Generic[T], Term[T]):
+class _BaseTerm(Generic[T], Term[T]):
     __head__: Operation[T]
     __args__: tuple["Term[T]" | Variable[T] | T, ...]
 
