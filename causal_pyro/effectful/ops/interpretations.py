@@ -66,6 +66,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
                 reflect,
                 # TODO is this call to interpret correct for nested products?
                 interpreter(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
+                # TODO is this call to interpret correct for nested products? is it even necessary?
                 interpreter(refls1)(intp2[op])
             )
             for op in intp2.keys()
