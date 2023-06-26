@@ -1,4 +1,4 @@
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar
 
 from causal_pyro.effectful.ops.operations import Interpretation, Operation, \
     define, interpreter
@@ -13,6 +13,24 @@ def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[
         op: lambda res, *args, **kwargs: prompt_op(res)
         for op in set(ops)
     })
+
+
+class AffineContinuation(Generic[T]):
+    cont: Callable[..., T]
+    used: bool
+
+    def __init__(self, cont: Callable[..., T]):
+        self.cont = cont
+        self.used = False
+
+    def __call__(self, *args, **kwargs) -> T:
+        try:
+            if not self.used:
+                return self.cont(*args, **kwargs)
+            else:
+                raise ValueError(f"can use continuation {self.cont} at most once")
+        finally:
+            self.used = True
 
 
 @define(Operation)
@@ -30,6 +48,9 @@ def reset_prompt(
         prev_cont = get_interpretation()[prompt_op]
     else:
         prev_cont = prompt_op.default
+
+    cont = AffineContinuation(cont)
+    prev_cont = AffineContinuation(prev_cont)
 
     shift = define(Interpretation)({prompt_op: prev_cont})
     reset = define(Interpretation)({
