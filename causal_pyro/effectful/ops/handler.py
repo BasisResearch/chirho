@@ -80,7 +80,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[T]):
-    from .runtime import get_interpretation, swap_interpretation
+    from ..internals.runtime import get_interpretation, swap_interpretation
 
     try:
         new_intp = compose(get_interpretation(), intp)

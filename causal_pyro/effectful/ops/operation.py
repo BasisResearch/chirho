@@ -3,7 +3,7 @@ from typing import Generic, Callable, Protocol, Type, TypeVar
 import functools
 import typing
 
-from . import runtime
+from ..internals import runtime
 
 
 S = TypeVar("S")

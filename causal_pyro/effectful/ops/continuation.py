@@ -42,7 +42,7 @@ def reset_prompt(
     *args: T,
     **kwargs
 ) -> T:
-    from .runtime import get_interpretation
+    from ..internals.runtime import get_interpretation
 
     if prompt_op in get_interpretation():
         prev_continuation = get_interpretation()[prompt_op]
