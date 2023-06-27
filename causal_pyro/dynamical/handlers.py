@@ -432,6 +432,66 @@ class PointIntervention(PointInterruption, _InterventionMixin):
     pass
 
 
+# TODO AZ - pull out common stuff between this and the interrupting observation, and have interrupting and non
+#  inherit from the same.
+# FIXME this needs to catch conflicting time observations.
+class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger):
+    def __init__(
+        self,
+        time: float,
+        data: Dict[str, torch.Tensor],
+        eps: float = 1e-6,
+    ):
+        self.data = data
+
+        # Add a small amount of time to the observation time to ensure that
+        # the observation occurs after the logging period.
+        self.time = torch.as_tensor(time + eps)
+
+        self.time_str = str(self.time.item())
+
+        super().__init__()
+
+    # TODO make generic and not use tensor directly?
+    def _pyro_simulate(self, msg) -> None:
+        dynamics, initial_state, timespan = msg["args"]
+
+        # Splice the time into the measured timespan, and get the corresponding index.
+
+        insert_idx = torch.searchsorted(timespan, self.time)
+
+        new_timespan = torch.cat(
+            [timespan[:insert_idx], torch.tensor([self.time]), timespan[insert_idx:]]
+        )
+
+        msg["args"] = (dynamics, initial_state, new_timespan)
+        msg[f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"] = insert_idx
+
+    def _pyro_post_simulate(self, msg) -> None:
+
+        dynamics, initial_state, timespan = msg["args"]
+        full_traj = msg["value"]
+
+        # Observe the state at the inserted index.
+        inserted_idx = msg[f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"]
+
+        with pyro.condition(data=self.data):
+            # This blocks sample statements of other observation handlers.
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: (isinstance(m, PointInterruption) or isinstance(m, NonInterruptingPointObservation)) and (m is not self)
+            ):
+                dynamics.observation(full_traj[inserted_idx.item()])
+
+        # Remove the inserted index from the returned trajectory so the user won't see it.
+        msg["value"] = concatenate(
+            full_traj[:inserted_idx], full_traj[inserted_idx + 1:]
+        )
+
+    def _pyro_sample(self, msg):
+        # modify observed site names to handle multiple time points
+        msg["name"] = msg["name"] + "_" + self.time_str
+
+
 class PointObservation(PointInterruption):
     def __init__(
         self,
@@ -463,7 +523,7 @@ class PointObservation(PointInterruption):
 
         with pyro.condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, PointInterruption) and (m is not self)
+                lambda m: (isinstance(m, PointInterruption) or isinstance(m, NonInterruptingPointObservation)) and (m is not self)
             ):
                 dynamics.observation(current_state)
 
