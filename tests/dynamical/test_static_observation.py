@@ -10,12 +10,15 @@ from pyro.infer.autoguide import AutoMultivariateNormal
 from causal_pyro.dynamical.handlers import (
     PointObservation,
     NonInterruptingPointObservation,
+    NonInterruptingPointObservationArray,
     SimulatorEventLoop,
     simulate,
 )
 from causal_pyro.dynamical.ops import State
 
 from .dynamical_fixtures import SimpleSIRDynamics, bayes_sir_model, check_trajectories_match
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +132,39 @@ def test_interrupting_and_non_interrupting_observation_equivalence(model):
                 with NonInterruptingPointObservation(time=1.5, data=data):
                     with NonInterruptingPointObservation(time=3.2, data=data):
                         non_interrupting_ret = simulate(model, init_state, tspan)
+
+    assert check_trajectories_match(interrupting_ret, non_interrupting_ret)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
+
+    S_obs = torch.tensor([10.0, 5.0, 3.0])
+    data = {"S_obs": S_obs}
+    times = torch.tensor([1.5, 2.9, 3.2])
+
+    logprobs = []
+    for _ in range(50):
+
+        with pyro.poutine.trace() as tr1:
+            with SimulatorEventLoop():
+                with PointObservation(time=times[0].item(), data={"S_obs": S_obs[0]}):
+                    with PointObservation(time=times[1].item(), data={"S_obs": S_obs[1]}):
+                        with PointObservation(time=times[2].item(), data={"S_obs": S_obs[2]}):
+                            interrupting_ret = simulate(model, init_state, tspan)
+
+        with pyro.poutine.trace() as tr2:
+            with SimulatorEventLoop():
+                with NonInterruptingPointObservationArray(times=times, data=data):
+                    non_interrupting_ret = simulate(model, init_state, tspan)
+
+        logprobs.append([tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum()])
+
+    # Randomness here is due to solver.
+    # TODO move this to its own test.
+    logprobs_means = torch.tensor(logprobs).mean(axis=0)
+    # TODO convert to a 95% CI or something.
+    assert torch.isclose(logprobs_means[0], logprobs_means[1], atol=1.0)
 
     assert check_trajectories_match(interrupting_ret, non_interrupting_ret)
 

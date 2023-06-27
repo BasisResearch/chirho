@@ -432,10 +432,95 @@ class PointIntervention(PointInterruption, _InterventionMixin):
     pass
 
 
+# Just a type rn for type checking. This should eventually have shared code in it useful for different types of point
+#  observations.
+class _PointObservationMixin:
+    pass
+
+
+class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _PointObservationMixin):
+
+    def __init__(
+        self,
+        times: torch.Tensor,
+        data: Dict[str, torch.Tensor],
+        eps: float = 1e-6,
+    ):
+        self.data = data
+
+        # Add a small amount of time to the observation time to ensure that
+        # the observation occurs after the logging period.
+        self.times = times + eps
+
+        # Require that the times are sorted. This is required by the index masking we do below.
+        # TODO AZ sort this here (and the data too) accordingly?
+        if not torch.all(self.times[1:] > self.times[:-1]):
+            raise ValueError(
+                f"The passed times must be sorted."
+            )
+
+        self._insert_mask_key = f"{self.__class__.__name__}.insert_mask"
+
+        # Require that each data element maps 1:1 with the times.
+        if not all(len(v) == len(times) for v in data.values()):
+            raise ValueError(
+                f"Each data element must have the same length as the passed times. Got lengths "
+                f"{[len(v) for v in data.values()]} for data elements {[k for k in data.keys()]}, but "
+                f"expected length {len(times)}."
+            )
+
+        super().__init__()
+
+    def _pyro_simulate(self, msg) -> None:
+
+        if self._insert_mask_key in msg:
+            # Just to avoid having to splice in multiple handlers. Also, this suggests the user is using this handler
+            #  in a suboptimal way, as they could just put their data into a single handler and avoid the overhead
+            #  of extra handlers in the stack.
+            raise ValueError(  # TODO AZ - this shouldn't be a value error probably. Is there a pyro handler error?
+                f"Cannot use {self.__class__.__name__} within another {self.__class__.__name__}."
+            )
+
+        dynamics, initial_state, timespan = msg["args"]
+
+        # Concatenate the timespan and the observation times, then sort. TODO find a way to use the searchsorted
+        #  result to avoid sorting again?
+        new_timespan, sort_indices = torch.sort(torch.cat((timespan, self.times)))
+
+        # Get the mask covering where the times were spliced in.
+        insert_mask = sort_indices >= len(timespan)
+
+        # Do a sanity check that the times were inserted in the right places.
+        assert torch.allclose(new_timespan[insert_mask], self.times), "Sanity check failed! Observation times not " \
+                                                                      "spliced into user provided timespan as expected."
+
+        msg["args"] = (dynamics, initial_state, new_timespan)
+        msg[self._insert_mask_key] = insert_mask
+
+    def _pyro_post_simulate(self, msg) -> None:
+        dynamics, initial_state, timespan = msg["args"]
+        full_traj = msg["value"]
+        insert_mask = msg[self._insert_mask_key]
+
+        # Do a sanity check that the times were inserted in the right places.
+        assert torch.allclose(timespan[insert_mask], self.times), "Sanity check failed! Observation times not " \
+                                                                  "spliced into user provided timespan as expected."
+
+        with pyro.condition(data=self.data):
+            # This blocks the handler from being called again, as it is already in the stack.
+            with pyro.poutine.messenger.block_messengers(
+                lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
+            ):
+                dynamics.observation(full_traj[insert_mask])
+
+        # Remove the elements of the trajectory at the inserted points.
+        msg["value"] = full_traj[~insert_mask]
+
+
 # TODO AZ - pull out common stuff between this and the interrupting observation, and have interrupting and non
 #  inherit from the same.
 # FIXME this needs to catch conflicting time observations.
-class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger):
+class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger, _PointObservationMixin):
     def __init__(
         self,
         time: float,
@@ -478,7 +563,7 @@ class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger):
         with pyro.condition(data=self.data):
             # This blocks sample statements of other observation handlers.
             with pyro.poutine.messenger.block_messengers(
-                lambda m: (isinstance(m, PointInterruption) or isinstance(m, NonInterruptingPointObservation)) and (m is not self)
+                lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
             ):
                 dynamics.observation(full_traj[inserted_idx.item()])
 
@@ -492,7 +577,7 @@ class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger):
         msg["name"] = msg["name"] + "_" + self.time_str
 
 
-class PointObservation(PointInterruption):
+class PointObservation(PointInterruption, _PointObservationMixin):
     def __init__(
         self,
         time: float,
@@ -523,7 +608,7 @@ class PointObservation(PointInterruption):
 
         with pyro.condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
-                lambda m: (isinstance(m, PointInterruption) or isinstance(m, NonInterruptingPointObservation)) and (m is not self)
+                lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
             ):
                 dynamics.observation(current_state)
 
