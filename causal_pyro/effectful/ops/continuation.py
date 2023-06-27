@@ -1,8 +1,7 @@
 from typing import Callable, Generic, Optional, TypeVar
-from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 
-from causal_pyro.effectful.ops.operation import Operation, \
-    define
+from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
+from causal_pyro.effectful.ops.operation import Operation, define
 
 
 S = TypeVar("S")
@@ -37,8 +36,8 @@ class AffineContinuation(Generic[T]):
 @define(Operation)
 def reset_prompt(
     prompt_op: Operation[T],
-    cont: Callable[..., T],
-    fst: Callable[..., T],
+    continuation: Callable[..., T],
+    fn: Callable[..., T],
     result: Optional[T],
     *args: T,
     **kwargs
@@ -46,15 +45,15 @@ def reset_prompt(
     from .runtime import get_interpretation
 
     if prompt_op in get_interpretation():
-        prev_cont = get_interpretation()[prompt_op]
+        prev_continuation = get_interpretation()[prompt_op]
     else:
-        prev_cont = prompt_op.default
+        prev_continuation = prompt_op.default
 
-    cont = AffineContinuation(cont)
-    prev_cont = AffineContinuation(prev_cont)
+    continuation = AffineContinuation(continuation)
+    prev_continuation = AffineContinuation(prev_continuation)
 
-    shift = define(Interpretation)({prompt_op: prev_cont})
+    shift = define(Interpretation)({prompt_op: prev_continuation})
     reset = define(Interpretation)({
-        prompt_op: lambda _, res: interpreter(shift)(cont)(res, *args, **kwargs)
+        prompt_op: lambda _, res: interpreter(shift)(continuation)(res, *args, **kwargs)
     })
-    return interpreter(reset)(fst)(result, *args, **kwargs)
+    return interpreter(reset)(fn)(result, *args, **kwargs)

@@ -1,9 +1,8 @@
 from typing import Generic, Iterable, Protocol, TypeVar, runtime_checkable
 
-from .interpretation import Interpretation, register
-
-from .operation import Operation, define
-from .environment import Variable
+from causal_pyro.effectful.ops.environment import Variable
+from causal_pyro.effectful.ops.interpretation import Interpretation, register
+from causal_pyro.effectful.ops.operation import Operation, define
 
 
 S = TypeVar("S")
