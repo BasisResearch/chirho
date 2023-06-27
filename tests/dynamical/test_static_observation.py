@@ -225,3 +225,31 @@ def test_svi_composition_test_two(model, obs_handler):
     pyro.clear_param_store()
     for step in range(n_steps):
         svi.step(data)
+
+
+@pytest.mark.parametrize("model", [bayes_sir_model])
+def test_svi_composition_vectorized_obs(model):
+    times = torch.tensor([0.1, 1.5, 2.3, 3.1])
+    data = {
+        "S_obs": torch.tensor([10.0, 8.0, 5.0, 3.0]),
+        "I_obs": torch.tensor([1.0, 2.0, 5.0, 7.0]),
+        "R_obs": torch.tensor([0.0, 1.0, 2.0, 3.0])
+    }
+
+    def conditioned_sir(times_data):
+        times, data = times_data
+        sir = model()
+        with SimulatorEventLoop():
+            with NonInterruptingPointObservationArray(times=times, data=data):
+                traj = simulate(sir, init_state, tspan)
+        return traj
+
+    guide = AutoMultivariateNormal(conditioned_sir)
+    adam = pyro.optim.Adam({"lr": 0.03})
+    svi = SVI(conditioned_sir, guide, adam, loss=Trace_ELBO())
+    n_steps = 25
+
+    # Do gradient steps
+    pyro.clear_param_store()
+    for step in range(n_steps):
+        svi.step((times, data))

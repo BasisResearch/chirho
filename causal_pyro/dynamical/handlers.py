@@ -471,6 +471,10 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
 
         super().__init__()
 
+    def _pyro_sample(self, msg) -> None:
+        # This tells pyro that the sample statement needs broadcasting.
+        msg['fn'] = msg['fn'].to_event(1)
+
     def _pyro_simulate(self, msg) -> None:
 
         if self._insert_mask_key in msg:
