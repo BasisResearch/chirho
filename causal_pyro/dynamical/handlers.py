@@ -524,21 +524,13 @@ class DynamicIntervention(DynamicInterruption, _InterventionMixin):
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time.
     """
+    pass
 
-    def __int__(
-        self,
-        intervention: State[T],
-        event_f: Callable[[T, State[T]], T],
-        var_order: Tuple[str, ...],
-        max_applications: Optional[int] = None,
-    ):
-        """
-        :param intervention: The instantaneous intervention applied to the state when the event is triggered.
-        """
 
-        super().__init__(
-            event_f=event_f,
-            var_order=var_order,
-            max_applications=max_applications,
-            intervention=intervention,
-        )
+class DynamicNonContinuousStateTransformOnEvent(DynamicInterruption, _InterventionMixin):
+
+    # Override the intervention's default application to not use intervene, but simply
+    #  to replace the state with that intervention.
+    def _pyro_apply_interruptions(self, msg) -> None:
+        dynamics, initial_state = msg["args"]
+        msg["args"] = (dynamics, self.intervention)
