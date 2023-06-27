@@ -21,8 +21,8 @@ class Term(Protocol[T]):
 @register(define(Term))
 class _BaseTerm(Generic[T], Term[T]):
     __head__: Operation[T]
-    __args__: tuple["Term[T]" | Variable[T] | T, ...]
-    __kwargs__: dict[str, "Term[T]" | Variable[T] | T]
+    __args__: tuple[Term[T] | Variable[T] | T, ...]
+    __kwargs__: dict[str, Term[T] | Variable[T] | T]
 
     def __init__(
         self,
