@@ -2,10 +2,10 @@ from typing import Optional, TypeVar
 
 import contextlib
 import functools
-from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 
-from causal_pyro.effectful.ops.operation import Operation, define
 from causal_pyro.effectful.ops.continuation import prompt_calls, reset_prompt
+from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
+from causal_pyro.effectful.ops.operation import Operation, define
 
 
 S = TypeVar("S")
