@@ -1,8 +1,8 @@
 from typing import TypeVar
 
-from ..ops.interpretations import Interpretation
-from ..ops.rewrites import evaluate
-from ..ops.terms import Operation, Environment, Symbol, Term, define, union
+from ..ops.interpretation import Interpretation
+from ..ops.rewrite import evaluate
+from ..ops.term import Operation, Environment, Symbol, Term, define, union
 
 
 S, T = TypeVar("S"), TypeVar("T")

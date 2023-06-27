@@ -6,10 +6,10 @@ import torch
 
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
+from causal_pyro.effectful.ops.interpretation import StatefulInterpretation, register
 
-from causal_pyro.effectful.ops.operations import Operation, define, register
-from causal_pyro.effectful.ops.interpretations import StatefulInterpretation, \
-    fwd, handler, reflect, product, prompt_calls
+from causal_pyro.effectful.ops.operation import Operation, define
+from causal_pyro.effectful.ops.handler import fwd, handler, reflect, product, prompt_calls
 
 
 S, T = TypeVar("S"), TypeVar("T")

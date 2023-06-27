@@ -2,7 +2,9 @@ from typing import Generic, Iterable, Optional, Protocol, Type, TypeVar
 
 import typing
 
-from causal_pyro.effectful.ops.operations import StatefulInterpretation, Operation, define, register
+from causal_pyro.effectful.ops.interpretation import StatefulInterpretation
+from causal_pyro.effectful.ops.interpretation import register
+from causal_pyro.effectful.ops.operation import Operation, define
 
 
 S = TypeVar("S")

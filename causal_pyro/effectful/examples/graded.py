@@ -1,6 +1,6 @@
 from typing import Generic, Optional, TypeVar
 
-from ..ops.terms import Environment, Meta, Operation, Term, define
+from ..ops.term import Environment, Meta, Operation, Term, define
 
 
 S, T = TypeVar("S"), TypeVar("T")

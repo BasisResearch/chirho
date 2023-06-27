@@ -1,10 +1,11 @@
-from typing import Callable, ClassVar, Generic, Iterable, Optional, TypeVar
+from typing import Optional, TypeVar
 
 import contextlib
 import functools
+from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 
-from causal_pyro.effectful.ops.operations import Interpretation, Operation, define, interpreter
-from causal_pyro.effectful.ops.continuations import prompt_calls, reset_prompt
+from causal_pyro.effectful.ops.operation import Operation, define
+from causal_pyro.effectful.ops.continuation import prompt_calls, reset_prompt
 
 
 S = TypeVar("S")
@@ -79,7 +80,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[T]):
-    from ._runtime import get_interpretation, swap_interpretation
+    from .runtime import get_interpretation, swap_interpretation
 
     try:
         new_intp = compose(get_interpretation(), intp)

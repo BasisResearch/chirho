@@ -1,11 +1,12 @@
 from typing import Callable
 
 import functools
+from causal_pyro.effectful.ops.interpretation import Interpretation
 
-from causal_pyro.effectful.ops.operations import Interpretation, Operation, define
-from causal_pyro.effectful.ops.interpretations import \
+from causal_pyro.effectful.ops.operation import Operation, define
+from causal_pyro.effectful.ops.handler import \
     compose, fwd, handler, product, reflect
-from causal_pyro.effectful.ops.terms import Term, Variable, LazyInterpretation, head_of, args_of
+from causal_pyro.effectful.ops.term import Term, Variable, LazyInterpretation, head_of, args_of
 
 
 @define(Operation)

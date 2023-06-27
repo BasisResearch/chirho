@@ -1,7 +1,9 @@
 from typing import Generic, Iterable, Protocol, TypeVar, runtime_checkable
 
-from .operations import Interpretation, Operation, define, register
-from .environments import Variable
+from .interpretation import Interpretation, register
+
+from .operation import Operation, define
+from .environment import Variable
 
 
 S = TypeVar("S")

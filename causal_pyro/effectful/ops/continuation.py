@@ -1,7 +1,8 @@
 from typing import Callable, Generic, Optional, TypeVar
+from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 
-from causal_pyro.effectful.ops.operations import Interpretation, Operation, \
-    define, interpreter
+from causal_pyro.effectful.ops.operation import Operation, \
+    define
 
 
 S = TypeVar("S")
@@ -42,7 +43,7 @@ def reset_prompt(
     *args: T,
     **kwargs
 ) -> T:
-    from ._runtime import get_interpretation
+    from .runtime import get_interpretation
 
     if prompt_op in get_interpretation():
         prev_cont = get_interpretation()[prompt_op]
