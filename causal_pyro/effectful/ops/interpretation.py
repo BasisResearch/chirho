@@ -67,6 +67,7 @@ def register(
 register(define(Interpretation), None, dict[Operation[T], Callable[..., T]])
 
 
+@define(Operation)
 @contextlib.contextmanager
 def interpreter(intp: Interpretation[T]):
     from .runtime import get_interpretation, swap_interpretation
