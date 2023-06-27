@@ -29,7 +29,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())] +
         [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())] +
         [(op, functools.partial(reset_prompt, fwd, intp[op], intp2[op]))
-            for op in set(intp.keys()) & set(intp2.keys())]
+         for op in set(intp.keys()) & set(intp2.keys())]
     )
 
 
@@ -66,9 +66,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         op: functools.partial(
             reset_prompt,
             reflect,
-            # TODO is this call to interpret correct for nested products?
+            # TODO is this call to interpreter correct for nested products?
             interpreter(refls2)(lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v),
-            # TODO is this call to interpret correct for nested products? is it even necessary?
+            # TODO is this call to interpreter correct for nested products? is it even necessary?
             interpreter(refls1)(intp2[op])
         )
         for op in intp2.keys()
