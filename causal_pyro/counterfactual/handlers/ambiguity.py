@@ -235,7 +235,9 @@ class AutoFactualConditioning(MinimalFactualConditioning):
 
         fn = msg["fn"]
         while hasattr(fn, "base_dist"):
-            if isinstance(fn, dist.TransformedDistribution):
+            if isinstance(fn, dist.FoldedDistribution):
+                return FactualConditioningReparam()
+            elif isinstance(fn, dist.TransformedDistribution):
                 return ConditionTransformReparam()
             else:
                 fn = fn.base_dist

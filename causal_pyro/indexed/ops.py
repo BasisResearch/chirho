@@ -3,7 +3,6 @@ from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar
 
 import pyro
 import torch
-from pyro.poutine.indep_messenger import CondIndepStackFrame
 
 T = TypeVar("T")
 
@@ -248,12 +247,28 @@ def scatter(
     raise NotImplementedError
 
 
+@scatter.register(dict)
+@pyro.poutine.runtime.effectful(type="scatter_n")
+def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
+    """
+    Scatters a dictionary of disjoint masked values into a single value
+    using repeated calls to :func:``scatter``.
+
+    :param partitioned_values: A dictionary mapping index sets to values.
+    :return: A single value.
+    """
+    assert len(values) > 0
+    assert all(isinstance(k, IndexSet) for k in values)
+    for indices, value in values.items():
+        result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
 @pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> Dict[Hashable, CondIndepStackFrame]:
-    raise NotImplementedError(
-        "No handler active for get_index_plates."
-        "Did you forget to use MultiWorldCounterfactual?"
-    )
+def get_index_plates() -> (
+    Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]
+):
+    return {}
 
 
 def indexset_as_mask(
@@ -268,7 +283,7 @@ def indexset_as_mask(
     """
     if name_to_dim_size is None:
         name_to_dim_size = {
-            f.name: (f.dim, f.size) for f in get_index_plates().values()
+            name: (f.dim, f.size) for name, f in get_index_plates().items()
         }
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)

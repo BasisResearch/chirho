@@ -46,7 +46,7 @@ def _gather_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
 
     result = value
     for name, indices in indexset.items():
@@ -57,25 +57,6 @@ def _gather_tensor(
             name_to_dim[name] - event_dim,
             torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
         )
-    return result
-
-
-@scatter.register(dict)
-def _scatter_dict(
-    partitioned_values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs
-):
-    """
-    Scatters a dictionary of disjoint masked values into a single value
-    using repeated calls to :func:``scatter``.
-
-    :param partitioned_values: A dictionary mapping index sets to values.
-    :return: A single value.
-    """
-    assert len(partitioned_values) > 0
-    assert all(isinstance(k, IndexSet) for k in partitioned_values)
-    add_indices(union(*partitioned_values.keys()))
-    for indices, value in partitioned_values.items():
-        result = scatter(value, indices, result=result, **kwargs)
     return result
 
 
@@ -111,7 +92,7 @@ def _scatter_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {f.name: f.dim for f in get_index_plates().values()}
+        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -173,7 +154,7 @@ def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
     name_to_dim = (
         kwargs["name_to_dim"]
         if "name_to_dim" in kwargs
-        else {f.name: f.dim for f in get_index_plates().values()}
+        else {name: f.dim for name, f in get_index_plates().items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(
@@ -199,6 +180,12 @@ def _indices_of_distribution(
 
 
 class _LazyPlateMessenger(IndepMessenger):
+    prefix: str = "__index_plate__"
+
+    def __init__(self, name: str, *args, **kwargs):
+        self._orig_name: str = name
+        super().__init__(f"{self.prefix}_{name}", *args, **kwargs)
+
     @property
     def frame(self) -> CondIndepStackFrame:
         return CondIndepStackFrame(
@@ -208,7 +195,7 @@ class _LazyPlateMessenger(IndepMessenger):
     def _process_message(self, msg):
         if msg["type"] not in ("sample",) or pyro.poutine.util.site_is_subsample(msg):
             return
-        if self.frame.name in union(
+        if self._orig_name in union(
             indices_of(msg["value"], event_dim=msg["fn"].event_dim),
             indices_of(msg["fn"]),
         ):

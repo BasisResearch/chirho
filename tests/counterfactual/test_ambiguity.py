@@ -5,14 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+from causal_pyro.counterfactual.handlers import (
+    MultiWorldCounterfactual,
+    SingleWorldFactual,
+    TwinWorldCounterfactual,
+)
 from causal_pyro.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
-)
-from causal_pyro.counterfactual.ops import (
-    Factual,
-    MultiWorldCounterfactual,
-    TwinWorldCounterfactual,
 )
 from causal_pyro.interventional.handlers import do
 
@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 )
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
+@pytest.mark.parametrize("x_folded", [True, False])
+def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape, x_folded):
     event_dim = len(event_shape)
 
     def model():
@@ -32,13 +33,19 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
         #  /  \
         # v    v
         # y --> z
-        X = pyro.sample(
-            "x",
-            dist.TransformedDistribution(
-                dist.Normal(0.0, 1).expand(event_shape).to_event(event_dim),
+        X_base_dist = dist.Normal(0.0, 1)
+        if x_folded:
+            X_dist = (
+                dist.FoldedDistribution(X_base_dist)
+                .expand(event_shape)
+                .to_event(event_dim)
+            )
+        else:
+            X_dist = dist.TransformedDistribution(
+                X_base_dist.expand(event_shape).to_event(event_dim),
                 [dist.transforms.ExpTransform()],
-            ),
-        )
+            )
+        X = pyro.sample("x", X_dist)
         Y = pyro.sample(
             "y",
             dist.TransformedDistribution(
@@ -72,7 +79,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape):
     queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
     cf_handler = cf_class(cf_dim)
 
-    with Factual():
+    with SingleWorldFactual():
         obs_tr = pyro.poutine.trace(queried_model).get_trace()
         obs_log_prob = obs_tr.log_prob_sum()
 

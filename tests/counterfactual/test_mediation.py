@@ -7,7 +7,7 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.ops import (
+from causal_pyro.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )

@@ -7,23 +7,14 @@ VERSION = "0.0.1"
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
-    "jupyter>=1.0.0",
-    "graphviz>=0.8",
-    "matplotlib>=1.3",
-    # "torchvision>=0.12.0",
-    # "visdom>=0.1.4,<0.2.2",  # FIXME visdom.utils is unavailable >=0.2.2
+    "jupyter",
+    "graphviz",
+    "matplotlib",
     "pandas",
-    # "pillow==8.2.0",  # https://github.com/pytorch/pytorch/issues/61125
-    # "scikit-learn",
-    "seaborn>=0.11.0",
-    # "wget",
-    # "lap",
-    # 'biopython>=1.54',
-    # 'scanpy>=1.4',  # Requires HDF5
-    # 'scvi>=0.6',  # Requires loopy and other fragile packages
-    "pytorch-lightning>=1.0.0",
-    "scikit-image>=0.16.0",
-    "tensorboard>=2.2.0",
+    "seaborn",
+    "pytorch-lightning",
+    "scikit-image",
+    "tensorboard",
 ]
 
 setup(
@@ -42,7 +33,7 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
-        "pyro-ppl",
+        "pyro-ppl>=1.8.5",
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
