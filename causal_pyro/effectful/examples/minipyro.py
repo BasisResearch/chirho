@@ -244,9 +244,11 @@ def trace_elbo(param_store: ParamStore, pyro_model: Callable[..., T], guide: Cal
 
 
 ###############################################################################
+# Sketch of intervene in new API
+###############################################################################
 
 @define(Operation)
-def intervene(obs: T, act: Optional[T] = None) -> T:
+def intervene(obs: T, act: Optional[T] = None, **kwargs) -> T:
     return act if act is not None else obs
 
 
@@ -261,10 +263,12 @@ def multi_world_counterfactual_intervene(
     obs: T,
     act: Optional[T] = None
 ) -> T:
+    from causal_pyro.indexed.ops import scatter
+
     act_result = fwd(result)
     new_plate = PlateData("__intervention__", 2, -5)
     cf_plates.append(new_plate)
-    return scatter(obs, act_result, dim=new_plate.dim)
+    return scatter(obs, act_result, dim=new_plate.dim)  # TODO
 
 
 @register(sample, MultiWorldCounterfactual)
@@ -275,6 +279,8 @@ def multi_world_counterfactual_sample(
     dist: Distribution,
     obs: Optional[T] = None,
 ) -> T:
+    from causal_pyro.indexed.ops import indices_of
+
     with contextlib.ExitStack() as stack:
         for p in cf_plates:
             if p.name in indices_of(dist):
