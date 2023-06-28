@@ -59,11 +59,11 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
     # compose interpretations with reflections to ensure compatibility with compose()
     # TODO use interpreter instead of compose here to disentangle compose and product
-    refls1 = compose(
+    refls_inner = compose(
         prompt_calls(reflect, *intp.keys()),
         define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp}),
     )
-    refls2 = compose(prompt_calls(reflect, *intp.keys(), *intp2.keys()), intp)
+    refls_outer = compose(prompt_calls(reflect, *intp.keys(), *intp2.keys()), intp)
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)(
@@ -72,9 +72,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
                 reset_prompt,
                 reflect,
                 # TODO is this call to interpreter correct for nested products?
-                interpreter(refls2)(functools.partial(_op_or_result, op)),
+                interpreter(refls_outer)(functools.partial(_op_or_result, op)),
                 # TODO is this call to interpreter correct for nested products? is it even necessary?
-                interpreter(refls1)(intp2[op]),
+                interpreter(refls_inner)(intp2[op]),
             )
             for op in intp2.keys()
         }
