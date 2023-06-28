@@ -48,6 +48,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     elif len(intps) > 1:
         return product(intp, product(*intps))  # associativity
 
+    def _op_or_result(op: Operation[T], v: Optional[T], *args, **kwargs) -> T:
+        return v if v is not None else op(*args, **kwargs)
+
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
     # 2. op in intp but not intp2: don't expose in user code
@@ -69,9 +72,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
                 reset_prompt,
                 reflect,
                 # TODO is this call to interpreter correct for nested products?
-                interpreter(refls2)(
-                    lambda v, *args, **kwargs: op(*args, **kwargs) if v is None else v
-                ),
+                interpreter(refls2)(functools.partial(_op_or_result, op)),
                 # TODO is this call to interpreter correct for nested products? is it even necessary?
                 interpreter(refls1)(intp2[op]),
             )
