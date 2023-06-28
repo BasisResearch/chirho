@@ -8,18 +8,14 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
-    return define(Interpretation)({
-        op: lambda res, *args, **kwargs: prompt_op(res)
-        for op in set(ops)
-    })
+Continuation = Callable[..., T]
 
 
-class AffineContinuation(Generic[T]):
-    cont: Callable[..., T]
+class _AffineContinuation(Generic[T]):
+    cont: Continuation[T]
     used: bool
 
-    def __init__(self, cont: Callable[..., T]):
+    def __init__(self, cont: Continuation[T]):
         self.cont = cont
         self.used = False
 
@@ -36,7 +32,7 @@ class AffineContinuation(Generic[T]):
 @define(Operation)
 def reset_prompt(
     prompt_op: Operation[T],
-    continuation: Callable[..., T],
+    continuation: Continuation[T],
     fn: Callable[..., T],
     result: Optional[T],
     *args: T,
@@ -49,11 +45,18 @@ def reset_prompt(
     else:
         prev_continuation = prompt_op.default
 
-    continuation = AffineContinuation(continuation)
-    prev_continuation = AffineContinuation(prev_continuation)
+    continuation = _AffineContinuation(continuation)
+    prev_continuation = _AffineContinuation(prev_continuation)
 
     shift = define(Interpretation)({prompt_op: prev_continuation})
     reset = define(Interpretation)({
         prompt_op: lambda _, res: interpreter(shift)(continuation)(res, *args, **kwargs)
     })
     return interpreter(reset)(fn)(result, *args, **kwargs)
+
+
+def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
+    return define(Interpretation)({
+        op: lambda res, *args, **kwargs: prompt_op(res)
+        for op in set(ops)
+    })
