@@ -1,7 +1,8 @@
-from typing import Callable, ClassVar, Generic, Iterable, Optional, Protocol, TypeVar, runtime_checkable
+from typing import Callable, ClassVar, Generic, Iterable, Optional, Protocol, TypeVar
 
 import contextlib
 import functools
+import typing
 
 from causal_pyro.effectful.ops.operation import Operation, define
 
@@ -10,9 +11,8 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@runtime_checkable
+@typing.runtime_checkable
 class Interpretation(Protocol[T]):
-    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
     def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
     def __contains__(self, op: Operation[T]) -> bool: ...
     def keys(self) -> Iterable[Operation[T]]: ...
@@ -46,10 +46,18 @@ class StatefulInterpretation(Generic[S, T]):
         return cls._op_interpretations.keys()
 
 
+@typing.runtime_checkable
+class _WriteableInterpretation(Protocol[T]):
+    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
+    def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
+    def __contains__(self, op: Operation[T]) -> bool: ...
+    def keys(self) -> Iterable[Operation[T]]: ...
+
+
 @define(Operation)
 def register(
     op: Operation[T],
-    intp: Optional[Interpretation[T]] = None,
+    intp: Optional[_WriteableInterpretation[T]] = None,
     interpret_op: Optional[Callable[..., T]] = None
 ):
     if interpret_op is None:
@@ -64,7 +72,9 @@ def register(
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
-register(define(Interpretation), None, dict[Operation[T], Callable[..., T]])
+@register(define(Interpretation))
+class _BaseInterpretation(Generic[T], dict[Operation[T], Callable[..., T]]):
+    pass
 
 
 @define(Operation)
@@ -72,9 +82,9 @@ register(define(Interpretation), None, dict[Operation[T], Callable[..., T]])
 def interpreter(intp: Interpretation[T]):
     from ..internals.runtime import get_interpretation, swap_interpretation
 
+    old_intp: Interpretation[T] = get_interpretation()
     try:
-        old_intp = get_interpretation()
-        new_intp = define(Interpretation)({
+        new_intp: Interpretation[T] = define(Interpretation)({
             op: intp[op] if op in intp else old_intp[op]
             for op in set(intp.keys()) | set(old_intp.keys())
         })

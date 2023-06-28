@@ -50,7 +50,6 @@ def define(m):
     """
     Scott encoding of a type as its constructor.
     """
-
     if typing.get_origin(m) is Operation:
         return _BaseOperation[Operation[m]](_BaseOperation[m])
 

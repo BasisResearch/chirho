@@ -1,6 +1,9 @@
-from typing import Callable, Mapping, TypedDict
+from typing import Callable, Mapping, TypedDict, TypeVar
 
 import functools
+
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 class Runtime(TypedDict):
@@ -16,7 +19,9 @@ def get_interpretation() -> Mapping[Callable, Callable]:
     return get_runtime()["interpretation"]
 
 
-def swap_interpretation(intp: Mapping[Callable, Callable]) -> Mapping[Callable, Callable]:
+def swap_interpretation(
+    intp: Mapping[Callable[..., S], Callable[..., T]]
+) -> Mapping[Callable[..., S], Callable[..., T]]:
     old_intp = get_runtime()["interpretation"]
     get_runtime()["interpretation"] = intp
     return old_intp
