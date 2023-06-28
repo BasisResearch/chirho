@@ -10,6 +10,10 @@ T = TypeVar("T")
 Continuation = Callable[..., T]
 
 
+class AffineContinuationError(Exception):
+    pass
+
+
 class _AffineContinuation(Generic[T]):
     cont: Continuation[T]
     used: bool
@@ -21,7 +25,7 @@ class _AffineContinuation(Generic[T]):
     def __call__(self, *args, **kwargs) -> T:
         try:
             if self.used:
-                raise ValueError(f"can use continuation {self.cont} at most once")
+                raise AffineContinuationError(f"can use {self.cont} at most once")
             return self.cont(*args, **kwargs)
         finally:
             self.used = True

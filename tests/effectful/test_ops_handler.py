@@ -6,6 +6,7 @@ from typing import TypeVar
 
 import pytest
 
+from causal_pyro.effectful.ops.continuation import AffineContinuationError
 from causal_pyro.effectful.ops.handler import compose, fwd, handler, product, reflect
 from causal_pyro.effectful.ops.interpretation import (
     Interpretation,
@@ -144,7 +145,7 @@ def test_affine_continuation_error_fwd(op, args):
 
     h_fail = define(Interpretation)({op: lambda v, *args, **kwargs: fwd(fwd(v))})
 
-    with pytest.raises(ValueError, match="can use continuation*"):
+    with pytest.raises(AffineContinuationError):
         interpreter(compose(defaults(op), h_fail))(f)()
 
 
@@ -157,5 +158,5 @@ def test_affine_continuation_error_reflect(op, args):
         {op: lambda v, *args, **kwargs: reflect(reflect(v))}
     )
 
-    with pytest.raises(ValueError, match="can use continuation*"):
+    with pytest.raises(AffineContinuationError):
         interpreter(product(defaults(op), h_fail))(f)()
