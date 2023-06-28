@@ -12,8 +12,8 @@ T = TypeVar("T")
 
 @typing.runtime_checkable
 class Operation(Protocol[T]):
-    def __call__(self, *args: T, **kwargs) -> T: ...
-    def default(self, result: Optional[T], *args: T, **kwargs) -> T: ...
+    def __call__(self, *args, **kwargs) -> T: ...
+    def default(self, result: Optional[T], *args, **kwargs) -> T: ...
 
 
 class _BaseOperation(Generic[T]):
@@ -21,16 +21,13 @@ class _BaseOperation(Generic[T]):
     def __init__(self, body: Callable[..., T]):
         self.body = body
 
-    @property
-    def default(self) -> Callable[..., T]:
-        return functools.wraps(self.body)(
-            lambda res, *args, **kwargs: res if res is not None else self.body(*args, **kwargs)
-        )
+    def default(self, result: Optional[T], *args, **kwargs) -> T:
+        return result if result is not None else self.body(*args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({getattr(self.body, '__name__', self.body)}"
 
-    def __call__(self, *args: T, **kwargs: T) -> T:
+    def __call__(self, *args, **kwargs) -> T:
         intp = runtime.get_runtime()["interpretation"] \
             if self is runtime.get_interpretation \
             else runtime.get_interpretation()
@@ -41,24 +38,27 @@ class _BaseOperation(Generic[T]):
         return interpret(None, *args, **kwargs)
 
 
-@functools.cache
-def define(m: Type[T]) -> Operation[T]:
+@typing.overload
+def define(m: Type[Operation[T]]) -> Operation[Operation[T]]: ...
+
+
+@typing.overload
+def define(m: Type[T]) -> Operation[T]: ...
+
+
+def define(m):
     """
     Scott encoding of a type as its constructor.
     """
 
     if typing.get_origin(m) is Operation:
+        return _BaseOperation[Operation[m]](_BaseOperation[m])
 
-        @_BaseOperation
-        def _defop(op: Callable[..., T]) -> Operation[T]:
-            return functools.wraps(op)(_BaseOperation(op))
-
-        return _defop  # _BaseOperation(_BaseOperation)
-
-    return define(Operation[m])(m)
+    defop: Operation[Operation[m]] = define(Operation[m])
+    return defop(typing.get_origin(m))
 
 
 # triggers bootstrapping
-define = define(Operation)(define)
+define = define(Operation)(functools.cache(define))
 runtime.get_interpretation = define(Operation)(runtime.get_interpretation)
 runtime.swap_interpretation = define(Operation)(runtime.swap_interpretation)
