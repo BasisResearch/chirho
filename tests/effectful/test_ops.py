@@ -53,6 +53,20 @@ OPERATION_CASES = (
 )
 
 
+def test_memoized_define():
+    assert define(Interpretation) is define(Interpretation)
+    assert define(Interpretation[int]) is define(Interpretation[int])
+    assert define(Interpretation[int]) is define(Interpretation[float])
+    assert define(Interpretation[int]) is define(Interpretation)
+
+    assert define(Operation) is define(Operation)
+    assert define(Operation[int]) is define(Operation[int])
+    assert define(Operation[int]) is define(Operation[float])
+    assert define(Operation[int]) is define(Operation)
+
+    assert define(Operation) is not define(Interpretation)
+
+
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
 def test_op_default(op, args):
     assert op(*args) == op.default(None, *args)
@@ -191,17 +205,3 @@ def test_op_fail_nest_interpreter(op, args, n, depth):
         except ValueError as e:
             assert op(*args) == op.default(None, *args)
             raise e
-
-
-def test_memoized_define():
-    assert define(Interpretation) is define(Interpretation)
-    assert define(Interpretation[int]) is define(Interpretation[int])
-    assert define(Interpretation[int]) is define(Interpretation[float])
-    assert define(Interpretation[int]) is define(Interpretation)
-
-    assert define(Operation) is define(Operation)
-    assert define(Operation[int]) is define(Operation[int])
-    assert define(Operation[int]) is define(Operation[float])
-    assert define(Operation[int]) is define(Operation)
-
-    assert define(Operation) is not define(Interpretation)
