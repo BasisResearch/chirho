@@ -51,6 +51,8 @@ OPERATION_CASES = (
     + [[plus_2, (i,)] for i in range(5)]
     + [[times_plus_1, (i, j)] for i, j in itertools.product(range(5), range(5))]
 )
+N_CASES = [1, 2, 3]
+DEPTH_CASES = [1, 2, 3]
 
 
 def test_memoized_define():
@@ -73,7 +75,7 @@ def test_op_default(op, args):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
+@pytest.mark.parametrize("n", N_CASES)
 def test_op_times_n_interpretation(op, args, n):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -84,7 +86,7 @@ def test_op_times_n_interpretation(op, args, n):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
+@pytest.mark.parametrize("n", N_CASES)
 def test_op_register_new_op(op, args, n):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
     intp = times_n(n, op)
@@ -101,7 +103,7 @@ def test_op_register_new_op(op, args, n):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
+@pytest.mark.parametrize("n", N_CASES)
 def test_op_interpreter_new_op_1(op, args, n):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -111,7 +113,7 @@ def test_op_interpreter_new_op_1(op, args, n):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
+@pytest.mark.parametrize("n", N_CASES)
 def test_op_interpreter_new_op_2(op, args, n):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -121,7 +123,7 @@ def test_op_interpreter_new_op_2(op, args, n):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
+@pytest.mark.parametrize("n", N_CASES)
 def test_op_interpreter_new_op_3(op, args, n):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -131,8 +133,8 @@ def test_op_interpreter_new_op_3(op, args, n):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n_outer", [1, 2])
-@pytest.mark.parametrize("n_inner", [1, 2])
+@pytest.mark.parametrize("n_outer", N_CASES)
+@pytest.mark.parametrize("n_inner", N_CASES)
 def test_op_nest_interpreter_1(op, args, n_outer, n_inner):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -143,8 +145,8 @@ def test_op_nest_interpreter_1(op, args, n_outer, n_inner):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n_outer", [1, 2])
-@pytest.mark.parametrize("n_inner", [1, 2])
+@pytest.mark.parametrize("n_outer", N_CASES)
+@pytest.mark.parametrize("n_inner", N_CASES)
 def test_op_nest_interpreter_2(op, args, n_outer, n_inner):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -155,8 +157,8 @@ def test_op_nest_interpreter_2(op, args, n_outer, n_inner):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n_outer", [1, 2])
-@pytest.mark.parametrize("n_inner", [1, 2])
+@pytest.mark.parametrize("n_outer", N_CASES)
+@pytest.mark.parametrize("n_inner", N_CASES)
 def test_op_nest_interpreter_3(op, args, n_outer, n_inner):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -167,8 +169,8 @@ def test_op_nest_interpreter_3(op, args, n_outer, n_inner):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
-@pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("n", N_CASES)
+@pytest.mark.parametrize("depth", DEPTH_CASES)
 def test_op_repeat_nest_interpreter(op, args, n, depth):
     new_op = define(Operation)(lambda *args: op(*args) + 3)
 
@@ -182,8 +184,8 @@ def test_op_repeat_nest_interpreter(op, args, n, depth):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n", [1, 2])
-@pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("n", N_CASES)
+@pytest.mark.parametrize("depth", DEPTH_CASES)
 def test_op_fail_nest_interpreter(op, args, n, depth):
     def _fail_op(*args: int) -> int:
         raise ValueError("oops")
