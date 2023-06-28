@@ -30,7 +30,7 @@ class _BaseOperation(Generic[T]):
 
     def __call__(self, *args, **kwargs) -> T:
         intp = (
-            runtime.get_runtime()["interpretation"]
+            runtime.get_runtime().interpretation
             if self is runtime.get_interpretation
             else runtime.get_interpretation()
         )

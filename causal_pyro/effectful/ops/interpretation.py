@@ -81,12 +81,12 @@ class _BaseInterpretation(Generic[T], dict[Operation[T], Callable[..., T]]):
 
 @define(Operation)
 @contextlib.contextmanager
-def interpreter(intp: Interpretation[T]):
+def interpreter(intp: Interpretation):
     from ..internals.runtime import get_interpretation, swap_interpretation
 
-    old_intp: Interpretation[T] = get_interpretation()
+    old_intp = get_interpretation()
     try:
-        new_intp: Interpretation[T] = define(Interpretation)(
+        new_intp = define(Interpretation)(
             {
                 op: intp[op] if op in intp else old_intp[op]
                 for op in set(intp.keys()) | set(old_intp.keys())
