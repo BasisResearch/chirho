@@ -19,13 +19,13 @@ class Operation(Protocol[T]):
 class _BaseOperation(Generic[T]):
 
     def __init__(self, body: Callable[..., T]):
-        self.body = body
-
-    def default(self, result: Optional[T], *args, **kwargs) -> T:
-        return result if result is not None else self.body(*args, **kwargs)
+        self._body = body
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({getattr(self.body, '__name__', self.body)}"
+        return f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)}"
+
+    def default(self, result: Optional[T], *args, **kwargs) -> T:
+        return result if result is not None else self._body(*args, **kwargs)
 
     def __call__(self, *args, **kwargs) -> T:
         intp = runtime.get_runtime()["interpretation"] \
@@ -34,7 +34,7 @@ class _BaseOperation(Generic[T]):
         try:
             interpret = intp[self]
         except KeyError:
-            interpret = self.default  # TODO abstract or codify default?
+            interpret = self.default
         return interpret(None, *args, **kwargs)
 
 
