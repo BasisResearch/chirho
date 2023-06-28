@@ -241,3 +241,42 @@ def trace_elbo(param_store: ParamStore, pyro_model: Callable[..., T], guide: Cal
                 elbo = elbo - node.distribution.log_prob(node.value).sum()
 
         return -elbo
+
+
+###############################################################################
+
+@define(Operation)
+def intervene(obs: T, act: Optional[T] = None) -> T:
+    return act if act is not None else obs
+
+
+class MultiWorldCounterfactual(Generic[T], StatefulInterpretation[List[PlateData], T]):
+    state: List[PlateData]
+
+
+@register(intervene, MultiWorldCounterfactual)
+def multi_world_counterfactual_intervene(
+    cf_plates: List[PlateData],
+    result: Optional[T],
+    obs: T,
+    act: Optional[T] = None
+) -> T:
+    act_result = fwd(result)
+    new_plate = PlateData("__intervention__", 2, -5)
+    cf_plates.append(new_plate)
+    return scatter(obs, act_result, dim=new_plate.dim)
+
+
+@register(sample, MultiWorldCounterfactual)
+def multi_world_counterfactual_sample(
+    cf_plates: List[PlateData],
+    result: Optional[T],
+    name: str,
+    dist: Distribution,
+    obs: Optional[T] = None,
+) -> T:
+    with contextlib.ExitStack() as stack:
+        for p in cf_plates:
+            if p.name in indices_of(dist):
+                stack.enter_context(handler(plate(p.name, p.size, p.dim)))
+        return fwd(result)
