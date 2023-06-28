@@ -6,6 +6,7 @@ from typing import TypeVar
 
 import pytest
 
+from causal_pyro.effectful.ops.handler import compose, fwd, handler, product, reflect
 from causal_pyro.effectful.ops.interpretation import (
     Interpretation,
     StatefulInterpretation,
@@ -13,7 +14,6 @@ from causal_pyro.effectful.ops.interpretation import (
     register,
 )
 from causal_pyro.effectful.ops.operation import Operation, define
-from causal_pyro.effectful.ops.handler import fwd, reflect, product, compose, handler
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,9 @@ def times_plus_1(x: int, y: int) -> int:
 
 
 def block(*ops: Operation[int]) -> Interpretation[int]:
-    return define(Interpretation)({op: lambda v, *args, **kwargs: reflect(v) for op in ops})
+    return define(Interpretation)(
+        {op: lambda v, *args, **kwargs: reflect(v) for op in ops}
+    )
 
 
 def defaults(*ops: Operation[int]) -> Interpretation[int]:
@@ -46,7 +48,9 @@ def defaults(*ops: Operation[int]) -> Interpretation[int]:
 
 
 def times_n_handler(n: int, *ops: Operation[int]) -> Interpretation[int]:
-    return define(Interpretation)({op: lambda v, *args, **kwargs: fwd(v) * n for op in ops})
+    return define(Interpretation)(
+        {op: lambda v, *args, **kwargs: fwd(v) * n for op in ops}
+    )
 
 
 OPERATION_CASES = (
@@ -61,7 +65,6 @@ N_CASES = [1, 2, 3]
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_compose_associative(op, args, n1, n2):
-
     def f():
         return op(*args)
 
@@ -79,7 +82,6 @@ def test_compose_associative(op, args, n1, n2):
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_compose_commute_orthogonal(op, args, n1, n2):
-
     def f():
         return op(*args) + new_op(*args)
 
@@ -99,7 +101,6 @@ def test_compose_commute_orthogonal(op, args, n1, n2):
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_handler_associative(op, args, n1, n2):
-
     def f():
         return op(*args)
 
@@ -123,7 +124,6 @@ def test_handler_associative(op, args, n1, n2):
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_product_block_associative(op, args, n1, n2):
-
     def f():
         return op(*args)
 
@@ -135,3 +135,27 @@ def test_product_block_associative(op, args, n1, n2):
     intp2 = product(product(h0, h1), h2)
 
     assert interpreter(intp1)(f)() == interpreter(intp2)(f)()
+
+
+@pytest.mark.parametrize("op,args", OPERATION_CASES)
+def test_affine_continuation_error_fwd(op, args):
+    def f():
+        return op(*args)
+
+    h_fail = define(Interpretation)({op: lambda v, *args, **kwargs: fwd(fwd(v))})
+
+    with pytest.raises(ValueError, match="can use continuation*"):
+        interpreter(compose(defaults(op), h_fail))(f)()
+
+
+@pytest.mark.parametrize("op,args", OPERATION_CASES)
+def test_affine_continuation_error_reflect(op, args):
+    def f():
+        return op(*args)
+
+    h_fail = define(Interpretation)(
+        {op: lambda v, *args, **kwargs: reflect(reflect(v))}
+    )
+
+    with pytest.raises(ValueError, match="can use continuation*"):
+        interpreter(product(defaults(op), h_fail))(f)()
