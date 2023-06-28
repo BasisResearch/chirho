@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import itertools
 import logging
 from typing import TypeVar
@@ -10,9 +9,7 @@ from causal_pyro.effectful.ops.continuation import AffineContinuationError
 from causal_pyro.effectful.ops.handler import compose, fwd, handler, product, reflect
 from causal_pyro.effectful.ops.interpretation import (
     Interpretation,
-    StatefulInterpretation,
     interpreter,
-    register,
 )
 from causal_pyro.effectful.ops.operation import Operation, define
 
