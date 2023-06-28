@@ -42,8 +42,13 @@ class _BaseOperation(Generic[T]):
 
 @functools.cache
 def define(m: Type[T]) -> Operation[T]:
+    if not typing.TYPE_CHECKING:
+        if typing.get_args(m):
+            return define(typing.get_origin(m))
+
     if m is Operation:
-        return _BaseOperation(_BaseOperation)
+        # return _BaseOperation(_BaseOperation)
+        return _BaseOperation(lambda op: functools.wraps(op)(_BaseOperation(op)))
 
     return define(Operation)(m)
 
