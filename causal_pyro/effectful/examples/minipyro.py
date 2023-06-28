@@ -244,7 +244,7 @@ def trace_elbo(param_store: ParamStore, pyro_model: Callable[..., T], guide: Cal
 
 
 ###############################################################################
-# Sketch of intervene in new API
+# Sketch of intervene/counterfactuals in new API
 ###############################################################################
 
 @define(Operation)
@@ -268,7 +268,7 @@ def multi_world_counterfactual_intervene(
     act_result = fwd(result)
     new_plate = PlateData("__intervention__", 2, -5)
     cf_plates.append(new_plate)
-    return scatter(obs, act_result, dim=new_plate.dim)  # TODO
+    return scatter(obs, act_result, dim=new_plate.dim)
 
 
 @register(sample, MultiWorldCounterfactual)
