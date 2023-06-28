@@ -64,9 +64,11 @@ def register(
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        setattr(op, "body", interpret_op)  # TODO resolve confusion of body, default
+        op.default = functools.wraps(op.default)(
+            lambda result, *args, **kwargs: interpret_op(*args, **kwargs) if result is None else result
+        )
         return interpret_op
-    elif isinstance(intp, Interpretation):
+    elif isinstance(intp, Interpretation) and hasattr(intp, "__setitem__"):
         intp.__setitem__(op, interpret_op)
         return interpret_op
     raise NotImplementedError(f"Cannot register {op} in {intp}")
