@@ -63,6 +63,30 @@ N_CASES = [1, 2, 3]
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
+def test_affine_continuation_error_fwd(op, args):
+    def f():
+        return op(*args)
+
+    h_fail = define(Interpretation)({op: lambda v, *args, **kwargs: fwd(fwd(v))})
+
+    with pytest.raises(AffineContinuationError):
+        interpreter(compose(defaults(op), h_fail))(f)()
+
+
+@pytest.mark.parametrize("op,args", OPERATION_CASES)
+def test_affine_continuation_error_reflect(op, args):
+    def f():
+        return op(*args)
+
+    h_fail = define(Interpretation)(
+        {op: lambda v, *args, **kwargs: reflect(reflect(v))}
+    )
+
+    with pytest.raises(AffineContinuationError):
+        interpreter(product(defaults(op), h_fail))(f)()
+
+
+@pytest.mark.parametrize("op,args", OPERATION_CASES)
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_compose_associative(op, args, n1, n2):
@@ -154,27 +178,3 @@ def test_product_block_associative(op, args, n1, n2):
     intp2 = product(product(h0, h1), h2)
 
     assert interpreter(intp1)(f)() == interpreter(intp2)(f)()
-
-
-@pytest.mark.parametrize("op,args", OPERATION_CASES)
-def test_affine_continuation_error_fwd(op, args):
-    def f():
-        return op(*args)
-
-    h_fail = define(Interpretation)({op: lambda v, *args, **kwargs: fwd(fwd(v))})
-
-    with pytest.raises(AffineContinuationError):
-        interpreter(compose(defaults(op), h_fail))(f)()
-
-
-@pytest.mark.parametrize("op,args", OPERATION_CASES)
-def test_affine_continuation_error_reflect(op, args):
-    def f():
-        return op(*args)
-
-    h_fail = define(Interpretation)(
-        {op: lambda v, *args, **kwargs: reflect(reflect(v))}
-    )
-
-    with pytest.raises(AffineContinuationError):
-        interpreter(product(defaults(op), h_fail))(f)()
