@@ -1,4 +1,4 @@
-from typing import Generic, Callable, Protocol, Type, TypeVar
+from typing import Generic, Callable, Optional, Protocol, Type, TypeVar
 
 import functools
 import typing
@@ -13,6 +13,7 @@ T = TypeVar("T")
 @typing.runtime_checkable
 class Operation(Protocol[T]):
     def __call__(self, *args: T, **kwargs) -> T: ...
+    def default(self, result: Optional[T], *args: T, **kwargs) -> T: ...
 
 
 class _BaseOperation(Generic[T]):
@@ -42,15 +43,19 @@ class _BaseOperation(Generic[T]):
 
 @functools.cache
 def define(m: Type[T]) -> Operation[T]:
-    if not typing.TYPE_CHECKING:
-        if typing.get_args(m):
-            return define(typing.get_origin(m))
+    """
+    Scott encoding of a type as its constructor.
+    """
 
-    if m is Operation:
-        # return _BaseOperation(_BaseOperation)
-        return _BaseOperation(lambda op: functools.wraps(op)(_BaseOperation(op)))
+    if typing.get_origin(m) is Operation:
 
-    return define(Operation)(m)
+        @_BaseOperation
+        def _defop(op: Callable[..., T]) -> Operation[T]:
+            return functools.wraps(op)(_BaseOperation(op))
+
+        return _defop  # _BaseOperation(_BaseOperation)
+
+    return define(Operation[m])(m)
 
 
 # triggers bootstrapping
