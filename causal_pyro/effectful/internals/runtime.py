@@ -1,7 +1,6 @@
-from typing import Callable, Mapping, TypedDict, TypeVar
-
 import functools
 import weakref
+from typing import Callable, Mapping, TypedDict, TypeVar
 
 S = TypeVar("S")
 T = TypeVar("T")
