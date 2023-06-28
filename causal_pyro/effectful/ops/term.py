@@ -1,5 +1,6 @@
-from typing import Generic, Iterable, Mapping, Protocol, TypeVar
+from typing import Callable, Generic, Hashable, Iterable, Mapping, Optional, Protocol, Type, TypeVar
 
+import functools
 import typing
 
 from causal_pyro.effectful.ops.environment import Variable
@@ -61,3 +62,48 @@ def LazyInterpretation(*ops: Operation[T]) -> Interpretation[T | Term[T] | Varia
         op: lambda _, *args, **kwargs: define(Term)(op, args, kwargs)
         for op in ops
     })
+
+
+def rename(term: Term[T]) -> Term[T]:
+    # TODO use an Interpretation
+    return define(Term)(
+        term.__head__,
+        (rename(arg) if isinstance(arg, Term) else arg for arg in term.__args__),
+        {k: rename(v) if isinstance(v, Term) else v for k, v in term.__kwargs__.items()}
+    )
+
+
+FreshVars = define(Interpretation)()
+BoundVars = define(Interpretation)()
+
+
+@register(define(Variable), FreshVars)
+def _variable_freshvars(name: Hashable, tp: Optional[Type]) -> set[Hashable]:
+    return {name}
+
+
+@define(Operation)
+def Lambda(var: Variable[S], body: Term[T]) -> Callable[[S], Term[T]]: ...
+
+
+@register(Lambda, BoundVars)
+def _lambda_freshvars(var: Variable[S], body: T) -> set[Hashable]:
+    return {var}
+
+
+def BindingInterpretation(*ops: Operation[T]):
+
+    def _mangle(name: Hashable) -> Hashable:
+        return f"{name}__{id(name)}"  # TODO
+
+    def _alpha_rename(
+        args_kwargs: tuple[tuple, dict], fresh: set[Hashable], bound: set[Hashable]
+    ) -> tuple[tuple, dict]:
+        return rename(args_kwargs, {v: _mangle(v) for v in fresh | bound})
+
+    def apply(op: Operation[T], *args, **kwargs) -> T:
+        fresh_vars, bound_vars = FreshVars[op](*args, **kwargs), BoundVars[op](*args, **kwargs)
+        (args, kwargs) = _alpha_rename((args, kwargs), fresh=fresh_vars, bound=bound_vars)
+        return op(*args, **kwargs)
+
+    return define(Interpretation)({op: functools.partial(apply, op) for op in ops})
