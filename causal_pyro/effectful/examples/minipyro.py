@@ -1,4 +1,4 @@
-from typing import Any, Callable, Container, ContextManager, Generic, Hashable, List, NamedTuple, Optional, Type, TypeVar, Union
+from typing import Callable, Container, Generic, Hashable, List, NamedTuple, Optional, TypeVar
 
 import collections
 import contextlib
@@ -6,15 +6,13 @@ import torch
 
 from torch.distributions import Distribution
 from torch.distributions.constraints import Constraint
-from causal_pyro.effectful.ops.interpretation import StatefulInterpretation, register
 
+from causal_pyro.effectful.ops.interpretation import StatefulInterpretation, register
 from causal_pyro.effectful.ops.operation import Operation, define
 from causal_pyro.effectful.ops.handler import fwd, handler, reflect, product, prompt_calls
 
 
 S, T = TypeVar("S"), TypeVar("T")
-
-Environment = dict[Hashable, T]  # TODO define and import from terms
 
 
 @define(Operation)
@@ -30,7 +28,7 @@ def sample(
 def param(
     name: str,
     init_value: Optional[T] = None,
-    constraint=torch.distributions.constraints.real,
+    constraint: Constraint = torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
     raise NotImplementedError
@@ -46,7 +44,6 @@ class DefaultInterpretation(Generic[T], StatefulInterpretation[ParamStore, T]):
 @register(sample, DefaultInterpretation)
 def default_sample(
     param_store: ParamStore,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -58,11 +55,10 @@ def default_sample(
 @register(sample, DefaultInterpretation)
 def default_param(
     param_store: ParamStore,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
-    constraint=torch.distributions.constraints.real,
+    constraint: Constraint = torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
     if name in param_store:
@@ -128,7 +124,6 @@ class trace(Generic[T], StatefulInterpretation[Trace, T]):
 @register(sample, trace)
 def trace_sample(
     tr: Trace,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -142,11 +137,10 @@ def trace_sample(
 @register(param, trace)
 def trace_param(
     tr: Trace,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     init_value: Optional[T] = None,
-    constraint=torch.distributions.constraints.real,
+    constraint: Constraint = torch.distributions.constraints.real,
     event_dim: Optional[int] = None,
 ) -> T:
     result = fwd(result)
@@ -161,7 +155,6 @@ class replay(Generic[T], StatefulInterpretation[Trace, T]):
 @register(sample, replay)
 def replay_sample(
     tr: Trace,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -182,7 +175,6 @@ class condition(Generic[T], StatefulInterpretation[Observations, T]):
 @register(sample, condition)
 def condition_sample(
     state: Observations,
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     distribution: Distribution,
@@ -202,7 +194,6 @@ class block(Generic[T], StatefulInterpretation[Container[str], T]):
 @register(sample, block)
 def block_sample(
     blocked: Container[str],
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     *args
@@ -213,7 +204,6 @@ def block_sample(
 @register(param, block)
 def block_param(
     blocked: Container[str],
-    # ctx: Environment[T],
     result: Optional[T],
     name: str,
     *args
