@@ -13,6 +13,7 @@ T = TypeVar("T")
 
 @typing.runtime_checkable
 class Interpretation(Protocol[T]):
+    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
     def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
     def __contains__(self, op: Operation[T]) -> bool: ...
     def keys(self) -> Iterable[Operation[T]]: ...
@@ -46,18 +47,10 @@ class StatefulInterpretation(Generic[S, T]):
         return cls._op_interpretations.keys()
 
 
-@typing.runtime_checkable
-class _WriteableInterpretation(Protocol[T]):
-    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None: ...
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]: ...
-    def __contains__(self, op: Operation[T]) -> bool: ...
-    def keys(self) -> Iterable[Operation[T]]: ...
-
-
 @define(Operation)
 def register(
     op: Operation[T],
-    intp: Optional[_WriteableInterpretation[T]] = None,
+    intp: Optional[Interpretation[T]] = None,
     interpret_op: Optional[Callable[..., T]] = None
 ):
     if interpret_op is None:
@@ -68,7 +61,7 @@ def register(
             lambda result, *args, **kwargs: interpret_op(*args, **kwargs) if result is None else result
         )
         return interpret_op
-    elif isinstance(intp, Interpretation) and hasattr(intp, "__setitem__"):
+    elif isinstance(intp, Interpretation):
         intp.__setitem__(op, interpret_op)
         return interpret_op
     raise NotImplementedError(f"Cannot register {op} in {intp}")

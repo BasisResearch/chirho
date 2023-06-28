@@ -174,13 +174,13 @@ def test_op_repeat_nest_interpreter(op, args, n, depth):
 @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
 def test_op_fail_nest_interpreter(op, args, n, depth):
 
-    @define(Operation)
-    def fail_op(*args: int) -> int:
+    def _fail_op(*args: int) -> int:
         raise ValueError("oops")
 
+    fail_op = define(Operation)(_fail_op)
     intp = times_n(n, op, fail_op)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="oops"):
         try:
             with contextlib.ExitStack() as stack:
                 for _ in range(depth):
