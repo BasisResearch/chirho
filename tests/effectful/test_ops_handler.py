@@ -122,6 +122,24 @@ def test_handler_associative(op, args, n1, n2):
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
+@pytest.mark.parametrize("n", N_CASES)
+@pytest.mark.parametrize("depth", [1, 2, 3])
+def test_stop_without_fwd(op, args, n, depth):
+    def f():
+        return op(*args)
+
+    expected = f()
+
+    with contextlib.ExitStack() as stack:
+        for _ in range(depth):
+            stack.enter_context(handler(times_n_handler(n, op)))
+
+        stack.enter_context(handler(defaults(op)))
+
+        assert f() == expected
+
+
+@pytest.mark.parametrize("op,args", OPERATION_CASES)
 @pytest.mark.parametrize("n1", N_CASES)
 @pytest.mark.parametrize("n2", N_CASES)
 def test_product_block_associative(op, args, n1, n2):
