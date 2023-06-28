@@ -1,6 +1,7 @@
 from typing import Callable, Mapping, TypedDict, TypeVar
 
 import functools
+import weakref
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -25,3 +26,23 @@ def swap_interpretation(
     old_intp = get_runtime()["interpretation"]
     get_runtime()["interpretation"] = intp
     return old_intp
+
+
+def weak_memoize(f: Callable[[S], T]) -> Callable[[S], T]:
+    """
+    Memoize a one-argument function using a dictionary
+    whose keys are weak references to the arguments.
+    """
+
+    cache = weakref.WeakKeyDictionary()
+
+    @functools.wraps(f)
+    def wrapper(x):
+        try:
+            return cache[x]
+        except KeyError:
+            result = f(x)
+            cache[x] = result
+            return result
+
+    return wrapper

@@ -1,6 +1,5 @@
 from typing import Generic, Callable, Optional, Protocol, Type, TypeVar
 
-import functools
 import typing
 
 from ..internals import runtime
@@ -22,7 +21,7 @@ class _BaseOperation(Generic[T]):
         self._body = body
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)}"
+        return f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
 
     def default(self, result: Optional[T], *args, **kwargs) -> T:
         return result if result is not None else self._body(*args, **kwargs)
@@ -50,14 +49,17 @@ def define(m):
     """
     Scott encoding of a type as its constructor.
     """
-    if typing.get_origin(m) is Operation:
+    if typing.get_origin(m) not in (m, None):
+        return define(typing.get_origin(m))
+
+    if m is Operation:
         return _BaseOperation[Operation[m]](_BaseOperation[m])
 
-    defop: Operation[Operation[m]] = define(Operation[m])
-    return defop(typing.get_origin(m))
+    defop: Operation[Operation[m]] = define(Operation)
+    return defop(typing.get_origin(m) if typing.get_origin(m) is not None else m)
 
 
 # triggers bootstrapping
-define = define(Operation)(functools.cache(define))
+define = define(Operation)(runtime.weak_memoize(define))
 runtime.get_interpretation = define(Operation)(runtime.get_interpretation)
 runtime.swap_interpretation = define(Operation)(runtime.swap_interpretation)
