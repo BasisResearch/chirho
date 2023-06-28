@@ -3,7 +3,6 @@ from typing import Callable, Generic, Optional, TypeVar
 from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 from causal_pyro.effectful.ops.operation import Operation, define
 
-
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -35,7 +34,7 @@ def reset_prompt(
     fn: Callable[..., T],
     result: Optional[T],
     *args: T,
-    **kwargs
+    **kwargs,
 ) -> T:
     from ..internals.runtime import get_interpretation
 
@@ -48,14 +47,17 @@ def reset_prompt(
     prev_continuation: Continuation[T] = _AffineContinuation(prev_continuation)
 
     shift = define(Interpretation)({prompt_op: prev_continuation})
-    reset = define(Interpretation)({
-        prompt_op: lambda _, res: interpreter(shift)(continuation)(res, *args, **kwargs)
-    })
+    reset = define(Interpretation)(
+        {
+            prompt_op: lambda _, res: interpreter(shift)(continuation)(
+                res, *args, **kwargs
+            )
+        }
+    )
     return interpreter(reset)(fn)(result, *args, **kwargs)
 
 
 def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
-    return define(Interpretation)({
-        op: lambda res, *args, **kwargs: prompt_op(res)
-        for op in set(ops)
-    })
+    return define(Interpretation)(
+        {op: lambda res, *args, **kwargs: prompt_op(res) for op in set(ops)}
+    )
