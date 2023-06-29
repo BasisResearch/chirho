@@ -59,9 +59,3 @@ def reset_prompt(
         }
     )
     return interpreter(reset)(fn)(result, *args, **kwargs)
-
-
-def prompt_calls(prompt_op: Operation[T], *ops: Operation[T]) -> Interpretation[T]:
-    return define(Interpretation)(
-        {op: lambda res, *args, **kwargs: prompt_op(res) for op in set(ops)}
-    )

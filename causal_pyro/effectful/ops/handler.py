@@ -2,7 +2,7 @@ import contextlib
 import functools
 from typing import Optional, TypeVar
 
-from causal_pyro.effectful.ops.continuation import prompt_calls, reset_prompt
+from causal_pyro.effectful.ops.continuation import reset_prompt
 from causal_pyro.effectful.ops.interpretation import Interpretation, interpreter
 from causal_pyro.effectful.ops.operation import Operation, define
 
@@ -58,12 +58,17 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     (intp2,) = intps
 
     # compose interpretations with reflections to ensure compatibility with compose()
+    refls = {
+        op: lambda v, *_, **__: reflect(v)
+        for op in set(intp.keys()) | set(intp2.keys())
+    }
+
     # TODO use interpreter instead of compose here to disentangle compose and product
-    refls_inner = compose(
-        prompt_calls(reflect, *intp.keys()),
+    intp_inner = compose(
+        define(Interpretation)({op: refls[op] for op in intp.keys()}),
         define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp}),
     )
-    refls_outer = compose(prompt_calls(reflect, *intp.keys(), *intp2.keys()), intp)
+    intp_outer = compose(define(Interpretation)(refls), intp)
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)(
@@ -72,9 +77,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
                 reset_prompt,
                 reflect,
                 # TODO is this call to interpreter correct for nested products?
-                interpreter(refls_outer)(functools.partial(_op_or_result, op)),
+                interpreter(intp_outer)(functools.partial(_op_or_result, op)),
                 # TODO is this call to interpreter correct for nested products? is it even necessary?
-                interpreter(refls_inner)(intp2[op]),
+                interpreter(intp_inner)(intp2[op]),
             )
             for op in intp2.keys()
         }
