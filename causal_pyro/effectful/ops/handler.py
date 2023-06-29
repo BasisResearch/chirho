@@ -33,7 +33,21 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     )
 
 
-##################################################
+@define(Operation)
+@contextlib.contextmanager
+def handler(intp: Interpretation[T]):
+    from ..internals.runtime import get_interpretation, swap_interpretation
+
+    old_intp = get_interpretation()
+    try:
+        new_intp = compose(old_intp, intp)
+        old_intp = swap_interpretation(new_intp)
+        yield intp
+    finally:
+        swap_interpretation(old_intp)
+
+
+###############################################################################
 
 
 @define(Operation)
@@ -62,8 +76,7 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         op: lambda v, *_, **__: reflect(v)
         for op in set(intp.keys()) | set(intp2.keys())
     }
-
-    # TODO use interpreter instead of compose here to disentangle compose and product
+    # TODO use interpreter instead of compose here to disentangle compose and product?
     intp_inner = compose(
         define(Interpretation)({op: refls[op] for op in intp.keys()}),
         define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp}),
@@ -84,20 +97,3 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
             for op in intp2.keys()
         }
     )
-
-
-############################################################
-
-
-@define(Operation)
-@contextlib.contextmanager
-def handler(intp: Interpretation[T]):
-    from ..internals.runtime import get_interpretation, swap_interpretation
-
-    old_intp = get_interpretation()
-    try:
-        new_intp = compose(old_intp, intp)
-        old_intp = swap_interpretation(new_intp)
-        yield intp
-    finally:
-        swap_interpretation(old_intp)
