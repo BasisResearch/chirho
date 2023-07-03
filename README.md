@@ -1,26 +1,16 @@
 # Causal Probabilistic Programming with Causal Pyro
 
-Causal Pyro is a causal extension to the Pyro probabilistic programming
-language. It was built to bridge the gap between the capabilities of
-modern probablistic programming systems, such as Pyro, and the needs of
-policymakers, scientists, and AI researchers, who often want to use
-models to answer their questions about cause-and-effect relationships.
-As a non-exhaustive set of examples, Causal Pyro makes it easier to
-answer the following kinds of causal questions that appear frequently in
+Causal Pyro is a causal extension to the Pyro probabilistic programming language. It was built to bridge the gap between the capabilities of modern probablistic programming systems, such as Pyro, and the needs of policymakers, scientists, and AI researchers, who often want to use
+models to answer their questions about cause-and-effect relationships. As a non-exhaustive set of examples, Causal Pyro makes it easier to answer the following kinds of causal questions that appear frequently in
 practice.
 
--   **Interventional** : *How many COVID-19 hospitalizations will occur
-    if the the USA imposes a national mask mandate?*
+-   **Interventional**: *How many COVID-19 hospitalizations will occur if the the USA imposes a national mask mandate?*
 
--   **Counterfactual** : *Given that 100,000 people were infected with
-    COVID-19 in the past month, how many would have been infected if a
-    mask mandate had been in place?*
+-   **Counterfactual**: *Given that 100,000 people were infected with COVID-19 in the past month, how many would have been infected if a mask mandate had been in place?*
 
--   **Explanation** : *Why were 100,000 people infected with COVID-19 in
-    the past month?*
+-   **Explanation**: *Why were 100,000 people infected with COVID-19 in the past month?*
 
--   **Causal Structure Discovery** : *What individual attributes
-    influence risk of COVID-19 hospitalization?*
+-   **Causal structure discovery**: *What individual attributes influence risk of COVID-19 hospitalization?*
 
 ## Installation
 
@@ -64,20 +54,20 @@ def model():
     y = pyro.sample("y", dist.Normal(x + h, 1))
     return y
 
-# Define a causal question (here intervening on x)
-def question():
+# Define a causal query (here intervening on x)
+def query():
     return do(model, {"x": 1})
 
 # Generate 10,000 samples from the observational distribution P(y) ~ N(0, 2)
 obs_samples = pyro.infer.Predictive(model, num_samples=1000)()["y"]
 
 # Generate 10,000 samples from the interventional distribution P(y | do(X=1)) ~ N(1, 1)
-int_samples = pyro.infer.Predictive(question(), num_samples=1000)()["y"]
+int_samples = pyro.infer.Predictive(query(), num_samples=1000)()["y"]
 ```
 
 ## Learn more
 
-We have written a number of tutorials and examples for Causal Pyro. We have tried to choose simple examples that would be of interest to both the causal inference and probabilistic programming communities: they collectively span Pearl’s causal hierarchy @pearl2001bayesian, and most are broadly applicable, empirically validated, have an
+We have written a number of tutorials and examples for Causal Pyro. We have tried to choose simple examples that would be of interest to both the causal inference and probabilistic programming communities: they collectively span Pearl’s causal hierarchy [@pearl2001bayesian], and most are broadly applicable, empirically validated, have an
 unconventional or limited identification result, and make use of modern probabilistic machine learning tools, like neural networks or stochastic
 variational inference.
 
@@ -108,7 +98,7 @@ Causal Pyro does not answer causal questions by magic. In fact, there is no esca
 
 > *behind any causal conclusion there must lie some causal assumption,*
 
-a phrase made famous by Judea Pearl @pearl2001bayesian. Instead, Causal Pyro provides a substrate for writing causal assumptions as probabilistic programs, and for writing causal questions in terms of program transformations. 
+a phrase made famous by Judea Pearl [@pearl2001bayesian]. Instead, Causal Pyro provides a substrate for writing causal assumptions as probabilistic programs, and for writing causal questions in terms of program transformations. 
 
 
 ## Additional background reading material
