@@ -468,6 +468,12 @@ def test_cond_tensor_associate(enum_shape, batch_shape, plate_shape, event_shape
             event_dim=event_dim,
         )
 
+        assert (
+            indices_of(actual_full, event_dim=event_dim)
+            == indices_of(actual_left, event_dim=event_dim)
+            == indices_of(actual_right, event_dim=event_dim)
+        )
+
     assert actual_full.shape == enum_shape + batch_shape + plate_shape + event_shape
     assert actual_full.shape == actual_left.shape == actual_right.shape
     assert (actual_full == actual_left).all()

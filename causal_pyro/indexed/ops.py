@@ -271,20 +271,37 @@ def cond(fst, snd: T, case, **kwargs):
     Selection operation that is the sum-type analogue of :func:`scatter`
     in the sense that where :func:`scatter` propagates both of its arguments,
     :func:`cond` propagates only one, depending on the value of a boolean ``case`` .
-    For a given fst, snd, and case, :func:`cond` returns
-    snd if the case is true, and fst otherwise,
+
+    For a given ``fst`` , ``snd`` , and ``case`` , :func:`cond` returns
+    ``snd`` if the ``case`` is true, and ``fst`` otherwise,
     analogous to a Python conditional expression ``snd if case else fst`` .
     Unlike a Python conditional expression, however, the case may be a tensor,
-    and both branches evaluated, as with :func:`torch.where` .
+    and both branches are evaluated, as with :func:`torch.where` ::
+
+        >> fst, snd = torch.randn(2, 3), torch.randn(2, 3)
+        >> case = (fst < snd).all(-1)
+        >> x = cond(fst, snd, case, event_dim=1)
+        >> assert (x == torch.where(case[..., None], snd, fst)).all()
+
+    .. note::
+
+        :func:`cond` can be extended to new value types by registering
+        an implementation for the type using :func:`functools.singledispatch` .
+
+    :param fst: The value to return if ``case`` is ``False`` .
+    :param snd: The value to return if ``case`` is ``True`` .
+    :param case: A boolean value or tensor. If a tensor, should have event shape ``()`` .
+    :param kwargs: Additional keyword arguments used by specific implementations.
     """
     raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
 @cond.register(dict)
 @pyro.poutine.runtime.effectful(type="cond_n")
-def _cond_n(values: Dict[IndexSet, T], case, *, result: Optional[T] = None, **kwargs):
+def _cond_n(values: Dict[IndexSet, T], case, **kwargs):
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
+    result: Optional[T] = None
     for indices, value in values.items():
         tst = functools.reduce(
             operator.or_, [case == index for index in next(iter(indices.values()))]
