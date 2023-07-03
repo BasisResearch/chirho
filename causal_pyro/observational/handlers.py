@@ -1,12 +1,42 @@
 import functools
 import operator
-from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
+from typing import Callable, Generic, Hashable, Literal, Mapping, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
+from causal_pyro.observational.ops import AtomicObservation, observe
+
 T = TypeVar("T")
+
+
+class ConditionMessenger(Generic[T], pyro.poutine.messenger.Messenger):
+    """
+    Condition on values in a probabilistic program.
+    """
+
+    def __init__(self, data: Mapping[Hashable, AtomicObservation[T]]):
+        self.data = data
+        super().__init__()
+
+    def _pyro_sample(self, msg):
+        if msg["is_observed"] or msg["done"] or msg["name"] not in self.data:
+            return
+
+        msg["stop"] = True
+        msg["done"] = True
+        msg["value"] = observe(
+            msg["fn"],
+            self.data[msg["name"]],
+            event_dim=len(msg["fn"].event_shape),
+            name=msg["name"],
+            **msg["kwargs"]
+        )
+
+
+condition = pyro.poutine.handlers._make_handler(ConditionMessenger)[1]
+
 
 Kernel = Callable[[T, T], torch.Tensor]
 
