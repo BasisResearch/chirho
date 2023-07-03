@@ -1,9 +1,6 @@
-import functools
-import operator
-from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
+from typing import Optional, TypeVar
 
 import pyro
-import pyro.distributions.constraints as constraints
 import torch
 
 from causal_pyro.observational.ops import AtomicObservation, observe
