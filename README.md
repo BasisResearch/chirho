@@ -1,3 +1,6 @@
+[![Build Status](https://github.com/BasisResearch/causal_pyro/actions/workflows/test.yml/badge.svg)](https://github.com/BasisResearch/causal_pyro/actions/workflows/test.yml)
+
+
 # Causal Probabilistic Programming with Causal Pyro
 
 Causal Pyro is a causal extension to the Pyro probabilistic programming language. It was built to bridge the gap between the capabilities of modern probablistic programming systems, such as Pyro, and the needs of policymakers, scientists, and AI researchers, who often want to use
