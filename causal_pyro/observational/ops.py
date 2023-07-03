@@ -3,13 +3,13 @@ from typing import Callable, Hashable, Mapping, Optional, Tuple, TypeVar, Union
 
 T = TypeVar("T")
 
-AtomicObservation = Union[T, Tuple[T, ...], Callable[[T], Union[T, Tuple[T, ...]]]]
+AtomicObservation = Union[T, Callable[[T], Union[T, Tuple[T, ...]]]]
 CompoundObservation = Union[Mapping[Hashable, AtomicObservation[T]], Callable[..., T]]
 Observation = Union[AtomicObservation[T], CompoundObservation[T]]
 
 
 @functools.singledispatch
-def observe(rv, obs: Optional[Observation[T]] = None, **kwargs):
+def observe(rv, obs: Optional[Observation[T]] = None, **kwargs) -> T:
     """
     Observe a random value in a probabilistic program.
     """
