@@ -1,7 +1,9 @@
 import logging
+from typing import Iterable
 
 import pyro
 import pyro.distributions as dist
+import pyro.infer
 import pytest
 import torch
 
@@ -13,6 +15,7 @@ from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     TwinWorldCounterfactual,
 )
 from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
+from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
 from causal_pyro.observational.handlers import condition
 from causal_pyro.observational.ops import observe
@@ -267,64 +270,143 @@ def test_nested_interventions_same_variable(
     assert (x11 != x2).all() if dependent_intervention else (x11 == x2).all()
 
 
+def hmm_model(data: Iterable, use_condition: bool):
+    transition_probs = pyro.param(
+        "transition_probs",
+        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+        constraint=dist.constraints.simplex,
+    )
+    emission_probs = pyro.sample(
+        "emission_probs",
+        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+    )
+    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+    logger.debug(f"-1\t{tuple(x.shape)}")
+    for t, y in pyro.markov(enumerate(data)):
+        x = pyro.sample(
+            f"x_{t}",
+            dist.Categorical(transition_probs[x]),
+            infer={"enumerate": "parallel"},
+        )
+
+        if use_condition:
+            pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
+        else:
+            observe(dist.Categorical(emission_probs[x]), y, name=f"y_{t}")
+        logger.debug(f"{t}\t{tuple(x.shape)}")
+
+
+@pytest.mark.parametrize(
+    "max_plate_nesting", [3, float("inf")]
+)  # TODO currently fails when inf
+@pytest.mark.parametrize(
+    "use_condition", [False, True]
+)  # TODO currently fails when True
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
-@pytest.mark.parametrize("use_observe", [False, True])  # expected to fail when False
-def test_smoke_enumerate_hmm(num_steps, use_observe):
+@pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
+@pytest.mark.parametrize("use_guide", [False, True])
+def test_smoke_enumerate_hmm_elbo(
+    num_steps, use_condition, Elbo, use_guide, max_plate_nesting
+):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
-    @MultiWorldCounterfactual(-1)
-    @condition(
-        data={f"y_{t}": y for t, y in enumerate(data if not use_observe else ())}
-    )
+    @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     def model(data):
-        transition_probs = pyro.sample(
-            "transition_probs",
-            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
-        )
-        emission_probs = pyro.sample(
-            "emission_probs",
-            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
-        )
-        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
-        logger.debug(f"-1\t{tuple(x.shape)}")
-        for t, y in pyro.markov(enumerate(data)):
-            x = pyro.sample(
-                f"x_{t}",
-                dist.Categorical(transition_probs[x]),
-                infer={"enumerate": "parallel"},
+        return hmm_model(data, use_condition)
+
+    assert issubclass(Elbo, pyro.infer.elbo.ELBO)
+    elbo = Elbo(max_plate_nesting=max_plate_nesting)
+
+    if use_condition:
+        model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
+
+    if use_guide:
+        guide = pyro.infer.config_enumerate(
+            pyro.infer.autoguide.AutoDiscreteParallel(
+                pyro.poutine.block(expose=["x"])(condition(data={})(model))
             )
-            if t <= 1:
-                x = intervene(x, torch.tensor(0), event_dim=0, name=f"ix_{t}")
-
-            if use_observe:
-                observe(dist.Categorical(emission_probs[x]), y, name=f"y_{t}")
-            else:
-                pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
-            logger.debug(f"{t}\t{tuple(x.shape)}")
-
-    @pyro.infer.config_enumerate
-    def guide(data):
-        init_probs = pyro.param(
-            "init_probs",
-            torch.tensor([0.75, 0.25]),
-            constraint=dist.constraints.simplex,
         )
-        pyro.sample("x", dist.Categorical(init_probs))
+    else:
+        model = condition(model, data={"x": torch.as_tensor(0)})
 
-    conditioned_model = condition(model, data={"x": torch.as_tensor(0)})
+        def guide(data):
+            pass
 
-    pyro.infer.TraceEnum_ELBO(max_plate_nesting=3).differentiable_loss(
-        conditioned_model, lambda *args: None, data
+    # smoke test
+    elbo.differentiable_loss(MultiWorldCounterfactual(-1)(model), guide, data)
+
+
+@pytest.mark.parametrize(
+    "max_plate_nesting", [3, float("inf")]
+)  # TODO currently fails when inf
+@pytest.mark.parametrize(
+    "use_condition", [False, True]
+)  # TODO currently fails when True
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+def test_smoke_enumerate_hmm_compute_marginals(
+    num_steps, use_condition, max_plate_nesting
+):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
+    @condition(data={"x": torch.as_tensor(0)})
+    def model(data):
+        return hmm_model(data, use_condition)
+
+    if use_condition:
+        model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
+
+    def guide(data):
+        pass
+
+    # smoke test
+    elbo = pyro.infer.TraceEnum_ELBO(max_plate_nesting=max_plate_nesting)
+    elbo.compute_marginals(MultiWorldCounterfactual(-1)(model), guide, data)
+
+
+@pytest.mark.parametrize(
+    "max_plate_nesting", [3, float("inf")]
+)  # TODO currently fails when inf
+@pytest.mark.parametrize(
+    "use_condition", [False, True]
+)  # TODO currently fails when True
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+def test_smoke_enumerate_hmm_infer_discrete(
+    num_steps, use_condition, max_plate_nesting
+):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
+    @condition(data={"x": torch.as_tensor(0)})
+    def model(data):
+        return hmm_model(data, use_condition)
+
+    if use_condition:
+        model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
+
+    # smoke test
+    pyro.infer.infer_discrete(first_available_dim=-1 - max_plate_nesting)(
+        MultiWorldCounterfactual(-1)(model)
+    )(data)
+
+
+@pytest.mark.parametrize(
+    "use_condition", [False, True]
+)  # TODO currently fails when True
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
+def test_smoke_enumerate_hmm_mcmc(num_steps, use_condition, Kernel):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
+    @condition(data={"x": torch.as_tensor(0)})
+    def model(data):
+        return hmm_model(data, use_condition)
+
+    if use_condition:
+        model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
+
+    # smoke test
+    pyro.infer.MCMC(Kernel(MultiWorldCounterfactual(-1)(model)), num_samples=1).run(
+        data
     )
-
-    pyro.infer.TraceTMC_ELBO().differentiable_loss(model, guide, data)
-
-    pyro.infer.TraceEnum_ELBO(max_plate_nesting=3).differentiable_loss(
-        model, guide, data
-    )
-
-    pyro.infer.TraceEnum_ELBO().compute_marginals(model, guide, data)["x"]
-
-    pyro.infer.infer_discrete(first_available_dim=-4)(conditioned_model)(data)
-
-    pyro.infer.MCMC(pyro.infer.NUTS(conditioned_model)).run(data)
