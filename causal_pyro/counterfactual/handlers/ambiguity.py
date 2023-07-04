@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Dict, TypeVar
+from typing import TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -10,37 +10,11 @@ from causal_pyro.counterfactual.handlers.selection import (
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.indexed.ops import gather, get_index_plates, indices_of, scatter, union
+from causal_pyro.counterfactual.internals import no_ambiguity, site_is_ambiguous
+from causal_pyro.indexed.ops import gather, get_index_plates, indices_of, scatter
 from causal_pyro.observational.ops import observe
 
 T = TypeVar("T")
-
-
-def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
-    """
-    Helper function used with :func:`observe` to determine
-    whether a site is observed or ambiguous.
-
-    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-    and the observed value's index variables are a strict subset of the distribution's
-    indices and hence require clarification of which entries of the random variable
-    are fixed/observed (as opposed to random/unobserved).
-    """
-    rv, obs = msg["args"][:2]
-    value_indices = indices_of(obs, event_dim=len(rv.event_shape))
-    dist_indices = indices_of(rv)
-    return (
-        bool(union(value_indices, dist_indices)) and value_indices != dist_indices
-    ) or not msg["infer"].get("_specified_conditioning", True)
-
-
-def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Helper function used with :func:`pyro.poutine.infer_config` to inform
-    :class:`FactualConditioningMessenger` that all ambiguity in the current
-    context has been resolved.
-    """
-    return {"_specified_conditioning": True}
 
 
 class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
