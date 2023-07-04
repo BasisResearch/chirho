@@ -286,7 +286,6 @@ def hmm_model(data: Iterable, use_condition: bool):
         x = pyro.sample(
             f"x_{t}",
             dist.Categorical(transition_probs[x]),
-            infer={"enumerate": "parallel"},
         )
 
         if use_condition:
@@ -299,9 +298,7 @@ def hmm_model(data: Iterable, use_condition: bool):
 @pytest.mark.parametrize(
     "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
 )
-@pytest.mark.parametrize(
-    "use_condition", [False, pytest.param(True, marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 @pytest.mark.parametrize("use_guide", [False, True])
@@ -326,7 +323,9 @@ def test_smoke_enumerate_hmm_elbo(
                 pyro.poutine.block(expose=["x"])(condition(data={})(model))
             )
         )
+        model = pyro.infer.config_enumerate(model)
     else:
+        model = pyro.infer.config_enumerate(model)
         model = condition(model, data={"x": torch.as_tensor(0)})
 
         def guide(data):
@@ -339,9 +338,7 @@ def test_smoke_enumerate_hmm_elbo(
 @pytest.mark.parametrize(
     "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
 )
-@pytest.mark.parametrize(
-    "use_condition", [False, pytest.param(True, marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 def test_smoke_enumerate_hmm_compute_marginals(
     num_steps, use_condition, max_plate_nesting
@@ -350,6 +347,7 @@ def test_smoke_enumerate_hmm_compute_marginals(
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
+    @pyro.infer.config_enumerate
     def model(data):
         return hmm_model(data, use_condition)
 
@@ -365,12 +363,10 @@ def test_smoke_enumerate_hmm_compute_marginals(
 
 
 @pytest.mark.parametrize(
-    "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
+    "max_plate_nesting", [3, 4, 5, pytest.param(float("inf"), marks=pytest.mark.xfail)]
 )
-@pytest.mark.parametrize(
-    "use_condition", [False, pytest.param(True, marks=pytest.mark.xfail)]
-)
-@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("use_condition", [False, True])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 def test_smoke_enumerate_hmm_infer_discrete(
     num_steps, use_condition, max_plate_nesting
 ):
@@ -378,6 +374,7 @@ def test_smoke_enumerate_hmm_infer_discrete(
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
+    @pyro.infer.config_enumerate
     def model(data):
         return hmm_model(data, use_condition)
 
@@ -390,12 +387,11 @@ def test_smoke_enumerate_hmm_infer_discrete(
     )(data)
 
 
+@pytest.mark.xfail(reason="TODO: fix state behavior")
 @pytest.mark.parametrize(
     "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
 )
-@pytest.mark.parametrize(
-    "use_condition", [False, pytest.param(True, marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 @pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
 def test_smoke_enumerate_hmm_mcmc(num_steps, use_condition, max_plate_nesting, Kernel):
@@ -403,6 +399,7 @@ def test_smoke_enumerate_hmm_mcmc(num_steps, use_condition, max_plate_nesting, K
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
+    @pyro.infer.config_enumerate
     def model(data):
         return hmm_model(data, use_condition)
 

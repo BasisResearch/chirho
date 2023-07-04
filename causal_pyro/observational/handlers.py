@@ -34,6 +34,11 @@ class ConditionMessenger(Generic[T], ObserveNameMessenger):
 
     def _pyro_sample(self, msg):
         if msg["name"] not in self.data or msg["infer"].get("_do_not_observe", None):
+            if (
+                "_markov_scope" in msg["infer"]
+                and getattr(self, "_current_site", None) is not None
+            ):
+                msg["infer"]["_markov_scope"].pop(self._current_site, None)
             return
 
         msg["stop"] = True
@@ -53,9 +58,13 @@ class ConditionMessenger(Generic[T], ObserveNameMessenger):
                 or msg_["infer"].get("_do_not_observe", False)
             }
         ):
-            msg["value"] = observe(
-                msg["fn"], self.data[msg["name"]], name=msg["name"], **msg["kwargs"]
-            )
+            try:
+                self._current_site = msg["name"]
+                msg["value"] = observe(
+                    msg["fn"], self.data[msg["name"]], name=msg["name"], **msg["kwargs"]
+                )
+            finally:
+                self._current_site = None
 
 
 condition = pyro.poutine.handlers._make_handler(ConditionMessenger)[1]
