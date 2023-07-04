@@ -295,9 +295,7 @@ def hmm_model(data: Iterable, use_condition: bool):
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
-@pytest.mark.parametrize(
-    "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
@@ -335,9 +333,7 @@ def test_smoke_enumerate_hmm_elbo(
     elbo.differentiable_loss(MultiWorldCounterfactual(-1)(model), guide, data)
 
 
-@pytest.mark.parametrize(
-    "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("max_plate_nesting", [2, 3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 def test_smoke_enumerate_hmm_compute_marginals(
@@ -362,9 +358,7 @@ def test_smoke_enumerate_hmm_compute_marginals(
     elbo.compute_marginals(MultiWorldCounterfactual(-1)(model), guide, data)
 
 
-@pytest.mark.parametrize(
-    "max_plate_nesting", [3, 4, 5, pytest.param(float("inf"), marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("max_plate_nesting", [2, 3, 4, 5])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
 def test_smoke_enumerate_hmm_infer_discrete(
@@ -387,10 +381,7 @@ def test_smoke_enumerate_hmm_infer_discrete(
     )(data)
 
 
-@pytest.mark.xfail(reason="TODO: fix state behavior")
-@pytest.mark.parametrize(
-    "max_plate_nesting", [3, pytest.param(float("inf"), marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("max_plate_nesting", [2, 3])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
 @pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
@@ -411,5 +402,5 @@ def test_smoke_enumerate_hmm_mcmc(num_steps, use_condition, max_plate_nesting, K
         Kernel(
             MultiWorldCounterfactual(-1)(model), max_plate_nesting=max_plate_nesting
         ),
-        num_samples=1,
+        num_samples=2,
     ).run(data)
