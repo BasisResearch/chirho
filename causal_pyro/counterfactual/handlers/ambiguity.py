@@ -13,7 +13,7 @@ from causal_pyro.counterfactual.handlers.selection import (
 )
 
 # from causal_pyro.counterfactual.internals import EventDimMessenger  # TODO use this
-from causal_pyro.indexed.ops import gather, indices_of, scatter, union
+from causal_pyro.indexed.ops import gather, get_index_plates, indices_of, scatter, union
 from causal_pyro.observational.ops import observe
 
 T = TypeVar("T")
@@ -51,6 +51,23 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     Reparameterization strategy for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
     """
+
+    def _pyro_post_sample(self, msg: dict) -> None:
+        # expand latent values to include all index plates
+        if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
+            dist_indices = indices_of(msg["fn"])
+            value_indices = indices_of(
+                msg["value"], event_dim=len(msg["fn"].event_shape)
+            )
+
+            missing_shape = list(msg["value"].shape)
+            for name in set(dist_indices.keys()) - set(value_indices.keys()):
+                dim = get_index_plates()[name].dim
+                missing_shape[dim - len(msg["fn"].event_shape)] = msg["fn"].batch_shape[
+                    dim
+                ]
+
+            msg["value"] = msg["value"].expand(tuple(missing_shape))
 
     def _pyro_observe(self, msg: dict) -> None:
         if "name" not in msg["kwargs"]:
