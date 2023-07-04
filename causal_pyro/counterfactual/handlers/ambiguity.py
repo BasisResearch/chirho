@@ -58,12 +58,13 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
             rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
             index_plates = get_index_plates()
 
-            missing_shape = list(value.shape)
+            new_shape = list(value.shape)
             for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
                 dim = index_plates[k].dim
-                missing_shape[dim - event_dim] = rv.batch_shape[dim]
+                new_shape = [1] * ((event_dim - dim) - len(new_shape)) + new_shape
+                new_shape[dim - event_dim] = rv.batch_shape[dim]
 
-            msg["value"] = value.expand(tuple(missing_shape))
+            msg["value"] = value.expand(tuple(new_shape))
 
     def _pyro_observe(self, msg: dict) -> None:
         if "name" not in msg["kwargs"]:
