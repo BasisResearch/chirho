@@ -1,12 +1,8 @@
-from typing import Any, Dict, Optional, TypeVar
+from typing import Any, Dict, TypeVar
 
 import pyro
 
-from causal_pyro.counterfactual.handlers.ambiguity import (
-    AmbiguousConditioningReparamMessenger,
-    AutoFactualConditioning,
-    CondStrategy,
-)
+from causal_pyro.counterfactual.handlers.ambiguity import FactualConditioningMessenger
 from causal_pyro.counterfactual.ops import split
 from causal_pyro.indexed.handlers import IndexPlatesMessenger
 from causal_pyro.indexed.ops import get_index_plates
@@ -15,15 +11,10 @@ from causal_pyro.interventional.ops import intervene
 T = TypeVar("T")
 
 
-class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
+class BaseCounterfactualMessenger(FactualConditioningMessenger):
     """
     Base class for counterfactual handlers.
     """
-
-    def __init__(self, config: Optional[CondStrategy] = None):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
 
     @staticmethod
     def _pyro_intervene(msg: Dict[str, Any]) -> None:

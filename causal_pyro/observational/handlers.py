@@ -1,17 +1,29 @@
 import functools
 import operator
-from typing import Callable, Generic, Hashable, Literal, Mapping, Optional, Protocol, TypedDict, TypeVar, Union
+from typing import (
+    Callable,
+    Generic,
+    Hashable,
+    Literal,
+    Mapping,
+    Optional,
+    Protocol,
+    TypedDict,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
+from causal_pyro.observational.internals import ObserveNameMessenger
 from causal_pyro.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
 
 
-class ConditionMessenger(Generic[T], pyro.poutine.messenger.Messenger):
+class ConditionMessenger(Generic[T], ObserveNameMessenger):
     """
     Condition on values in a probabilistic program.
     """
@@ -21,18 +33,29 @@ class ConditionMessenger(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_sample(self, msg):
-        if msg["is_observed"] or msg["done"] or msg["name"] not in self.data:
+        if msg["name"] not in self.data or msg["infer"].get("_do_not_observe", None):
             return
 
         msg["stop"] = True
         msg["done"] = True
-        msg["value"] = observe(
-            msg["fn"],
-            self.data[msg["name"]],
-            event_dim=len(msg["fn"].event_shape),
-            name=msg["name"],
-            **msg["kwargs"]
-        )
+
+        # flags to guarantee commutativity of condition, intervene, trace
+        msg["mask"] = False
+        msg["is_observed"] = False
+        msg["infer"]["is_auxiliary"] = True
+        msg["infer"]["_do_not_trace"] = True
+        msg["infer"]["_do_not_intervene"] = True
+        msg["infer"]["_do_not_observe"] = True
+
+        with pyro.poutine.infer_config(
+            config_fn=lambda msg_: {
+                "_do_not_observe": msg["name"] == msg_["name"]
+                or msg_["infer"].get("_do_not_observe", False)
+            }
+        ):
+            msg["value"] = observe(
+                msg["fn"], self.data[msg["name"]], name=msg["name"], **msg["kwargs"]
+            )
 
 
 condition = pyro.poutine.handlers._make_handler(ConditionMessenger)[1]

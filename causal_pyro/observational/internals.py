@@ -18,7 +18,9 @@ def _observe_deterministic(
     """
     Observe a tensor in a probabilistic program.
     """
-    rv_dist = pyro.distributions.Delta(torch.as_tensor(rv), event_dim=kwargs.pop("event_dim", 0))
+    rv_dist = pyro.distributions.Delta(
+        torch.as_tensor(rv), event_dim=kwargs.pop("event_dim", 0)
+    )
     return observe(rv_dist, obs, **kwargs)
 
 
@@ -38,11 +40,21 @@ def _observe_distribution(
         # rv_ = pyro.sample(name, rv, obs=None, **kwargs)
         # obs = obs(rv_)
         # return observe(rv_, obs, name=name, **kwargs)
-        raise NotImplementedError("Observing a distribution with a callable is not yet supported")
+        raise NotImplementedError(
+            "Observing a distribution with a callable is not yet supported"
+        )
 
     if isinstance(obs, tuple):
         # for i, o in enumerate(obs):
         #     observe(rv, o, name=f"{name}[{i}]", **kwargs)
-        raise NotImplementedError("Observing a distribution with a tuple is not yet supported")
+        raise NotImplementedError(
+            "Observing a distribution with a tuple is not yet supported"
+        )
 
     return pyro.sample(name, rv, obs=obs, **kwargs)
+
+
+class ObserveNameMessenger(pyro.poutine.messenger.Messenger):
+    def _pyro_observe(self, msg):
+        if "name" not in msg["kwargs"]:
+            msg["kwargs"]["name"] = msg["name"]

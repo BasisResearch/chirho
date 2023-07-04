@@ -15,6 +15,7 @@ from causal_pyro.observational.handlers import (
     KernelSoftConditionReparam,
     RBFKernel,
     SoftEqKernel,
+    condition,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def test_soft_conditioning_smoke_continuous_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -110,7 +111,7 @@ def test_soft_conditioning_smoke_discrete_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         discrete_scm_1()
 
     tr.trace.compute_log_prob()
@@ -154,7 +155,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), cf_class(cf_dim), do(actions=actions), pyro.condition(data=data):
+    ), cf_class(cf_dim), do(actions=actions), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
