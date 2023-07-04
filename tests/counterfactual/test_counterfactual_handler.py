@@ -321,14 +321,14 @@ def test_smoke_enumerate_hmm_elbo(
         model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
 
     if use_guide:
-        guide = pyro.infer.config_enumerate(
+        guide = pyro.infer.config_enumerate(default="parallel")(
             pyro.infer.autoguide.AutoDiscreteParallel(
                 pyro.poutine.block(expose=["x"])(condition(data={})(model))
             )
         )
-        model = pyro.infer.config_enumerate(model)
+        model = pyro.infer.config_enumerate(default="parallel")(model)
     else:
-        model = pyro.infer.config_enumerate(model)
+        model = pyro.infer.config_enumerate(default="parallel")(model)
         model = condition(model, data={"x": torch.as_tensor(0)})
 
         def guide(data):
