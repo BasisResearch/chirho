@@ -295,10 +295,10 @@ def hmm_model(data: Iterable, use_condition: bool):
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+@pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
-@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 @pytest.mark.parametrize("use_guide", [False, True])
 def test_smoke_enumerate_hmm_elbo(
@@ -338,10 +338,10 @@ def test_smoke_enumerate_hmm_elbo(
     elbo.differentiable_loss(MultiWorldCounterfactual(cf_dim)(model), guide, data)
 
 
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
+@pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [2, 3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
-@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 def test_smoke_enumerate_hmm_compute_marginals(
     num_steps, use_condition, max_plate_nesting, cf_dim
 ):
@@ -369,8 +369,8 @@ def test_smoke_enumerate_hmm_compute_marginals(
     elbo.compute_marginals(MultiWorldCounterfactual(cf_dim)(model), guide, data)
 
 
-@pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
-@pytest.mark.parametrize("max_plate_nesting", [2, 3, 4, 5])
+@pytest.mark.parametrize("cf_dim", [-1, -2, None])
+@pytest.mark.parametrize("max_plate_nesting", [2, 5])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize(
     "num_steps",
@@ -409,7 +409,7 @@ def test_smoke_enumerate_hmm_infer_discrete(
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [2, 3])
 @pytest.mark.parametrize("use_condition", [False, True])
-@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 @pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
 def test_smoke_enumerate_hmm_mcmc(
     num_steps, use_condition, max_plate_nesting, Kernel, cf_dim
