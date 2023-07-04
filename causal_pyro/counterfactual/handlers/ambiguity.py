@@ -111,10 +111,3 @@ def _observe_tfmdist(
     new_value = scatter(value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim)
     new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
     return pyro.sample(name, new_fn, obs=new_value)
-
-
-# TODO use this to handle independent transformed distributions
-# @FactualConditioningMessenger._dispatch_observe.register
-# def _observe_indep(self, rv: dist.Independent, obs: torch.Tensor, name: str) -> torch.Tensor:
-#     with EventDimMessenger(rv.reinterpreted_batch_ndims):
-#         return self._dispatch_observe(rv.base_dist, obs, name)
