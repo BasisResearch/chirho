@@ -3,7 +3,6 @@ from typing import Any, Dict, TypeVar
 
 import pyro
 import pyro.distributions as dist
-import pyro.infer.reparam
 import torch
 
 from causal_pyro.counterfactual.handlers.selection import (
@@ -11,8 +10,6 @@ from causal_pyro.counterfactual.handlers.selection import (
     SelectFactual,
     get_factual_indices,
 )
-
-# from causal_pyro.counterfactual.internals import EventDimMessenger  # TODO use this
 from causal_pyro.indexed.ops import gather, get_index_plates, indices_of, scatter, union
 from causal_pyro.observational.ops import observe
 
@@ -103,13 +100,6 @@ def _observe_dist(
         return pyro.sample(name, new_rv, obs=new_value)
 
 
-# TODO
-# @FactualConditioningMessenger._dispatch_observe.register
-# def _observe_indep(self, rv: dist.Independent, obs: torch.Tensor, name: str) -> torch.Tensor:
-#     with EventDimMessenger(rv.reinterpreted_batch_ndims):
-#         return self._dispatch_observe(rv.base_dist, obs, name)
-
-
 @FactualConditioningMessenger._dispatched_observe.register
 def _observe_tfmdist(
     self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
@@ -147,3 +137,10 @@ def _observe_tfmdist(
     new_value = scatter(value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim)
     new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
     return pyro.sample(name, new_fn, obs=new_value)
+
+
+# TODO use this to handle independent transformed distributions
+# @FactualConditioningMessenger._dispatch_observe.register
+# def _observe_indep(self, rv: dist.Independent, obs: torch.Tensor, name: str) -> torch.Tensor:
+#     with EventDimMessenger(rv.reinterpreted_batch_ndims):
+#         return self._dispatch_observe(rv.base_dist, obs, name)
