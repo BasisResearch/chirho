@@ -55,18 +55,15 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     def _pyro_post_sample(self, msg: dict) -> None:
         # expand latent values to include all index plates
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
+            rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
             index_plates = get_index_plates()
-            event_dim = len(msg["fn"].event_shape)
 
-            dist_indices = indices_of(msg["fn"])
-            value_indices = indices_of(msg["value"], event_dim=event_dim)
+            missing_shape = list(value.shape)
+            for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
+                dim = index_plates[k].dim
+                missing_shape[dim - event_dim] = rv.batch_shape[dim]
 
-            missing_shape = list(msg["value"].shape)
-            for name in set(dist_indices.keys()) - set(value_indices.keys()):
-                dim = index_plates[name].dim
-                missing_shape[dim - event_dim] = msg["fn"].batch_shape[dim]
-
-            msg["value"] = msg["value"].expand(tuple(missing_shape))
+            msg["value"] = value.expand(tuple(missing_shape))
 
     def _pyro_observe(self, msg: dict) -> None:
         if "name" not in msg["kwargs"]:
