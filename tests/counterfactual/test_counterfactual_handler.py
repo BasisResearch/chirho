@@ -14,6 +14,8 @@ from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
 )
 from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
 from causal_pyro.interventional.ops import intervene
+from causal_pyro.observational.handlers import condition
+from causal_pyro.observational.ops import observe
 
 logger = logging.getLogger(__name__)
 
@@ -263,3 +265,66 @@ def test_nested_interventions_same_variable(
     assert (x10 == x1).all()
     assert (x01 == x2).all()
     assert (x11 != x2).all() if dependent_intervention else (x11 == x2).all()
+
+
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 10])
+@pytest.mark.parametrize("use_observe", [False, True])  # expected to fail when False
+def test_smoke_enumerate_hmm(num_steps, use_observe):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    @MultiWorldCounterfactual(-1)
+    @condition(
+        data={f"y_{t}": y for t, y in enumerate(data if not use_observe else ())}
+    )
+    def model(data):
+        transition_probs = pyro.sample(
+            "transition_probs",
+            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+        )
+        emission_probs = pyro.sample(
+            "emission_probs",
+            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+        )
+        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+        logger.debug(f"-1\t{tuple(x.shape)}")
+        for t, y in pyro.markov(enumerate(data)):
+            x = pyro.sample(
+                f"x_{t}",
+                dist.Categorical(transition_probs[x]),
+                infer={"enumerate": "parallel"},
+            )
+            if t <= 1:
+                x = intervene(x, torch.tensor(0), event_dim=0, name=f"ix_{t}")
+
+            if use_observe:
+                observe(dist.Categorical(emission_probs[x]), y, name=f"y_{t}")
+            else:
+                pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
+            logger.debug(f"{t}\t{tuple(x.shape)}")
+
+    @pyro.infer.config_enumerate
+    def guide(data):
+        init_probs = pyro.param(
+            "init_probs",
+            torch.tensor([0.75, 0.25]),
+            constraint=dist.constraints.simplex,
+        )
+        pyro.sample("x", dist.Categorical(init_probs))
+
+    conditioned_model = condition(model, data={"x": torch.as_tensor(0)})
+
+    pyro.infer.TraceEnum_ELBO(max_plate_nesting=3).differentiable_loss(
+        conditioned_model, lambda *args: None, data
+    )
+
+    pyro.infer.TraceTMC_ELBO().differentiable_loss(model, guide, data)
+
+    pyro.infer.TraceEnum_ELBO(max_plate_nesting=3).differentiable_loss(
+        model, guide, data
+    )
+
+    pyro.infer.TraceEnum_ELBO().compute_marginals(model, guide, data)["x"]
+
+    pyro.infer.infer_discrete(first_available_dim=-4)(conditioned_model)(data)
+
+    pyro.infer.MCMC(pyro.infer.NUTS(conditioned_model)).run(data)
