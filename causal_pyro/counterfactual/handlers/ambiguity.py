@@ -72,78 +72,77 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         if not site_is_ambiguous(msg):
             return
 
-        msg["value"] = self._dispatch_observe(*msg["args"], name=msg["name"])
+        msg["value"] = self._dispatched_observe(*msg["args"], name=msg["name"])
         msg["done"] = True
         msg["stop"] = True
 
     @functools.singledispatchmethod
-    def _dispatch_observe(self, rv, obs: torch.Tensor, name: str) -> torch.Tensor:
+    def _dispatched_observe(self, rv, obs: torch.Tensor, name: str) -> torch.Tensor:
         raise NotImplementedError
 
-    @_dispatch_observe.register(dist.FoldedDistribution)
-    @_dispatch_observe.register(dist.Distribution)
-    def _observe_dist(
-        self, rv: dist.Distribution, obs: torch.Tensor, name: str
-    ) -> torch.Tensor:
-        with pyro.poutine.infer_config(config_fn=no_ambiguity):
-            with SelectFactual():
-                fv = pyro.sample(name + "_factual", rv, obs=obs)
 
-            with SelectCounterfactual():
-                cv = pyro.sample(name + "_counterfactual", rv)
+@FactualConditioningMessenger._dispatched_observe.register(dist.FoldedDistribution)
+@FactualConditioningMessenger._dispatched_observe.register(dist.Distribution)
+def _observe_dist(
+    self, rv: dist.Distribution, obs: torch.Tensor, name: str
+) -> torch.Tensor:
+    with pyro.poutine.infer_config(config_fn=no_ambiguity):
+        with SelectFactual():
+            fv = pyro.sample(name + "_factual", rv, obs=obs)
 
-            event_dim = len(rv.event_shape)
-            fw_indices = get_factual_indices()
-            new_value: torch.Tensor = scatter(
-                fv, fw_indices, result=cv.clone(), event_dim=event_dim
-            )
-            new_rv = dist.Delta(new_value, event_dim=event_dim).mask(False)
-            return pyro.sample(name, new_rv, obs=new_value)
+        with SelectCounterfactual():
+            cv = pyro.sample(name + "_counterfactual", rv)
 
-    # TODO
-    # @_dispatch_observe.register
-    # def _observe_indep(self, rv: dist.Independent, obs: torch.Tensor, name: str) -> torch.Tensor:
-    #     with EventDimMessenger(rv.reinterpreted_batch_ndims):
-    #         return self._dispatch_observe(rv.base_dist, obs, name)
-
-    @_dispatch_observe.register
-    def _observe_tfmdist(
-        self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
-    ) -> torch.Tensor:
-        tfm = (
-            rv.transforms[-1]
-            if len(rv.transforms) == 1
-            else dist.transforms.ComposeTransformModule(rv.transforms)
+        event_dim = len(rv.event_shape)
+        fw_indices = get_factual_indices()
+        new_value: torch.Tensor = scatter(
+            fv, fw_indices, result=cv.clone(), event_dim=event_dim
         )
-        noise_dist = rv.base_dist
-        noise_event_dim = len(noise_dist.event_shape)
-        obs_event_dim = len(rv.event_shape)
+        new_rv = dist.Delta(new_value, event_dim=event_dim).mask(False)
+        return pyro.sample(name, new_rv, obs=new_value)
 
-        # factual world
-        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
-            new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
-            new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
-            obs_noise = pyro.sample(
-                name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
-            )
 
-        # depends on strategy and indices of noise_dist
-        fw = get_factual_indices()
-        obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(
-            obs_noise.shape
+# TODO
+# @FactualConditioningMessenger._dispatch_observe.register
+# def _observe_indep(self, rv: dist.Independent, obs: torch.Tensor, name: str) -> torch.Tensor:
+#     with EventDimMessenger(rv.reinterpreted_batch_ndims):
+#         return self._dispatch_observe(rv.base_dist, obs, name)
+
+
+@FactualConditioningMessenger._dispatched_observe.register
+def _observe_tfmdist(
+    self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
+) -> torch.Tensor:
+    tfm = (
+        rv.transforms[-1]
+        if len(rv.transforms) == 1
+        else dist.transforms.ComposeTransformModule(rv.transforms)
+    )
+    noise_dist = rv.base_dist
+    noise_event_dim = len(noise_dist.event_shape)
+    obs_event_dim = len(rv.event_shape)
+
+    # factual world
+    with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
+        new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
+        new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
+        obs_noise = pyro.sample(
+            name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
         )
-        # obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
-        obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
-        # counterfactual world
-        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
-            cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
-            cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)
-            cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
+    # depends on strategy and indices of noise_dist
+    fw = get_factual_indices()
+    obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(obs_noise.shape)
+    # obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
+    obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
-        # merge
-        new_value = scatter(
-            value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim
-        )
-        new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
-        return pyro.sample(name, new_fn, obs=new_value)
+    # counterfactual world
+    with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
+        cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
+        cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)
+        cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
+
+    # merge
+    new_value = scatter(value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim)
+    new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
+    return pyro.sample(name, new_fn, obs=new_value)
