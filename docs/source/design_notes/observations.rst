@@ -1,10 +1,8 @@
 Classical counterfactual formulations treat randomness as exogenous and shared across factual and counterfactual
-worlds. Pyro, however, does not expose the underlying probability space to users. This means that the twin-world
+worlds. Pyro, however, does not expose the underlying probability space to users, and the cardinality of
+randomness is determined by the number of batched random variables at each ``sample`` site. This means that the twin-world
 semantics above may not, in an arbitrary model, correspond directly to the classical, counterfactual formulation.
-These issues can be seen when an intervention occurs both upstream and downstream of sample sites.
-
-..
-    TODO: is that right? "These issues can be seen when an intervention occurs both upstream and downstream of sample sites."
+An arbitrary model may assign independent noise to the factual and counterfactual worlds.
 
 .. code:: python
 
@@ -13,9 +11,13 @@ These issues can be seen when an intervention occurs both upstream and downstrea
      ...
      a = intervene(f(x), a_cf)
      ...
+     # Higher cardinality of a here will, by default induce independent normal draws,
+     #  resulting in different exogenous noise variables in the factual and counterfactual worlds.
      y = pyro.sample("y", Normal(a, b))  # downstream of a
      ...
      z = pyro.sample("z", Normal(1, 1))  # not downstream of a
+     # Here, because the noise is not "combined" with a except in this determinstic function g,
+     #  the noise is shared across the factual and counterfactual worlds.
      z_a = g(a, z)  # downstream of a
 
 Interestingly, nearly all `PyTorch and Pyro
