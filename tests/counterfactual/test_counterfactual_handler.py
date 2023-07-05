@@ -295,6 +295,9 @@ def hmm_model(data: Iterable, use_condition: bool):
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
+@pytest.mark.parametrize(
+    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+)
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
@@ -302,7 +305,7 @@ def hmm_model(data: Iterable, use_condition: bool):
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 @pytest.mark.parametrize("use_guide", [False, True])
 def test_smoke_cf_enumerate_hmm_elbo(
-    num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim
+    num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -315,7 +318,11 @@ def test_smoke_cf_enumerate_hmm_elbo(
         max_plate_nesting += 1 - MultiWorldCounterfactual(cf_dim).first_available_dim
     else:
         max_plate_nesting += 1 - cf_dim
-    elbo = Elbo(max_plate_nesting=max_plate_nesting)
+    elbo = Elbo(
+        max_plate_nesting=max_plate_nesting,
+        num_particles=num_particles,
+        vectorize_particles=(num_particles > 1),
+    )
 
     if use_condition:
         model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(model)
@@ -369,6 +376,9 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
     elbo.compute_marginals(MultiWorldCounterfactual(cf_dim)(model), guide, data)
 
 
+@pytest.mark.parametrize(
+    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+)
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [2, 5])
 @pytest.mark.parametrize("use_condition", [False, True])
@@ -382,7 +392,7 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
     ],
 )
 def test_smoke_cf_enumerate_hmm_infer_discrete(
-    num_steps, use_condition, max_plate_nesting, cf_dim
+    num_steps, use_condition, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
@@ -399,6 +409,12 @@ def test_smoke_cf_enumerate_hmm_infer_discrete(
         max_plate_nesting += 1 - MultiWorldCounterfactual(cf_dim).first_available_dim
     else:
         max_plate_nesting += 1 - cf_dim
+
+    if num_particles > 1:
+        model = pyro.plate("particles", num_particles, dim=-1 - max_plate_nesting)(
+            model
+        )
+        max_plate_nesting += 1
 
     # smoke test
     pyro.infer.infer_discrete(first_available_dim=-1 - max_plate_nesting)(

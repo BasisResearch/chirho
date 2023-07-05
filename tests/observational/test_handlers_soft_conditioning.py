@@ -199,17 +199,24 @@ def hmm_model(data):
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
+@pytest.mark.parametrize(
+    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+)
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_guide", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 def test_smoke_condition_enumerate_hmm_elbo(
-    num_steps, Elbo, use_guide, max_plate_nesting
+    num_steps, Elbo, use_guide, max_plate_nesting, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
 
     assert issubclass(Elbo, pyro.infer.elbo.ELBO)
-    elbo = Elbo(max_plate_nesting=max_plate_nesting)
+    elbo = Elbo(
+        max_plate_nesting=max_plate_nesting,
+        num_particles=num_particles,
+        vectorize_particles=(num_particles > 1),
+    )
 
     model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(hmm_model)
 
