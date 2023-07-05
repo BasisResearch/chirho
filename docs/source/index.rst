@@ -27,7 +27,7 @@ practice.
 - **Causal Structure Discovery** : "What individual attributes influence risk of covid-19 hospitalization?"
 
 Importantly, Causal Pyro does not answer these kinds of questions by magic. In fact, there is no escaping the fact that
-"behind any causal conclusion there must lie some causal assumption", a phrase made famous by Judea Pearl (TODO: CITE). Instead, Causal Pyro
+"behind any causal conclusion there must lie some causal assumption", a phrase made famous by Judea Pearl :cite:`pearl`. Instead, Causal Pyro
 provides a substrate for writing causal assumptions as probabilistic programs, 
 and for writing causal questions in terms of program transformations. To understand this in a bit more detail,
 see the following in-depth tutorials describes Causal Pyro's underlying machinery.
@@ -49,7 +49,7 @@ examples from the causal inference literature.
 
 We have tried to choose simple examples that would be of interest to
 both the causal inference and probabilistic programming communities:
-they collectively span Pearl’s causal hierarchy [@pearl2001bayesian],
+they collectively span Pearl’s causal hierarchy :cite:`pearl2001bayesian`,
 and most are broadly applicable, empirically validated, have an
 unconventional or limited identification result, and make use of modern
 probabilistic machine learning tools, like neural networks or stochastic
@@ -105,6 +105,11 @@ Additional background reading material
    programs: \ https://docs.pyro.ai/en/stable/infer.reparam.html
 -  Optional: getting started with
    NumPyro \ https://num.pyro.ai/en/stable/getting_started.html
+
+References
+----------
+
+.. bibliography::
 
 Indices and tables
 ==================
