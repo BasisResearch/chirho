@@ -1,19 +1,16 @@
-Design notes: Sampling and conditioning via reparameterization
---------------------------------------------------------------
+Classical counterfactual formulations treat randomness as exogenous and shared across factual and counterfactual
+worlds. Pyro, however, does not expose the underlying probability space to users. This means that the twin-world
+semantics above may not, in an arbitrary model, correspond directly to the classical, counterfactual formulation.
+These issues can be seen when an intervention occurs both upstream and downstream of sample sites.
 
-A notable distinction between Omega and Pyro (or rather between Omega
-and most other PPLs) is that random variables in Pyro do not expose the
-underlying probability space, and the amount of randomness is determined
-by the number of batched random variables at each ``sample`` site. This
-means that the twin-world semantics above may not, in an arbitrary
-model, correspond directly to a classical counterfactual where all
-randomness is exogenous and shared across factual and counterfactual
-worlds.
+..
+    TODO: is that right? "These issues can be seen when an intervention occurs both upstream and downstream of sample sites."
 
 .. code:: python
 
    def model():
-     x = pyro.sample("x", Normal(0, 1))  # upstream of a
+     # upstream of a
+     x = pyro.sample("x", Normal(0, 1))
      ...
      a = intervene(f(x), a_cf)
      ...
@@ -24,17 +21,17 @@ worlds.
 
 Interestingly, nearly all `PyTorch and Pyro
 distributions <https://pytorch.org/docs/stable/distributions.html>`__
-have samplers that, like Omega random variables, are implemented as
+have samplers that are implemented as
 `deterministic functions of exogenous
 noise <https://pytorch.org/docs/stable/distributions.html#torch.distributions.distribution.Distribution.rsample>`__,
 because `as discussed in Pyro’s tutorials on variational
 inference <http://pyro.ai/examples/svi_part_iii.html#Easy-Case:-Reparameterizable-Random-Variables>`__
 this leads to Monte Carlo estimates of gradients with much lower
-variance. However, unlike with Omega these noise variables are not
+variance. However, these noise variables are not
 exposed via to users or to Pyro’s inference APIs.
 
 Reusing and replicating exogenous noise
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 Pyro implements a number of generic measure-preserving
 `reparameterizations of probabilistic
@@ -86,7 +83,7 @@ computations in surrogate structural causal models whose mechanisms are
 determined by global latent variables or parameters.
 
 Soft conditioning for likelihood-based inference
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------------------
 
 Answering counterfactual queries requires conditioning on the value of
 deterministic functions of random variables, an intractable problem in
@@ -96,8 +93,11 @@ Approximate solutions to this problem can be implemented using the same
 ``Reparam`` API, making such models compatible with the full range of
 Pyro’s existing likelihood-based inference machinery.
 
+..
+    TODO need to also cite the predicate exchange thing here if we want to use this example?
+
 For example, to implement something like the relaxation in Omega’s
-predicate exchange meta-algorithm, we could implement a new ``Reparam``
+predicate exchange meta-algorithm :cite:`tavares_2020`, we could implement a new ``Reparam``
 class that rewrites observed deterministic functions to approximate soft
 conditioning statements using a distance metric or positive semidefinite
 kernel and the ``factor`` primitive.

@@ -85,11 +85,7 @@ approximations that power much of the modern probabilistic machine learning land
    :maxdepth: 2
    :caption: Design Notes
 
-   design_notes/index
-   design_notes/counterfactuals
-   design_notes/interventions
-   design_notes/queries
-   design_notes/observations
+   design_notes/design_notes_for_contrib
 
 Additional background reading material
 --------------------------------------
