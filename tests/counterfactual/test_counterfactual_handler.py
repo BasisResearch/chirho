@@ -296,7 +296,14 @@ def hmm_model(data: Iterable, use_condition: bool):
 
 
 @pytest.mark.parametrize(
-    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+    "num_particles",
+    [
+        1,
+        pytest.param(
+            10,
+            marks=pytest.mark.xfail(reason="TODO fix failures with num_particles > 1"),
+        ),
+    ],
 )
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
@@ -377,7 +384,14 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
 
 
 @pytest.mark.parametrize(
-    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+    "num_particles",
+    [
+        1,
+        pytest.param(
+            10,
+            marks=pytest.mark.xfail(reason="TODO fix failures with num_particles > 1"),
+        ),
+    ],
 )
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [2, 5])
