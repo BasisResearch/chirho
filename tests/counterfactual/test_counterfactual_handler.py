@@ -285,26 +285,24 @@ def hmm_model(data: Iterable, use_condition: bool):
     for t, y in pyro.markov(enumerate(data)):
         x = pyro.sample(
             f"x_{t}",
-            dist.Categorical(transition_probs[x]),
+            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
         )
 
         if use_condition:
-            pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
+            pyro.sample(
+                f"y_{t}",
+                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+            )
         else:
-            observe(dist.Categorical(emission_probs[x]), y, name=f"y_{t}")
+            observe(
+                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+                y,
+                name=f"y_{t}",
+            )
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
-@pytest.mark.parametrize(
-    "num_particles",
-    [
-        1,
-        pytest.param(
-            10,
-            marks=pytest.mark.xfail(reason="TODO fix failures with num_particles > 1"),
-        ),
-    ],
-)
+@pytest.mark.parametrize("num_particles", [1, 10])
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
@@ -383,16 +381,7 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
     elbo.compute_marginals(MultiWorldCounterfactual(cf_dim)(model), guide, data)
 
 
-@pytest.mark.parametrize(
-    "num_particles",
-    [
-        1,
-        pytest.param(
-            10,
-            marks=pytest.mark.xfail(reason="TODO fix failures with num_particles > 1"),
-        ),
-    ],
-)
+@pytest.mark.parametrize("num_particles", [1, 10])
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
 @pytest.mark.parametrize("max_plate_nesting", [2, 5])
 @pytest.mark.parametrize("use_condition", [False, True])
