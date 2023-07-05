@@ -1,10 +1,12 @@
 import functools
-from typing import Callable, Hashable, Mapping, Optional, Tuple, TypeVar, Union
+from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 T = TypeVar("T")
 
-AtomicObservation = Union[T, Callable[[T], Union[T, Tuple[T, ...]]]]
-CompoundObservation = Union[Mapping[Hashable, AtomicObservation[T]], Callable[..., T]]
+AtomicObservation = T | Callable[..., T]  # TODO add support for more atomic types
+CompoundObservation = Union[
+    Mapping[Hashable, AtomicObservation[T]], Callable[..., AtomicObservation[T]]
+]
 Observation = Union[AtomicObservation[T], CompoundObservation[T]]
 
 
