@@ -1,26 +1,29 @@
-import pyro.infer.reparam
-import torch
+from typing import Any, Dict
+
+from causal_pyro.indexed.ops import indices_of, union
 
 
-def expand_obs_value_inplace_(msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
+def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     """
-    Slightly gross workaround that mutates the msg in place
-    to avoid triggering overzealous validation logic in
-    :class:~`pyro.poutine.reparam.ReparamMessenger`
-    that uses cheaper tensor shape and identity equality checks as
-    a conservative proxy for an expensive tensor value equality check.
-    (see https://github.com/pyro-ppl/pyro/blob/685c7adee65bbcdd6bd6c84c834a0a460f2224eb/pyro/poutine/reparam_messenger.py#L99)  # noqa: E501
-    This workaround is correct because these reparameterizers do not change
-    the observed entries, it just packs counterfactual values around them;
-    the equality check being approximated by that logic would still pass.
+    Helper function used with :func:`observe` to determine
+    whether a site is observed or ambiguous.
+    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
+    and the observed value's index variables are a strict subset of the distribution's
+    indices and hence require clarification of which entries of the random variable
+    are fixed/observed (as opposed to random/unobserved).
     """
-    msg["value"] = torch.as_tensor(msg["value"])
-    msg["infer"]["orig_shape"] = msg["value"].shape
-    _custom_init = getattr(msg["value"], "_pyro_custom_init", False)
-    msg["value"] = msg["value"].expand(
-        torch.broadcast_shapes(
-            msg["fn"].batch_shape + msg["fn"].event_shape,
-            msg["value"].shape,
-        )
-    )
-    setattr(msg["value"], "_pyro_custom_init", _custom_init)
+    rv, obs = msg["args"][:2]
+    value_indices = indices_of(obs, event_dim=len(rv.event_shape))
+    dist_indices = indices_of(rv)
+    return (
+        bool(union(value_indices, dist_indices)) and value_indices != dist_indices
+    ) or not msg["infer"].get("_specified_conditioning", True)
+
+
+def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Helper function used with :func:`pyro.poutine.infer_config` to inform
+    :class:`FactualConditioningMessenger` that all ambiguity in the current
+    context has been resolved.
+    """
+    return {"_specified_conditioning": True}
