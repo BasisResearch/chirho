@@ -95,11 +95,11 @@ Pyro’s existing likelihood-based inference machinery.
 ..
     TODO need to also cite the predicate exchange thing here if we want to use this example?
 
-For example, to implement something like the relaxation in Omega’s (another PPL)
-predicate exchange meta-algorithm :cite:`tavares_2020, tavaresPredicateExchangeInference2019`, we could implement a new ``Reparam``
+For example, we could implement a new ``Reparam``
 class that rewrites observed deterministic functions to approximate soft
 conditioning statements using a distance metric or positive semidefinite
-kernel and the ``factor`` primitive.
+kernel and the ``factor`` primitive. This is useful when the observed value is, for example, a predicate
+of a random variable :cite:`tavaresPredicateExchangeInference2019`, or e.g. distributed according to a point mass.
 
 .. code:: python
 
