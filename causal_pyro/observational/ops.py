@@ -3,7 +3,7 @@ from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 T = TypeVar("T")
 
-AtomicObservation = T | Callable[..., T]  # TODO add support for more atomic types
+AtomicObservation = Union[T, Callable[..., T]]  # TODO add support for more atomic types
 CompoundObservation = Union[
     Mapping[Hashable, AtomicObservation[T]], Callable[..., AtomicObservation[T]]
 ]
