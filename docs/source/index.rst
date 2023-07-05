@@ -85,7 +85,7 @@ approximations that power much of the modern probabilistic machine learning land
    :maxdepth: 2
    :caption: Design Notes
 
-   design_notes/design_notes_for_contrib
+   design_notes/index
 
 Additional background reading material
 --------------------------------------
@@ -106,6 +106,7 @@ References
 ----------
 
 .. bibliography::
+   :filter: docname in docnames
 
 Indices and tables
 ==================

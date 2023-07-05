@@ -9,8 +9,7 @@ These issues can be seen when an intervention occurs both upstream and downstrea
 .. code:: python
 
    def model():
-     # upstream of a
-     x = pyro.sample("x", Normal(0, 1))
+     x = pyro.sample("x", Normal(0, 1))  # upstream of a
      ...
      a = intervene(f(x), a_cf)
      ...
@@ -96,8 +95,8 @@ Pyro’s existing likelihood-based inference machinery.
 ..
     TODO need to also cite the predicate exchange thing here if we want to use this example?
 
-For example, to implement something like the relaxation in Omega’s
-predicate exchange meta-algorithm :cite:`tavares_2020`, we could implement a new ``Reparam``
+For example, to implement something like the relaxation in Omega’s (another PPL)
+predicate exchange meta-algorithm :cite:`tavares_2020, tavaresPredicateExchangeInference2019`, we could implement a new ``Reparam``
 class that rewrites observed deterministic functions to approximate soft
 conditioning statements using a distance metric or positive semidefinite
 kernel and the ``factor`` primitive.

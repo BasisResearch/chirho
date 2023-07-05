@@ -34,4 +34,8 @@ Causal Queries as Program Transformations
 
 .. include:: queries.rst
 
+References
+==========
+
 .. bibliography::
+   :filter: docname in docnames
