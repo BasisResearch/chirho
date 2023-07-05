@@ -39,7 +39,11 @@ extensions = [
     "myst_parser",
     # "sphinx_gallery.gen_gallery",
     # "sphinx_search.extension",
+    "sphinxcontrib.bibtex"
 ]
+
+# Point sphinxcontrib.bibtex to the bibtex file.
+bibtex_bibfiles = ['refs.bib']
 
 # Enable documentation inheritance
 

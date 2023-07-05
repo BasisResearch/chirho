@@ -33,8 +33,8 @@ class SelectCounterfactual(DependentMaskMessenger):
         pyro.poutine.mask(mask=~indexset_as_mask(get_factual_indices()))
     """
 
+    @staticmethod
     def get_mask(
-        self,
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor],
         device: torch.device = torch.device("cpu"),
@@ -57,8 +57,8 @@ class SelectFactual(DependentMaskMessenger):
         pyro.poutine.mask(mask=indexset_as_mask(get_factual_indices()))
     """
 
+    @staticmethod
     def get_mask(
-        self,
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor] = None,
         device: torch.device = torch.device("cpu"),
