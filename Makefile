@@ -1,8 +1,5 @@
 lint: FORCE
-	flake8
-	black --check .
-	isort --check .
-	python scripts/update_headers.py --check
+	scripts/lint.sh
 
 format:
 	black .
