@@ -15,6 +15,7 @@ from causal_pyro.observational.handlers import (
     KernelSoftConditionReparam,
     RBFKernel,
     SoftEqKernel,
+    condition,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ def test_soft_conditioning_smoke_continuous_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -110,7 +111,7 @@ def test_soft_conditioning_smoke_discrete_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         discrete_scm_1()
 
     tr.trace.compute_log_prob()
@@ -154,7 +155,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), cf_class(cf_dim), do(actions=actions), pyro.condition(data=data):
+    ), cf_class(cf_dim), do(actions=actions), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -174,3 +175,64 @@ def test_soft_conditioning_counterfactual_continuous_1(
         else:
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
+
+
+def hmm_model(data):
+    transition_probs = pyro.param(
+        "transition_probs",
+        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+        constraint=dist.constraints.simplex,
+    )
+    emission_probs = pyro.sample(
+        "emission_probs",
+        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+    )
+    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+    logger.debug(f"-1\t{tuple(x.shape)}")
+    for t, y in pyro.markov(enumerate(data)):
+        x = pyro.sample(
+            f"x_{t}",
+            dist.Categorical(transition_probs[x]),
+        )
+
+        pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
+        logger.debug(f"{t}\t{tuple(x.shape)}")
+
+
+@pytest.mark.parametrize(
+    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
+)
+@pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
+@pytest.mark.parametrize("use_guide", [False, True])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6])
+@pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
+def test_smoke_condition_enumerate_hmm_elbo(
+    num_steps, Elbo, use_guide, max_plate_nesting, num_particles
+):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    assert issubclass(Elbo, pyro.infer.elbo.ELBO)
+    elbo = Elbo(
+        max_plate_nesting=max_plate_nesting,
+        num_particles=num_particles,
+        vectorize_particles=(num_particles > 1),
+    )
+
+    model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(hmm_model)
+
+    if use_guide:
+        guide = pyro.infer.config_enumerate(default="parallel")(
+            pyro.infer.autoguide.AutoDiscreteParallel(
+                pyro.poutine.block(expose=["x"])(condition(data={})(model))
+            )
+        )
+        model = pyro.infer.config_enumerate(default="parallel")(model)
+    else:
+        model = pyro.infer.config_enumerate(default="parallel")(model)
+        model = condition(model, data={"x": torch.as_tensor(0)})
+
+        def guide(data):
+            pass
+
+    # smoke test
+    elbo.differentiable_loss(model, guide, data)
