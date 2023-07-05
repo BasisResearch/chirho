@@ -18,7 +18,9 @@ class ConditionMessenger(Generic[T], ObserveNameMessenger):
         super().__init__()
 
     def _pyro_sample(self, msg):
-        if pyro.poutine.util.site_is_subsample(msg) or pyro.poutine.util.site_is_factor(msg):
+        if pyro.poutine.util.site_is_subsample(msg) or pyro.poutine.util.site_is_factor(
+            msg
+        ):
             return
 
         if msg["name"] not in self.data or msg["infer"].get("_do_not_observe", None):

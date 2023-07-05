@@ -1,14 +1,6 @@
 import functools
 import operator
-from typing import (
-    Callable,
-    Literal,
-    Optional,
-    Protocol,
-    TypedDict,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
 import pyro.distributions.constraints as constraints

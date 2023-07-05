@@ -10,12 +10,12 @@ from causal_pyro.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from causal_pyro.interventional.handlers import do
-from causal_pyro.observational.handlers import (
+from causal_pyro.observational.handlers import condition
+from causal_pyro.observational.handlers.soft_conditioning import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
     RBFKernel,
     SoftEqKernel,
-    condition,
 )
 
 logger = logging.getLogger(__name__)

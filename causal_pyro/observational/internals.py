@@ -13,9 +13,7 @@ T = TypeVar("T")
 @observe.register(float)
 @observe.register(bool)
 @observe.register(torch.Tensor)
-def _observe_deterministic(
-    rv: T, obs: Optional[AtomicObservation[T]] = None, **kwargs
-):
+def _observe_deterministic(rv: T, obs: Optional[AtomicObservation[T]] = None, **kwargs):
     """
     Observe a tensor in a probabilistic program.
     """
