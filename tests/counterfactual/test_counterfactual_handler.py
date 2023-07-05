@@ -301,7 +301,7 @@ def hmm_model(data: Iterable, use_condition: bool):
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 @pytest.mark.parametrize("use_guide", [False, True])
-def test_smoke_enumerate_hmm_elbo(
+def test_smoke_cf_enumerate_hmm_elbo(
     num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
@@ -342,7 +342,7 @@ def test_smoke_enumerate_hmm_elbo(
 @pytest.mark.parametrize("max_plate_nesting", [2, 3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
-def test_smoke_enumerate_hmm_compute_marginals(
+def test_smoke_cf_enumerate_hmm_compute_marginals(
     num_steps, use_condition, max_plate_nesting, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
@@ -381,7 +381,7 @@ def test_smoke_enumerate_hmm_compute_marginals(
         )
     ],
 )
-def test_smoke_enumerate_hmm_infer_discrete(
+def test_smoke_cf_enumerate_hmm_infer_discrete(
     num_steps, use_condition, max_plate_nesting, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
@@ -411,7 +411,7 @@ def test_smoke_enumerate_hmm_infer_discrete(
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 @pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
-def test_smoke_enumerate_hmm_mcmc(
+def test_smoke_cf_enumerate_hmm_mcmc(
     num_steps, use_condition, max_plate_nesting, Kernel, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
