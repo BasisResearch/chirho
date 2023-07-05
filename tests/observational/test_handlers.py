@@ -236,3 +236,47 @@ def test_smoke_condition_enumerate_hmm_elbo(
 
     # smoke test
     elbo.differentiable_loss(model, guide, data)
+
+
+def test_condition_commutes():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        with pyro.plate("data", 2):
+            x = pyro.sample("x", dist.Normal(z, 1))
+            y = pyro.sample("y", dist.Normal(x + z, 1))
+        return z, x, y
+
+    h_cond = condition(
+        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
+    )
+    h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
+
+    # case 1
+    with pyro.poutine.trace() as tr1:
+        with h_cond, h_do:
+            model()
+
+    # case 2
+    with pyro.poutine.trace() as tr2:
+        with h_do, h_cond:
+            model()
+
+    # case 3
+    with h_cond, pyro.poutine.trace() as tr3:
+        with h_do:
+            model()
+
+    tr1.trace.compute_log_prob()
+    tr2.trace.compute_log_prob()
+    tr3.trace.compute_log_prob()
+
+    assert set(tr1.trace.nodes) == set(tr2.trace.nodes) == set(tr3.trace.nodes)
+    assert (
+        tr1.trace.log_prob_sum() == tr2.trace.log_prob_sum() == tr3.trace.log_prob_sum()
+    )
+    for name, node in tr1.trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            assert torch.allclose(node["value"], tr2.trace.nodes[name]["value"])
+            assert torch.allclose(node["value"], tr3.trace.nodes[name]["value"])
+            assert torch.allclose(node["log_prob"], tr2.trace.nodes[name]["log_prob"])
+            assert torch.allclose(node["log_prob"], tr3.trace.nodes[name]["log_prob"])
