@@ -11,6 +11,9 @@ T = TypeVar("T")
 class ConditionMessenger(Generic[T], ObserveNameMessenger):
     """
     Condition on values in a probabilistic program.
+
+    Can be used as a drop-in replacement for :func:`pyro.condition` that supports
+    a richer set of observational data types and enables counterfactual inference.
     """
 
     def __init__(self, data: Mapping[Hashable, AtomicObservation[T]]):
