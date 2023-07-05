@@ -1,1 +1,1 @@
-from .condition import condition
+from .condition import condition  # noqa: F401
