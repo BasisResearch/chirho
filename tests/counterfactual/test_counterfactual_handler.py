@@ -270,6 +270,44 @@ def test_nested_interventions_same_variable(
     assert (x11 != x2).all() if dependent_intervention else (x11 == x2).all()
 
 
+def test_cf_condition_commutes():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        with pyro.plate("data", 2):
+            x = pyro.sample("x", dist.Normal(z, 1))
+            y = pyro.sample("y", dist.Normal(x + z, 1))
+        return dict(x=x, y=y, z=z)
+
+    h_cond = condition(
+        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
+    )
+    h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
+
+    # case 1
+    with pyro.poutine.trace() as tr1:
+        with MultiWorldCounterfactual() as cf1, h_do, h_cond:
+            model()
+
+    # case 2
+    with pyro.poutine.trace() as tr2:
+        with MultiWorldCounterfactual() as cf2, h_cond, h_do:
+            model()
+
+    assert set(tr1.trace.nodes.keys()) == set(tr2.trace.nodes.keys())
+    for name, node in tr1.trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            with cf1:
+                assert set(indices_of(tr1.trace.nodes[name]["value"], event_dim=0)) <= {
+                    "x",
+                    "z",
+                }
+            with cf2:
+                assert set(indices_of(tr2.trace.nodes[name]["value"], event_dim=0)) <= {
+                    "x",
+                    "z",
+                }
+
+
 def hmm_model(data: Iterable, use_condition: bool):
     transition_probs = pyro.param(
         "transition_probs",
@@ -515,41 +553,3 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
     assert actual["z"].shape == expected["z"].shape
-
-
-def test_cf_condition_commutes():
-    def model():
-        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
-        with pyro.plate("data", 2):
-            x = pyro.sample("x", dist.Normal(z, 1))
-            y = pyro.sample("y", dist.Normal(x + z, 1))
-        return dict(x=x, y=y, z=z)
-
-    h_cond = condition(
-        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
-    )
-    h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
-
-    # case 1
-    with pyro.poutine.trace() as tr1:
-        with MultiWorldCounterfactual() as cf1, h_do, h_cond:
-            model()
-
-    # case 2
-    with pyro.poutine.trace() as tr2:
-        with MultiWorldCounterfactual() as cf2, h_cond, h_do:
-            model()
-
-    assert set(tr1.trace.nodes.keys()) == set(tr2.trace.nodes.keys())
-    for name, node in tr1.trace.nodes.items():
-        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
-            with cf1:
-                assert set(indices_of(tr1.trace.nodes[name]["value"], event_dim=0)) <= {
-                    "x",
-                    "z",
-                }
-            with cf2:
-                assert set(indices_of(tr2.trace.nodes[name]["value"], event_dim=0)) <= {
-                    "x",
-                    "z",
-                }
