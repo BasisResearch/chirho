@@ -490,7 +490,6 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
 
     guide = Autoguide(model)
 
-    # Compute by hand.
     vectorize = pyro.plate("_vectorize", num_samples, dim=cf_dim - 2)
     guide_tr = pyro.poutine.trace(vectorize(guide)).get_trace()
     expected = {
@@ -501,7 +500,6 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
         if v["type"] == "sample" and not pyro.poutine.util.site_is_subsample(v)
     }
 
-    # Use Predictive.
     predictive = pyro.infer.Predictive(
         model,
         guide=guide,
