@@ -456,3 +456,41 @@ def test_smoke_cf_enumerate_hmm_mcmc(
         ),
         num_samples=2,
     ).run(data)
+
+
+def test_cf_condition_commutes():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        with pyro.plate("data", 2):
+            x = pyro.sample("x", dist.Normal(z, 1))
+            y = pyro.sample("y", dist.Normal(x + z, 1))
+        return z, x, y
+
+    h_cond = condition(
+        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
+    )
+    h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
+
+    # case 1
+    with pyro.poutine.trace() as tr1:
+        with MultiWorldCounterfactual() as cf1, h_do, h_cond:
+            model()
+
+    # case 2
+    with pyro.poutine.trace() as tr2:
+        with MultiWorldCounterfactual() as cf2, h_cond, h_do:
+            model()
+
+    assert set(tr1.trace.nodes.keys()) == set(tr2.trace.nodes.keys())
+    for name, node in tr1.trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            with cf1:
+                assert set(indices_of(tr1.trace.nodes[name]["value"], event_dim=0)) <= {
+                    "x",
+                    "z",
+                }
+            with cf2:
+                assert set(indices_of(tr2.trace.nodes[name]["value"], event_dim=0)) <= {
+                    "x",
+                    "z",
+                }
