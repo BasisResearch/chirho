@@ -83,7 +83,9 @@ class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_post_sample(self, msg):
-        if msg["name"] not in self.actions or msg.get("_do_not_intervene", None):
+        if msg["name"] not in self.actions or msg["infer"].get(
+            "_do_not_intervene", None
+        ):
             return
 
         msg["value"] = intervene(

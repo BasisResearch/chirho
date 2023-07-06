@@ -192,16 +192,17 @@ def hmm_model(data):
     for t, y in pyro.markov(enumerate(data)):
         x = pyro.sample(
             f"x_{t}",
-            dist.Categorical(transition_probs[x]),
+            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
         )
 
-        pyro.sample(f"y_{t}", dist.Categorical(emission_probs[x]))
+        pyro.sample(
+            f"y_{t}",
+            dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+        )
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
-@pytest.mark.parametrize(
-    "num_particles", [1, pytest.param(10, marks=pytest.mark.xfail)]
-)
+@pytest.mark.parametrize("num_particles", [1, 10])
 @pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
 @pytest.mark.parametrize("use_guide", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6])
