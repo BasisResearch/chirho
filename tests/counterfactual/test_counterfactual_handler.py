@@ -458,13 +458,70 @@ def test_smoke_cf_enumerate_hmm_mcmc(
     ).run(data)
 
 
+@pytest.mark.parametrize(
+    "Autoguide",
+    [
+        pyro.infer.autoguide.AutoDelta,
+        pyro.infer.autoguide.AutoNormal,
+        pyro.infer.autoguide.AutoDiagonalNormal,
+    ],
+)
+@pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)], ids=str)
+@pytest.mark.parametrize("cf_dim", [-2, -3])
+@pytest.mark.parametrize("parallel", [False, True])
+def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
+    pyro.clear_param_store()
+    num_samples = 7
+
+    actions = {"x": torch.randn((2,) + event_shape), "z": torch.randn(event_shape)}
+    data = {"x": torch.randn((2,) + event_shape), "y": torch.randn((2,) + event_shape)}
+
+    @MultiWorldCounterfactual(cf_dim)
+    @do(actions=actions)
+    @condition(data=data)
+    def model():
+        z = pyro.sample(
+            "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
+        )
+        with pyro.plate("data", 2, dim=-1):
+            x = pyro.sample("x", dist.Normal(z, 1).to_event(len(event_shape)))
+            y = pyro.sample("y", dist.Normal(x + z, 1).to_event(len(event_shape)))
+        return dict(x=x, y=y, z=z)
+
+    guide = Autoguide(model)
+
+    # Compute by hand.
+    vectorize = pyro.plate("_vectorize", num_samples, dim=cf_dim - 2)
+    guide_tr = pyro.poutine.trace(vectorize(guide)).get_trace()
+    expected = {
+        k: v["value"]
+        for k, v in pyro.poutine.trace(pyro.poutine.replay(vectorize(model), guide_tr))
+        .get_trace()
+        .nodes.items()
+        if v["type"] == "sample" and not pyro.poutine.util.site_is_subsample(v)
+    }
+
+    # Use Predictive.
+    predictive = pyro.infer.Predictive(
+        model,
+        guide=guide,
+        num_samples=num_samples,
+        parallel=parallel,
+    )
+    actual = predictive()
+    assert set(actual) == set(expected)
+    assert actual["x"].shape == expected["x"].shape
+    assert actual["y"].shape == expected["y"].shape
+    assert actual["z"].shape == expected["z"].shape
+
+
 def test_cf_condition_commutes():
     def model():
         z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
         with pyro.plate("data", 2):
             x = pyro.sample("x", dist.Normal(z, 1))
             y = pyro.sample("y", dist.Normal(x + z, 1))
-        return z, x, y
+        return dict(x=x, y=y, z=z)
 
     h_cond = condition(
         data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
