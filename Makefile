@@ -1,9 +1,8 @@
 lint: FORCE
-	./scripts/clean.sh
+	./scripts/lint.sh
 
 format:
-	black .
-	isort .
+	./scripts/clean.sh
 
 tests: lint FORCE
 	pytest -v tests
