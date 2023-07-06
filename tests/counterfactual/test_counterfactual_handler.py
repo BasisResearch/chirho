@@ -490,6 +490,10 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
 
     guide = Autoguide(model)
 
+    pyro.infer.Trace_ELBO(max_plate_nesting=1 - cf_dim).differentiable_loss(
+        model, guide
+    )
+
     vectorize = pyro.plate("_vectorize", num_samples, dim=cf_dim - 2)
     guide_tr = pyro.poutine.trace(vectorize(guide)).get_trace()
     expected = {
