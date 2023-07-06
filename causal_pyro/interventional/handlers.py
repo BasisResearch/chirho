@@ -20,7 +20,7 @@ T = TypeVar("T")
 @intervene.register(torch.Tensor)
 @pyro.poutine.runtime.effectful(type="intervene")
 def _intervene_atom(
-    obs: T, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs
+    obs, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs
 ) -> T:
     """
     Intervene on an atomic value in a probabilistic program.
