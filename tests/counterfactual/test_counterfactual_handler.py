@@ -14,6 +14,7 @@ from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
+from causal_pyro.counterfactual.handlers.selection import SelectFactual
 from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
 from causal_pyro.interventional.handlers import do
 from causal_pyro.interventional.ops import intervene
@@ -553,3 +554,52 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
     assert actual["x"].shape == expected["x"].shape
     assert actual["y"].shape == expected["y"].shape
     assert actual["z"].shape == expected["z"].shape
+
+
+@pytest.mark.parametrize("cf_dim", [-1, -2])
+@pytest.mark.parametrize("num_steps", [3, 4, 5, 10])
+def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    pin_tr = pyro.poutine.trace(hmm_model).get_trace(data, True)
+    pinned = {
+        "x": torch.as_tensor(0),
+        "emission_probs": pin_tr.nodes["emission_probs"]["value"],
+    }
+
+    @condition(data=pinned)
+    @condition(data={f"y_{t}": y for t, y in enumerate(data)})
+    @pyro.infer.config_enumerate
+    def model(data):
+        return hmm_model(data, True)
+
+    @MultiWorldCounterfactual(cf_dim)
+    @SelectFactual()
+    @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
+    def cf_model(data):
+        return model(data)
+
+    posterior = pyro.infer.infer_discrete(
+        first_available_dim=cf_dim - 3, temperature=0
+    )(model)
+    cf_posterior = pyro.infer.infer_discrete(
+        first_available_dim=cf_dim - 3, temperature=0
+    )(cf_model)
+
+    posterior_mode = pyro.poutine.trace(posterior).get_trace(data)
+    cf_posterior_mode = pyro.poutine.trace(cf_posterior).get_trace(data)
+
+    assert set(posterior_mode.nodes) <= set(cf_posterior_mode.nodes)
+
+    for name, posterior_node in posterior_mode.nodes.items():
+        if pyro.poutine.util.site_is_subsample(posterior_node):
+            continue
+        if posterior_node["type"] != "sample" or name in pinned:
+            continue
+
+        # modes should match in the factual world
+        cf_mode_value = cf_posterior_mode.nodes[name]["value"][
+            cf_posterior_mode.nodes[name]["mask"]
+        ]
+        mode_value = posterior_mode.nodes[name]["value"]
+        assert torch.allclose(mode_value, cf_mode_value), f"failed for {name}"

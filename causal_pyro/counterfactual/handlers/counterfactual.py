@@ -61,7 +61,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         name = msg["name"] if msg["name"] is not None else cls.default_name
         index_plates = get_index_plates()
         if name in index_plates:
-            name = f"{name}_{len(index_plates)}"
+            name = f"{name}__dup_{len(index_plates)}"
         msg["kwargs"]["name"] = msg["name"] = name
 
 
