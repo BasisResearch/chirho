@@ -76,6 +76,12 @@ def _intervene_callable(
 class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
     """
     Intervene on values in a probabilistic program.
+
+    :class:`DoMessenger` is an effect handler that intervenes at specified sample sites
+    in a probabilistic program. This allows users to define programs without any
+    interventional or causal semantics, and then to add those features later in the
+    context of, for example, :class:`DoMessenger`. This handler uses :func:`intervene`
+    internally and supports the same types of interventions.
     """
 
     def __init__(self, actions: Mapping[Hashable, AtomicIntervention[T]]):
