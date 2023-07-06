@@ -1,5 +1,5 @@
 lint: FORCE
-	scripts/lint.sh
+	./scripts/clean.sh
 
 format:
 	black .
