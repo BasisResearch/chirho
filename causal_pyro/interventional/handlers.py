@@ -79,6 +79,10 @@ class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
     """
 
     def __init__(self, actions: Mapping[Hashable, AtomicIntervention[T]]):
+        """
+        :param actions: A mapping from
+            names of sample sites to interventions.
+        """
         self.actions = actions
         super().__init__()
 
