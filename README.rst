@@ -98,13 +98,13 @@ approximations that power much of the modern probabilistic machine learning land
 
 - `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_
   - Key observations inspiring Causal Pyro's design and outlines a causal Bayesian workflow for using Causal Pyro to answer causal questions
-- `Example: Backdoor <https://basisresearch.github.io/causal_pyro/backdoor.html>`_
+- `Example: Backdoor Adjustment Criteria <https://basisresearch.github.io/causal_pyro/backdoor.html>`_
   - Adjusting for observed confounding with Pearl's backdoor criteria
-- `Example: CEVAE <https://basisresearch.github.io/causal_pyro/cevae.html>`_
+- `Example: Causal Effect Variational Autoencoder <https://basisresearch.github.io/causal_pyro/cevae.html>`_
   - Implementation of Causal Effect Variational Autoencoder
-- `Example: Mediation <https://basisresearch.github.io/causal_pyro/mediation.html>`_
+- `Example: Mediation analysis and (in)direct effects <https://basisresearch.github.io/causal_pyro/mediation.html>`_
   - Mediation analysis to target various effect estimands
-- `Example: Deep SCM <https://basisresearch.github.io/causal_pyro/deepscm.html>`_
+- `Example: Deep structural causal model counterfactuals <https://basisresearch.github.io/causal_pyro/deepscm.html>`_
   - Implementation of Deep Structural Causal Model
 - `Example: Structured Latent Confounders <https://basisresearch.github.io/causal_pyro/slc.html>`_
   - Causal effect estimation in the presence of structured latent confounders
@@ -116,6 +116,17 @@ probabilistic programming. For introductory Pyro tutorials, please see
 `Additional background reading
 material <#additional-background-reading-material>`__ below.
 
+Documentation
+-------------
+- `Counterfactual <https://basisresearch.github.io/causal_pyro/counterfactual.html>`_
+  - Effect handlers for computing counterfactuals in a probabilistic program
+- `Interventional <https://basisresearch.github.io/causal_pyro/interventional.html>`_
+  - Effect handlers for performing interventions in a probabilistic program
+- `Observational <https://basisresearch.github.io/causal_pyro/observational.html>`_
+  - TODO: what does this module do? 
+- `Indexed <https://basisresearch.github.io/causal_pyro/indexed.html>`_
+  - Helper utilities for working with indexed dimensions in Pyro
+  
 Caveats
 -------
 
