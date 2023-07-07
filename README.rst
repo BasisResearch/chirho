@@ -96,46 +96,20 @@ These example illustrate how Causal Pyro is compatible with any inference method
 implemented in Pyro, including the kinds of scalable gradient-based
 approximations that power much of the modern probabilistic machine learning landscape.
 
-+-----------------------------------+-----------------------------------+
-| Section                           | Description                       |
-+===================================+===================================+
-| `Documentation <https://basisr    | Full API documentation and        |
-| esearch.github.io/causal_pyro>`__ | tutorials                         |
-+-----------------------------------+-----------------------------------+
-| `Tutorial                         | Key observations inspiring Causal |
-| l <https://basisresearch.github.i | Pyro’s design and outlines a      |
-| o/causal_pyro/tutorial_i.html>`__ | causal Bayesian workflow for      |
-|                                   | using Causal Pyro to answer       |
-|                                   | causal questions                  |
-+-----------------------------------+-----------------------------------+
-| `Example:                         | Adjusting for observed            |
-| Backd                             | confounding with Pearl’s backdoor |
-| oor <https://basisresearch.github | criteria                          |
-| .io/causal_pyro/backdoor.html>`__ |                                   |
-+-----------------------------------+-----------------------------------+
-| `Example:                         | Implementation of Causal Effect   |
-| CEVAE <https://basisresearch.git  | Variational Autoencoder           |
-| hub.io/causal_pyro/cevae.html>`__ |                                   |
-+-----------------------------------+-----------------------------------+
-| `Example:                         | Mediation analysis to target      |
-| Mediation                         | various effect estimands          |
-| <https://basisresearch.github.    |                                   |
-| io/causal_pyro/mediation.html>`__ |                                   |
-+-----------------------------------+-----------------------------------+
-| `Example: Deep                    | Implementation of Deep Structural |
-| SCM <https://basisresearch.githu  | Causal Model                      |
-| b.io/causal_pyro/deepscm.html>`__ |                                   |
-+-----------------------------------+-----------------------------------+
-| `Example: Structured Latent       | Causal effect estimation in the   |
-| Con                               | presence of structured latent     |
-| founders <https://basisresearch.g | confounders                       |
-| ithub.io/causal_pyro/slc.html>`__ |                                   |
-+-----------------------------------+-----------------------------------+
-| `Design notes                     | Technical implementation details  |
-| n                                 | of Causal Pyro using effect       |
-| otes <https://basisresearch.githu | handlers                          |
-| b.io/causal_pyro/design_notes>`__ |                                   |
-+-----------------------------------+-----------------------------------+
+- `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_
+  - Key observations inspiring Causal Pyro's design and outlines a causal Bayesian workflow for using Causal Pyro to answer causal questions
+- `Example: Backdoor <https://basisresearch.github.io/causal_pyro/backdoor.html>`_
+  - Adjusting for observed confounding with Pearl's backdoor criteria
+- `Example: CEVAE <https://basisresearch.github.io/causal_pyro/cevae.html>`_
+  - Implementation of Causal Effect Variational Autoencoder
+- `Example: Mediation <https://basisresearch.github.io/causal_pyro/mediation.html>`_
+  - Mediation analysis to target various effect estimands
+- `Example: Deep SCM <https://basisresearch.github.io/causal_pyro/deepscm.html>`_
+  - Implementation of Deep Structural Causal Model
+- `Example: Structured Latent Confounders <https://basisresearch.github.io/causal_pyro/slc.html>`_
+  - Causal effect estimation in the presence of structured latent confounders
+- `Design notes <https://basisresearch.github.io/causal_pyro/design_notes>`_
+  - Technical implementation details of Causal Pyro using effect handlers
 
 *Note*: The tutorials assume some familiarity with Pyro and
 probabilistic programming. For introductory Pyro tutorials, please see
