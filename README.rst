@@ -25,8 +25,7 @@ practice.
 -  **Causal structure discovery**: *What individual attributes influence
    risk of COVID-19 hospitalization?*
 
-In our `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_ we answer some of 
-these questions. See also `Learn more <#learn-more>`__.
+To see how Causal Pyro supports causal reasoning, take a look at our `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_.
 
 Installation
 ------------
