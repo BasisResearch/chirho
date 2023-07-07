@@ -85,14 +85,14 @@ more <#learn-more>`__.
        return y
 
    # Define a causal query (here intervening on x)
-   def query_model():
+   def queried_model():
        return do(model, {"x": 1})
 
    # Generate 10,000 samples from the observational distribution P(y) ~ N(0, 2)
    obs_samples = pyro.infer.Predictive(model, num_samples=1000)()["y"]
 
    # Generate 10,000 samples from the interventional distribution P(y | do(X=1)) ~ N(1, 1)
-   int_samples = pyro.infer.Predictive(query_model(), num_samples=1000)()["y"]
+   int_samples = pyro.infer.Predictive(queried_model(), num_samples=1000)()["y"]
 
 Learn more
 ----------
