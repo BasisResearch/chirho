@@ -16,7 +16,7 @@ import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
-from causal_pyro.indexed.ops import IndexSet, gather, indexset_as_mask
+from causal_pyro.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
 from causal_pyro.indexed.handlers import add_indices
 
 
@@ -313,24 +313,18 @@ class IndexCutModule(
             return
 
         if (not msg["is_observed"]) and (msg["name"] in self.vars):
-            # TODO: enforce this constraint exactly
+            # discard the second value
+            # TODO is the mask computed in _pyro_sample correct?
             value_one = gather(
                 msg["value"],
                 IndexSet(**{self.name: {0}}),
                 event_dim=msg["fn"].event_dim,
             )
-            value_two = gather(
-                msg["value"],
-                IndexSet(**{self.name: {1}}),
+
+            msg["value"] = scatter(
+                {
+                    IndexSet(**{self.name: {0}}): value_one,
+                    IndexSet(**{self.name: {1}}): value_one.detach(),
+                },
                 event_dim=msg["fn"].event_dim,
             )
-            eq_constraint = (
-                -torch.abs(value_one.detach() - value_two)
-                .expand(msg["value"].shape)
-                .reshape(msg["fn"].batch_shape + (-1,))
-                .mean(-1)
-            )
-
-            cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
-            with pyro.poutine.mask(mask=indexset_as_mask(cut_index)):  # TODO device
-                pyro.factor(f"{msg['name']}_equality_contraint", eq_constraint)
