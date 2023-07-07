@@ -119,11 +119,10 @@ material <#additional-background-reading-material>`__ below.
 Documentation
 -------------
 - `Counterfactual <https://basisresearch.github.io/causal_pyro/counterfactual.html>`_
-  - Effect handlers for computing counterfactuals in a probabilistic program
+  - Effect handlers for computing counterfactuals
 - `Interventional <https://basisresearch.github.io/causal_pyro/interventional.html>`_
-  - Effect handlers for performing interventions in a probabilistic program
+  - Effect handlers for performing interventions
 - `Observational <https://basisresearch.github.io/causal_pyro/observational.html>`_
-  - TODO: what does this module do? 
 - `Indexed <https://basisresearch.github.io/causal_pyro/indexed.html>`_
   - Helper utilities for working with indexed dimensions in Pyro
   
