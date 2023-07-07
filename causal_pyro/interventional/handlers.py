@@ -20,7 +20,7 @@ T = TypeVar("T")
 @intervene.register(torch.Tensor)
 @pyro.poutine.runtime.effectful(type="intervene")
 def _intervene_atom(
-    obs: T, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs
+    obs, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs
 ) -> T:
     """
     Intervene on an atomic value in a probabilistic program.
@@ -76,9 +76,18 @@ def _intervene_callable(
 class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
     """
     Intervene on values in a probabilistic program.
+
+    :class:`DoMessenger` is an effect handler that intervenes at specified sample sites
+    in a probabilistic program. This allows users to define programs without any
+    interventional or causal semantics, and then to add those features later in the
+    context of, for example, :class:`DoMessenger`. This handler uses :func:`intervene`
+    internally and supports the same types of interventions.
     """
 
     def __init__(self, actions: Mapping[Hashable, AtomicIntervention[T]]):
+        """
+        :param actions: A mapping from names of sample sites to interventions.
+        """
         self.actions = actions
         super().__init__()
 
