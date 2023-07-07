@@ -25,8 +25,8 @@ practice.
 -  **Causal structure discovery**: *What individual attributes influence
    risk of COVID-19 hospitalization?*
 
-In our `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_, we  
-illustrate how Causal Pyro can be used to answer such questions. See also `Learn more <#learn-more>`__.
+In our `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_ we answer some of 
+these questions. See also `Learn more <#learn-more>`__.
 
 Installation
 ------------
@@ -100,7 +100,7 @@ Learn more
 We have written a number of tutorials and examples for Causal Pyro. We
 have tried to choose simple examples that would be of interest to both
 the causal inference and probabilistic programming communities: they
-collectively span Pearl’s causal hierarchy Pearl (Pearl 2001), and
+collectively span Pearl’s causal hierarchy Pearl (Pearl 2009), and
 most are broadly applicable, empirically validated, have an
 unconventional or limited identification result, and make use of modern
 probabilistic machine learning tools, like neural networks or stochastic
@@ -115,19 +115,19 @@ approximations that power much of the modern probabilistic machine learning land
 - `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_
   - Key observations inspiring Causal Pyro's design and outlines a causal Bayesian workflow for using Causal Pyro to answer causal questions
 - `Example: Backdoor Adjustment Criteria <https://basisresearch.github.io/causal_pyro/backdoor.html>`_
-  - Adjusting for observed confounding with Pearl's backdoor criteria
+  - Adjusting for observed confounders
 - `Example: Causal Effect Variational Autoencoder <https://basisresearch.github.io/causal_pyro/cevae.html>`_
-  - Implementation of Causal Effect Variational Autoencoder
+  - Causal inference with deep models and proxy variables
 - `Example: Mediation analysis and (in)direct effects <https://basisresearch.github.io/causal_pyro/mediation.html>`_
-  - Mediation analysis to target various effect estimands
+  - Mediation analysis for path specific effects
 - `Example: Deep structural causal model counterfactuals <https://basisresearch.github.io/causal_pyro/deepscm.html>`_
-  - Implementation of Deep Structural Causal Model
+  - Counterfactuals with normalizing flows
 - `Example: Structured Latent Confounders <https://basisresearch.github.io/causal_pyro/slc.html>`_
-  - Causal effect estimation in the presence of structured latent confounders
+  - Causal effect estimation when latent confounders are shared across groups
 - `Design notes <https://basisresearch.github.io/causal_pyro/design_notes>`_
   - Technical implementation details of Causal Pyro using effect handlers
 
-*Note*: The tutorials assume some familiarity with Pyro and
+*Note*: These tutorials and examples assume some familiarity with Pyro and
 probabilistic programming. For introductory Pyro tutorials, please see
 `Additional background reading
 material <#additional-background-reading-material>`__ below.
@@ -135,17 +135,18 @@ material <#additional-background-reading-material>`__ below.
 Documentation
 -------------
 - `Counterfactual <https://basisresearch.github.io/causal_pyro/counterfactual.html>`_
-  - Effect handlers for computing counterfactuals
+  - Effect handlers for counterfactual world splitting
 - `Interventional <https://basisresearch.github.io/causal_pyro/interventional.html>`_
   - Effect handlers for performing interventions
 - `Observational <https://basisresearch.github.io/causal_pyro/observational.html>`_
-  - TODO add description
+  - Effect handler utilities for computing probabilistic quantities for 
+  partially deterministic models. This is useful for counterfactual reasoning
 - `Indexed <https://basisresearch.github.io/causal_pyro/indexed.html>`_
-  - Helper utilities for working with indexed dimensions in Pyro
+  - Effect handler utilities for named indices in Causal Pyro. Useful for manipluating
+  and tracking counterfactual worlds
   
 Caveats
 -------
-
 Causal Pyro does not answer causal questions by magic. In fact, there is
 no escaping the fact that
 
@@ -174,8 +175,6 @@ Additional background reading material
 
 References
 ----------
-Pearl, Judea. *Bayesianism and Causality, or, Why I Am Only a Half-Bayesian*. Volume 24. Springer, Dordrecht, 2001.
-
 Pearl, Judea. *Causality: Models, Reasoning and Inference*. 2nd ed. USA: Cambridge University Press, 2009.
 
 
