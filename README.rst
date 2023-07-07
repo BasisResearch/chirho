@@ -35,11 +35,20 @@ see the following in-depth tutorials describes Causal Pyro's underlying machiner
 Note: These tutorials assume some familiarity with Pyro and probabilistic programming. 
 For introductory Pyro tutorials please see "Additional background reading material" below.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Tutorials
 
-   tutorial_i
+Tutorials
+---------
+
+`Causal probabilistic programming without tears <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_
+    - `Outline <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Outline>`_
+    - `Observation 1: causal models are probabilistic programs <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-1:-causal-models-are-probabilistic-programs>`_
+    - `Observation 2: causal uncertainty is probabilistic uncertainty <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-2:-causal-uncertainty-is-probabilistic-uncertainty>`_
+    - `Observation 3: causal inference is probabilistic inference <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-3:-causal-inference-is-probabilistic-inference>`_
+    - `Recap <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Recap>`_
+    - `A Causal Bayesian Workflow <https://basisresearch.github.io/causal_pyro/tutorial_i.html#A-Causal-Bayesian-Workflow>`_
+    - `References <https://basisresearch.github.io/causal_pyro/tutorial_i.html#References>`_
+
+
 
 Example applications
 --------------------
@@ -91,6 +100,7 @@ approximations that power much of the modern probabilistic machine learning land
    design_notes/queries
    design_notes/observations
 
+
 Additional background reading material
 --------------------------------------
 
@@ -105,6 +115,7 @@ Additional background reading material
    programs: \ https://docs.pyro.ai/en/stable/infer.reparam.html
 -  Optional: getting started with
    NumPyro \ https://num.pyro.ai/en/stable/getting_started.html
+
 
 References
 ----------
