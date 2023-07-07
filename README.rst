@@ -12,6 +12,22 @@ As a non-exhaustive set of examples, Causal Pyro makes it easier to
 answer the following kinds of causal questions that appear frequently in
 practice.
 
+-  **Interventional**: *How many COVID-19 hospitalizations will occur if
+   the the USA imposes a national mask mandate?*
+
+-  **Counterfactual**: *Given that 100,000 people were infected with
+   COVID-19 in the past month, how many would have been infected if a
+   mask mandate had been in place?*
+
+-  **Explanation**: *Why were 100,000 people infected with COVID-19 in
+   the past month?*
+
+-  **Causal structure discovery**: *What individual attributes influence
+   risk of COVID-19 hospitalization?*
+
+In our `Tutorial <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_, we  
+illustrate how Causal Pyro can be used to answer such questions. See also `Learn more <#learn-more>`__.
+
 Installation
 ------------
 
@@ -123,6 +139,7 @@ Documentation
 - `Interventional <https://basisresearch.github.io/causal_pyro/interventional.html>`_
   - Effect handlers for performing interventions
 - `Observational <https://basisresearch.github.io/causal_pyro/observational.html>`_
+  - TODO add description
 - `Indexed <https://basisresearch.github.io/causal_pyro/indexed.html>`_
   - Helper utilities for working with indexed dimensions in Pyro
   
