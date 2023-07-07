@@ -1,5 +1,7 @@
 |Build Status|
 
+.. index-inclusion-marker
+
 Causal Probabilistic Programming with Causal Pyro
 =================================================
 
