@@ -100,7 +100,7 @@ Learn more
 We have written a number of tutorials and examples for Causal Pyro. We
 have tried to choose simple examples that would be of interest to both
 the causal inference and probabilistic programming communities: they
-collectively span Pearl’s causal hierarchy Pearl (Pearl 2009), and
+collectively span Pearl’s causal hierarchy (Pearl 2009), and
 most are broadly applicable, empirically validated, have an
 unconventional or limited identification result, and make use of modern
 probabilistic machine learning tools, like neural networks or stochastic
@@ -140,9 +140,9 @@ Documentation
   - Effect handlers for performing interventions
 - `Observational <https://basisresearch.github.io/causal_pyro/observational.html>`_
   - Effect handler utilities for computing probabilistic quantities for 
-  partially deterministic models. This is useful for counterfactual reasoning
+  partially deterministic models which is useful for counterfactual reasoning
 - `Indexed <https://basisresearch.github.io/causal_pyro/indexed.html>`_
-  - Effect handler utilities for named indices in Causal Pyro. Useful for manipluating
+  - Effect handler utilities for named indices in Causal Pyro which is useful for manipluating
   and tracking counterfactual worlds
   
 Caveats
