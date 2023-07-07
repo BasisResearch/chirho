@@ -1,105 +1,159 @@
-.. causal_pyro documentation master file, created by
-   sphinx-quickstart on Mon Sep 26 14:49:58 2022.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+|Build Status|
 
 Causal Probabilistic Programming with Causal Pyro
 =================================================
 
-Welcome! On this page you'll find a collection of tutorials and examples 
-on Causal Pyro, a causal extension to the Pyro probabilistic programming language. 
-Our intention is to make these tutorials accesible for a broad technical audience, spanning from computer science
-researchers to (computationally literate) domain experts. If you find anything unclear, 
-please ask questions and join the conversation on our forum (TODO).
-
-Motivation
-----------
-
-Causal Pyro was built to bridge the gap between the capabilities of modern probablistic
-programming systems, such as Pyro, and the needs of policymakers, scientists, and AI researchers,
-who often want to use models to answer their questions about cause and effect relationships. As a non-exhaustive 
-set of examples, Causal Pyro makes it easier to answer the following kinds of causal questions that appear frequently in
+Causal Pyro is a causal extension to the Pyro probabilistic programming
+language. It was built to bridge the gap between the capabilities of
+modern probablistic programming systems, such as Pyro, and the needs of
+policymakers, scientists, and AI researchers, who often want to use
+models to answer their questions about cause-and-effect relationships.
+As a non-exhaustive set of examples, Causal Pyro makes it easier to
+answer the following kinds of causal questions that appear frequently in
 practice.
 
-- **Interventional** : "How many covid-19 hospitalizations will occur if the the USA imposes a national mask mandate?"
-- **Counterfactual** : "Given that 100,000 people were infected with covid-19 in the past month, how many would have been infected if a mask mandate had been in place?"
-- **Explanation** : "Why were 100,000 people infected with covid-19 in the past month?"
-- **Causal Structure Discovery** : "What individual attributes influence risk of covid-19 hospitalization?"
+Installation
+------------
 
-Importantly, Causal Pyro does not answer these kinds of questions by magic. In fact, there is no escaping the fact that
-"behind any causal conclusion there must lie some causal assumption", a phrase made famous by Judea Pearl :cite:`pearl`. Instead, Causal Pyro
-provides a substrate for writing causal assumptions as probabilistic programs, 
-and for writing causal questions in terms of program transformations. To understand this in a bit more detail,
-see the following in-depth tutorials describes Causal Pyro's underlying machinery.
+**Install using pip:**
 
-Note: These tutorials assume some familiarity with Pyro and probabilistic programming. 
-For introductory Pyro tutorials please see "Additional background reading material" below.
+.. code:: sh
 
+   pip install causal_pyro
 
-Tutorials
----------
+**Install from source:**
 
-`Causal probabilistic programming without tears <https://basisresearch.github.io/causal_pyro/tutorial_i.html>`_
-    - `Outline <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Outline>`_
-    - `Observation 1: causal models are probabilistic programs <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-1:-causal-models-are-probabilistic-programs>`_
-    - `Observation 2: causal uncertainty is probabilistic uncertainty <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-2:-causal-uncertainty-is-probabilistic-uncertainty>`_
-    - `Observation 3: causal inference is probabilistic inference <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Observation-3:-causal-inference-is-probabilistic-inference>`_
-    - `Recap <https://basisresearch.github.io/causal_pyro/tutorial_i.html#Recap>`_
-    - `A Causal Bayesian Workflow <https://basisresearch.github.io/causal_pyro/tutorial_i.html#A-Causal-Bayesian-Workflow>`_
-    - `References <https://basisresearch.github.io/causal_pyro/tutorial_i.html#References>`_
+.. code:: sh
 
+   git clone git@github.com:BasisResearch/causal_pyro.git
+   cd causal_pyro
+   git checkout master
+   pip install .
 
+**Install with extra packages:**
 
-Example applications
---------------------
+To install the dependencies required to run the tutorials in
+``examples``/``tutorials`` directories, please use the following
+command:
 
-To illustrate the utility of this approach, we have included several
-examples from the causal inference literature.
+.. code:: sh
 
-We have tried to choose simple examples that would be of interest to
-both the causal inference and probabilistic programming communities:
-they collectively span Pearl’s causal hierarchy :cite:`pearl2001bayesian`,
-and most are broadly applicable, empirically validated, have an
+   pip install causal_pyro[extras] 
+
+Make sure that the models come from the same release version of the
+`Causal Pyro source
+code <https://github.com/BasisResearch/causal_pyro/releases>`__ as you
+have installed.
+
+Getting Started
+---------------
+
+Below is a simple example of how to use Causal Pyro to answer an
+interventional question. For more in-depth examples, go to `Learn
+more <#learn-more>`__.
+
+.. code:: python
+
+   import torch
+   import pyro
+   import pyro.distributions as dist
+   from causal_pyro.interventional.handlers import do
+
+   pyro.set_rng_seed(101)
+
+   # Define a causal model with single confounder h
+   def model():
+       h = pyro.sample("h", dist.Normal(0, 1))
+       x = pyro.sample("x", dist.Normal(h, 1))
+       y = pyro.sample("y", dist.Normal(x + h, 1))
+       return y
+
+   # Define a causal query (here intervening on x)
+   def query_model():
+       return do(model, {"x": 1})
+
+   # Generate 10,000 samples from the observational distribution P(y) ~ N(0, 2)
+   obs_samples = pyro.infer.Predictive(model, num_samples=1000)()["y"]
+
+   # Generate 10,000 samples from the interventional distribution P(y | do(X=1)) ~ N(1, 1)
+   int_samples = pyro.infer.Predictive(query_model(), num_samples=1000)()["y"]
+
+Learn more
+----------
+
+We have written a number of tutorials and examples for Causal Pyro. We
+have tried to choose simple examples that would be of interest to both
+the causal inference and probabilistic programming communities: they
+collectively span Pearl’s causal hierarchy Pearl (Pearl 2001), and
+most are broadly applicable, empirically validated, have an
 unconventional or limited identification result, and make use of modern
 probabilistic machine learning tools, like neural networks or stochastic
 variational inference.
 
-Our examples demonstrate how real-world
-causal assumptions can be expressed as probabilistic programs 
+Our examples demonstrate how real-world causal assumptions can be expressed as probabilistic programs 
 and real-world causal estimands can be expressed as program transformations.
 These example illustrate how Causal Pyro is compatible with any inference method 
 implemented in Pyro, including the kinds of scalable gradient-based
 approximations that power much of the modern probabilistic machine learning landscape.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Examples
++-----------------------------------+-----------------------------------+
+| Section                           | Description                       |
++===================================+===================================+
+| `Documentation <https://basisr    | Full API documentation and        |
+| esearch.github.io/causal_pyro>`__ | tutorials                         |
++-----------------------------------+-----------------------------------+
+| `Tutoria                          | Key observations inspiring Causal |
+| l <https://basisresearch.github.i | Pyro’s design and outlines a      |
+| o/causal_pyro/tutorial_i.html>`__ | causal Bayesian workflow for      |
+|                                   | using Causal Pyro to answer       |
+|                                   | causal questions                  |
++-----------------------------------+-----------------------------------+
+| `Example:                         | Adjusting for observed            |
+| Backd                             | confounding with Pearl’s backdoor |
+| oor <https://basisresearch.github | criteria                          |
+| .io/causal_pyro/backdoor.html>`__ |                                   |
++-----------------------------------+-----------------------------------+
+| `Example:                         | Implementation of Causal Effect   |
+| CEVAE <https://basisresearch.git  | Variational Autoencoder           |
+| hub.io/causal_pyro/cevae.html>`__ |                                   |
++-----------------------------------+-----------------------------------+
+| `Example:                         | Mediation analysis to target      |
+| Mediati                           | various effect estimands          |
+| on <https://basisresearch.github. |                                   |
+| io/causal_pyro/mediation.html>`__ |                                   |
++-----------------------------------+-----------------------------------+
+| `Example: Deep                    | Implementation of Deep Structural |
+| SCM <https://basisresearch.githu  | Causal Model                      |
+| b.io/causal_pyro/deepscm.html>`__ |                                   |
++-----------------------------------+-----------------------------------+
+| `Example: Structured Latent       | Causal effect estimation in the   |
+| Con                               | presence of structured latent     |
+| founders <https://basisresearch.g | confounders                       |
+| ithub.io/causal_pyro/slc.html>`__ |                                   |
++-----------------------------------+-----------------------------------+
+| `Design                           | Technical implementation details  |
+| n                                 | of Causal Pyro using effect       |
+| otes <https://basisresearch.githu | handlers                          |
+| b.io/causal_pyro/design_notes>`__ |                                   |
++-----------------------------------+-----------------------------------+
 
-   backdoor
-   cevae
-   deepscm
-   slc
-   mediation
+*Note*: The tutorials assume some familiarity with Pyro and
+probabilistic programming. For introductory Pyro tutorials, please see
+`Additional background reading
+material <#additional-background-reading-material>`__ below.
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Documentation
+Caveats
+-------
 
-   counterfactual
-   interventional
-   observational
-   indexed
+Causal Pyro does not answer causal questions by magic. In fact, there is
+no escaping the fact that
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Design Notes
+   *behind any causal conclusion there must lie some causal assumption,*
 
-   design_notes/index
-   design_notes/counterfactuals
-   design_notes/interventions
-   design_notes/queries
-   design_notes/observations
-
+a phrase made famous by Judea Pearl (Pearl 2009). Instead,
+Causal Pyro provides a substrate for writing causal assumptions as
+probabilistic programs, and for writing causal questions in terms of
+program transformations.
 
 Additional background reading material
 --------------------------------------
@@ -119,12 +173,10 @@ Additional background reading material
 
 References
 ----------
+Pearl, Judea. *Bayesianism and Causality, or, Why I Am Only a Half-Bayesian*. Volume 24. Springer, Dordrecht, 2001.
 
-.. bibliography::
+Pearl, Judea. *Causality: Models, Reasoning and Inference*. 2nd ed. USA: Cambridge University Press, 2009.
 
-Indices and tables
-==================
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+.. |Build Status| image:: https://github.com/BasisResearch/causal_pyro/actions/workflows/test.yml/badge.svg
+   :target: https://github.com/BasisResearch/causal_pyro/actions/workflows/test.yml
