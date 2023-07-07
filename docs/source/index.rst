@@ -39,7 +39,7 @@ Table of Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Design Notes
+   :caption: For Contributors
 
    design_notes/index
 

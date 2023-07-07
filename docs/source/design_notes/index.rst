@@ -1,4 +1,4 @@
-Design Notes for Contributors
+Design Notes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. contents::
