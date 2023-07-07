@@ -102,7 +102,7 @@ approximations that power much of the modern probabilistic machine learning land
 | `Documentation <https://basisr    | Full API documentation and        |
 | esearch.github.io/causal_pyro>`__ | tutorials                         |
 +-----------------------------------+-----------------------------------+
-| `Tutoria                          | Key observations inspiring Causal |
+| `Tutorial                         | Key observations inspiring Causal |
 | l <https://basisresearch.github.i | Pyro’s design and outlines a      |
 | o/causal_pyro/tutorial_i.html>`__ | causal Bayesian workflow for      |
 |                                   | using Causal Pyro to answer       |
@@ -118,8 +118,8 @@ approximations that power much of the modern probabilistic machine learning land
 | hub.io/causal_pyro/cevae.html>`__ |                                   |
 +-----------------------------------+-----------------------------------+
 | `Example:                         | Mediation analysis to target      |
-| Mediati                           | various effect estimands          |
-| on <https://basisresearch.github. |                                   |
+| Mediation                         | various effect estimands          |
+| <https://basisresearch.github.    |                                   |
 | io/causal_pyro/mediation.html>`__ |                                   |
 +-----------------------------------+-----------------------------------+
 | `Example: Deep                    | Implementation of Deep Structural |
@@ -131,7 +131,7 @@ approximations that power much of the modern probabilistic machine learning land
 | founders <https://basisresearch.g | confounders                       |
 | ithub.io/causal_pyro/slc.html>`__ |                                   |
 +-----------------------------------+-----------------------------------+
-| `Design                           | Technical implementation details  |
+| `Design notes                     | Technical implementation details  |
 | n                                 | of Causal Pyro using effect       |
 | otes <https://basisresearch.githu | handlers                          |
 | b.io/causal_pyro/design_notes>`__ |                                   |
