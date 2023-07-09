@@ -18,7 +18,7 @@ import sphinx_rtd_theme
 
 # -- Project information -----------------------------------------------------
 
-project = 'causal_pyro'
+project = 'chirho'
 copyright = '2022, Basis'
 author = 'Basis'
 
