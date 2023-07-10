@@ -5,11 +5,6 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.counterfactual.handlers import (
-    MultiWorldCounterfactual,
-    TwinWorldCounterfactual,
-)
-from chirho.interventional.handlers import do
 from chirho.constrained.handlers import condition
 from chirho.constrained.handlers.soft_conditioning import (
     AutoSoftConditioning,
@@ -17,6 +12,11 @@ from chirho.constrained.handlers.soft_conditioning import (
     RBFKernel,
     SoftEqKernel,
 )
+from chirho.counterfactual.handlers import (
+    MultiWorldCounterfactual,
+    TwinWorldCounterfactual,
+)
+from chirho.interventional.handlers import do
 
 logger = logging.getLogger(__name__)
 

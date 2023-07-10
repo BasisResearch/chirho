@@ -139,7 +139,7 @@ Documentation
   - Effect handlers for counterfactual world splitting
 - `Interventional <https://basisresearch.github.io/chirho/interventional.html>`_
   - Effect handlers for performing interventions
-- `Observational <https://basisresearch.github.io/chirho/observational.html>`_
+- `Constrained <https://basisresearch.github.io/chirho/constrained.html>`_
   - Effect handler utilities for computing probabilistic quantities for 
   partially deterministic models which is useful for counterfactual reasoning
 - `Indexed <https://basisresearch.github.io/chirho/indexed.html>`_

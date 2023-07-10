@@ -17,7 +17,7 @@ def intervene(obs, act: Optional[Intervention[T]] = None, **kwargs):
     for concisely and extensibly defining the semantics of interventions. This
     function is generically typed and extensible to new types via
     :func:`functools.singledispatch`. When its first argument is a function,
-    :func:`intervene` now behaves like the current `observational.do` effect handler.
+    :func:`intervene` now behaves like the current `constrained.do` effect handler.
 
     :param obs: a value in a probabilistic program.
     :param act: an optional intervention.
