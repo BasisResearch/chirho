@@ -1,4 +1,4 @@
-Design notes: causal Pyro
+Design notes: ChiRho
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The probabilistic programming language `Omega.jl <http://www.zenna.org/Omega.jl/latest/>`_
