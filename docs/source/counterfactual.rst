@@ -19,6 +19,10 @@ Handlers
    :members:
    :undoc-members:
 
+.. automodule:: chirho.counterfactual.handlers.counterfactual
+   :members:
+   :undoc-members:
+
 .. automodule:: chirho.counterfactual.handlers.ambiguity
    :members:
    :undoc-members:
