@@ -7,19 +7,19 @@ import pyro.infer
 import pytest
 import torch
 
-import causal_pyro.interventional.handlers  # noqa: F401
-from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
+import chirho.interventional.handlers  # noqa: F401
+from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.handlers.selection import SelectFactual
-from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
-from causal_pyro.interventional.handlers import do
-from causal_pyro.interventional.ops import intervene
-from causal_pyro.observational.handlers import condition
-from causal_pyro.observational.ops import observe
+from chirho.counterfactual.handlers.selection import SelectFactual
+from chirho.indexed.ops import IndexSet, gather, indices_of, union
+from chirho.interventional.handlers import do
+from chirho.interventional.ops import intervene
+from chirho.observational.handlers import condition
+from chirho.observational.ops import observe
 
 logger = logging.getLogger(__name__)
 

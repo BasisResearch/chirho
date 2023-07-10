@@ -5,17 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (
+from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.handlers.selection import (
-    SelectCounterfactual,
-    SelectFactual,
-)
-from causal_pyro.interventional.handlers import do
-from causal_pyro.observational.handlers import condition
+from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
+from chirho.interventional.handlers import do
+from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 

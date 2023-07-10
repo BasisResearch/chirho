@@ -5,14 +5,14 @@ import pyro
 import pyro.distributions as dist
 import torch
 
-from causal_pyro.counterfactual.handlers.selection import (
+from chirho.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.counterfactual.internals import no_ambiguity, site_is_ambiguous
-from causal_pyro.indexed.ops import gather, get_index_plates, indices_of, scatter
-from causal_pyro.observational.ops import observe
+from chirho.counterfactual.internals import no_ambiguity, site_is_ambiguous
+from chirho.indexed.ops import gather, get_index_plates, indices_of, scatter
+from chirho.observational.ops import observe
 
 T = TypeVar("T")
 
