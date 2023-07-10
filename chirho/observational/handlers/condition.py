@@ -2,8 +2,8 @@ from typing import Generic, Hashable, Mapping, TypeVar
 
 import pyro
 
-from causal_pyro.observational.internals import ObserveNameMessenger
-from causal_pyro.observational.ops import AtomicObservation, observe
+from chirho.observational.internals import ObserveNameMessenger
+from chirho.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
 

@@ -7,19 +7,19 @@ import pyro.infer
 import pytest
 import torch
 
-import causal_pyro.interventional.handlers  # noqa: F401
-from causal_pyro.counterfactual.handlers import (  # TwinWorldCounterfactual,
+import chirho.interventional.handlers  # noqa: F401
+from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.handlers.selection import SelectFactual
-from causal_pyro.indexed.ops import IndexSet, gather, indices_of, union
-from causal_pyro.interventional.handlers import do
-from causal_pyro.interventional.ops import intervene
-from causal_pyro.observational.handlers import condition
-from causal_pyro.observational.ops import observe
+from chirho.counterfactual.handlers.selection import SelectFactual
+from chirho.indexed.ops import IndexSet, gather, indices_of, union
+from chirho.interventional.handlers import do
+from chirho.interventional.ops import intervene
+from chirho.observational.handlers import condition
+from chirho.observational.ops import observe
 
 logger = logging.getLogger(__name__)
 
@@ -603,3 +603,37 @@ def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
         ]
         mode_value = posterior_mode.nodes[name]["value"]
         assert torch.allclose(mode_value, cf_mode_value), f"failed for {name}"
+
+
+@pytest.mark.parametrize("cf_dim", [-2, -3])
+def test_cf_infer_discrete_mediation(cf_dim):
+    actions = {
+        "w": (torch.tensor(0.0), torch.tensor(1.0)),
+        "x": lambda x_: gather(x_, IndexSet(w={2})),
+    }
+
+    @MultiWorldCounterfactual(cf_dim)
+    @do(actions=actions)
+    @pyro.plate("data", size=1000, dim=-1)
+    @pyro.infer.config_enumerate
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.67))
+
+        p_x = torch.tensor([0.53, 0.43])
+        p_x_w = pyro.ops.indexing.Vindex(p_x)[..., w.long()]
+        x = pyro.sample("x", dist.Bernoulli(p_x_w))
+
+        p_y = torch.tensor([0.92, 0.23])
+        p_y_w = pyro.ops.indexing.Vindex(p_y)[..., w.long()]
+        y = pyro.sample("y", dist.Bernoulli(p_y_w))
+
+        p_z = torch.tensor([[0.3, 0.4], [0.8, 0.1]])
+        p_z_xy = pyro.ops.indexing.Vindex(p_z)[x.long(), y.long()]
+        z = pyro.sample("z", dist.Bernoulli(p_z_xy))
+        return dict(x=x, y=y, z=z)
+
+    posterior = pyro.infer.infer_discrete(first_available_dim=cf_dim - 2)(model)
+    tr = pyro.poutine.trace(posterior).get_trace()
+
+    assert torch.any(tr.nodes["z"]["value"] > 0)
+    assert torch.any(tr.nodes["z"]["value"] < 1)

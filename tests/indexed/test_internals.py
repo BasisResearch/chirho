@@ -6,9 +6,9 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.internals import add_indices
-from causal_pyro.indexed.ops import (
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.indexed.internals import add_indices
+from chirho.indexed.ops import (
     IndexSet,
     gather,
     get_index_plates,
