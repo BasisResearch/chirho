@@ -2,15 +2,15 @@ from typing import Any, Dict, Optional, TypeVar
 
 import pyro
 
-from causal_pyro.counterfactual.handlers.ambiguity import (
+from chirho.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import split
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import get_index_plates
-from causal_pyro.interventional.ops import intervene
+from chirho.counterfactual.ops import split
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.indexed.ops import get_index_plates
+from chirho.interventional.ops import intervene
 
 T = TypeVar("T")
 

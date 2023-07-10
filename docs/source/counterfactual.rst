@@ -1,35 +1,35 @@
 Counterfactual
 ==============
 
-.. automodule:: causal_pyro.counterfactual
+.. automodule:: chirho.counterfactual
    :members:
    :undoc-members:
 
 Operations
 ----------
 
-.. automodule:: causal_pyro.counterfactual.ops
+.. automodule:: chirho.counterfactual.ops
    :members:
    :undoc-members:
 
 Handlers
 --------
 
-.. automodule:: causal_pyro.counterfactual.handlers
+.. automodule:: chirho.counterfactual.handlers
    :members:
    :undoc-members:
 
-.. automodule:: causal_pyro.counterfactual.handlers.ambiguity
+.. automodule:: chirho.counterfactual.handlers.ambiguity
    :members:
    :undoc-members:
 
-.. automodule:: causal_pyro.counterfactual.handlers.selection
+.. automodule:: chirho.counterfactual.handlers.selection
    :members:
    :undoc-members:
 
 Internals
 ---------
 
-.. automodule:: causal_pyro.counterfactual.internals
+.. automodule:: chirho.counterfactual.internals
    :members:
    :undoc-members:

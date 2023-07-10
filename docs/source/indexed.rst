@@ -1,7 +1,7 @@
 Indexed
 =======
 
-.. automodule:: causal_pyro.indexed
+.. automodule:: chirho.indexed
    :members:
    :undoc-members:
 
@@ -9,20 +9,20 @@ Indexed
 Operations
 ----------
 
-.. automodule:: causal_pyro.indexed.ops
+.. automodule:: chirho.indexed.ops
    :members:
    :undoc-members:
 
 Handlers
 --------
 
-.. automodule:: causal_pyro.indexed.handlers
+.. automodule:: chirho.indexed.handlers
    :members:
    :undoc-members:
 
 Internals
 ---------
 
-.. automodule:: causal_pyro.indexed.internals
+.. automodule:: chirho.indexed.internals
    :members:
    :undoc-members:

@@ -1,4 +1,4 @@
-"""**causal_pyro**
+"""**chirho**
 
 Project short description.
 """
