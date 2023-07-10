@@ -1,9 +1,15 @@
-import os
+import sys
 
 from setuptools import find_packages, setup
 
-PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
 VERSION = "0.0.1"
+
+try:
+    long_description = open("README.rst", encoding="utf-8").read()
+except Exception as e:
+    sys.stderr.write("Failed to read README: {}\n".format(e))
+    sys.stderr.flush()
+    long_description = ""
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
@@ -21,15 +27,14 @@ setup(
     name="chirho",
     version=VERSION,
     description="Causal reasoning",
-    # long_description=long_description,
-    # long_description_content_type="text/markdown",
+    long_description=long_description,
     packages=find_packages(include=["chirho", "chirho.*"]),
     author="Basis",
-    # url="",
-    # project_urls={
+    url="https://www.basis.ai/",
+    project_urls={
     #     "Documentation": "",
-    #     "Source": "https://github.com/BasisResearch/chirho",
-    # },
+        "Source": "https://github.com/BasisResearch/chirho",
+    },
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
