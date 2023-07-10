@@ -4,12 +4,12 @@ from typing import Any, Dict, Hashable, List, Optional
 import pyro
 import torch
 
-from causal_pyro.indexed.internals import (
+from chirho.indexed.internals import (
     _LazyPlateMessenger,
     add_indices,
     get_sample_msg_device,
 )
-from causal_pyro.indexed.ops import union
+from chirho.indexed.ops import union
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
@@ -69,7 +69,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 # are still guaranteed to exit safely in the correct order.
                 self.plates[name] = self._enter_index_plate(
                     _LazyPlateMessenger(
-                        name="__index_plate__" + name,
+                        name=name,
                         dim=self.first_available_dim,
                         size=new_size,
                     )

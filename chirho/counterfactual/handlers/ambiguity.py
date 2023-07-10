@@ -5,13 +5,13 @@ import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
 
-from causal_pyro.counterfactual.handlers.selection import (
+from chirho.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
     get_factual_indices,
 )
-from causal_pyro.counterfactual.internals import expand_obs_value_inplace_
-from causal_pyro.indexed.ops import gather, indices_of, scatter, union
+from chirho.counterfactual.internals import expand_obs_value_inplace_
+from chirho.indexed.ops import gather, indices_of, scatter, union
 
 T = TypeVar("T")
 
@@ -235,7 +235,9 @@ class AutoFactualConditioning(MinimalFactualConditioning):
 
         fn = msg["fn"]
         while hasattr(fn, "base_dist"):
-            if isinstance(fn, dist.TransformedDistribution):
+            if isinstance(fn, dist.FoldedDistribution):
+                return FactualConditioningReparam()
+            elif isinstance(fn, dist.TransformedDistribution):
                 return ConditionTransformReparam()
             else:
                 fn = fn.base_dist

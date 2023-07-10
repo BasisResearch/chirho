@@ -3,15 +3,15 @@ from typing import Any, Dict, Generic, Hashable, Mapping, Optional, TypeVar
 import pyro
 import torch
 
-from causal_pyro.counterfactual.handlers.ambiguity import (
+from chirho.counterfactual.handlers.ambiguity import (
     AmbiguousConditioningReparamMessenger,
     AutoFactualConditioning,
     CondStrategy,
 )
-from causal_pyro.counterfactual.ops import preempt, split
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.indexed.ops import get_index_plates
-from causal_pyro.interventional.ops import Intervention, intervene
+from chirho.counterfactual.ops import preempt, split
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.indexed.ops import get_index_plates
+from chirho.interventional.ops import Intervention, intervene
 
 T = TypeVar("T")
 

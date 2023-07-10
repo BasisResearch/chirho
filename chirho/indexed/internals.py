@@ -6,7 +6,7 @@ import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from causal_pyro.indexed.ops import (
+from chirho.indexed.ops import (
     IndexSet,
     cond,
     gather,
@@ -207,6 +207,12 @@ def _cond_tensor(
 
 
 class _LazyPlateMessenger(IndepMessenger):
+    prefix: str = "__index_plate__"
+
+    def __init__(self, name: str, *args, **kwargs):
+        self._orig_name: str = name
+        super().__init__(f"{self.prefix}_{name}", *args, **kwargs)
+
     @property
     def frame(self) -> CondIndepStackFrame:
         return CondIndepStackFrame(
@@ -216,7 +222,7 @@ class _LazyPlateMessenger(IndepMessenger):
     def _process_message(self, msg):
         if msg["type"] not in ("sample",) or pyro.poutine.util.site_is_subsample(msg):
             return
-        if self.frame.name in union(
+        if self._orig_name in union(
             indices_of(msg["value"], event_dim=msg["fn"].event_dim),
             indices_of(msg["fn"]),
         ):

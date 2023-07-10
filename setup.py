@@ -18,17 +18,17 @@ EXTRAS_REQUIRE = [
 ]
 
 setup(
-    name="causal_pyro",
+    name="chirho",
     version=VERSION,
-    description="Causal inference with Pyro",
+    description="Causal reasoning",
     # long_description=long_description,
     # long_description_content_type="text/markdown",
-    packages=find_packages(include=["causal_pyro", "causal_pyro.*"]),
+    packages=find_packages(include=["chirho", "chirho.*"]),
     author="Basis",
     # url="",
     # project_urls={
     #     "Documentation": "",
-    #     "Source": "https://github.com/BasisResearch/causal_pyro",
+    #     "Source": "https://github.com/BasisResearch/chirho",
     # },
     install_requires=[
         # if you add any additional libraries, please also
@@ -46,6 +46,7 @@ setup(
             "flake8",
             "isort",
             "sphinx",
+            "sphinxcontrib-bibtex",
             "sphinx_rtd_theme",
             "myst_parser",
             "nbsphinx",
