@@ -10,8 +10,8 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.interventional.handlers import do
-from chirho.observational.handlers import condition
-from chirho.observational.handlers.soft_conditioning import (
+from chirho.constrained.handlers import condition
+from chirho.constrained.handlers.soft_conditioning import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
     RBFKernel,
