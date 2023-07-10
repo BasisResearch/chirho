@@ -2,15 +2,15 @@
 
 .. index-inclusion-marker
 
-Causal Probabilistic Programming with Causal Pyro
+Causal Probabilistic Programming with ChiRho
 =================================================
 
-Causal Pyro is a causal extension to the Pyro probabilistic programming
+ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
 modern probablistic programming systems, such as Pyro, and the needs of
 policymakers, scientists, and AI researchers, who often want to use
 models to answer their questions about cause-and-effect relationships.
-As a non-exhaustive set of examples, Causal Pyro makes it easier to
+As a non-exhaustive set of examples, ChiRho makes it easier to
 answer the following kinds of causal questions that appear frequently in
 practice.
 
@@ -27,7 +27,7 @@ practice.
 -  **Causal structure discovery**: *What individual attributes influence
    risk of COVID-19 hospitalization?*
 
-To see how Causal Pyro supports causal reasoning, take a look at our `Tutorial <https://basisresearch.github.io/chirho/tutorial_i.html>`_.
+To see how ChiRho supports causal reasoning, take a look at our `Tutorial <https://basisresearch.github.io/chirho/tutorial_i.html>`_.
 
 Installation
 ------------
@@ -58,14 +58,14 @@ command:
    pip install chirho[extras] 
 
 Make sure that the models come from the same release version of the
-`Causal Pyro source
+`ChiRho source
 code <https://github.com/BasisResearch/chirho/releases>`__ as you
 have installed.
 
 Getting Started
 ---------------
 
-Below is a simple example of how to use Causal Pyro to answer an
+Below is a simple example of how to use ChiRho to answer an
 interventional question. For more in-depth examples, go to `Learn
 more <#learn-more>`__.
 
@@ -98,7 +98,7 @@ more <#learn-more>`__.
 Learn more
 ----------
 
-We have written a number of tutorials and examples for Causal Pyro. We
+We have written a number of tutorials and examples for ChiRho. We
 have tried to choose simple examples that would be of interest to both
 the causal inference and probabilistic programming communities: they
 collectively span Pearl’s causal hierarchy (Pearl 2009), and
@@ -109,12 +109,12 @@ variational inference.
 
 Our examples demonstrate how real-world causal assumptions can be expressed as probabilistic programs 
 and real-world causal estimands can be expressed as program transformations.
-These example illustrate how Causal Pyro is compatible with any inference method 
+These example illustrate how ChiRho is compatible with any inference method 
 implemented in Pyro, including the kinds of scalable gradient-based
 approximations that power much of the modern probabilistic machine learning landscape.
 
 - `Tutorial <https://basisresearch.github.io/chirho/tutorial_i.html>`_
-  - Key observations inspiring Causal Pyro's design and outlines a causal Bayesian workflow for using Causal Pyro to answer causal questions
+  - Key observations inspiring ChiRho's design and outlines a causal Bayesian workflow for using ChiRho to answer causal questions
 - `Example: Backdoor Adjustment Criteria <https://basisresearch.github.io/chirho/backdoor.html>`_
   - Adjusting for observed confounders
 - `Example: Causal Effect Variational Autoencoder <https://basisresearch.github.io/chirho/cevae.html>`_
@@ -126,7 +126,7 @@ approximations that power much of the modern probabilistic machine learning land
 - `Example: Structured Latent Confounders <https://basisresearch.github.io/chirho/slc.html>`_
   - Causal effect estimation when latent confounders are shared across groups
 - `Design notes <https://basisresearch.github.io/chirho/design_notes>`_
-  - Technical implementation details of Causal Pyro using effect handlers
+  - Technical implementation details of ChiRho using effect handlers
 
 *Note*: These tutorials and examples assume some familiarity with Pyro and
 probabilistic programming. For introductory Pyro tutorials, please see
@@ -143,18 +143,18 @@ Documentation
   - Effect handler utilities for computing probabilistic quantities for 
   partially deterministic models which is useful for counterfactual reasoning
 - `Indexed <https://basisresearch.github.io/chirho/indexed.html>`_
-  - Effect handler utilities for named indices in Causal Pyro which is useful for manipluating
+  - Effect handler utilities for named indices in ChiRho which is useful for manipluating
   and tracking counterfactual worlds
   
 Caveats
 -------
-Causal Pyro does not answer causal questions by magic. In fact, there is
+ChiRho does not answer causal questions by magic. In fact, there is
 no escaping the fact that
 
    *behind any causal conclusion there must lie some causal assumption,*
 
 a phrase made famous by Judea Pearl (Pearl 2009). Instead,
-Causal Pyro provides a substrate for writing causal assumptions as
+ChiRho provides a substrate for writing causal assumptions as
 probabilistic programs, and for writing causal questions in terms of
 program transformations.
 
