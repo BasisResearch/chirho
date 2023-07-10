@@ -1,6 +1,6 @@
 from typing import Any, Dict
 
-from causal_pyro.indexed.ops import indices_of, union
+from chirho.indexed.ops import indices_of, union
 
 
 def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
