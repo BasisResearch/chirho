@@ -10,10 +10,7 @@ from chirho.counterfactual.handlers import (
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from chirho.counterfactual.handlers.selection import (
-    SelectCounterfactual,
-    SelectFactual,
-)
+from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
 from chirho.interventional.handlers import do
 
 logger = logging.getLogger(__name__)
