@@ -5,7 +5,7 @@ from typing import Callable, Generic, Hashable, Mapping, Optional, TypeVar
 import pyro
 import torch
 
-from causal_pyro.interventional.ops import (
+from chirho.interventional.ops import (
     AtomicIntervention,
     CompoundIntervention,
     intervene,

@@ -3,8 +3,8 @@ from typing import Optional
 import pyro
 import torch
 
-from causal_pyro.indexed.handlers import DependentMaskMessenger
-from causal_pyro.indexed.ops import IndexSet, get_index_plates, indexset_as_mask
+from chirho.indexed.handlers import DependentMaskMessenger
+from chirho.indexed.ops import IndexSet, get_index_plates, indexset_as_mask
 
 
 def get_factual_indices() -> IndexSet:

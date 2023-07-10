@@ -1,11 +1,11 @@
-# Contributing to Causal Pyro
+# Contributing to ChiRho
 
 ## Development
 
-Please follow our established coding style including variable names, module imports, and function definitions. The Causal Pyro codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/) (which you can check with `make lint`) and follows [`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`). 
+Please follow our established coding style including variable names, module imports, and function definitions. The ChiRho codebase follows the [PEP8 style guide](https://www.python.org/dev/peps/pep-0008/) (which you can check with `make lint`) and follows [`isort`](https://github.com/timothycrosley/isort) import order (which you can enforce with `make format`). 
 
 ## Dev Setup
-To install dev dependencies for Causal Pyro, run the following command.
+To install dev dependencies for ChiRho, run the following command.
 ```sh
 pip install -e .[test]
 ```

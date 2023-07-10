@@ -1,20 +1,20 @@
 Interventional
 ==============
 
-.. automodule:: causal_pyro.interventional
+.. automodule:: chirho.interventional
    :members:
    :undoc-members:
 
 Operations
 ----------
 
-.. automodule:: causal_pyro.interventional.ops
+.. automodule:: chirho.interventional.ops
    :members:
    :undoc-members:
 
 Handlers
 --------
 
-.. automodule:: causal_pyro.interventional.handlers
+.. automodule:: chirho.interventional.handlers
    :members:
    :undoc-members:
