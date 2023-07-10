@@ -6,7 +6,7 @@ import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
-from causal_pyro.indexed.ops import (
+from chirho.indexed.ops import (
     IndexSet,
     cond,
     gather,

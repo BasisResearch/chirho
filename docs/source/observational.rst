@@ -1,13 +1,13 @@
 Observational
 =============
 
-.. automodule:: causal_pyro.observational
+.. automodule:: chirho.observational
    :members:
    :undoc-members:
 
 Handlers
 --------
 
-.. automodule:: causal_pyro.observational.handlers
+.. automodule:: chirho.observational.handlers
    :members:
    :undoc-members:
