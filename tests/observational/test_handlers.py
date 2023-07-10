@@ -10,7 +10,8 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.interventional.handlers import do
-from chirho.observational.handlers import (
+from chirho.observational.handlers import condition
+from chirho.observational.handlers.soft_conditioning import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
     RBFKernel,
@@ -69,7 +70,7 @@ def test_soft_conditioning_smoke_continuous_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -110,7 +111,7 @@ def test_soft_conditioning_smoke_discrete_1(
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), pyro.condition(data=data):
+    ), condition(data=data):
         discrete_scm_1()
 
     tr.trace.compute_log_prob()
@@ -154,7 +155,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
-    ), cf_class(cf_dim), do(actions=actions), pyro.condition(data=data):
+    ), cf_class(cf_dim), do(actions=actions), condition(data=data):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -174,3 +175,109 @@ def test_soft_conditioning_counterfactual_continuous_1(
         else:
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
+
+
+def hmm_model(data):
+    transition_probs = pyro.param(
+        "transition_probs",
+        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
+        constraint=dist.constraints.simplex,
+    )
+    emission_probs = pyro.sample(
+        "emission_probs",
+        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+    )
+    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+    logger.debug(f"-1\t{tuple(x.shape)}")
+    for t, y in pyro.markov(enumerate(data)):
+        x = pyro.sample(
+            f"x_{t}",
+            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
+        )
+
+        pyro.sample(
+            f"y_{t}",
+            dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+        )
+        logger.debug(f"{t}\t{tuple(x.shape)}")
+
+
+@pytest.mark.parametrize("num_particles", [1, 10])
+@pytest.mark.parametrize("max_plate_nesting", [3, float("inf")])
+@pytest.mark.parametrize("use_guide", [False, True])
+@pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6])
+@pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
+def test_smoke_condition_enumerate_hmm_elbo(
+    num_steps, Elbo, use_guide, max_plate_nesting, num_particles
+):
+    data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+
+    assert issubclass(Elbo, pyro.infer.elbo.ELBO)
+    elbo = Elbo(
+        max_plate_nesting=max_plate_nesting,
+        num_particles=num_particles,
+        vectorize_particles=(num_particles > 1),
+    )
+
+    model = condition(data={f"y_{t}": y for t, y in enumerate(data)})(hmm_model)
+
+    if use_guide:
+        guide = pyro.infer.config_enumerate(default="parallel")(
+            pyro.infer.autoguide.AutoDiscreteParallel(
+                pyro.poutine.block(expose=["x"])(condition(data={})(model))
+            )
+        )
+        model = pyro.infer.config_enumerate(default="parallel")(model)
+    else:
+        model = pyro.infer.config_enumerate(default="parallel")(model)
+        model = condition(model, data={"x": torch.as_tensor(0)})
+
+        def guide(data):
+            pass
+
+    # smoke test
+    elbo.differentiable_loss(model, guide, data)
+
+
+def test_condition_commutes():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        with pyro.plate("data", 2):
+            x = pyro.sample("x", dist.Normal(z, 1))
+            y = pyro.sample("y", dist.Normal(x + z, 1))
+        return z, x, y
+
+    h_cond = condition(
+        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
+    )
+    h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
+
+    # case 1
+    with pyro.poutine.trace() as tr1:
+        with h_cond, h_do:
+            model()
+
+    # case 2
+    with pyro.poutine.trace() as tr2:
+        with h_do, h_cond:
+            model()
+
+    # case 3
+    with h_cond, pyro.poutine.trace() as tr3:
+        with h_do:
+            model()
+
+    tr1.trace.compute_log_prob()
+    tr2.trace.compute_log_prob()
+    tr3.trace.compute_log_prob()
+
+    assert set(tr1.trace.nodes) == set(tr2.trace.nodes) == set(tr3.trace.nodes)
+    assert (
+        tr1.trace.log_prob_sum() == tr2.trace.log_prob_sum() == tr3.trace.log_prob_sum()
+    )
+    for name, node in tr1.trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            assert torch.allclose(node["value"], tr2.trace.nodes[name]["value"])
+            assert torch.allclose(node["value"], tr3.trace.nodes[name]["value"])
+            assert torch.allclose(node["log_prob"], tr2.trace.nodes[name]["log_prob"])
+            assert torch.allclose(node["log_prob"], tr3.trace.nodes[name]["log_prob"])
