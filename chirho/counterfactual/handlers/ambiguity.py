@@ -19,7 +19,7 @@ T = TypeVar("T")
 
 class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     """
-    Reparameterization strategy for handling ambiguity in conditioning, for use with
+    Effect handler for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
     """
 
