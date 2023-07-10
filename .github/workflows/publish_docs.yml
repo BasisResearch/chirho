@@ -19,4 +19,4 @@ jobs:
       uses: sphinx-notes/pages@v3
       with:
         documentation_path: ./docs/source/
-        pyproject_extras: test
+        requirements_path: ./docs/source/requirements.txt
