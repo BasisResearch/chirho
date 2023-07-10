@@ -4,7 +4,7 @@ import pyro
 import pyro.distributions
 import torch
 
-from causal_pyro.observational.ops import AtomicObservation, observe
+from chirho.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
 

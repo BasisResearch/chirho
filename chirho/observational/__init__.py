@@ -1,1 +1,1 @@
-import causal_pyro.observational.internals  # noqa: F401
+import chirho.observational.internals  # noqa: F401
