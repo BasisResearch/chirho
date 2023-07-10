@@ -39,13 +39,9 @@ Table of Contents
 
 .. toctree::
    :maxdepth: 2
-   :caption: Design Notes
+   :caption: For Contributors
 
    design_notes/index
-   design_notes/counterfactuals
-   design_notes/interventions
-   design_notes/queries
-   design_notes/observations
 
 Indices and tables
 ==================

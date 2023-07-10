@@ -1,6 +1,3 @@
-Design notes: Causal queries as program transformations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 A primary motivation for working in a PPL is separation of concerns
 between models, queries, and inference. The design for causal inference
 presented so far is highly modular, but up to now we have been
