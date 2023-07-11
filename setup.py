@@ -2,7 +2,7 @@ import sys
 
 from setuptools import find_packages, setup
 
-VERSION = "0.0.1"
+VERSION = "0.1.0-alpha.1"
 
 try:
     long_description = open("README.rst", encoding="utf-8").read()
