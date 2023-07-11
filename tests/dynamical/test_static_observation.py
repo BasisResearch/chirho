@@ -7,11 +7,7 @@ import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal
 
-from chirho.dynamical.handlers import (
-    PointObservation,
-    SimulatorEventLoop,
-    simulate,
-)
+from chirho.dynamical.handlers import PointObservation, SimulatorEventLoop, simulate
 from chirho.dynamical.ops import State
 
 from .dynamical_fixtures import SimpleSIRDynamics, bayes_sir_model

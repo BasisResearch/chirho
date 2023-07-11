@@ -3,12 +3,13 @@ import logging
 import pytest
 import torch
 
-from chirho.dynamical.handlers import (
-    DynamicIntervention,
-    SimulatorEventLoop,
-    simulate,
+from chirho.counterfactual.handlers import (
+    MultiWorldCounterfactual,
+    TwinWorldCounterfactual,
 )
+from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop, simulate
 from chirho.dynamical.ops import State
+from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import SimpleSIRDynamics
 
@@ -29,11 +30,21 @@ intervene_state1 = State(S=torch.tensor(50.0))
 intervene_state2 = State(S=torch.tensor(30.0))
 
 
-def get_state_reached_event_f(target_state: State[torch.tensor]):
+def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int = 0):
     def event_f(t: torch.tensor, state: State[torch.tensor]):
         # ret = target_state.subtract_shared_variables(state).l2()
-
-        return state.R - target_state.R
+        actual, target = state.R, target_state.R
+        cf_indices = IndexSet(
+            **{
+                k: {1}
+                for k in union(
+                    indices_of(actual, event_dim=event_dim),
+                    indices_of(target, event_dim=event_dim),
+                ).keys()
+            }
+        )
+        event_var = gather(actual - target, cf_indices, event_dim=event_dim)
+        return event_var
 
     return event_f
 
@@ -144,3 +155,165 @@ def test_dynamic_intervention_causes_change(
         postint_traj.S + postint_traj.I + postint_traj.R
         > (preint_total + intervene_state.S) * 0.95
     )
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize(
+    "trigger_states",
+    [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
+)
+@pytest.mark.parametrize(
+    "intervene_states",
+    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+)
+def test_split_twinworld_dynamic_intervention(
+    model, init_state, tspan, trigger_states, intervene_states
+):
+    ts1, ts2 = trigger_states
+    is1, is2 = intervene_states
+
+    # Simulate with the intervention and ensure that the result differs from the observational execution.
+    with SimulatorEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+            var_order=init_state.var_order,
+            max_applications=1,
+        ):
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                with TwinWorldCounterfactual() as cf:
+                    cf_trajectory = simulate(model, init_state, tspan)
+
+    with cf:
+        for k in cf_trajectory.keys:
+            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize(
+    "trigger_states",
+    [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
+)
+@pytest.mark.parametrize(
+    "intervene_states",
+    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+)
+def test_split_multiworld_dynamic_intervention(
+    model, init_state, tspan, trigger_states, intervene_states
+):
+    ts1, ts2 = trigger_states
+    is1, is2 = intervene_states
+
+    # Simulate with the intervention and ensure that the result differs from the observational execution.
+    with SimulatorEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+            var_order=init_state.var_order,
+            max_applications=1,
+        ):
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                with MultiWorldCounterfactual() as cf:
+                    cf_trajectory = simulate(model, init_state, tspan)
+
+    with cf:
+        for k in cf_trajectory.keys:
+            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+
+
+@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize(
+    "trigger_states",
+    [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
+)
+@pytest.mark.parametrize(
+    "intervene_states",
+    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+)
+def test_split_twinworld_dynamic_matches_output(
+    model, init_state, tspan, trigger_states, intervene_states
+):
+    ts1, ts2 = trigger_states
+    is1, is2 = intervene_states
+
+    with SimulatorEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+            var_order=init_state.var_order,
+            max_applications=1,
+        ):
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                with TwinWorldCounterfactual() as cf:
+                    cf_trajectory = simulate(model, init_state, tspan)
+
+    with SimulatorEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+            var_order=init_state.var_order,
+            max_applications=1,
+        ):
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                expected_cf = simulate(model, init_state, tspan)
+
+    with SimulatorEventLoop():
+        expected_factual = simulate(model, init_state, tspan)
+
+    with cf:
+        factual_indices = IndexSet(
+            **{k: {0} for k in indices_of(cf_trajectory, event_dim=0).keys()}
+        )
+
+        cf_indices = IndexSet(
+            **{k: {1} for k in indices_of(cf_trajectory, event_dim=0).keys()}
+        )
+
+        actual_cf = gather(cf_trajectory, cf_indices, event_dim=0)
+        actual_factual = gather(cf_trajectory, factual_indices, event_dim=0)
+
+        assert not set(indices_of(actual_cf, event_dim=0))
+        assert not set(indices_of(actual_factual, event_dim=0))
+
+    assert set(cf_trajectory.keys) == set(actual_cf.keys) == set(expected_cf.keys)
+    assert (
+        set(cf_trajectory.keys)
+        == set(actual_factual.keys)
+        == set(expected_factual.keys)
+    )
+
+    for k in cf_trajectory.keys:
+        assert torch.allclose(
+            getattr(actual_cf, k), getattr(expected_cf, k), atol=1e-3, rtol=0
+        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+
+    for k in cf_trajectory.keys:
+        assert torch.allclose(
+            getattr(actual_factual, k), getattr(expected_factual, k), atol=1e-3, rtol=0
+        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
