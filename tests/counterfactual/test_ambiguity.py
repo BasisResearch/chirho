@@ -5,16 +5,14 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from causal_pyro.counterfactual.handlers import (
+from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from causal_pyro.counterfactual.handlers.selection import (
-    SelectCounterfactual,
-    SelectFactual,
-)
-from causal_pyro.interventional.handlers import do
+from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
+from chirho.interventional.handlers import do
+from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +74,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape, x_folde
         "x": torch.full(event_shape, 0.6),
     }
 
-    queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
+    queried_model = condition(data=observations)(do(actions=interventions)(model))
     cf_handler = cf_class(cf_dim)
 
     with SingleWorldFactual():

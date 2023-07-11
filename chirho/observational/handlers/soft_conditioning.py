@@ -8,6 +8,7 @@ import torch
 
 T = TypeVar("T")
 
+
 Kernel = Callable[[T, T], torch.Tensor]
 
 

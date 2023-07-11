@@ -1,15 +1,16 @@
 import collections
-from typing import Any, Dict, Hashable, List, Optional
+import functools
+from typing import Any, Callable, Dict, Hashable, List, Optional
 
 import pyro
 import torch
 
-from causal_pyro.indexed.internals import (
+from chirho.indexed.internals import (
     _LazyPlateMessenger,
     add_indices,
     get_sample_msg_device,
 )
-from causal_pyro.indexed.ops import union
+from chirho.indexed.ops import union
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
@@ -35,6 +36,26 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
         for name in reversed(list(self.plates.keys())):
             self.plates[name].__exit__(exc_type, exc_value, traceback)
         return super().__exit__(exc_type, exc_value, traceback)
+
+    def __call__(self, fn: Callable) -> Callable:
+        handled_fn = super().__call__(fn)
+
+        # IndexPlatesMessenger is a stateful handler, and by default
+        # does not clear its state after exiting a context to support REPL usage.
+        # This wrapper ensures that state is cleared after exiting a context
+        # when IndexPlatesMessenger is used as a decorator.
+        @functools.wraps(handled_fn)
+        def wrapped_handled_fn(*args, **kwargs):
+            try:
+                return handled_fn(*args, **kwargs)
+            finally:
+                if self not in pyro.poutine.runtime._PYRO_STACK:
+                    for p in list(self.plates):
+                        assert p not in pyro.poutine.runtime._PYRO_STACK
+                        del self.plates[p]
+                    self.first_available_dim = self._orig_dim
+
+        return wrapped_handled_fn
 
     def _pyro_get_index_plates(self, msg):
         msg["value"] = {name: plate.frame for name, plate in self.plates.items()}
