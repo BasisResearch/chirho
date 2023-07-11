@@ -10,7 +10,7 @@ whose behavior is modified by effect handlers during posterior inference.
     def sample(name: str, dist: pyro.distributions.Distribution, obs: Optional[Tensor] = None) -> Tensor:
         return obs if obs is not None else dist.sample()
 
-As discussed in the Introduction, Pyro already has an effect handler `pyro.poutine.do` for intervening on `sample`statements, but its implementation is too limited to be ergonomic for most causal inference problems of interest to practitioners.
+As discussed in the Introduction, Pyro already has an effect handler ``pyro.poutine.do`` for intervening on ``sample`` statements, but its implementation is too limited to be ergonomic for most causal inference problems of interest to practitioners.
 
 The polymorphic definition of ``intervene`` above can be expanded as the generic type ``Intervention`` is made explicit.
 
