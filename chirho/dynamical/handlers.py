@@ -8,7 +8,7 @@ import pyro
 import torch
 import torchdiffeq
 
-from causal_pyro.dynamical.ops import (
+from chirho.dynamical.ops import (
     State,
     Trajectory,
     apply_interruptions,
@@ -16,7 +16,7 @@ from causal_pyro.dynamical.ops import (
     simulate,
     simulate_to_interruption,
 )
-from causal_pyro.interventional.handlers import intervene
+from chirho.interventional.handlers import intervene
 
 S = TypeVar("S")
 T = TypeVar("T")

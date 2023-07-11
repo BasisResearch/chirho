@@ -2,8 +2,8 @@ import pyro
 import torch
 from pyro.distributions import Normal, Poisson, Uniform, constraints
 
-from causal_pyro.dynamical.handlers import ODEDynamics
-from causal_pyro.dynamical.ops import State, Trajectory
+from chirho.dynamical.handlers import ODEDynamics
+from chirho.dynamical.ops import State, Trajectory
 
 
 class SimpleSIRDynamics(ODEDynamics):
