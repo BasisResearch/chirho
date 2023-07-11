@@ -178,8 +178,8 @@ def concatenate(*inputs, **kwargs):
     raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
 
 
-@concatenate.register
-def trajectory_concatenate(*trajectories: Trajectory, **kwargs) -> Trajectory[T]:
+@concatenate.register(Trajectory)
+def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """
