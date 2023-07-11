@@ -5,6 +5,7 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+from chirho.constrained.handlers import condition
 from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     SingleWorldFactual,
@@ -12,7 +13,6 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
 from chirho.interventional.handlers import do
-from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 

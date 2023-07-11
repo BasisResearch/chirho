@@ -7,12 +7,12 @@ import pyro.distributions as dist
 import pytest
 import torch
 
+from chirho.constrained.handlers import condition
 from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
 from chirho.interventional.handlers import DoMessenger, do
-from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 

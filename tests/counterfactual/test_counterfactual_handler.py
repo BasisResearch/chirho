@@ -8,6 +8,8 @@ import pytest
 import torch
 
 import chirho.interventional.handlers  # noqa: F401
+from chirho.constrained.handlers import condition
+from chirho.constrained.ops import observe
 from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
@@ -18,8 +20,6 @@ from chirho.counterfactual.handlers.selection import SelectFactual
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
-from chirho.observational.handlers import condition
-from chirho.observational.ops import observe
 
 logger = logging.getLogger(__name__)
 

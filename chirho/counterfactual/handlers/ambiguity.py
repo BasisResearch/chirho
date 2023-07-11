@@ -5,6 +5,7 @@ import pyro
 import pyro.distributions as dist
 import torch
 
+from chirho.constrained.ops import observe
 from chirho.counterfactual.handlers.selection import (
     SelectCounterfactual,
     SelectFactual,
@@ -12,7 +13,6 @@ from chirho.counterfactual.handlers.selection import (
 )
 from chirho.counterfactual.internals import no_ambiguity, site_is_ambiguous
 from chirho.indexed.ops import gather, get_index_plates, indices_of, scatter
-from chirho.observational.ops import observe
 
 T = TypeVar("T")
 
