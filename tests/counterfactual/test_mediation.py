@@ -12,6 +12,7 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.interventional.handlers import DoMessenger, do
+from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 
@@ -107,7 +108,7 @@ def test_linear_mediation_unconditioned(x_cf_value):
 def test_linear_mediation_conditioned(x_cf_value):
     model = make_mediation_model(*linear_fs())
     x_cond_value = 0.1
-    conditioned_model = pyro.condition(
+    conditioned_model = condition(
         model, {"W": 1.0, "X": x_cond_value, "Z": 2.0, "Y": 1.1}
     )
 
@@ -173,9 +174,9 @@ def test_mediation_nde_smoke():
         return do(actions={"X": x})(
             do(actions={"X": x_prime})(
                 do(actions={"Z": lambda Z: Z})(
-                    pyro.condition(
-                        data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs}
-                    )(pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model))
+                    condition(data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs})(
+                        pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
+                    )
                 )
             )
         )

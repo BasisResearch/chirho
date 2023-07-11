@@ -11,6 +11,7 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
 from chirho.interventional.handlers import do
+from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +60,13 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
         "x": torch.full(event_shape, x_cf_value),
     }
 
-    queried_model = pyro.condition(data=observations)(do(actions=interventions)(model))
+    queried_model = condition(data=observations)(do(actions=interventions)(model))
 
     with cf_class(cf_dim):
         full_tr = pyro.poutine.trace(queried_model).get_trace()
         full_log_prob = full_tr.log_prob_sum()
 
-    pin_cf_latents = pyro.condition(
+    pin_cf_latents = condition(
         data={
             name: msg["value"]
             for name, msg in full_tr.nodes.items()
@@ -88,7 +89,9 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
     )
 
     for name in observations.keys():
+        assert full_tr.nodes[name]["value"].shape == cf_tr.nodes[name]["value"].shape
         assert torch.all(full_tr.nodes[name]["value"] == cf_tr.nodes[name]["value"])
+        assert full_tr.nodes[name]["value"].shape == fact_tr.nodes[name]["value"].shape
         assert torch.all(full_tr.nodes[name]["value"] == fact_tr.nodes[name]["value"])
 
     assert cf_log_prob != 0.0

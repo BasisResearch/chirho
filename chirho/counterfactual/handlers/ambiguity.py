@@ -1,8 +1,8 @@
-from typing import Any, Dict, Literal, Optional, TypedDict, TypeVar, Union
+import functools
+from typing import TypeVar
 
 import pyro
 import pyro.distributions as dist
-import pyro.infer.reparam
 import torch
 
 from chirho.counterfactual.handlers.selection import (
@@ -10,170 +10,80 @@ from chirho.counterfactual.handlers.selection import (
     SelectFactual,
     get_factual_indices,
 )
-from chirho.counterfactual.internals import expand_obs_value_inplace_
-from chirho.indexed.ops import gather, indices_of, scatter, union
+from chirho.counterfactual.internals import no_ambiguity, site_is_ambiguous
+from chirho.indexed.ops import gather, get_index_plates, indices_of, scatter
+from chirho.observational.ops import observe
 
 T = TypeVar("T")
 
 
-def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
+class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     """
-    Helper function used with :func:`pyro.condition` to determine
-    whether a site is observed or ambiguous.
-
-    A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-    and the observed value's index variables are a strict subset of the distribution's
-    indices and hence require clarification of which entries of the random variable
-    are fixed/observed (as opposed to random/unobserved).
-    """
-    if not (
-        msg["type"] == "sample"
-        and msg["is_observed"]
-        and not pyro.poutine.util.site_is_subsample(msg)
-    ):
-        return False
-
-    try:
-        return not msg["infer"]["_specified_conditioning"]
-    except KeyError:
-        value_indices = indices_of(msg["value"], event_dim=len(msg["fn"].event_shape))
-        dist_indices = indices_of(msg["fn"])
-        return (
-            bool(union(value_indices, dist_indices)) and value_indices != dist_indices
-        )
-
-
-def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Helper function used with :func:`pyro.poutine.infer_config` to inform
-    :class:`AmbiguousConditioningReparam` that all ambiguity in the current
-    context has been resolved.
-    """
-    return {"_specified_conditioning": True}
-
-
-class AmbiguousConditioningReparam(pyro.infer.reparam.reparam.Reparam):
-    """
-    Abstract base class for reparameterizers that handle ambiguous conditioning.
-    """
-
-    pass
-
-
-class AmbiguousConditioningStrategy(pyro.infer.reparam.strategies.Strategy):
-    """
-    Abstract base class for strategies that handle ambiguous conditioning.
-    """
-
-    pass
-
-
-CondStrategy = Union[
-    Dict[str, AmbiguousConditioningReparam], AmbiguousConditioningStrategy
-]
-
-
-class AmbiguousConditioningReparamMessenger(
-    pyro.poutine.reparam_messenger.ReparamMessenger
-):
-    config: CondStrategy
-
-    def _pyro_sample(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> None:
-        if site_is_ambiguous(msg):
-            expand_obs_value_inplace_(msg)
-            msg["infer"]["_specified_conditioning"] = False
-        super()._pyro_sample(msg)
-        msg["infer"]["_specified_conditioning"] = True
-
-
-class ConditionReparamMsg(TypedDict):
-    fn: pyro.distributions.Distribution
-    value: torch.Tensor
-    is_observed: Literal[True]
-
-
-class ConditionReparamArgMsg(ConditionReparamMsg):
-    name: str
-
-
-class FactualConditioningReparam(AmbiguousConditioningReparam):
-    """
-    Factual conditioning reparameterizer.
-
-    This :class:`pyro.infer.reparam.reparam.Reparam` is used to resolve inherent
-    semantic ambiguity in conditioning in the presence of interventions by
-    splitting the observed value into a factual and counterfactual component,
-    associating the observed value with the factual random variable,
-    and sampling the counterfactual random variable from its prior.
-    """
-
-    @pyro.poutine.infer_config(config_fn=no_ambiguity)
-    def apply(self, msg: ConditionReparamArgMsg) -> ConditionReparamMsg:
-        with SelectFactual():
-            fv = pyro.sample(msg["name"] + "_factual", msg["fn"], obs=msg["value"])
-
-        with SelectCounterfactual():
-            cv = pyro.sample(msg["name"] + "_counterfactual", msg["fn"])
-
-        event_dim = len(msg["fn"].event_shape)
-        fw_indices = get_factual_indices()
-        new_value: torch.Tensor = scatter(
-            fv, fw_indices, result=cv.clone(), event_dim=event_dim
-        )
-        new_fn = dist.Delta(new_value, event_dim=event_dim).mask(False)
-        return {"fn": new_fn, "value": new_value, "is_observed": True}
-
-
-class MinimalFactualConditioning(AmbiguousConditioningStrategy):
-    """
-    Reparameterization strategy for handling ambiguity in conditioning, for use with
+    Effect handler for handling ambiguity in conditioning, for use with
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
-
-    :class:`MinimalFactualConditioning` applies :class:`FactualConditioningReparam`
-    instances to all ambiguous sample sites in a model.
-
-    .. note::
-
-        A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-        and the observed value's index variables are a strict subset of the distribution's
-        indices and hence require clarification of which entries of the random variable
-        are fixed/observed (as opposed to random/unobserved).
-
     """
 
-    def configure(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
-    ) -> Optional[FactualConditioningReparam]:
+    def _pyro_post_sample(self, msg: dict) -> None:
+        # expand latent values to include all index plates
+        if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
+            rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
+            index_plates = get_index_plates()
+
+            new_shape = list(value.shape)
+            for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
+                dim = index_plates[k].dim
+                new_shape = [1] * ((event_dim - dim) - len(new_shape)) + new_shape
+                new_shape[dim - event_dim] = rv.batch_shape[dim]
+
+            msg["value"] = value.expand(tuple(new_shape))
+
+    def _pyro_observe(self, msg: dict) -> None:
+        if "name" not in msg["kwargs"]:
+            msg["kwargs"]["name"] = msg["name"]
+
         if not site_is_ambiguous(msg):
-            return None
+            return
 
-        return FactualConditioningReparam()
+        msg["value"] = self._dispatched_observe(*msg["args"], name=msg["name"])
+        msg["done"] = True
+        msg["stop"] = True
 
+    @functools.singledispatchmethod
+    def _dispatched_observe(self, rv, obs: torch.Tensor, name: str) -> torch.Tensor:
+        raise NotImplementedError
 
-class ConditionTransformReparamMsg(TypedDict):
-    fn: pyro.distributions.TransformedDistribution
-    value: torch.Tensor
-    is_observed: Literal[True]
+    @_dispatched_observe.register(dist.FoldedDistribution)
+    @_dispatched_observe.register(dist.Distribution)
+    def _observe_dist(
+        self, rv: dist.Distribution, obs: torch.Tensor, name: str
+    ) -> torch.Tensor:
+        with pyro.poutine.infer_config(config_fn=no_ambiguity):
+            with SelectFactual():
+                fv = pyro.sample(name + "_factual", rv, obs=obs)
 
+            with SelectCounterfactual():
+                cv = pyro.sample(name + "_counterfactual", rv)
 
-class ConditionTransformReparamArgMsg(ConditionTransformReparamMsg):
-    name: str
+            event_dim = len(rv.event_shape)
+            fw_indices = get_factual_indices()
+            new_value: torch.Tensor = scatter(
+                fv, fw_indices, result=cv.clone(), event_dim=event_dim
+            )
+            new_rv = dist.Delta(new_value, event_dim=event_dim).mask(False)
+            return pyro.sample(name, new_rv, obs=new_value)
 
-
-class ConditionTransformReparam(AmbiguousConditioningReparam):
-    def apply(
-        self, msg: ConditionTransformReparamArgMsg
-    ) -> ConditionTransformReparamMsg:
-        name, fn, value = msg["name"], msg["fn"], msg["value"]
-
+    @_dispatched_observe.register
+    def _observe_tfmdist(
+        self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
+    ) -> torch.Tensor:
         tfm = (
-            fn.transforms[-1]
-            if len(fn.transforms) == 1
-            else dist.transforms.ComposeTransformModule(fn.transforms)
+            rv.transforms[-1]
+            if len(rv.transforms) == 1
+            else dist.transforms.ComposeTransformModule(rv.transforms)
         )
-        noise_dist = fn.base_dist
+        noise_dist = rv.base_dist
         noise_event_dim = len(noise_dist.event_shape)
-        obs_event_dim = len(fn.event_shape)
+        obs_event_dim = len(rv.event_shape)
 
         # factual world
         with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
@@ -188,7 +98,8 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
         obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(
             obs_noise.shape
         )
-        obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
+        # obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
+        obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
         # counterfactual world
         with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
@@ -201,45 +112,4 @@ class ConditionTransformReparam(AmbiguousConditioningReparam):
             value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim
         )
         new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
-        return {"fn": new_fn, "value": new_value, "is_observed": msg["is_observed"]}
-
-
-class AutoFactualConditioning(MinimalFactualConditioning):
-    """
-    Reparameterization strategy for handling ambiguity in conditioning, for use with
-    counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
-
-    When the distribution is a :class:`pyro.distributions.TransformedDistribution`,
-    :class:`AutoFactualConditioning` automatically applies :class:`ConditionTransformReparam`
-    to the site. Otherwise, it behaves like :class:`MinimalFactualConditioning` .
-
-    .. note::
-
-        This strategy is applied by default via :class:`MultiWorldCounterfactual`
-        and :class:`TwinWorldCounterfactual` unless otherwise specified.
-
-    .. note::
-
-        A sample site is ambiguous if it is marked observed, is downstream of an intervention,
-        and the observed value's index variables are a strict subset of the distribution's
-        indices and hence require clarification of which entries of the random variable
-        are fixed/observed (as opposed to random/unobserved).
-
-    """
-
-    def configure(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
-    ) -> Optional[FactualConditioningReparam]:
-        if not site_is_ambiguous(msg):
-            return None
-
-        fn = msg["fn"]
-        while hasattr(fn, "base_dist"):
-            if isinstance(fn, dist.FoldedDistribution):
-                return FactualConditioningReparam()
-            elif isinstance(fn, dist.TransformedDistribution):
-                return ConditionTransformReparam()
-            else:
-                fn = fn.base_dist
-
-        return super().configure(msg)
+        return pyro.sample(name, new_fn, obs=new_value)
