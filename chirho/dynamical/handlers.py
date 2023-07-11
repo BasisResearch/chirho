@@ -17,6 +17,7 @@ from chirho.dynamical.ops import (
     simulate_to_interruption,
 )
 from chirho.interventional.handlers import intervene
+from chirho.observational.handlers import condition
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -461,7 +462,7 @@ class PointObservation(PointInterruption):
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics, current_state = msg["args"]
 
-        with pyro.condition(data=self.data):
+        with condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
                 lambda m: isinstance(m, PointInterruption) and (m is not self)
             ):
