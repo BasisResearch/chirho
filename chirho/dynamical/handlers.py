@@ -332,12 +332,15 @@ def torchdiffeq_combined_event_f(
     ]
 
     def combined_event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
-        return torch.tensor(
-            [
-                *[f(t, flat_state) for f in dynamic_event_fs],
-                terminal_event_f(t, flat_state),
-            ]
-        )
+        return torch.stack(
+            list(
+                torch.broadcast_tensors(
+                    *[f(t, flat_state) for f in dynamic_event_fs],
+                    terminal_event_f(t, flat_state),
+                )
+            ),
+            dim=-1,
+        )  # TODO support event_dim > 0
 
     return combined_event_f
 
