@@ -3,12 +3,8 @@ import logging
 import pytest
 import torch
 
-from causal_pyro.dynamical.handlers import (
-    PointIntervention,
-    SimulatorEventLoop,
-    simulate,
-)
-from causal_pyro.dynamical.ops import State
+from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop, simulate
+from chirho.dynamical.ops import State
 
 from .dynamical_fixtures import (
     SimpleSIRDynamics,

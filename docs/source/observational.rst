@@ -1,13 +1,35 @@
 Observational
 =============
 
-.. automodule:: causal_pyro.observational
+.. automodule:: chirho.observational
+   :members:
+   :undoc-members:
+
+Operations
+----------
+
+.. automodule:: chirho.observational.ops
    :members:
    :undoc-members:
 
 Handlers
 --------
 
-.. automodule:: causal_pyro.observational.handlers
+.. automodule:: chirho.observational.handlers
+   :members:
+   :undoc-members:
+
+.. automodule:: chirho.observational.handlers.condition
+   :members:
+   :undoc-members:
+
+.. automodule:: chirho.observational.handlers.soft_conditioning
+   :members:
+   :undoc-members:
+
+Internals
+---------
+
+.. automodule:: chirho.observational.internals
    :members:
    :undoc-members:
