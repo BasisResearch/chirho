@@ -9,9 +9,8 @@ from pyro.distributions import Normal, Uniform
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    ODEDynamics,
-    PointObservation,
     NonInterruptingPointObservation,
+    ODEDynamics,
     SimulatorEventLoop,
     simulate,
 )

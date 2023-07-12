@@ -549,8 +549,9 @@ class _PointObservationMixin:
     pass
 
 
-class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _PointObservationMixin):
-
+class NonInterruptingPointObservationArray(
+    pyro.poutine.messenger.Messenger, _PointObservationMixin
+):
     def __init__(
         self,
         times: torch.Tensor,
@@ -566,9 +567,7 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
         # Require that the times are sorted. This is required by the index masking we do below.
         # TODO AZ sort this here (and the data too) accordingly?
         if not torch.all(self.times[1:] > self.times[:-1]):
-            raise ValueError(
-                f"The passed times must be sorted."
-            )
+            raise ValueError("The passed times must be sorted.")
 
         self._insert_mask_key = f"{self.__class__.__name__}.insert_mask"
 
@@ -585,10 +584,9 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
     def _pyro_sample(self, msg) -> None:
         if not msg["infer"].get("_deterministic", False):
             # This tells pyro that the sample statement needs broadcasting.
-            msg['fn'] = msg['fn'].to_event(1)
+            msg["fn"] = msg["fn"].to_event(1)
 
     def _pyro_simulate(self, msg) -> None:
-
         if self._insert_mask_key in msg:
             # Just to avoid having to splice in multiple handlers. Also, this suggests the user is using this handler
             #  in a suboptimal way, as they could just put their data into a single handler and avoid the overhead
@@ -607,8 +605,10 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
         insert_mask = sort_indices >= len(timespan)
 
         # Do a sanity check that the times were inserted in the right places.
-        assert torch.allclose(new_timespan[insert_mask], self.times), "Sanity check failed! Observation times not " \
-                                                                      "spliced into user provided timespan as expected."
+        assert torch.allclose(new_timespan[insert_mask], self.times), (
+            "Sanity check failed! Observation times not "
+            "spliced into user provided timespan as expected."
+        )
 
         msg["args"] = (dynamics, initial_state, new_timespan)
         msg[self._insert_mask_key] = insert_mask
@@ -619,8 +619,10 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
         insert_mask = msg[self._insert_mask_key]
 
         # Do a sanity check that the times were inserted in the right places.
-        assert torch.allclose(timespan[insert_mask], self.times), "Sanity check failed! Observation times not " \
-                                                                  "spliced into user provided timespan as expected."
+        assert torch.allclose(timespan[insert_mask], self.times), (
+            "Sanity check failed! Observation times not "
+            "spliced into user provided timespan as expected."
+        )
 
         with pyro.condition(data=self.data):
             # This blocks the handler from being called again, as it is already in the stack.
@@ -636,7 +638,9 @@ class NonInterruptingPointObservationArray(pyro.poutine.messenger.Messenger, _Po
 # TODO AZ - pull out common stuff between this and the interrupting observation, and have interrupting and non
 #  inherit from the same.
 # FIXME this needs to catch conflicting time observations.
-class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger, _PointObservationMixin):
+class NonInterruptingPointObservation(
+    pyro.poutine.messenger.Messenger, _PointObservationMixin
+):
     def __init__(
         self,
         time: float,
@@ -666,15 +670,18 @@ class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger, _PointOb
         )
 
         msg["args"] = (dynamics, initial_state, new_timespan)
-        msg[f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"] = insert_idx
+        msg[
+            f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"
+        ] = insert_idx
 
     def _pyro_post_simulate(self, msg) -> None:
-
         dynamics, initial_state, timespan = msg["args"]
         full_traj = msg["value"]
 
         # Observe the state at the inserted index.
-        inserted_idx = msg[f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"]
+        inserted_idx = msg[
+            f"{NonInterruptingPointObservation.__name__}.inserted_idx_{self.time_str}"
+        ]
 
         with pyro.condition(data=self.data):
             # This blocks sample statements of other observation handlers.
@@ -685,7 +692,7 @@ class NonInterruptingPointObservation(pyro.poutine.messenger.Messenger, _PointOb
 
         # Remove the inserted index from the returned trajectory so the user won't see it.
         msg["value"] = concatenate(
-            full_traj[:inserted_idx], full_traj[inserted_idx + 1:]
+            full_traj[:inserted_idx], full_traj[inserted_idx + 1 :]
         )
 
     def _pyro_sample(self, msg):
