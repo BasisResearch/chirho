@@ -3,11 +3,7 @@ import logging
 import pytest
 import torch
 
-from chirho.dynamical.handlers import (
-    PointIntervention,
-    SimulatorEventLoop,
-    simulate,
-)
+from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop, simulate
 from chirho.dynamical.ops import State
 
 from .dynamical_fixtures import (
