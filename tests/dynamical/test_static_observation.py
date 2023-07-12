@@ -146,8 +146,8 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     with pyro.poutine.trace() as tr1:
         with SimulatorEventLoop():
-            with PointObservation(time=times[0].item(), data={k: v[0] for k, v in data.items()}):
-                with PointObservation(time=times[1].item(), data={k: v[1] for k, v in data.items()}):
+            with PointObservation(time=times[1].item(), data={k: v[1] for k, v in data.items()}):
+                with PointObservation(time=times[0].item(), data={k: v[0] for k, v in data.items()}):
                     with PointObservation(time=times[2].item(), data={k: v[2] for k, v in data.items()}):
                         interrupting_ret = simulate(model, init_state, tspan)
 
