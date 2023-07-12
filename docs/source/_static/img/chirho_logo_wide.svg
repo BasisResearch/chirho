@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="308.57721mm"
+   height="137.76601mm"
+   viewBox="0 0 308.57721 137.76601"
+   version="1.1"
+   id="svg5"
+   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
+   sodipodi:docname="chirho_logo.svg"
+   inkscape:export-filename="/home/eli/OneDrive/Documents/Basis docs/chirho_logo_wide.png"
+   inkscape:export-xdpi="96"
+   inkscape:export-ydpi="96"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:document-units="mm"
+     showgrid="true"
+     inkscape:zoom="0.66793791"
+     inkscape:cx="208.85175"
+     inkscape:cy="260.50326"
+     inkscape:window-width="960"
+     inkscape:window-height="1075"
+     inkscape:window-x="0"
+     inkscape:window-y="32"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="layer1"
+     width="135.46657mm">
+    <inkscape:grid
+       type="xygrid"
+       id="grid89704" />
+  </sodipodi:namedview>
+  <defs
+     id="defs2">
+    <rect
+       x="-443.492"
+       y="356.94891"
+       width="358.82718"
+       height="269.25226"
+       id="rect2673" />
+    <font
+       horiz-adv-x="1024"
+       id="font37797"
+       inkscape:label="font 1"
+       horiz-origin-x="0"
+       horiz-origin-y="0"
+       vert-origin-x="512"
+       vert-origin-y="768"
+       vert-adv-y="1024">
+      <font-face
+         units-per-em="1024"
+         id="font-face37799"
+         font-family="SVGFont 1" />
+      <missing-glyph
+         d="M0,0h1000v1024h-1000z"
+         id="missing-glyph37801" />
+    </font>
+  </defs>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(174.05461,-69.636924)">
+    <text
+       xml:space="preserve"
+       transform="matrix(1.0718191,0,0,1.0786952,402.36373,-332.90345)"
+       id="text2671"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:106.667px;line-height:1.25;font-family:sans-serif;-inkscape-font-specification:'sans-serif, Normal';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;letter-spacing:0px;white-space:pre;shape-inside:url(#rect2673);fill:#c00000;fill-opacity:1;stroke:none"><tspan
+         x="-443.49219"
+         y="454.00287"
+         id="tspan89767"><tspan
+           style="font-style:italic;font-weight:bold;font-family:'Noto Sans';-inkscape-font-specification:'Noto Sans, Bold'"
+           id="tspan89765">χ</tspan></tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-style:normal;font-weight:normal;font-size:47.8561px;line-height:1.25;font-family:sans-serif;fill:#ffc000;fill-opacity:1;stroke:none;stroke-width:1.19641"
+       x="-33.316879"
+       y="163.68515"
+       id="text22457"
+       transform="scale(1.0328039,0.96823801)"
+       inkscape:export-filename="/home/eli/OneDrive/Documents/Basis docs/chirho_logo_wide.png"
+       inkscape:export-xdpi="96"
+       inkscape:export-ydpi="96"><tspan
+         sodipodi:role="line"
+         id="tspan22455"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:127.617px;font-family:'DejaVu Serif';-inkscape-font-specification:'DejaVu Serif, Bold';font-variant-ligatures:normal;font-variant-caps:normal;font-variant-numeric:normal;font-variant-east-asian:normal;fill:#ffc000;fill-opacity:1;stroke-width:1.19641"
+         x="-33.316879"
+         y="163.68515">ρ</tspan></text>
+  </g>
+</svg>

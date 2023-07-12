@@ -1,9 +1,15 @@
-import os
+import sys
 
 from setuptools import find_packages, setup
 
-PROJECT_PATH = os.path.dirname(os.path.abspath(__file__))
-VERSION = "0.0.1"
+VERSION = "0.1.0-alpha1"
+
+try:
+    long_description = open("README.rst", encoding="utf-8").read()
+except Exception as e:
+    sys.stderr.write("Failed to read README: {}\n".format(e))
+    sys.stderr.flush()
+    long_description = ""
 
 # examples/tutorials
 EXTRAS_REQUIRE = [
@@ -19,18 +25,17 @@ EXTRAS_REQUIRE = [
 ]
 
 setup(
-    name="causal_pyro",
+    name="chirho",
     version=VERSION,
-    description="Causal inference with Pyro",
-    # long_description=long_description,
-    # long_description_content_type="text/markdown",
-    packages=find_packages(include=["causal_pyro", "causal_pyro.*"]),
+    description="Causal reasoning",
+    long_description=long_description,
+    packages=find_packages(include=["chirho", "chirho.*"]),
     author="Basis",
-    # url="",
-    # project_urls={
+    url="https://www.basis.ai/",
+    project_urls={
     #     "Documentation": "",
-    #     "Source": "https://github.com/BasisResearch/causal_pyro",
-    # },
+        "Source": "https://github.com/BasisResearch/chirho",
+    },
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/requirements.txt`
@@ -48,6 +53,7 @@ setup(
             "flake8",
             "isort",
             "sphinx",
+            "sphinxcontrib-bibtex",
             "sphinx_rtd_theme",
             "myst_parser",
             "nbsphinx",
@@ -65,7 +71,8 @@ setup(
         "Operating System :: MacOS :: MacOS X",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10.7",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
     ],
     # yapf
 )

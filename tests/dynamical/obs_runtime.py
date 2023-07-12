@@ -7,7 +7,7 @@ import pyro
 import torch
 from pyro.distributions import Normal, Uniform
 
-from causal_pyro.dynamical.handlers import (
+from chirho.dynamical.handlers import (
     DynamicIntervention,
     ODEDynamics,
     PointObservation,
@@ -15,7 +15,7 @@ from causal_pyro.dynamical.handlers import (
     SimulatorEventLoop,
     simulate,
 )
-from causal_pyro.dynamical.ops import State
+from chirho.dynamical.ops import State
 
 
 class SimpleSIRDynamicsBayes(ODEDynamics):
