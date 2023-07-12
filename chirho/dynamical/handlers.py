@@ -16,6 +16,7 @@ from chirho.dynamical.ops import (
     simulate,
     simulate_to_interruption,
 )
+from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 from chirho.observational.handlers import condition
 
@@ -49,7 +50,95 @@ class ODEDynamics(pyro.nn.PyroModule):
         return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
+@indices_of.register
+def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet:
+    return union(
+        *(
+            indices_of(getattr(state, k), event_dim=event_dim, **kwargs)
+            for k in state.keys
+        )
+    )
+
+
+@indices_of.register
+def _indices_of_trajectory(
+    trj: Trajectory, *, event_dim: int = 0, **kwargs
+) -> IndexSet:
+    return union(
+        *(
+            indices_of(getattr(trj, k), event_dim=event_dim + 1, **kwargs)
+            for k in trj.keys
+        )
+    )
+
+
+@gather.register(State)
+def _gather_state(
+    state: State[T], indices: IndexSet, *, event_dim: int = 0, **kwargs
+) -> State[T]:
+    return type(state)(
+        **{
+            k: gather(getattr(state, k), indices, event_dim=event_dim, **kwargs)
+            for k in state.keys
+        }
+    )
+
+
+@gather.register(Trajectory)
+def _gather_trajectory(
+    trj: Trajectory[T], indices: IndexSet, *, event_dim: int = 0, **kwargs
+) -> Trajectory[T]:
+    return type(trj)(
+        **{
+            k: gather(getattr(trj, k), indices, event_dim=event_dim + 1, **kwargs)
+            for k in trj.keys
+        }
+    )
+
+
 # <Torchdiffeq Implementations>
+
+
+def _batched_odeint(
+    func: Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], Tuple[torch.Tensor, ...]],
+    y0: Tuple[torch.Tensor, ...],
+    t: torch.Tensor,
+    *,
+    event_fn=None,
+    **kwargs,
+) -> Tuple[torch.Tensor, ...]:
+    """
+    Vectorized torchdiffeq.odeint.
+    """
+    # TODO support event_dim > 0
+    event_dim = 0  # assume states are batches of values of rank event_dim
+
+    y0_batch_shape = torch.broadcast_shapes(
+        *(y0_.shape[: len(y0_.shape) - event_dim] for y0_ in y0)
+    )
+
+    y0_expanded = tuple(
+        # y0_[(None,) * (len(y0_batch_shape) - (len(y0_.shape) - event_dim)) + (...,)]
+        y0_.expand(y0_batch_shape + y0_.shape[len(y0_.shape) - event_dim :])
+        for y0_ in y0
+    )
+
+    if event_fn is not None:
+        event_t, yt_raw = torchdiffeq.odeint_event(
+            func, y0_expanded, t, event_fn=event_fn, **kwargs
+        )
+    else:
+        yt_raw = torchdiffeq.odeint(func, y0_expanded, t, **kwargs)
+
+    yt = tuple(
+        torch.transpose(
+            yt_[(..., None) + yt_.shape[len(yt_.shape) - event_dim :]],
+            -len(yt_.shape) - 1,
+            -1 - event_dim,
+        )[0]
+        for yt_ in yt_raw
+    )
+    return yt if event_fn is None else (event_t, yt)
 
 
 def _torchdiffeq_ode_simulate_inner(
@@ -57,7 +146,7 @@ def _torchdiffeq_ode_simulate_inner(
 ):
     var_order = initial_state.var_order  # arbitrary, but fixed
 
-    solns = torchdiffeq.odeint(
+    solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(dynamics._deriv, var_order),
         tuple(getattr(initial_state, v) for v in var_order),
         timespan,
@@ -90,7 +179,10 @@ def torchdiffeq_ode_simulate_to_interruption(
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
 ) -> Tuple[
-    Trajectory[torch.Tensor], Tuple["Interruption", ...], float, State[torch.Tensor]
+    Trajectory[torch.Tensor],
+    Tuple["Interruption", ...],
+    torch.Tensor,
+    State[torch.Tensor],
 ]:
     nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
@@ -99,7 +191,8 @@ def torchdiffeq_ode_simulate_to_interruption(
         trajectory = _torchdiffeq_ode_simulate_inner(
             dynamics, start_state, timespan, **kwargs
         )
-        return trajectory, (), timespan[-1], trajectory[-1]
+        # TODO support event_dim > 0
+        return trajectory, (), timespan[-1], trajectory[..., -1]
 
     # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
     #  for the many possibilities, this can be optimized.
@@ -123,7 +216,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # Simulate to the event execution.
-    event_time, event_state = torchdiffeq.odeint_event(
+    event_time, event_states = _batched_odeint(  # torchdiffeq.odeint_event(
         functools.partial(dynamics._deriv, start_state.var_order),
         tuple(getattr(start_state, v) for v in start_state.var_order),
         timespan[0],
@@ -131,15 +224,18 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # event_state has both the first and final state of the interrupted simulation. We just want the last.
-    event_state = tuple(s[-1] for s in event_state)
+    event_state: Tuple[torch.Tensor, ...] = tuple(
+        s[..., -1] for s in event_states
+    )  # TODO support event_dim > 0
 
     # Check which event(s) fired, and put the triggered events in a list.
+    # TODO support batched outputs of event functions
     fired_mask = torch.isclose(
         combined_event_f(event_time, event_state),
         torch.tensor(0.0),
         rtol=1e-02,
         atol=1e-03,
-    )
+    ).reshape(-1)
 
     if not torch.any(fired_mask):
         # TODO AZ figure out the tolerance of the odeint_event function and use that above.
@@ -169,13 +265,19 @@ def torchdiffeq_ode_simulate_to_interruption(
 
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.
-    return trajectory[:-1], tuple(triggered_events), event_time, trajectory[-1]
+    # TODO support event_dim > 0
+    return (
+        trajectory[..., :-1],
+        tuple(triggered_events),
+        event_time,
+        trajectory[..., -1],
+    )
 
 
 # TODO AZ — maybe to multiple dispatch on the interruption type and state type?
 def torchdiffeq_point_interruption_flattened_event_f(
     pi: "PointInterruption",
-) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
+) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a flattened event function for a point interruption.
     :param pi: The point interruption for which to build the event function.
@@ -191,14 +293,14 @@ def torchdiffeq_point_interruption_flattened_event_f(
 # TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_dynamic_interruption_flattened_event_f(
     di: "DynamicInterruption",
-) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
+) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a flattened event function for a dynamic interruption.
     :param di: The dynamic interruption for which to build the event function.
     :return: The constructed event function.
     """
 
-    def event_f(t: torch.Tensor, flat_state: torch.Tensor):
+    def event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
         state: State[torch.Tensor] = State(
@@ -213,7 +315,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
 def torchdiffeq_combined_event_f(
     next_static_interruption: "PointInterruption",
     dynamic_interruptions: List["DynamicInterruption"],
-) -> Callable[[torch.Tensor, torch.Tensor], torch.Tensor]:
+) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a combined event function from a list of dynamic interruptions and a single terminal static interruption.
     :param next_static_interruption: The next static interruption. Viewed as terminal in the context of this event func.
@@ -229,13 +331,16 @@ def torchdiffeq_combined_event_f(
         for di in dynamic_interruptions
     ]
 
-    def combined_event_f(t: torch.Tensor, flat_state: torch.Tensor):
-        return torch.tensor(
-            [
-                *[f(t, flat_state) for f in dynamic_event_fs],
-                terminal_event_f(t, flat_state),
-            ]
-        )
+    def combined_event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
+        return torch.stack(
+            list(
+                torch.broadcast_tensors(
+                    *[f(t, flat_state) for f in dynamic_event_fs],
+                    terminal_event_f(t, flat_state),
+                )
+            ),
+            dim=-1,
+        )  # TODO support event_dim > 0
 
     return combined_event_f
 
@@ -320,11 +425,16 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 full_trajs.append(span_traj)
             else:
                 # Hack off the end time of the previous simulate_to_interruption, as the user didn't request this.
-                full_trajs.append(span_traj[1:])
+                # if any(s == 0 for k in span_traj.keys for s in getattr(span_traj[..., 1:], k).shape):
+                #     full_trajs.append(span_traj[..., 1:])
+                # TODO support event_dim > 0
+                span_traj_: Trajectory[T] = span_traj[..., 1:]
+                full_trajs.append(span_traj_)
 
             # If we've reached the end of the timespan, break.
             if last:
                 # The end state in this case will be the final tspan requested by the user, so we need to include.
+                # TODO support event_dim > 0
                 full_trajs.append(end_state.trajectorify())
                 break
 

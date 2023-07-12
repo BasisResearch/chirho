@@ -75,7 +75,8 @@ class State(Generic[T]):
 
     def trajectorify(self) -> "Trajectory[T]":
         ret: Trajectory[T] = Trajectory(
-            **{k: unsqueeze(getattr(self, k), 0) for k in self.keys}
+            # TODO support event_dim > 0
+            **{k: getattr(self, k)[..., None] for k in self.keys}
         )
         return ret
 
@@ -112,42 +113,19 @@ class Trajectory(State[T]):
     # This is needed so that mypy and other type checkers believe that Trajectory can be indexed into.
     @functools.singledispatchmethod
     def __getitem__(self, key):
-        raise NotImplementedError(
-            "singledispatch __getitem__ has not been properly registered to Trajectory. This"
-            / " should never happen."
-        )
+        return self._getitem(key)
 
+    @__getitem__.register(int)
+    def _getitem_int(self, key: int) -> State[T]:
+        return self._getitem(key)
 
-# Note AZondsu192: Have to add this after the class is defined. Deferred annotations (e.g. 'Trajectory[
-# torch.Tensor]') for the return value of the _getitem_slice don't work here because the register decorator tries to
-# instantiate the class before it's defined.
-@functools.singledispatchmethod
-def __getitem__(self, key):
-    raise NotImplementedError(f"__getitem__ not implemented for type {type(key)}")
-
-
-# This method, that returns another object of the same type of self, is the reason for breaking this out of the
-#  class. See note AZondsu192 above.
-@__getitem__.register
-def _getitem_slice(self, key: slice) -> Trajectory[T]:
-    return self._getitem(key)
-
-
-@__getitem__.register
-def _getitem_int(self, key: int) -> State[T]:
-    return self._getitem(key)
-
-
-@__getitem__.register
-def _getitem_torchmask(self, key: torch.Tensor) -> Trajectory[T]:
-    if key.dtype != torch.bool:
-        raise ValueError(
-            f"__getitem__ with a torch.Tensor only supports boolean mask indexing, but got dtype {key.dtype}."
-        )
-    return self._getitem(key)
-
-
-setattr(Trajectory, "__getitem__", __getitem__)
+    @__getitem__.register(torch.Tensor)
+    def _getitem_torchmask(self, key: torch.Tensor) -> "Trajectory[T]":
+        if key.dtype != torch.bool:
+            raise ValueError(
+                f"__getitem__ with a torch.Tensor only supports boolean mask indexing, but got dtype {key.dtype}."
+            )
+        return self._getitem(key)
 
 
 @runtime_checkable
@@ -193,15 +171,15 @@ def simulate_to_interruption(
 
 
 @functools.singledispatch
-def concatenate(*inputs):
+def concatenate(*inputs, **kwargs):
     """
     Concatenate multiple inputs of type T into a single output of type T.
     """
     raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
 
 
-@concatenate.register
-def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
+@concatenate.register(Trajectory)
+def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """
@@ -211,10 +189,18 @@ def trajectory_concatenate(*trajectories: Trajectory) -> Trajectory[T]:
             if k not in full_trajectory.keys:
                 setattr(full_trajectory, k, getattr(trajectory, k))
             else:
+                prev_v = getattr(full_trajectory, k)
+                curr_v = getattr(trajectory, k)
+                time_dim = -1  # TODO generalize to nontrivial event_shape
+                batch_shape = torch.broadcast_shapes(
+                    prev_v.shape[:-1], curr_v.shape[:-1]
+                )
+                prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
+                curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
                 setattr(
                     full_trajectory,
                     k,
-                    torch.cat([getattr(full_trajectory, k), getattr(trajectory, k)]),
+                    torch.cat([prev_v, curr_v], dim=time_dim),
                 )
     return full_trajectory
 
