@@ -24,8 +24,6 @@ class SimpleSIRDynamics(ODEDynamics):
         S_obs = pyro.sample("S_obs", Normal(X.S, 1))
         I_obs = pyro.sample("I_obs", Normal(X.I, 1))
         R_obs = pyro.sample("R_obs", Normal(X.R, 1))
-        usa_expected_cost = torch.relu(S_obs + 2 * I_obs - R_obs)
-        pyro.sample("usa_cost", Normal(usa_expected_cost, 1))
 
 
 class SimpleSIRDynamicsBayes(ODEDynamics):
