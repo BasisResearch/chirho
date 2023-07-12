@@ -133,27 +133,6 @@ def test_svi_composition_test_one(model, obs_handler):
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
-def test_interrupting_and_non_interrupting_observation_equivalence(model):
-    S_obs = torch.tensor(10.0)
-    data = {"S_obs": S_obs}
-
-    with pyro.poutine.trace():
-        with SimulatorEventLoop():
-            with PointObservation(time=2.9, data=data):
-                with PointObservation(time=1.5, data=data):
-                    with PointObservation(time=3.2, data=data):
-                        interrupting_ret = simulate(model, init_state, tspan)
-
-    with pyro.poutine.trace():
-        with SimulatorEventLoop():
-            with NonInterruptingPointObservationArray(
-                    times=torch.tensor([1.5, 2.9, 3.2]), data={"S_obs": torch.tile(S_obs, (3,))}):
-                non_interrupting_ret = simulate(model, init_state, tspan)
-
-    assert check_trajectories_match(interrupting_ret, non_interrupting_ret)
-
-
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
 def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     S_obs = torch.tensor([10.0, 5.0, 3.0])
     I_obs = torch.tensor([1.0, 4.0, 4.0])
@@ -165,7 +144,6 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     )
     times = torch.tensor([1.5, 2.9, 3.2])
 
-    logprobs = []
     with pyro.poutine.trace() as tr1:
         with SimulatorEventLoop():
             with PointObservation(time=times[0].item(), data={k: v[0] for k, v in data.items()}):
