@@ -1,5 +1,9 @@
 |Build Status|
 
+.. image:: docs/source/_static/img/chirho_logo_wide.png
+   :alt: ChiRho logo
+   :align: center
+
 .. index-inclusion-marker
 
 Causal Probabilistic Programming with ChiRho
