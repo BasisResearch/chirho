@@ -624,7 +624,7 @@ class NonInterruptingPointObservationArray(
             "spliced into user provided timespan as expected."
         )
 
-        with pyro.condition(data=self.data):
+        with condition(data=self.data):
             # This blocks the handler from being called again, as it is already in the stack.
             with pyro.poutine.messenger.block_messengers(
                 lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
