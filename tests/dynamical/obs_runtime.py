@@ -9,8 +9,8 @@ from pyro.distributions import Normal, Uniform
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
+    NonInterruptingPointObservation,
     ODEDynamics,
-    PointObservation,
     SimulatorEventLoop,
     simulate,
 )
@@ -55,7 +55,7 @@ def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
     for obs in data.values():
         obs_time = obs[0].item()
         obs_data = obs[1]
-        managers.append(PointObservation(obs_time, obs_data))
+        managers.append(NonInterruptingPointObservation(obs_time, obs_data))
     if include_dynamic_intervention:
         event_f = make_event_fn(State(I=torch.tensor(30.0)))
         managers.append(
