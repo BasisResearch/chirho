@@ -6,7 +6,6 @@ import pytest
 import torch
 from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal
-import functools
 
 from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
@@ -56,8 +55,10 @@ def _get_compatible_observations(obs_handler, time, data):
         return PointObservation(time=time, data=data)
     elif obs_handler is NonInterruptingPointObservationArray:
         # Just make make a two element observation array.
-        return NonInterruptingPointObservationArray(times=torch.tensor([time, time + 0.1]),
-                                                    data={k: torch.tensor([v, v]) for k, v in data.items()})
+        return NonInterruptingPointObservationArray(
+            times=torch.tensor([time, time + 0.1]),
+            data={k: torch.tensor([v, v]) for k, v in data.items()},
+        )
 
 
 @pytest.mark.parametrize("model", [SimpleSIRDynamics()])
@@ -108,17 +109,12 @@ def test_svi_composition_test_one(model, obs_handler):
         "I_obs": torch.tensor(5.0),
         "R_obs": torch.tensor(5.0),
     }
-    data2 = {
-        "S_obs": torch.tensor(8.0),
-        "I_obs": torch.tensor(6.0),
-        "R_obs": torch.tensor(6.0),
-    }
 
     def conditioned_sir():
         sir = model()
         with SimulatorEventLoop():
             with _get_compatible_observations(obs_handler, time=2.9, data=data1):
-                    traj = simulate(sir, init_state, tspan)
+                traj = simulate(sir, init_state, tspan)
         return traj
 
     guide = AutoMultivariateNormal(conditioned_sir)
@@ -146,9 +142,15 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     with pyro.poutine.trace() as tr1:
         with SimulatorEventLoop():
-            with PointObservation(time=times[1].item(), data={k: v[1] for k, v in data.items()}):
-                with PointObservation(time=times[0].item(), data={k: v[0] for k, v in data.items()}):
-                    with PointObservation(time=times[2].item(), data={k: v[2] for k, v in data.items()}):
+            with PointObservation(
+                time=times[1].item(), data={k: v[1] for k, v in data.items()}
+            ):
+                with PointObservation(
+                    time=times[0].item(), data={k: v[0] for k, v in data.items()}
+                ):
+                    with PointObservation(
+                        time=times[2].item(), data={k: v[2] for k, v in data.items()}
+                    ):
                         interrupting_ret = simulate(model, init_state, tspan)
 
     with pyro.poutine.trace() as tr2:
