@@ -1,9 +1,13 @@
 |Build Status|
 
+.. image:: docs/source/_static/img/chirho_logo_wide.png
+   :alt: ChiRho logo
+   :align: center
+
 .. index-inclusion-marker
 
-Causal Probabilistic Programming with ChiRho
-=================================================
+Causal Reasoning with ChiRho
+============================
 
 ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
