@@ -37,7 +37,7 @@ class ODEDynamics(pyro.nn.PyroModule):
 
     # noinspection PyMethodParameters
     def _deriv(
-        dynamics: "ODEDynamics",
+        self: "ODEDynamics",
         var_order: Tuple[str, ...],
         time: torch.Tensor,
         state: Tuple[torch.Tensor, ...],
@@ -46,8 +46,30 @@ class ODEDynamics(pyro.nn.PyroModule):
         env: State[torch.Tensor] = State()
         for var, value in zip(var_order, state):
             setattr(env, var, value)
-        dynamics.diff(ddt, env)
+        assert "t" not in env.keys, "variable name t is reserved for time"
+        env.t = time
+        self.diff(ddt, env)
         return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
+
+    @pyro.nn.pyro_method
+    @pyro.poutine.runtime.effectful(type="simulate")
+    def _torchdiffeq_ode_simulate_inner(
+        self: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+    ):
+        var_order = initial_state.var_order  # arbitrary, but fixed
+
+        solns = _batched_odeint(  # torchdiffeq.odeint(
+            functools.partial(self._deriv, var_order),
+            tuple(getattr(initial_state, v) for v in var_order),
+            timespan,
+            **kwargs,
+        )
+
+        trajectory: Trajectory[torch.Tensor] = Trajectory()
+        for var, soln in zip(var_order, solns):
+            setattr(trajectory, var, soln)
+
+        return trajectory
 
 
 @indices_of.register
@@ -141,35 +163,16 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-def _torchdiffeq_ode_simulate_inner(
-    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
-):
-    var_order = initial_state.var_order  # arbitrary, but fixed
-
-    solns = _batched_odeint(  # torchdiffeq.odeint(
-        functools.partial(dynamics._deriv, var_order),
-        tuple(getattr(initial_state, v) for v in var_order),
-        timespan,
-        **kwargs,
-    )
-
-    trajectory: Trajectory[torch.Tensor] = Trajectory()
-    for var, soln in zip(var_order, solns):
-        setattr(trajectory, var, soln)
-
-    return trajectory
-
-
 @simulate.register(ODEDynamics)
-@pyro.poutine.runtime.effectful(type="simulate")
 def torchdiffeq_ode_simulate(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
-    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+    return dynamics._torchdiffeq_ode_simulate_inner(initial_state, timespan, **kwargs)
 
 
 @simulate_to_interruption.register(ODEDynamics)
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
+@pyro.poutine.block(hide_types=["simulate"])
 def torchdiffeq_ode_simulate_to_interruption(
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
@@ -188,9 +191,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = _torchdiffeq_ode_simulate_inner(
-            dynamics, start_state, timespan, **kwargs
-        )
+        trajectory = simulate(dynamics, start_state, timespan, **kwargs)
         # TODO support event_dim > 0
         return trajectory, (), timespan[-1], trajectory[..., -1]
 
@@ -259,9 +260,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     timespan_2nd_pass = torch.tensor([*timespan[timespan < event_time], event_time])
 
     # Execute a standard, non-event based simulation on the new timespan.
-    trajectory = _torchdiffeq_ode_simulate_inner(
-        dynamics, start_state, timespan_2nd_pass, **kwargs
-    )
+    trajectory = simulate(dynamics, start_state, timespan_2nd_pass, **kwargs)
 
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.
