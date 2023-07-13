@@ -246,3 +246,32 @@ def test_svi_composition_vectorized_obs(model):
     pyro.clear_param_store()
     for step in range(n_steps):
         svi.step((times, data))
+
+
+@pytest.mark.parametrize("use_event_loop", [True, False])
+def test_simulate_persistent_pyrosample(use_event_loop):
+    class RandBetaSimpleSIRDynamics(SimpleSIRDynamics):
+        @pyro.nn.PyroSample
+        def beta(self):
+            return pyro.distributions.Beta(1, 1)
+
+        def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+            super().diff(dX, X)
+            assert torch.allclose(self.beta, self.beta)
+
+    model = RandBetaSimpleSIRDynamics()
+
+    if not use_event_loop:
+        result = simulate(model, init_state, tspan)
+    else:
+        S_obs = torch.tensor(10.0)
+        data1 = {"S_obs": S_obs}
+        data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
+        with SimulatorEventLoop():
+            with PointObservation(time=3.1, data=data2):
+                with PointObservation(time=2.9, data=data1):
+                    result = simulate(model, init_state, tspan)
+
+    assert result.S.shape[0] == 5
+    assert result.I.shape[0] == 5
+    assert result.R.shape[0] == 5
