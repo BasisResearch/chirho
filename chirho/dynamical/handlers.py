@@ -46,8 +46,6 @@ class ODEDynamics(pyro.nn.PyroModule):
         env: State[torch.Tensor] = State()
         for var, value in zip(var_order, state):
             setattr(env, var, value)
-        assert "t" not in env.keys, "variable name t is reserved for time"
-        env.t = time
         self.diff(ddt, env)
         return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
