@@ -298,7 +298,7 @@ def cond(fst, snd: T, case, **kwargs):
 
 @cond.register(dict)
 @pyro.poutine.runtime.effectful(type="cond_n")
-def _cond_n(values: Dict[IndexSet, T], case, **kwargs):
+def _cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     result: Optional[T] = None
