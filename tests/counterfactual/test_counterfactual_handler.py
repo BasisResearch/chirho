@@ -21,6 +21,8 @@ from chirho.interventional.ops import intervene
 from chirho.observational.handlers import condition
 from chirho.observational.ops import observe
 
+pyro.settings.set(module_local_params=True)
+
 logger = logging.getLogger(__name__)
 
 
@@ -309,35 +311,35 @@ def test_cf_condition_commutes():
                 }
 
 
-def hmm_model(data: Iterable, use_condition: bool):
-    transition_probs = pyro.param(
-        "transition_probs",
-        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
-        constraint=dist.constraints.simplex,
-    )
-    emission_probs = pyro.sample(
-        "emission_probs",
-        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
-    )
-    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
-    logger.debug(f"-1\t{tuple(x.shape)}")
-    for t, y in pyro.markov(enumerate(data)):
-        x = pyro.sample(
-            f"x_{t}",
-            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
-        )
+class HMM(pyro.nn.PyroModule):
+    @pyro.nn.PyroParam(constraint=dist.constraints.simplex)
+    def trans_probs(self):
+        return torch.tensor([[0.75, 0.25], [0.25, 0.75]])
 
-        if use_condition:
-            pyro.sample(
-                f"y_{t}",
-                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+    def forward(self, data: Iterable, use_condition: bool):
+        emit_probs = pyro.sample(
+            "emission_probs",
+            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+        )
+        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+        logger.debug(f"-1\t{tuple(x.shape)}")
+        for t, y in pyro.markov(enumerate(data)):
+            x = pyro.sample(
+                f"x_{t}",
+                dist.Categorical(pyro.ops.indexing.Vindex(self.trans_probs)[..., x, :]),
             )
-        else:
-            observe(
-                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
-                y,
-                name=f"y_{t}",
-            )
+
+            if use_condition:
+                pyro.sample(
+                    f"y_{t}",
+                    dist.Categorical(pyro.ops.indexing.Vindex(emit_probs)[..., x, :]),
+                )
+            else:
+                observe(
+                    dist.Categorical(pyro.ops.indexing.Vindex(emit_probs)[..., x, :]),
+                    y,
+                    name=f"y_{t}",
+                )
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
@@ -352,6 +354,7 @@ def test_smoke_cf_enumerate_hmm_elbo(
     num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     def model(data):
@@ -397,6 +400,7 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
     num_steps, use_condition, max_plate_nesting, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -437,6 +441,7 @@ def test_smoke_cf_enumerate_hmm_infer_discrete(
     num_steps, use_condition, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -473,6 +478,7 @@ def test_smoke_cf_enumerate_hmm_mcmc(
     num_steps, use_condition, max_plate_nesting, Kernel, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -560,6 +566,7 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
 @pytest.mark.parametrize("num_steps", [3, 4, 5, 10])
 def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     pin_tr = pyro.poutine.trace(hmm_model).get_trace(data, True)
     pinned = {
