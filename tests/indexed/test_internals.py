@@ -10,6 +10,7 @@ from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.internals import add_indices
 from chirho.indexed.ops import (
     IndexSet,
+    cond,
     gather,
     get_index_plates,
     indexset_as_mask,
@@ -421,3 +422,59 @@ def test_index_plate_names():
     assert len(index_plates) == 1
     for name, frame in index_plates.items():
         assert name != frame.name
+
+
+@pytest.mark.parametrize(
+    "enum_shape,plate_shape,batch_shape,event_shape", SHAPE_CASES, ids=str
+)
+def test_cond_tensor_associate(enum_shape, batch_shape, plate_shape, event_shape):
+    cf_dim = -1 - len(plate_shape)
+    event_dim = len(event_shape)
+    ind1, ind2, ind3 = (
+        IndexSet(new_dim={0}),
+        IndexSet(new_dim={1}),
+        IndexSet(new_dim={2}),
+    )
+    name_to_dim = {f"dim_{i}": cf_dim - i for i in range(len(batch_shape))}
+
+    case = torch.randint(0, 3, enum_shape + batch_shape + plate_shape)
+    value1 = torch.randn(batch_shape + plate_shape + event_shape)
+    value2 = torch.randn(
+        enum_shape + batch_shape + (1,) * len(plate_shape) + event_shape
+    )
+    value3 = torch.randn(enum_shape + batch_shape + plate_shape + event_shape)
+
+    with IndexPlatesMessenger(cf_dim):
+        for name, dim in name_to_dim.items():
+            add_indices(
+                IndexSet(**{name: set(range(max(3, (batch_shape + plate_shape)[dim])))})
+            )
+
+        actual_full = cond(
+            {ind1: value1, ind2: value2, ind3: value3}, case, event_dim=event_dim
+        )
+
+        actual_left = cond(
+            cond(value1, value2, case == 1, event_dim=event_dim),
+            value3,
+            case >= 2,
+            event_dim=event_dim,
+        )
+
+        actual_right = cond(
+            value1,
+            cond(value2, value3, case == 2, event_dim=event_dim),
+            case >= 1,
+            event_dim=event_dim,
+        )
+
+        assert (
+            indices_of(actual_full, event_dim=event_dim)
+            == indices_of(actual_left, event_dim=event_dim)
+            == indices_of(actual_right, event_dim=event_dim)
+        )
+
+    assert actual_full.shape == enum_shape + batch_shape + plate_shape + event_shape
+    assert actual_full.shape == actual_left.shape == actual_right.shape
+    assert (actual_full == actual_left).all()
+    assert (actual_left == actual_right).all()
