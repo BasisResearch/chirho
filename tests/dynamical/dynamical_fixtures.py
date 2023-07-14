@@ -1,13 +1,12 @@
 import pyro
 import torch
-from pyro.distributions import Normal, Poisson, Uniform, constraints
+from pyro.distributions import Normal, Uniform, constraints
 
 from chirho.dynamical.handlers import ODEDynamics
 from chirho.dynamical.ops import State, Trajectory
 
 
 class UnifiedFixtureDynamics(ODEDynamics):
-
     def __init__(self, beta=None, gamma=None):
         super().__init__()
 
@@ -31,7 +30,6 @@ class UnifiedFixtureDynamics(ODEDynamics):
             return pyro.sample(name, Normal(x, 1).to_event(1))
 
     def observation(self, X: State[torch.Tensor]):
-
         S_obs = self._unit_measurement_error("S_obs", X.S)
         I_obs = self._unit_measurement_error("I_obs", X.I)
         R_obs = self._unit_measurement_error("R_obs", X.R)
