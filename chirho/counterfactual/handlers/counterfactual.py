@@ -3,11 +3,7 @@ from typing import Any, Dict, Generic, Hashable, Mapping, Optional, TypeVar
 import pyro
 import torch
 
-from chirho.counterfactual.handlers.ambiguity import (
-    AmbiguousConditioningReparamMessenger,
-    AutoFactualConditioning,
-    CondStrategy,
-)
+from chirho.counterfactual.handlers.ambiguity import FactualConditioningMessenger
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
@@ -16,15 +12,10 @@ from chirho.interventional.ops import Intervention, intervene
 T = TypeVar("T")
 
 
-class BaseCounterfactualMessenger(AmbiguousConditioningReparamMessenger):
+class BaseCounterfactualMessenger(FactualConditioningMessenger):
     """
     Base class for counterfactual handlers.
     """
-
-    def __init__(self, config: Optional[CondStrategy] = None):
-        if config is None:
-            config = AutoFactualConditioning()
-        super().__init__(config=config)
 
     @staticmethod
     def _pyro_intervene(msg: Dict[str, Any]) -> None:
@@ -79,7 +70,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         name = msg["name"] if msg["name"] is not None else cls.default_name
         index_plates = get_index_plates()
         if name in index_plates:
-            name = f"{name}_{len(index_plates)}"
+            name = f"{name}__dup_{len(index_plates)}"
         msg["kwargs"]["name"] = msg["name"] = name
 
 
