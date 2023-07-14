@@ -23,8 +23,6 @@ from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from chirho.observational.ops import observe
 
-pyro.settings.set(module_local_params=True)
-
 logger = logging.getLogger(__name__)
 
 
