@@ -91,3 +91,20 @@ def check_trajectories_match_in_all_but_values(
         ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."
 
     return True
+
+
+def run_svi_inference_torch_direct(model, n_steps=100, verbose=True, **model_kwargs):
+    guide = pyro.infer.autoguide.AutoMultivariateNormal(model)
+    elbo = pyro.infer.Trace_ELBO()(model, guide)
+    # initialize parameters
+    elbo(**model_kwargs)
+    adam = torch.optim.Adam(elbo.parameters(), lr=0.03)
+    # Do gradient steps
+    for step in range(1, n_steps + 1):
+        adam.zero_grad()
+        loss = elbo(**model_kwargs)
+        loss.backward()
+        adam.step()
+        if (step % 100 == 0) or (step == 1) & verbose:
+            print("[iteration %04d] loss: %.4f" % (step, loss))
+    return guide
