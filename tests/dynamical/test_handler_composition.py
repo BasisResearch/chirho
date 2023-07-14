@@ -61,15 +61,20 @@ vec_obs3 = NonInterruptingPointObservationArray(
 def counterf_model():
     with SimulatorEventLoop():
         with vec_obs3, reparam, twin_world, intervention:
-            ret = simulate(
+            return simulate(
                 UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
                 init_state,
                 tspan,
             )
-            return ret
 
 
 def conditioned_model():
+    # This is equivalent to the following:
+    # with SimulatorEventLoop():
+    #   with vec_obs3:
+    #       return simulate(...)
+    # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from
+    #  the factual conditional world.
     with pyro.poutine.messenger.block_messengers(
         lambda m: m in (reparam, twin_world, intervention)
     ):
