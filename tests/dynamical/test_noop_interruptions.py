@@ -12,7 +12,7 @@ from chirho.dynamical.handlers import (
 )
 from chirho.dynamical.ops import State
 
-from .dynamical_fixtures import SimpleSIRDynamics, check_trajectories_match
+from .dynamical_fixtures import UnifiedFixtureDynamics, check_trajectories_match
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ intervene_states = [
 ]
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_noop_point_interruptions(model, init_state, tspan):
@@ -67,7 +67,7 @@ def test_noop_point_interruptions(model, init_state, tspan):
     # TODO test pointinterruptions when they are out of scope of the timespan
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
@@ -127,7 +127,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
     assert check_trajectories_match(observational_execution_result, result_double_pi2)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_point_interruption_at_start(model, init_state, tspan):
@@ -140,7 +140,7 @@ def test_point_interruption_at_start(model, init_state, tspan):
     assert check_trajectories_match(observational_execution_result, result_pint)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)

@@ -13,7 +13,7 @@ from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 
 from .dynamical_fixtures import (
-    SimpleSIRDynamics,
+    UnifiedFixtureDynamics,
     check_trajectories_match,
     check_trajectories_match_in_all_but_values,
 )
@@ -42,7 +42,7 @@ intervene_times = tspan_values - 0.5
 eps = 1e-3
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
@@ -87,7 +87,7 @@ def test_point_intervention_causes_difference(
 
 
 # TODO get rid of some entries cz this test takes too long to run w/ all permutations.
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state1", intervene_states)
@@ -137,7 +137,7 @@ def test_nested_point_interventions_cause_difference(
 # TODO test that we're getting the exactly right answer, instead of just "a different answer" as we are now.
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
@@ -159,7 +159,7 @@ def test_twinworld_point_intervention(
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
@@ -181,7 +181,7 @@ def test_multiworld_point_intervention(
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
@@ -198,7 +198,7 @@ def test_split_odeint_broadcast(
             assert len(indices_of(getattr(trajectory, k), event_dim=1)) > 0
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)

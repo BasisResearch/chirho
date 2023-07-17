@@ -91,6 +91,31 @@ def _unsqueeze_torch(x: torch.Tensor, axis: int) -> torch.Tensor:
     return torch.unsqueeze(x, axis)
 
 
+def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    # Index into the last dimension of x with a boolean mask.
+    # TODO AZ — There must be an easier way to do this?
+    # NOTE AZ — this could be easily modified to support the last n dimensions, adapt if needed.
+
+    if mask.dtype != torch.bool:
+        raise ValueError(
+            f"_index_last_dim_with_mask only supports boolean mask indexing, but got dtype {mask.dtype}."
+        )
+
+    # Require that the mask is 1d and aligns with the last dimension of x.
+    if mask.ndim != 1 or mask.shape[0] != x.shape[-1]:
+        raise ValueError(
+            "_index_last_dim_with_mask only supports 1d boolean mask indexing, and must align with the last "
+            f"dimension of x, but got mask shape {mask.shape} and x shape {x.shape}."
+        )
+
+    return torch.masked_select(
+        x,
+        # Get a shape that will broadcast to the shape of x. This will be [1, ..., len(mask)].
+        mask.reshape((1,) * (x.ndim - 1) + mask.shape)
+        # masked_select flattens tensors, so we need to reshape back to the original shape w/ the mask applied.
+    ).reshape(x.shape[:-1] + (int(mask.sum()),))
+
+
 # TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
 #  we expect multiple vs. a single state in the vectors, but it's likely confusing/not useful for the user? Maybe,
 #  maybe not. If we do keep it we need more explicit guarantees that the State won't have more than a single entry?
@@ -107,7 +132,11 @@ class Trajectory(State[T]):
 
         item = State() if isinstance(key, int) else Trajectory()
         for k, v in self.__dict__["_values"].items():
-            setattr(item, k, v[key])
+            if isinstance(key, torch.Tensor):
+                keyd_v = _index_last_dim_with_mask(v, key)
+            else:
+                keyd_v = v[key]
+            setattr(item, k, keyd_v)
         return item
 
     # This is needed so that mypy and other type checkers believe that Trajectory can be indexed into.
@@ -125,6 +154,7 @@ class Trajectory(State[T]):
             raise ValueError(
                 f"__getitem__ with a torch.Tensor only supports boolean mask indexing, but got dtype {key.dtype}."
             )
+
         return self._getitem(key)
 
 
