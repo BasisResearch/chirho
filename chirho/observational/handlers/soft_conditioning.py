@@ -16,8 +16,8 @@ import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
-from causal_pyro.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
-from causal_pyro.indexed.handlers import add_indices
+from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
+from chirho.indexed.handlers import add_indices
 
 
 T = TypeVar("T")

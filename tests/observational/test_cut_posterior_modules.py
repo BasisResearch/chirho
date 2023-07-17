@@ -7,8 +7,8 @@ import pyro.infer.reparam
 import torch
 import pyro.poutine as poutine
 
-from causal_pyro.indexed.handlers import IndexPlatesMessenger
-from causal_pyro.observational.handlers import IndexCutModule, cut
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.observational.handlers.soft_conditioning import IndexCutModule, cut
 
 
 # Observed data assumed in the closed-form posterior expressions
