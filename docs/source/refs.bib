@@ -1,0 +1,862 @@
+@article{804e2ece-3145-39bd-b4e6-c8476cc08643,
+  title = {Autonomy},
+  author = {Aldrich, John},
+  year = {1989},
+  journal = {Oxford Economic Papers},
+  volume = {41},
+  number = {1},
+  eprint = {2663180},
+  eprinttype = {jstor},
+  pages = {15--34},
+  publisher = {{Oxford University Press}},
+  issn = {00307653, 14643812},
+  urldate = {2023-07-03}
+}
+
+@article{9c8bcb59-753a-33cb-871e-17f05b11d793,
+  title = {Evaluating the Econometric Evaluations of Training Programs with Experimental Data},
+  author = {LaLonde, Robert J.},
+  year = {1986},
+  journal = {The American Economic Review},
+  volume = {76},
+  number = {4},
+  eprint = {1806062},
+  eprinttype = {jstor},
+  pages = {604--620},
+  publisher = {{American Economic Association}},
+  issn = {00028282},
+  urldate = {2023-07-03},
+  abstract = {This paper compares the effect on trainee earnings of an employment program that was run as a field experiment where participants were randomly assigned to treatment and control groups with the estimates that would have been produced by an econometrician. This comparison shows that many of the econometric procedures do not replicate the experimentally determined results, and it suggests that researchers should be aware of the potential for specification errors in other nonexperimental evaluations.}
+}
+
+@article{agrawal_2019,
+  title = {{{ABCD-Strategy}}: {{Budgeted}} Experimental Design for Targeted Causal Structure Discovery},
+  author = {Agrawal, Raj and Squires, Chandler and Yang, Karren and Shanmugam, Karthik and Uhler, Caroline},
+  year = {2019},
+  month = feb,
+  journal = {arXiv},
+  urldate = {2020-07-23},
+  abstract = {Determining the causal structure of a set of variables is critical for both scientific inquiry and decision-making. However, this is often challenging in practice due to limited interventional data. Given that randomized experiments are usually expensive to perform, we propose a general framework and theory based on optimal Bayesian experimental design to select experiments for targeted causal discovery. That is, we assume the experimenter is interested in learning some function of the unknown graph (e.g., all descendants of a target node) subject to design constraints such as limits on the number of samples and rounds of experimentation. While it is in general computationally intractable to select an optimal experimental design strategy, we provide a tractable implementation with provable guarantees on both approximation and optimization quality based on submodularity. We evaluate the efficacy of our proposed method on both synthetic and real datasets, thereby demonstrating that our method realizes considerable performance gains over baseline strategies such as random sampling.},
+  sciwheel-projects = {Causality}
+}
+
+@article{amin_2021,
+  title = {A {{Pearl}} Pearl, or {{How}} to Teach a Good Old Fashioned {{AI}} New Tricks},
+  author = {Amin, Nada and Byrd, William and Cottam, Joseph and Parent, Marc-Antoine and Zucker, Jeremy},
+  year = {2021},
+  month = may,
+  journal = {arXiv},
+  urldate = {2021-05-06},
+  abstract = {Causal reasoning is a basic component of human intelligence. However, causal information has proven difficult for AI and machine learning applications to incorporate. This omission hinders such systems as they cannot take advantage of this important information during reasoning or explanation. Recent advances in formal causal reasoning open new possibilities to include causal reasoning in such systems. We show that causal reasoning can be represented in a Truth Maintenance Systems (TMS), and thus enable expert systems to reason causally. The integration is complete (demonstrated by the ability to answer all six `Firing Squad' questions), simple (only 200 lines of Common Lisp), and practical (through an application to medical diagnosis). This paper outlines the implementation and shows how to use a TMS augmented with causal reasoning.}
+}
+
+@incollection{balke_1994,
+  title = {Counterfactual Probabilities: Computational Methods, Bounds and Applications},
+  booktitle = {Uncertainty Proceedings 1994},
+  author = {Balke, Alexander and Pearl, Judea},
+  year = {1994},
+  pages = {46--54},
+  publisher = {{Elsevier}},
+  doi = {10.1016/B978-1-55860-332-5.50011-0},
+  urldate = {2020-07-23},
+  abstract = {Evaluation of counterfactual queries (e.g., "If A were true, would C have been true?") is important to fault diagnosis, planning, and determination of liability. In this paper we present methods for computing the probabilities of such queries using the formulation proposed in [Balke and Pearl, 1994], where the antecedent of the query is interpreted as an external action that forces the proposition A to be true. When a prior probability is available on the causal mechanisms governing the domain, counterfactual probabilities can be evaluated precisely. However, when causal knowledge is specified as conditional probabilities on the observables, only bounds can computed. This paper develops techniques for evaluating these bounds, and demonstrates their use in two applications: (1) the determination of treatment efficacy from studies in which subjects may choose their own treatment, and (2) the determination of liability in product-safety litigation.},
+  isbn = {978-1-55860-332-5},
+  sciwheel-projects = {Causality}
+}
+
+@article{baral_2007,
+  title = {Using the Probabilistic Logic Programming Language {{P-log}} for Causal and Counterfactual Reasoning and Non-Naive Conditioning},
+  author = {Baral, Chitta and Hunsaker, Matt},
+  year = {2007},
+  journal = {IJCAI : proceedings of the conference / sponsored by the International Joint Conferences on Artificial Intelligence},
+  urldate = {2021-05-02},
+  abstract = {P-log is a probabilistic logic programming language, which combines both logic programming style knowledge representation and probabilistic reasoning. In earlier papers various advantages of P-log have been discussed. In this paper we further elaborate on the KR prowess of P-log by showing that: (i) it can be used for causal and counterfactual reasoning and (ii) it provides an elaboration tolerant way for non-naive conditioning.},
+  sciwheel-projects = {Causality}
+}
+
+@article{bareinboim_2016,
+  title = {Causal Inference and the Data-Fusion Problem.},
+  author = {Bareinboim, Elias and Pearl, Judea},
+  year = {2016},
+  month = jul,
+  journal = {Proceedings of the National Academy of Sciences of the United States of America},
+  volume = {113},
+  number = {27},
+  pages = {7345--7352},
+  doi = {10.1073/pnas.1510507113},
+  urldate = {2019-03-08},
+  abstract = {We review concepts, principles, and tools that unify current approaches to causal analysis and attend to new challenges presented by big data. In particular, we address the problem of data fusion-piecing together multiple datasets collected under heterogeneous conditions (i.e., different populations, regimes, and sampling methods) to obtain valid answers to queries of interest. The availability of multiple heterogeneous datasets presents new opportunities to big data analysts, because the knowledge that can be acquired from combined data would not be possible from any individual source alone. However, the biases that emerge in heterogeneous environments require new analytical tools. Some of these biases, including confounding, sampling selection, and cross-population biases, have been addressed in isolation, largely in restricted parametric models. We here present a general, nonparametric framework for handling these biases and, ultimately, a theoretical solution to the problem of data fusion in causal inference tasks.},
+  pmcid = {PMC4941504},
+  pmid = {27382148},
+  sciwheel-projects = {Causality and Y0-SCUC}
+}
+
+@incollection{Bareinboim2022-BAROPH-2,
+  title = {On Pearl's Hierarchy and the Foundations of Causal Inference (1st Edition)},
+  booktitle = {Probabilistic and Causal Inference: The Works of Judea Pearl},
+  author = {Bareinboim, Elias and Correa, Juan and Ibeling, Duligur and Icard, Thomas},
+  editor = {Geffner, Hector and Dechter, Rina and Halpern, Joseph Y.},
+  year = {2022},
+  pages = {507--556},
+  publisher = {{ACM Books}}
+}
+
+@misc{bhattacharya2020semiparametric,
+  title = {Semiparametric Inference for Causal Effects in Graphical Models with Hidden Variables},
+  author = {Bhattacharya, Rohit and Nabi, Razieh and Shpitser, Ilya},
+  year = {2020},
+  eprint = {2003.12659},
+  primaryclass = {stat.ML},
+  archiveprefix = {arxiv}
+}
+
+@article{bingham2018pyro,
+  title = {Pyro: {{Deep}} Universal Probabilistic Programming},
+  author = {Bingham, Eli and Chen, Jonathan P. and Jankowiak, Martin and Obermeyer, Fritz and Pradhan, Neeraj and Karaletsos, Theofanis and Singh, Rohit and Szerlip, Paul and Horsfall, Paul and Goodman, Noah D.},
+  year = {2018},
+  journal = {Journal of Machine Learning Research}
+}
+
+@article{blei_2014,
+  title = {Build, Compute, Critique, Repeat: {{Data}} Analysis with Latent Variable Models},
+  author = {Blei, David M.},
+  year = {2014},
+  month = jan,
+  journal = {Annual review of statistics and its application},
+  volume = {1},
+  number = {1},
+  pages = {203--232},
+  issn = {2326-8298},
+  doi = {10.1146/annurev-statistics-022513-115657},
+  urldate = {2020-02-06},
+  abstract = {We survey latent variable models for solving data-analysis problems. A latent variable model is a probabilistic model that encodes hidden patterns in the data. We uncover these patterns from their conditional distribution and use them to summarize data and form predictions. Latent variable models are important in many fields, including computational biology, natural language processing, and social network analysis. Our perspective is that models are developed iteratively: We build a model, use it to analyze data, assess how it succeeds and fails, revise it, and repeat. We describe how new research has transformed these essential activities. First, we describe probabilistic graphical models, a language for formulating latent variable models. Second, we describe mean field variational inference, a generic algorithm for approximating conditional distributions. Third, we describe how to use our analyses to solve problems: exploring the data, forming predictions, and pointing us in the direction of improved models.},
+  sciwheel-projects = {Causality}
+}
+
+@article{bouneffouf2019survey,
+  title = {A Survey on Practical Applications of Multi-Armed and Contextual Bandits},
+  author = {Bouneffouf, Djallel and Rish, Irina},
+  year = {2019},
+  journal = {arXiv preprint arXiv:1904.10040},
+  eprint = {1904.10040},
+  archiveprefix = {arxiv}
+}
+
+@article{brul_2018,
+  title = {Causal Programming: Inference with Structural Causal Models as Finding Instances of a Relation},
+  author = {Brul{\'e}, Joshua},
+  year = {2018},
+  month = may,
+  journal = {arXiv},
+  urldate = {2020-12-21},
+  abstract = {This paper proposes a causal inference relation and causal programming as general frameworks for causal inference with structural causal models. A tuple, \$M, I, Q, F \$, is an instance of the relation if a formula, \$F\$, computes a causal query, \$Q\$, as a function of known population probabilities, \$I\$, in every model entailed by a set of model assumptions, \$M\$. Many problems in causal inference can be viewed as the problem of enumerating instances of the relation that satisfy given criteria. This unifies a number of previously studied problems, including causal effect identification, causal discovery and recovery from selection bias. In addition, the relation supports formalizing new problems in causal inference with structural causal models, such as the problem of research design. Causal programming is proposed as a further generalization of causal inference as the problem of finding optimal instances of the relation, with respect to a cost function.},
+  sciwheel-projects = {Causality}
+}
+
+@misc{castroMorphoMNISTQuantitativeAssessment2019,
+  title = {Morpho-{{MNIST}}: {{Quantitative Assessment}} and {{Diagnostics}} for {{Representation Learning}}},
+  shorttitle = {Morpho-{{MNIST}}},
+  author = {Castro, Daniel C. and Tan, Jeremy and Kainz, Bernhard and Konukoglu, Ender and Glocker, Ben},
+  year = {2019},
+  month = oct,
+  number = {arXiv:1809.10780},
+  eprint = {1809.10780},
+  primaryclass = {cs, stat},
+  publisher = {{arXiv}},
+  urldate = {2023-07-03},
+  abstract = {Revealing latent structure in data is an active field of research, having introduced exciting technologies such as variational autoencoders and adversarial networks, and is essential to push machine learning towards unsupervised knowledge discovery. However, a major challenge is the lack of suitable benchmarks for an objective and quantitative evaluation of learned representations. To address this issue we introduce Morpho-MNIST, a framework that aims to answer: "to what extent has my model learned to represent specific factors of variation in the data?" We extend the popular MNIST dataset by adding a morphometric analysis enabling quantitative comparison of trained models, identification of the roles of latent variables, and characterisation of sample diversity. We further propose a set of quantifiable perturbations to assess the performance of unsupervised and supervised methods on challenging tasks such as outlier detection and domain adaptation. Data and code are available at https://github.com/dccastro/Morpho-MNIST.},
+  archiveprefix = {arxiv},
+  keywords = {Computer Science - Machine Learning,Statistics - Machine Learning},
+  file = {/Users/azane/Zotero/storage/ZFAUSMGP/Castro et al. - 2019 - Morpho-MNIST Quantitative Assessment and Diagnost.pdf;/Users/azane/Zotero/storage/XBN2GUFF/1809.html}
+}
+
+@article{cinelliCrashCourseGood2020,
+  title = {A {{Crash Course}} in {{Good}} and {{Bad Controls}}},
+  author = {Cinelli, Carlos and Forney, Andrew and Pearl, Judea},
+  year = {2020},
+  journal = {SSRN Electronic Journal},
+  issn = {1556-5068},
+  doi = {10.2139/ssrn.3689437},
+  urldate = {2023-07-03},
+  langid = {english}
+}
+
+@inproceedings{correa2020calculus,
+  title = {A Calculus for Stochastic Interventions: {{Causal}} Effect Identification and Surrogate Experiments},
+  booktitle = {Proceedings of the 34th {{AAAI}} Conference on Artificial Intelligence},
+  author = {Correa, J. and Bareinboim, E.},
+  year = {2020},
+  publisher = {{AAAI Press}},
+  address = {{New York, NY}}
+}
+
+@article{ding2018causal,
+  title = {Causal Inference: {{A}} Missing Data Perspective},
+  author = {Ding, Peng and Li, Fan and others},
+  year = {2018},
+  journal = {Statistical Science},
+  volume = {33},
+  number = {2},
+  pages = {214--237},
+  publisher = {{Institute of Mathematical Statistics}}
+}
+
+@techreport{doudchenko2016balancing,
+  title = {Balancing, Regression, Difference-in-Differences and Synthetic Control Methods: {{A}} Synthesis},
+  author = {Doudchenko, Nikolay and Imbens, Guido W},
+  year = {2016},
+  institution = {{National Bureau of Economic Research}}
+}
+
+@article{dowhypaper,
+  title = {{{DoWhy}}: {{An}} End-to-End Library for Causal Inference},
+  author = {Sharma, Amit and Kiciman, Emre},
+  year = {2020},
+  journal = {arXiv preprint arXiv:2011.04216},
+  eprint = {2011.04216},
+  archiveprefix = {arxiv}
+}
+
+@article{everitt_2021,
+  title = {Agent Incentives: {{A}} Causal Perspective},
+  author = {Everitt, Tom and Carey, Ryan and Langlois, Eric and Ortega, Pedro A and Legg, Shane},
+  year = {2021},
+  month = feb,
+  journal = {arXiv},
+  urldate = {2021-03-13},
+  abstract = {We present a framework for analysing agent incentives using causal influence diagrams. We establish that a well-known criterion for value of information is complete. We propose a new graphical criterion for value of control, establishing its soundness and completeness. We also introduce two new concepts for incentive analysis: response incentives indicate which changes in the environment affect an optimal decision, while instrumental control incentives establish whether an agent can influence its utility via a variable X. For both new concepts, we provide sound and complete graphical criteria. We show by example how these results can help with evaluating the safety and fairness of an AI system.},
+  sciwheel-projects = {Causality}
+}
+
+@manual{Fear05,
+  type = {Manual},
+  title = {Publication Quality Tables in {{LaTeX}}},
+  author = {Fear, Simon},
+  year = {2005},
+  month = apr
+}
+
+@article{feller2015hierarchical,
+  title = {Hierarchical Models for Causal Effects},
+  author = {Feller, Avi and Gelman, Andrew},
+  year = {2015},
+  journal = {Emerging Trends in the Social and Behavioral Sciences: An interdisciplinary, searchable, and linkable resource},
+  pages = {1--16},
+  publisher = {{Wiley Online Library}}
+}
+
+@article{franks2019flexible,
+  title = {Flexible Sensitivity Analysis for Observational Studies without Observable Implications},
+  author = {Franks, AlexanderM and D'Amour, Alexander and Feller, Avi},
+  year = {2019},
+  journal = {Journal of the American Statistical Association},
+  publisher = {{Taylor \& Francis}}
+}
+
+@book{gelman2006data,
+  title = {Data Analysis Using Regression and {{Multilevel}}/{{Hierarchical}} Models},
+  author = {Gelman, Andrew and Hill, Jennifer},
+  year = {2006},
+  publisher = {{Cambridge University Press}}
+}
+
+@article{genewein_2020,
+  title = {Algorithms for Causal Reasoning in Probability Trees},
+  author = {Genewein, Tim and McGrath, Tom and D{\'e}letang, Gr{\'e}goire and Mikulik, Vladimir and Martic, Miljan and Legg, Shane and Ortega, Pedro A.},
+  year = {2020},
+  month = oct,
+  journal = {arXiv},
+  urldate = {2020-10-28},
+  abstract = {Probability trees are one of the simplest models of causal generative processes. They possess clean semantics and \textendash{} unlike causal Bayesian networks \textendash{} they can represent context-specific causal dependencies, which are necessary for e.g. causal induction. Yet, they have received little attention from the AI and ML community. Here we present concrete algorithms for causal reasoning in discrete probability trees that cover the entire causal hierarchy (association, intervention, and counterfactuals), and operate on arbitrary propositional and causal events. Our work expands the domain of causal reasoning to a very general class of discrete stochastic processes.},
+  sciwheel-projects = {Causality}
+}
+
+@article{ghassami_2018,
+  title = {Budgeted Experiment Design for Causal Structure Learning},
+  author = {{Ghassami} and {AmirEmad} and {Salehkaleybar} and {Kiyavash} and {Bareinboim}},
+  year = {2018},
+  month = jun,
+  journal = {Bioinformatics (Oxford, England)},
+  volume = {27},
+  number = {2},
+  doi = {10.1093/bioinformatics/btq632},
+  urldate = {2019-05-02},
+  abstract = {We study the problem of causal structure learning when the experimenter is limited to perform at mostknon-adaptive experiments of size1. We formulate the problem of finding the best intervention target set as an optimization problem, which aims to maximize the average number of edges whose directions are resolved. We prove that the corresponding objective function is submodular and a greedy algorithm suffices to achieve(1 1 e )approximation of the optimal value. We further present an accelerated variant of the greedy algorithm, which can lead to orders of magnitude performance speedup. We validate our proposed approach on synthetic and real graphs. The results show that compared to the purely observational setting, our algorithm orients the majority of the edges through a considerably small number of interventions.},
+  pmcid = {PMC3018820},
+  pmid = {21075743},
+  sciwheel-projects = {Causality and COVID-19}
+}
+
+@inproceedings{hal-02911619,
+  title = {{{aGrUM}}/{{pyAgrum}} : A Toolbox to Build Models and Algorithms for Probabilistic Graphical Models in Python},
+  booktitle = {10th International Conference on Probabilistic Graphical Models},
+  author = {Ducamp, Gaspard and Bonnard, Philippe and De Sainte Marie, Christian and Wuillemin, Pierre-Henri},
+  year = {2020},
+  month = sep,
+  series = {Proceedings of Machine Learning Research},
+  volume = {138},
+  pages = {173--184},
+  address = {{Sk\o rping, Denmark}},
+  hal_id = {hal-02911619},
+  hal_version = {v1},
+  keywords = {Bayesian Networks,c++,Probabilistic Graphical Models,python}
+}
+
+@article{ibeling_2019,
+  title = {On Open-Universe Causal Reasoning},
+  author = {Ibeling, Duligur and Icard, Thomas},
+  year = {2019},
+  month = jul,
+  journal = {arXiv},
+  urldate = {2020-08-03},
+  abstract = {We extend two kinds of causal models, structural equation models and simulation models, to infinite variable spaces. This enables a semantics for conditionals founded on a calculus of intervention, and axiomatization of causal reasoning for rich, expressive generative models\textemdash including those in which a causal representation exists only implicitly\textemdash in an open-universe setting. Further, we show that under suitable restrictions the two kinds of models are equivalent, perhaps surprisingly as their axiomatizations differ substantially in the general case. We give a series of complete axiomatizations in which the open-universe nature of the setting is seen to be essential.},
+  sciwheel-projects = {Causality}
+}
+
+@article{imai_2013,
+  title = {Experimental Designs for Identifying Causal Mechanisms},
+  author = {Imai, Kosuke and Tingley, Dustin and Yamamoto, Teppei},
+  year = {2013},
+  month = jan,
+  journal = {Journal of the Royal Statistical Society: Series A (Statistics in Society)},
+  volume = {176},
+  number = {1},
+  pages = {5--51},
+  issn = {09641998},
+  doi = {10.1111/j.1467-{985X}.2012.01032.x},
+  urldate = {2020-11-21},
+  sciwheel-projects = {Causality}
+}
+
+@article{jang2016categorical,
+  title = {Categorical Reparameterization with Gumbel-Softmax},
+  author = {Jang, Eric and Gu, Shixiang and Poole, Ben},
+  year = {2016},
+  journal = {arXiv preprint arXiv:1611.01144},
+  eprint = {1611.01144},
+  archiveprefix = {arxiv}
+}
+
+@inproceedings{jensen2020object,
+  title = {Object Conditioning for Causal Inference},
+  booktitle = {Uncertainty in Artificial Intelligence},
+  author = {Jensen, David and Burroni, Javier and Rattigan, Matthew},
+  year = {2020},
+  pages = {1072--1082},
+  publisher = {{PMLR}}
+}
+
+@inproceedings{kallus2019interval,
+  title = {Interval Estimation of Individual-Level Causal Effects under Unobserved Confounding},
+  booktitle = {The 22nd International Conference on Artificial Intelligence and Statistics},
+  author = {Kallus, Nathan and Mao, Xiaojie and Zhou, Angela},
+  year = {2019},
+  pages = {2281--2290},
+  publisher = {{PMLR}}
+}
+
+@incollection{kennedy_2014,
+  title = {Semiparametric Theory},
+  booktitle = {Wiley Statsref: Statistics Reference Online},
+  author = {Kennedy, Edward H.},
+  editor = {Balakrishnan, N. and Colton, Theodore and Everitt, Brian and Piegorsch, Walter and Ruggeri, Fabrizio and Teugels, Jozef L.},
+  year = {2014},
+  month = apr,
+  pages = {1--7},
+  publisher = {{John Wiley \& Sons, Ltd}},
+  address = {{Chichester, UK}},
+  doi = {10.1002/9781118445112.stat08083},
+  urldate = {2020-12-21},
+  abstract = {In this paper we give a brief review of semiparametric theory, using as a running example the common problem of estimating an average causal effect. Semiparametric models allow at least part of the data-generating process to be unspecified and unrestricted, and can often yield robust estimators that nonetheless behave similarly to those based on parametric likelihood assumptions, e.g., fast rates of convergence to normal limiting distributions. We discuss the basics of semiparametric theory, focusing on influence functions.},
+  isbn = {978-1-118-44511-2},
+  sciwheel-projects = {Causality}
+}
+
+@article{kingma2013auto,
+  title = {Auto-Encoding Variational Bayes},
+  author = {Kingma, Diederik P and Welling, Max},
+  year = {2013},
+  journal = {arXiv preprint arXiv:1312.6114},
+  eprint = {1312.6114},
+  archiveprefix = {arxiv}
+}
+
+@article{kingma2015variational,
+  title = {Variational Dropout and the Local Reparameterization Trick},
+  author = {Kingma, Diederik P and Salimans, Tim and Welling, Max},
+  year = {2015},
+  journal = {arXiv preprint arXiv:1506.02557},
+  eprint = {1506.02557},
+  archiveprefix = {arxiv}
+}
+
+@article{kingmaAutoEncodingVariationalBayes2013,
+  title = {Auto-{{Encoding Variational Bayes}}},
+  author = {Kingma, Diederik P and Welling, Max},
+  year = {2013},
+  publisher = {{arXiv}},
+  doi = {10.48550/ARXIV.1312.6114},
+  urldate = {2023-07-03},
+  abstract = {How can we perform efficient inference and learning in directed probabilistic models, in the presence of continuous latent variables with intractable posterior distributions, and large datasets? We introduce a stochastic variational inference and learning algorithm that scales to large datasets and, under some mild differentiability conditions, even works in the intractable case. Our contributions are two-fold. First, we show that a reparameterization of the variational lower bound yields a lower bound estimator that can be straightforwardly optimized using standard stochastic gradient methods. Second, we show that for i.i.d. datasets with continuous latent variables per datapoint, posterior inference can be made especially efficient by fitting an approximate inference model (also called a recognition model) to the intractable posterior using the proposed lower bound estimator. Theoretical advantages are reflected in experimental results.},
+  copyright = {arXiv.org perpetual, non-exclusive license},
+  keywords = {FOS: Computer and information sciences,Machine Learning (cs.LG),Machine Learning (stat.ML)}
+}
+
+@inproceedings{koppel_2020,
+  title = {Demystifying Dependence},
+  booktitle = {Proceedings of the 2020 {{ACM SIGPLAN}} International Symposium on New Ideas, New Paradigms, and Reflections on Programming and Software},
+  author = {Koppel, James and Jackson, Daniel},
+  year = {2020},
+  month = nov,
+  pages = {48--64},
+  publisher = {{ACM}},
+  address = {{New York, NY, USA}},
+  doi = {10.1145/3426428.3426916},
+  urldate = {2020-11-27},
+  isbn = {978-1-4503-8178-9},
+  sciwheel-projects = {Causality}
+}
+
+@book{lamport:latex,
+  title = {{{LaTeX}}{\emph{: }}{{{\emph{A}}}}{\emph{ Document Preparation System}}},
+  author = {Lamport, Leslie},
+  year = {1986},
+  publisher = {{Addison-Wesley}},
+  address = {{Reading, MA.}}
+}
+
+@article{lattimore_2019,
+  title = {Replacing the Do-Calculus with {{Bayes}} Rule},
+  author = {Lattimore, Finnian and Rohde, David},
+  year = {2019},
+  month = jun,
+  journal = {arXiv},
+  urldate = {2021-04-28},
+  abstract = {The concept of causality has a controversial history. The question of whether it is possible to represent and address causal problems with probability theory, or if fundamentally new mathematics such as the do calculus is required has been hotly debated, e.g. Pearl (2001) states "the building blocks of our scientific and everyday knowledge are elementary facts such as "mud does not cause rain" and "symptoms do not cause disease" and those facts, strangely enough, cannot be expressed in the vocabulary of probability calculus". This has lead to a dichotomy between advocates of causal graphical modeling and the do calculus, and researchers applying Bayesian methods. In this paper we demonstrate that, while it is critical to explicitly model our assumptions on the impact of intervening in a system, provided we do so, estimating causal effects can be done entirely within the standard Bayesian paradigm. The invariance assumptions underlying causal graphical models can be encoded in ordinary Probabilistic graphical models, allowing causal estimation with Bayesian statistics, equivalent to the do calculus. Elucidating the connections between these approaches is a key step toward enabling the insights provided by each to be combined to solve real problems.},
+  sciwheel-projects = {Causality}
+}
+
+@inproceedings{laurent_2018,
+  title = {Counterfactual Resimulation for Causal Analysis of Rule-Based Models |{{Proceedings}} of the 27th {{International Joint Conference}} on {{Artificial Intelligence}}},
+  author = {Laurent, Jonathan and Yang, Jean and Fontana, Walter},
+  year = {2018},
+  month = jul,
+  publisher = {{International Joint Conferences on Artificial Intelligence}},
+  urldate = {2020-12-10},
+  abstract = {Models based on rules that express local and heterogeneous mechanisms of stochastic interactions between structured agents are an important tool for investigating the dynamical behavior of complex systems, especially in molecular biology. Given a simulated trace of events, the challenge is to construct a causal diagram that explains how a phenomenon of interest occurred. Counterfactual analysis can provide distinctive insights, but its standard definition is not applicable in rule-based models because they are not readily expressible in terms of structural equations. We provide a semantics of counterfactual statements that addresses this challenge by sampling counterfactual trajectories that are probabilistically as close to the factual trace as a given intervention permits them to be. We then show how counterfactual dependencies give rise to explanations in terms of relations of enablement and prevention between events.},
+  sciwheel-projects = {Causality and COVID-19}
+}
+
+@article{levine2018reinforcement,
+  title = {Reinforcement Learning and Control as Probabilistic Inference: {{Tutorial}} and Review},
+  author = {Levine, Sergey},
+  year = {2018},
+  journal = {arXiv preprint arXiv:1805.00909},
+  eprint = {1805.00909},
+  archiveprefix = {arxiv}
+}
+
+@article{lindgren_2018,
+  title = {[1810.11867v1] Experimental Design for Cost-Aware Learning of Causal Graphs},
+  author = {Lindgren, Erik M. and Kocaoglu, Murat and Dimakis, Alexandros G. and Vishwanath, Sriram},
+  year = {2018},
+  month = oct,
+  journal = {arXiv},
+  urldate = {2019-04-14},
+  abstract = {We consider the minimum cost intervention design problem: Given the essential graph of a causal graph and a cost to intervene on a variable, identify the set of interventions with minimum total cost that can learn any causal graph with the given essential graph. We first show that this problem is NP-hard. We then prove that we can achieve a constant factor approximation to this problem with a greedy algorithm. We then constrain the sparsity of each intervention. We develop an algorithm that returns an intervention design that is nearly optimal in terms of size for sparse graphs with sparse interventions and we discuss how to use it when there are costs on the vertices.},
+  sciwheel-projects = {Causality}
+}
+
+@article{loftus1994using,
+  title = {Using Confidence Intervals in Within-Subject Designs},
+  author = {Loftus, Geoffrey and Masson, Michael},
+  year = {1994},
+  journal = {Psychonomic Bulletin \& Review},
+  volume = {1},
+  number = {4},
+  pages = {476--490},
+  publisher = {{Springer}}
+}
+
+@article{louizos2017causal,
+  title = {Causal Effect Inference with Deep Latent-Variable Models},
+  author = {Louizos, Christos and Shalit, Uri and Mooij, Joris and Sontag, David and Zemel, Richard and Welling, Max},
+  year = {2017},
+  journal = {arXiv preprint arXiv:1705.08821},
+  eprint = {1705.08821},
+  archiveprefix = {arxiv}
+}
+
+@misc{louizosCausalEffectInference2017,
+  title = {Causal {{Effect Inference}} with {{Deep Latent-Variable Models}}},
+  author = {Louizos, Christos and Shalit, Uri and Mooij, Joris and Sontag, David and Zemel, Richard and Welling, Max},
+  year = {2017},
+  month = nov,
+  number = {arXiv:1705.08821},
+  eprint = {1705.08821},
+  primaryclass = {cs, stat},
+  publisher = {{arXiv}},
+  urldate = {2023-07-03},
+  abstract = {Learning individual-level causal effects from observational data, such as inferring the most effective medication for a specific patient, is a problem of growing importance for policy makers. The most important aspect of inferring causal effects from observational data is the handling of confounders, factors that affect both an intervention and its outcome. A carefully designed observational study attempts to measure all important confounders. However, even if one does not have direct access to all confounders, there may exist noisy and uncertain measurement of proxies for confounders. We build on recent advances in latent variable modeling to simultaneously estimate the unknown latent space summarizing the confounders and the causal effect. Our method is based on Variational Autoencoders (VAE) which follow the causal structure of inference with proxies. We show our method is significantly more robust than existing methods, and matches the state-of-the-art on previous benchmarks focused on individual treatment effects.},
+  archiveprefix = {arxiv},
+  keywords = {Computer Science - Machine Learning,Statistics - Machine Learning},
+  file = {/Users/azane/Zotero/storage/PJYWS2E6/Louizos et al. - 2017 - Causal Effect Inference with Deep Latent-Variable .pdf;/Users/azane/Zotero/storage/EBXXBTA3/1705.html}
+}
+
+@inproceedings{malinsky2019potential,
+  title = {A Potential Outcomes Calculus for Identifying Conditional Path-Specific Effects},
+  booktitle = {The 22nd International Conference on Artificial Intelligence and Statistics},
+  author = {Malinsky, Daniel and Shpitser, Ilya and Richardson, Thomas},
+  year = {2019},
+  pages = {3080--3088},
+  publisher = {{PMLR}}
+}
+
+@article{moodie2007demystifying,
+  title = {Demystifying Optimal Dynamic Treatment Regimes},
+  author = {Moodie, Erica EM and Richardson, Thomas S and Stephens, David A},
+  year = {2007},
+  journal = {Biometrics. Journal of the International Biometric Society},
+  volume = {63},
+  number = {2},
+  pages = {447--455},
+  publisher = {{Wiley Online Library}}
+}
+
+@article{ness2019integrating,
+  title = {Integrating {{Markov}} Processes with Structural Causal Modeling Enables Counterfactual Inference in Complex Systems},
+  author = {Ness, Robert Osazuwa and Paneri, Kaushal and Vitek, Olga},
+  year = {2019},
+  journal = {arXiv preprint arXiv:1911.02175},
+  eprint = {1911.02175},
+  archiveprefix = {arxiv}
+}
+
+@inproceedings{oberst2019counterfactual,
+  title = {Counterfactual Off-Policy Evaluation with Gumbel-Max Structural Causal Models},
+  booktitle = {International Conference on Machine Learning},
+  author = {Oberst, Michael and Sontag, David},
+  year = {2019},
+  pages = {4881--4890},
+  publisher = {{PMLR}}
+}
+
+@article{pawlowski2020deep,
+  title = {Deep Structural Causal Models for Tractable Counterfactual Inference},
+  author = {Pawlowski, Nick and Castro, Daniel C and Glocker, Ben},
+  year = {2020},
+  journal = {arXiv preprint arXiv:2006.06485},
+  eprint = {2006.06485},
+  archiveprefix = {arxiv}
+}
+
+@book{pearl,
+  title = {Causality: {{Models}}, Reasoning and Inference},
+  author = {Pearl, Judea},
+  year = {2009},
+  edition = {Second},
+  publisher = {{Cambridge University Press}},
+  address = {{USA}},
+  abstract = {Written by one of the preeminent researchers in the field, this book provides a comprehensive exposition of modern analysis of causation. It shows how causality has grown from a nebulous concept into a mathematical theory with significant applications in the fields of statistics, artificial intelligence, economics, philosophy, cognitive science, and the health and social sciences. Judea Pearl presents and unifies the probabilistic, manipulative, counterfactual, and structural approaches to causation and devises simple mathematical tools for studyi\textdagger ng the relationships between causal connections and statistical associations. The book will open the way for including causal analysis in the standard curricula of statistics, artificial intelligence, business, epidemiology, social sciences, and economics. Students in these fields will find natural models, simple inferential procedures, and precise mathematical definitions of causal concepts that traditional texts have evaded or made unduly complicated. The first edition of Causality has led to a paradigmatic change in the way that causality is treated in statistics, philosophy, computer science, social science, and economics. Cited in more than 3,000 scientific publications, it continues to liberate scientists from the traditional molds of statistical thinking. In this revised edition, Judea Pearl elucidates thorny issues, answers readers' questions, and offers a panoramic view of recent advances in this field of research. Causality will be of interests to students and professionals in a wide variety of fields. Anyone who wishes to elucidate meaningful relationships from data, predict effects of actions and policies, assess explanations of reported events, or form theories of causal understanding and causal speech will find this book stimulating and invaluable.},
+  isbn = {0-521-89560-X}
+}
+
+@article{pearl_2019,
+  title = {The Seven Tools of Causal Inference, with Reflections on Machine Learning},
+  author = {Pearl, Judea},
+  year = {2019},
+  month = feb,
+  journal = {Communications of the ACM},
+  volume = {62},
+  number = {3},
+  pages = {54--60},
+  issn = {00010782},
+  doi = {10.1145/3241036},
+  urldate = {2019-03-08},
+  abstract = {The kind of causal inference seen in natural human thought can be "algorithmitized" to help produce human-level machine intelligence.},
+  sciwheel-projects = {Causality and DL and Y0-SCUC}
+}
+
+@book{pearl2001bayesian,
+  title = {Bayesianism and Causality, or, Why {{I}} Am Only a Half-Bayesian},
+  author = {Pearl, Judea},
+  year = {2001},
+  month = jan,
+  volume = {24},
+  pages = {19--36},
+  publisher = {{Springer, Dordrecht}},
+  doi = {10.1007/978-94-017-1586-7_2},
+  isbn = {978-90-481-5920-8}
+}
+
+@article{pearl2011algorithmization,
+  title = {The Algorithmization of Counterfactuals},
+  author = {Pearl, Judea},
+  year = {2011},
+  journal = {Annals of Mathematics and Artificial Intelligence},
+  volume = {61},
+  number = {1},
+  pages = {29--39},
+  publisher = {{Springer}}
+}
+
+@article{perov_2019,
+  title = {{{MultiVerse}}: {{Causal}} Reasoning Using Importance Sampling in Probabilistic Programming},
+  author = {Perov, Yura and Graham, Logan and Gourgoulias, Kostis and Richens, Jonathan G. and Lee, Ciar{\'a}n M. and Baker, Adam and Johri, Saurabh},
+  year = {2019},
+  month = oct,
+  journal = {arXiv},
+  urldate = {2020-02-05},
+  abstract = {We elaborate on using importance sampling for causal reasoning, in particular for counterfactual inference. We show how this can be implemented natively in probabilistic programming. By considering the structure of the counterfactual query, one can significantly optimise the inference process. We also consider design choices to enable further optimisations. We introduce MultiVerse, a probabilistic programming prototype engine for approximate causal reasoning. We provide experimental results and compare with Pyro, an existing probabilistic programming framework with some of causal reasoning tools.},
+  sciwheel-projects = {Causality}
+}
+
+@article{petersenCommentaryApplyingCausal2014,
+  title = {Commentary: {{Applying}} a {{Causal Road Map}} in {{Settings}} with {{Time-dependent Confounding}}},
+  shorttitle = {Commentary},
+  author = {Petersen, Maya L.},
+  year = {2014},
+  month = nov,
+  journal = {Epidemiology},
+  volume = {25},
+  number = {6},
+  pages = {898--901},
+  issn = {1044-3983},
+  doi = {10.1097/EDE.0000000000000178},
+  urldate = {2023-07-03},
+  langid = {english},
+  file = {/Users/azane/Zotero/storage/N3YNHU7T/Petersen - 2014 - Commentary Applying a Causal Road Map in Settings.pdf}
+}
+
+@misc{pgmpy,
+  type = {{{WEBSITE}}},
+  title = {Pgmpy},
+  year = {2021},
+  urldate = {2021-05-02},
+  sciwheel-projects = {Causality}
+}
+
+@misc{probprog2021instructions,
+  title = {Formatting Instructions for {{PROBPROG}} 2021 Abstracts},
+  author = {{van den Broeck}, Guy and Murray, Lawrence and Tristan, Jean-Baptiste and {van de Meent}, Jan-Willem},
+  year = {2021}
+}
+
+@article{richardson2013single,
+  title = {Single World Intervention Graphs ({{SWIGs}}): {{A}} Unification of the Counterfactual and Graphical Approaches to Causality},
+  author = {Richardson, Thomas S and Robins, James M},
+  year = {2013},
+  journal = {Center for the Statistics and the Social Sciences, University of Washington Series. Working Paper},
+  volume = {128},
+  number = {30},
+  pages = {2013}
+}
+
+@article{schuler_2017,
+  title = {Targeted Maximum Likelihood Estimation for Causal Inference in Observational Studies.},
+  author = {Schuler, Megan S and Rose, Sherri},
+  year = {2017},
+  month = jan,
+  journal = {American Journal of Epidemiology},
+  volume = {185},
+  number = {1},
+  pages = {65--73},
+  doi = {10.1093/aje/kww165},
+  urldate = {2018-03-30},
+  abstract = {Estimation of causal effects using observational data continues to grow in popularity in the epidemiologic literature. While many applications of causal effect estimation use propensity score methods or G-computation, targeted maximum likelihood estimation (TMLE) is a well-established alternative method with desirable statistical properties. TMLE is a doubly robust maximum-likelihood-based approach that includes a secondary "targeting" step that optimizes the bias-variance tradeoff for the target parameter. Under standard causal assumptions, estimates can be interpreted as causal effects. Because TMLE has not been as widely implemented in epidemiologic research, we aim to provide an accessible presentation of TMLE for applied researchers. We give step-by-step instructions for using TMLE to estimate the average treatment effect in the context of an observational study. We discuss conceptual similarities and differences between TMLE and 2 common estimation approaches (G-computation and inverse probability weighting) and present findings on their relative performance using simulated data. Our simulation study compares methods under parametric regression misspecification; our results highlight TMLE's property of double robustness. Additionally, we discuss best practices for TMLE implementation, particularly the use of ensembled machine learning algorithms. Our simulation study demonstrates all methods using super learning, highlighting that incorporation of machine learning may outperform parametric regression in observational data settings. The Author 2016. Published by Oxford University Press on behalf of the Johns Hopkins Bloomberg School of Public Health. All rights reserved. For permissions, please e-mail: journals.permissions@oup.com.},
+  pmid = {27941068},
+  sciwheel-projects = {Causality}
+}
+
+@book{shadish2002experimental,
+  title = {Experimental and Quasi-Experimental Designs for Generalized Causal Inference/{{William R}}. {{Shedish}}, Thomas {{D}}. {{Cook}}, Donald {{T}}. {{Campbell}}.},
+  author = {Shadish, William and Cook, Thomas and Campbell, Donald Thomas and others},
+  year = {2002},
+  publisher = {{Boston: Houghton Mifflin,}}
+}
+
+@misc{shalit2017estimating,
+  title = {Estimating Individual Treatment Effect: Generalization Bounds and Algorithms},
+  author = {Shalit, Uri and Johansson, Fredrik D. and Sontag, David},
+  year = {2017},
+  eprint = {1606.03976},
+  primaryclass = {stat.ML},
+  archiveprefix = {arxiv}
+}
+
+@article{shpitser_2012,
+  title = {What Counterfactuals Can Be Tested},
+  author = {Shpitser, Ilya and Pearl, Judea},
+  translator = {{Pearl}},
+  year = {2012},
+  journal = {Arxiv},
+  urldate = {2019-04-09},
+  sciwheel-projects = {Causality and Y0-SCUC}
+}
+
+@techreport{tavares_2020,
+  title = {A Language for Counterfactual Generative Models},
+  author = {Tavares, Zenna and Koppel, James and Zhang, Xin and {Solar-Lezama}, Armando},
+  year = {2020},
+  institution = {{MIT Technical Report}},
+  urldate = {2020-12-13},
+  sciwheel-projects = {Causality}
+}
+
+@inproceedings{tavaresPredicateExchangeInference2019,
+  title = {Predicate {{Exchange}}: {{Inference}} with {{Declarative Knowledge}}},
+  booktitle = {Proceedings of the 36th {{International Conference}} on {{Machine Learning}}},
+  author = {Tavares, Zenna and Burroni, Javier and Minasyan, Edgar and {Solar-Lezama}, Armando and Ranganath, Rajesh},
+  editor = {Chaudhuri, Kamalika and Salakhutdinov, Ruslan},
+  year = {2019},
+  month = jun,
+  series = {Proceedings of {{Machine Learning Research}}},
+  volume = {97},
+  pages = {6186--6195},
+  publisher = {{PMLR}},
+  abstract = {Programming languages allow us to express complex predicates, but existing inference methods are unable to condition probabilistic models on most of them. To support a broader class of predicates, we develop an inference procedure called predicate exchange, which softens predicates. A soft predicate quantifies the extent to which values of model variables are consistent with its hard counterpart. We substitute the likelihood term in the Bayesian posterior with a soft predicate, and develop a variant of replica exchange MCMC to draw posterior samples. We implement predicate exchange as a language agnostic tool which performs a nonstandard execution of a probabilistic program. We demonstrate the approach on sequence models of health and inverse rendering.},
+  file = {/Users/azane/Zotero/storage/W3ETAMGL/Tavares et al. - 2019 - Predicate Exchange Inference with Declarative Kno.pdf}
+}
+
+
+@article{textor_2016,
+  title = {Robust Causal Inference Using Directed Acyclic Graphs: The {{R}} Package 'Dagitty'.},
+  author = {Textor, Johannes and {van der Zander}, Benito and Gilthorpe, Mark S and Liskiewicz, Maciej and Ellison, George Th},
+  year = {2016},
+  month = dec,
+  journal = {International Journal of Epidemiology},
+  volume = {45},
+  number = {6},
+  pages = {1887--1894},
+  doi = {10.1093/ije/dyw341},
+  urldate = {2021-02-24},
+  abstract = {Directed acyclic graphs (DAGs), which offer systematic representations of causal relationships, have become an established framework for the analysis of causal inference in epidemiology, often being used to determine covariate adjustment sets for minimizing confounding bias. DAGitty is a popular web application for drawing and analysing DAGs. Here we introduce the R package 'dagitty', which provides access to all of the capabilities of the DAGitty web application within the R platform for statistical computing, and also offers several new functions. We describe how the R package 'dagitty' can be used to: evaluate whether a DAG is consistent with the dataset it is intended to represent; enumerate 'statistically equivalent' but causally different DAGs; and identify exposure-outcome adjustment sets that are valid for causally different but statistically equivalent DAGs. This functionality enables epidemiologists to detect causal misspecifications in DAGs and make robust inferences that remain valid for a range of different DAGs. The R package 'dagitty' is available through the comprehensive R archive network (CRAN) at [https://cran.r-project.org/web/packages/dagitty/]. The source code is available on github at [https://github.com/jtextor/dagitty]. The web application 'DAGitty' is free software, licensed under the GNU general public licence (GPL) version 2 and is available at [http://dagitty.net/]. The Author 2017; all rights reserved. Published by Oxford University Press on behalf of the International Epidemiological Association.},
+  pmid = {28089956},
+  sciwheel-projects = {Causality}
+}
+
+@article{tikka_2017,
+  title = {Identifying Causal Effects with {{theR}} Packagecausaleffect},
+  author = {Tikka, Santtu and Karvanen, Juha},
+  year = {2017},
+  journal = {Journal of statistical software},
+  volume = {76},
+  number = {12},
+  pages = {1--30},
+  issn = {1548-7660},
+  doi = {10.18637/jss.v076.i12},
+  urldate = {2019-12-28},
+  abstract = {Do-calculus is concerned with estimating the interventional distribution of an action from the observed joint probability distribution of the variables in a given causal structure. All identifiable causal effects can be derived using the rules of do-calculus, but the rules themselves do not give any direct indication whether the effect in question is identifiable or not. Shpitser and Pearl (2006b) constructed an algorithm for identifying joint interventional distributions in causal models, which contain unobserved variables and induce directed acyclic graphs. This algorithm can be seen as a repeated application of the rules of do-calculus and known properties of probabilities, and it ultimately either derives an expression for the causal distribution, or fails to identify the effect, in which case the effect is non-identifiable. In this paper, the R package causaleffect is presented, which provides an implementation of this algorithm. Functionality of causaleffect is also demonstrated through examples.},
+  sciwheel-projects = {Causality}
+}
+
+@inproceedings{tran_2004,
+  title = {Encoding Probabilistic Causal Model in Probabilistic Action Language},
+  author = {Tran, Nam and Baral, Chitta},
+  year = {2004},
+  publisher = {{AAAI}},
+  urldate = {2021-05-02},
+  abstract = {Pearl's probabilistic causal model has been used in many domains to reason about causality. Pearl's treatment of actions is very different from the way actions are represented explicitly in action languages. In this paper we show how to encode Pearl's probabilistic causal model in the action language PAL thus relating this two distinct approaches to reasoning about actions.},
+  sciwheel-projects = {Causality}
+}
+
+@article{vennekens_2009,
+  title = {{{CP-logic}}: {{A}} Language of Causal Probabilistic Events and Its Relation to Logic Programming},
+  author = {Vennekens, {\relax JOOST} and Denecker, {\relax MARC} and Bruynooghe, {\relax MAURICE}},
+  year = {2009},
+  month = may,
+  journal = {Theory and Practice of Logic Programming},
+  volume = {9},
+  number = {03},
+  pages = {245--308},
+  issn = {1471-0684},
+  doi = {10.1017/S1471068409003767},
+  urldate = {2021-05-02},
+  abstract = {This paper develops a logical language for representing probabilistic causal laws. Our interest in such a language is two-fold. First, it can be motivated as a fundamental study of the representation of causal knowledge. Causality has an inherent dynamic aspect, which has been studied at the semantical level by Shafer in his framework of probability trees. In such a dynamic context, where the evolution of a domain over time is considered, the idea of a causal law as something which guides this evolution is quite natural. In our formalization, a set of probabilistic causal laws can be used to represent a class of probability trees in a concise, flexible and modular way. In this way, our work extends Shafer's by offering a convenient logical representation for his semantical objects. Second, this language also has relevance for the area of probabilistic logic programming. In particular, we prove that the formal semantics of a theory in our language can be equivalently defined as a probability distribution over the well-founded models of certain logic programs, rendering it formally quite similar to existing languages such as ICL or PRISM. Because we can motivate and explain our language in a completely self-contained way as a representation of probabilistic causal laws, this provides a new way of explaining the intuitions behind such probabilistic logic programs: we can say precisely which knowledge such a program expresses, in terms that are equally understandable by a non-logician. Moreover, we also obtain an additional piece of knowledge representation methodology for probabilistic logic programs, by showing how they can express probabilistic causal laws.},
+  sciwheel-projects = {Causality}
+}
+
+@article{wang2019blessings,
+  title = {The Blessings of Multiple Causes},
+  author = {Wang, Yixin and Blei, David M},
+  year = {2019},
+  journal = {Journal of the American Statistical Association},
+  volume = {114},
+  number = {528},
+  pages = {1574--1596},
+  publisher = {{Taylor \& Francis}}
+}
+
+@inproceedings{winn2012causality,
+  title = {Causality with Gates},
+  booktitle = {Artificial Intelligence and Statistics},
+  author = {Winn, John},
+  year = {2012},
+  pages = {1314--1322},
+  publisher = {{PMLR}}
+}
+
+@article{witty_2021,
+  title = {A Simulation-Based Test of Identifiability for Bayesian Causal Inference},
+  author = {Witty, Sam and Jensen, David and Mansinghka, Vikash},
+  year = {2021},
+  month = feb,
+  journal = {arXiv},
+  urldate = {2021-03-04},
+  abstract = {This paper introduces a procedure for testing the identifiability of Bayesian models for causal inference. Although the do-calculus is sound and complete given a causal graph, many practical assumptions cannot be expressed in terms of graph structure alone, such as the assumptions required by instrumental variable designs, regression discontinuity designs, and within-subjects designs. We present simulation-based identifiability (SBI), a fully automated identification test based on a particle optimization scheme with simulated observations. This approach expresses causal assumptions as priors over functions in a structural causal model, including flexible priors using Gaussian processes. We prove that SBI is asymptotically sound and complete, and produces practical finite-sample bounds. We also show empirically that SBI agrees with known results in graph-based identification as well as with widely-held intuitions for designs in which graph-based methods are inconclusive.},
+  sciwheel-projects = {Causality}
+}
+
+@inproceedings{witty2020,
+  title = {Bayesian Causal Inference via Probabilistic Program Synthesis},
+  booktitle = {Proceedings of the Second Conference on Probabilistic Programming},
+  author = {Witty, Sam and Lew, Alexander and Jensen, David and Mansinghka, Vikash},
+  year = {2020}
+}
+
+@inproceedings{witty2020causal,
+  title = {Causal Inference Using {{Gaussian}} Processes with Structured Latent Confounders},
+  booktitle = {International Conference on Machine Learning},
+  author = {Witty, Sam and Takatsu, Kenta and Jensen, David and Mansinghka, Vikash},
+  year = {2020},
+  pages = {10313--10323},
+  publisher = {{PMLR}}
+}
+
+@article{wong2020computational,
+  title = {Computational Causal Inference},
+  author = {Wong, Jeffrey C},
+  year = {2020},
+  journal = {arXiv preprint arXiv:2007.10979},
+  eprint = {2007.10979},
+  archiveprefix = {arxiv}
+}
+
+@misc{y0,
+  type = {{{WEBSITE}}},
+  title = {{{Y}}{$_0$} Documentation},
+  author = {Zucker, Jeremy and Cottam, Joseph and Hoyt, Charles Tapley and Bakker, Craig and Weems, Zachary},
+  year = {2021},
+  urldate = {2021-05-02},
+  sciwheel-projects = {Causality}
+}
+
+@article{zheng2021copula,
+  title = {Copula-Based Sensitivity Analysis for Multi-Treatment Causal Inference with Unobserved Confounding},
+  author = {Zheng, Jiajing and D'Amour, Alexander and Franks, Alexander},
+  year = {2021},
+  journal = {arXiv preprint arXiv:2102.09412},
+  eprint = {2102.09412},
+  archiveprefix = {arxiv}
+}
+
+@article{zucker_2021,
+  title = {Leveraging Structured Biological Knowledge for Counterfactual Inference: A Case Study of Viral Pathogenesis - {{IEEE}} Journals \& Magazine},
+  author = {Zucker, Jeremy and {Mohammad-Taheri}, Sara and Paneri, Kaushal and Bhargava, Somya and Kolambkar, Pallavi and Bakker, Craig and Teuton, Jeremy and Hoyt, Charles Tapley and Oxford, Kristie and Ness, Robert and Vitek, Olga},
+  year = {2021},
+  month = jan,
+  journal = {IEEE Transactions on Big Data},
+  urldate = {2021-01-20},
+  abstract = {Counterfactual inference is a useful tool for comparing outcomes of interventions on complex systems. It requires us to represent the system in form of a structural causal model, complete with a causal diagram, probabilistic assumptions on exogenous variables, and functional assignments. Specifying such models can be extremely difficult in practice. The process requires substantial domain expertise, and does not scale easily to large systems, multiple systems, or novel system modifications. At the same time, many application domains, such as molecular biology, are rich in structured causal knowledge that is qualitative in nature. This manuscript proposes a general approach for querying a causal knowledge graph with a causal question and converting the qualitative result into a quantitative structural causal model that can learn from data to answer the question. We demonstrate the feasibility, accuracy and versatility of this approach using two case studies in systems biology. The first demonstrates the appropriateness of the underlying assumptions and the accuracy of the results. The second demonstrates the versatility of the approach by querying a knowledge base for the molecular determinants of a SARS-CoV-2-induced cytokine storm and performing counterfactual inference to predict the causal effect of medical countermeasures for severely ill COVID-19 patients.},
+  sciwheel-projects = {COVID-19 and Your publications}
+}

@@ -1,6 +1,3 @@
-Design notes: Causal queries as program transformations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 A primary motivation for working in a PPL is separation of concerns
 between models, queries, and inference. The design for causal inference
 presented so far is highly modular, but up to now we have been
@@ -22,7 +19,7 @@ Here is a sketch for intervention queries on random variables
 (``pyro.sample`` statements) essentially identical semantically to the
 one built into Pyro. Note that it is entirely
 separate from and compatible with any of the
-counterfactual semantics in ``causal_pyro.query.counterfactual``.
+counterfactual semantics in ``chirho.query.counterfactual``.
 
 .. code:: python
 
