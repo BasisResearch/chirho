@@ -66,7 +66,7 @@ def analytical_linear_gaussian_cut_posterior(data):
         1
         / SIGMA_ONE**2
         * data["w"].sum()
-        / (NUM_SAMPS_MODULE_ONE * 1 / SIGMA_ONE**2 + 1),
+        / (1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2),
         scale=post_sd_mod_one,
     )
     post_mean_mod_two = lambda eta: (
