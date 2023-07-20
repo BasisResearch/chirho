@@ -302,12 +302,8 @@ class IndexCutModule(
         # use mask to remove the contribution of this observed site to the model log-joint
 
         cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
-        mask = indexset_as_mask(cut_index)  # | msg["is_observed"]  # TODO device
+        mask = indexset_as_mask(cut_index)  # TODO device
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
-
-        # RA: I think this should NOT be done for latent variables in module 1;
-        # basically duplicate eta but make it a no grad. Looks like what line 334 is doing
-        # actually seems fine now.
 
         # expand distribution to make sure two copies of a variable are sampled
         msg["fn"] = msg["fn"].expand(
@@ -315,11 +311,6 @@ class IndexCutModule(
         )
 
     def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
-        # if msg["name"] == "z":
-        #     import pdb
-
-        #     pdb.set_trace()
-
         if pyro.poutine.util.site_is_subsample(msg):
             return
 
