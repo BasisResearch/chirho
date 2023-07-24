@@ -1,11 +1,9 @@
-from typing import NamedTuple
-
 import math
+
 import pyro
 import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
-import pyro.poutine as poutine
 
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.observational.handlers.soft_conditioning import IndexCutModule, cut
@@ -17,11 +15,9 @@ BERN_DATA = {"z": torch.tensor(1.0), "w": torch.tensor(1.0)}
 @pyro.infer.config_enumerate
 def bern_model():
     eta = pyro.sample("eta", dist.Bernoulli(0.5))
-    w = pyro.sample("w", dist.Bernoulli(torch.where(eta == 1, 0.8, 0.2)))
+    pyro.sample("w", dist.Bernoulli(torch.where(eta == 1, 0.8, 0.2)))
     theta = pyro.sample("theta", dist.Bernoulli(0.5))
-    z = pyro.sample(
-        "z", dist.Bernoulli(torch.where((eta == 1) & (theta == 1), 0.8, 0.2))
-    )
+    pyro.sample("z", dist.Bernoulli(torch.where((eta == 1) & (theta == 1), 0.8, 0.2)))
 
 
 def bern_posterior():
@@ -65,13 +61,11 @@ def linear_gaussian_model(N1=10, N2=10, sigma1=1.0, sigma2=1.0):
 
 
 def test_cut_module_raises_assertion_error():
-    conditioned_model = pyro.condition(
-        model, data={"z": torch.tensor(1.0), "w": torch.tensor(1.0)}
-    )
+    conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
     module_one_vars = ["eta", "w"]
     module_one, module_two = cut(conditioned_model, vars=module_one_vars)
     try:
-        module_two_post = pyro.infer.infer_discrete(module_two, first_available_dim=-2)
+        pyro.infer.infer_discrete(module_two, first_available_dim=-2)
         assert (
             False
         ), "AssertionError should have been raised since module_one is not conditioned on"
@@ -137,8 +131,3 @@ def test_cut_module_discrete():
     assert (
         torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
     )
-
-
-def test_zero_log_probs():
-    # Should ensure in cut complement, the gradients are zero for cut module
-    pass

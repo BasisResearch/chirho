@@ -16,9 +16,8 @@ import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
-from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
 from chirho.indexed.handlers import add_indices
-
+from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
 
 T = TypeVar("T")
 
@@ -261,9 +260,7 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
             assert msg["is_observed"]
 
 
-def cut(
-    model: Optional[Callable] = None, *, vars: Set[str] = set()
-) -> tuple[Callable, Callable]:
+def cut(model: Optional[Callable] = None, *, vars: Set[str] = set()):
     if model is None:
         return functools.partial(cut, vars=vars)
 

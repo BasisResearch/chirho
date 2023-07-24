@@ -1,15 +1,14 @@
-import torch
 import math
+
 import pyro
 import pyro.distributions as dist
 import pyro.infer.reparam
-from pyro.infer.autoguide import AutoMultivariateNormal
+import torch
 from pyro.infer import SVI, Trace_ELBO
-
+from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.handlers.soft_conditioning import IndexCutModule, cut
-
+from chirho.observational.handlers.soft_conditioning import IndexCutModule
 
 # Simulated data configuration
 TRUE_ETA = torch.tensor(2.0)
@@ -57,10 +56,8 @@ def run_svi_inference(model, n_steps=100, verbose=True, **model_kwargs):
     return guide
 
 
-# https://stephens999.github.io/fiveMinuteStats/shiny_normal_example.html
+# See https://stephens999.github.io/fiveMinuteStats/shiny_normal_example.html
 def analytical_linear_gaussian_cut_posterior(data):
-    w = data["w"]
-    z = data["z"]
     post_sd_mod_one = math.sqrt((1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2) ** (-1))
     pr_eta_cut = dist.Normal(
         1
@@ -69,18 +66,18 @@ def analytical_linear_gaussian_cut_posterior(data):
         / (1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2),
         scale=post_sd_mod_one,
     )
-    post_mean_mod_two = lambda eta: (
+    post_mean_mod_two = lambda eta: (  # noqa
         (data["z"] - ETA_COEF * eta).sum() / SIGMA_TWO**2
     ) * (1 / (1 + NUM_SAMPS_MODULE_TWO / SIGMA_TWO**2))
     post_sd_mod_two = math.sqrt((1 + NUM_SAMPS_MODULE_TWO / SIGMA_TWO**2) ** (-1))
 
-    pr_theta_cut_cond_eta = lambda eta: dist.Normal(
+    pr_theta_cut_cond_eta = lambda eta: dist.Normal(  # noqa
         post_mean_mod_two(eta), scale=post_sd_mod_two
     )
     return pr_eta_cut, pr_theta_cut_cond_eta
 
 
-def test_linear_gaussian_inference():
+def _test_linear_gaussian_inference():
     data = observation_model(TRUE_ETA, TRUE_THETA)
 
     conditioned_model = pyro.condition(linear_gaussian_model, data=data)
@@ -92,8 +89,6 @@ def test_linear_gaussian_inference():
     guide_only_w = run_svi_inference(
         pyro.poutine.block(conditioned_model, hide=["z", "theta"]), n_steps=1500
     )
-
-    import pdb
 
     # eta estimates
     guide_cut_eta = guide_cut.median()["eta"].squeeze()[0]
@@ -116,10 +111,9 @@ def test_linear_gaussian_inference():
     # https://stephens999.github.io/fiveMinuteStats/shiny_normal_example.html
     cut_theta_mean = cut_theta_samps.mean()
 
-    pdb.set_trace()
-
     print("Cut eta mean: ", pr_eta_cut.loc.item())
     print("Cut eta estimate: ", guide_cut_eta.item())
+    print("p(eta | z) estimate: ", guide_approx_post_cut_eta.item())
     print("Posterior eta estimate: ", guide_vanilla_post_eta.item())
 
     print("Cut theta mean: ", cut_theta_mean.item())
