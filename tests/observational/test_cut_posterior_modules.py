@@ -141,6 +141,19 @@ def test_correctly_duplicates_module_one_vars():
     x = dummy_model()
     assert x[0] == x[1]
 
+    # Check composability with replay
+    def dummy_guide():
+        pyro.sample("x", dist.Normal(0.0, 1.0).expand([2, 1, 1, 1, 1]))
+
+    with pyro.poutine.trace() as dummy_guide_tr:
+        dummy_guide()
+
+    dummy_guide_x = dummy_guide_tr.trace.nodes["x"]["value"][0]
+    replayed_model_x = pyro.poutine.replay(dummy_model, dummy_guide_tr.trace)()
+    assert replayed_model_x[0].squeeze() == dummy_guide_x[0].squeeze()
+    assert replayed_model_x[1].squeeze() == dummy_guide_x[0].squeeze()
+
+    # Check composability with trace
     with pyro.poutine.trace() as tr:
         with IndexPlatesMessenger(), IndexCutModule(["x"]):
             pyro.sample("x", dist.Normal(0.0, 1.0))
