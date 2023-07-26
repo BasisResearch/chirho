@@ -131,3 +131,18 @@ def test_cut_module_discrete():
     assert (
         torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
     )
+
+
+def test_correctly_duplicates_module_one_vars():
+    def dummy_model():
+        with IndexPlatesMessenger(), IndexCutModule(["x"]):
+            return pyro.sample("x", dist.Normal(0.0, 1.0))
+
+    x = dummy_model()
+    assert x[0] == x[1]
+
+    with pyro.poutine.trace() as tr:
+        with IndexPlatesMessenger(), IndexCutModule(["x"]):
+            pyro.sample("x", dist.Normal(0.0, 1.0))
+
+    assert tr.trace.nodes["x"]["value"][0] == tr.trace.nodes["x"]["value"][1]
