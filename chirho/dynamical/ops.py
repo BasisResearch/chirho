@@ -185,7 +185,7 @@ def simulate_to_interruption(
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[Trajectory[T], Tuple["Interruption", ...], float, State[T]]:
+) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
     """
     Simulate a dynamical system until the next interruption. Return the state at the requested time points, and
      a collection of interruptions that ended the simulation (this will usually just be a single interruption).
