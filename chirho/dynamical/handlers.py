@@ -578,11 +578,6 @@ class NonInterruptingPointObservationArray(
 
         super().__init__()
 
-    def _pyro_sample(self, msg) -> None:
-        if not msg["infer"].get("_deterministic", False):
-            # This tells pyro that the sample statement needs broadcasting.
-            msg["fn"] = msg["fn"].to_event(1)
-
     def _pyro_simulate(self, msg) -> None:
         if self._insert_mask_key in msg:
             # Just to avoid having to splice in multiple handlers. Also, this suggests the user is using this handler
@@ -621,11 +616,12 @@ class NonInterruptingPointObservationArray(
             "spliced into user provided timespan as expected."
         )
 
-        with pyro.condition(data=self.data):
+        with condition(data=self.data):
             # This blocks the handler from being called again, as it is already in the stack.
             with pyro.poutine.messenger.block_messengers(
                 lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
             ):
+                # with pyro.plate("__time_plate", size=int(insert_mask.sum()), dim=-1):
                 dynamics.observation(full_traj[insert_mask])
 
         # Remove the elements of the trajectory at the inserted points.

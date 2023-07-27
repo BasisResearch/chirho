@@ -11,9 +11,9 @@ from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop, s
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
-from .dynamical_fixtures import SimpleSIRDynamics
-from chirho.dynamical.handlers import ODEDynamics
+from .dynamical_fixtures import UnifiedFixtureDynamics
 
+from chirho.dynamical.handlers import ODEDynamics
 from torch import tensor as tt
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     return event_f
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize(
@@ -122,7 +122,7 @@ def test_nested_dynamic_intervention_causes_change(
     )
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("trigger_state", [trigger_state1])
@@ -160,7 +160,7 @@ def test_dynamic_intervention_causes_change(
     )
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize(
@@ -199,7 +199,7 @@ def test_split_twinworld_dynamic_intervention(
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize(
@@ -238,7 +238,7 @@ def test_split_multiworld_dynamic_intervention(
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize(

@@ -16,7 +16,7 @@ from chirho.dynamical.handlers import (
 from chirho.dynamical.ops import State
 
 from .dynamical_fixtures import (
-    SimpleSIRDynamics,
+    UnifiedFixtureDynamics,
     bayes_sir_model,
     check_trajectories_match,
 )
@@ -28,7 +28,7 @@ init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3)
 tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 def test_multiple_point_observations(model):
     """
     Tests if multiple PointObservation handlers can be composed.
@@ -61,7 +61,7 @@ def _get_compatible_observations(obs_handler, time, data):
         )
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
     "obs_handler", [PointObservation, NonInterruptingPointObservationArray]
 )
@@ -79,7 +79,7 @@ def test_log_prob_exists(model, obs_handler):
     assert isinstance(tr.trace.log_prob_sum(), torch.Tensor), "No log_prob found!"
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
     "obs_handler", [PointObservation, NonInterruptingPointObservationArray]
 )
@@ -128,7 +128,7 @@ def test_svi_composition_test_one(model, obs_handler):
         svi.step()
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     S_obs = torch.tensor([10.0, 5.0, 3.0])
     I_obs = torch.tensor([1.0, 4.0, 4.0])
@@ -163,7 +163,7 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     assert torch.isclose(tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum())
 
 
-@pytest.mark.parametrize("model", [SimpleSIRDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan])
 def test_point_observation_at_tspan_start_excepts(model, init_state, tspan):
@@ -250,7 +250,7 @@ def test_svi_composition_vectorized_obs(model):
 
 @pytest.mark.parametrize("use_event_loop", [True, False])
 def test_simulate_persistent_pyrosample(use_event_loop):
-    class RandBetaSimpleSIRDynamics(SimpleSIRDynamics):
+    class RandBetaUnifiedFixtureDynamics(UnifiedFixtureDynamics):
         @pyro.nn.PyroSample
         def beta(self):
             return pyro.distributions.Beta(1, 1)
@@ -259,7 +259,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
             super().diff(dX, X)
             assert torch.allclose(self.beta, self.beta)
 
-    model = RandBetaSimpleSIRDynamics()
+    model = RandBetaUnifiedFixtureDynamics()
 
     if not use_event_loop:
         result = simulate(model, init_state, tspan)
