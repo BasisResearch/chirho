@@ -7,11 +7,14 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop, simulate
+from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop, simulate, PointIntervention
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import SimpleSIRDynamics
+from chirho.dynamical.handlers import ODEDynamics
+
+from torch import tensor as tt
 
 logger = logging.getLogger(__name__)
 
@@ -317,3 +320,132 @@ def test_split_twinworld_dynamic_matches_output(
         assert torch.allclose(
             getattr(actual_factual, k), getattr(expected_factual, k), atol=1e-3, rtol=0
         ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+
+
+def test_grad_of_dynamic_intervention_event_f_params():
+    class Model(ODEDynamics):
+        def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+            dX.x = tt(1.0)
+            dX.z = X.dz
+            dX.dz = tt(0.0)  # also a constant, this gets set by interventions.
+            dX.param = tt(0.0)  # this is a constant event function parameter, so no change.
+
+    model = Model()
+    param = torch.nn.Parameter(tt(5.0))
+    # Param has to be part of the state in order to take gradients with respect to it.
+    s0 = State(x=tt(0.0), z=tt(0.0), dz=tt(0.0), param=param)
+
+    dynamic_intervention = DynamicIntervention(
+        event_f=lambda t, s: t - s.param,
+        intervention=State(dz=tt(1.0)),
+        var_order=s0.var_order,
+        max_applications=1
+    )
+
+    # noinspection DuplicatedCode
+    with SimulatorEventLoop():
+        with dynamic_intervention:
+            traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
+
+    dxdparam, = torch.autograd.grad(outputs=(traj.x[-1],), inputs=(param,), create_graph=True)
+    assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
+
+    # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
+    dzdparam, = torch.autograd.grad(outputs=(traj.z[-1],), inputs=(param,), create_graph=True)
+    assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
+
+
+@pytest.mark.skip(reason="TODO")
+def test_grad_of_point_intervention_params():
+    # TODO This, somewhat unsurprisingly, does not work with point interventions,
+    #  presumably because its treated as two completely separate simulations.
+    # Note: implementing this would require the boilerplate from the dynamic test above.
+
+    # point_intervention = PointIntervention(
+    #     intervention=State(dz=tt(1.0)),
+    #     time=param
+    # )
+    #
+    # # noinspection DuplicatedCode
+    # with SimulatorEventLoop():
+    #     with point_intervention:
+    #         traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
+    #
+    # dxdparam, = torch.autograd.grad(outputs=(traj.x[-1],), inputs=(param,), create_graph=True)
+    # assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
+    #
+    # # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
+    # dzdparam, = torch.autograd.grad(outputs=(traj.z[-1],), inputs=(param,), create_graph=True)
+    # assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
+
+    raise NotImplementedError()
+
+
+def test_grad_of_event_f_params_torchdiffeq_only():
+    # This tests functionality tests in test_grad_of_dynamic_intervention_event_f_params
+    # See "NOTE: parameters for the event function must be in the state itself to obtain gradients."
+    # In the torchdiffeq readme:
+    #  https://github.com/rtqichen/torchdiffeq/blob/master/README.md#differentiable-event-handling
+
+    import torchdiffeq
+
+    param = torch.nn.Parameter(tt(5.0))
+
+    dx = tt(1.0)
+    dz = tt(0.0)
+    dparam = tt(0.0)  # this is a constant event function parameter, so no change.
+    ds = (dx, dz, dparam)
+
+    t0 = tt(0.0)
+    x0, z0, param0 = tt(0.0), tt(0.0), param
+    s0 = (x0, z0, param0)  # x, z, param
+
+    t_at_split, s_at_split = torchdiffeq.odeint_event(
+        lambda t, s: ds,
+        s0, t0,
+        # Terminate when the final element of the state vector (the parameter) is equal to the time. i.e. terminate
+        #  at t=param.
+        event_fn=lambda t, s: t - s[-1])
+
+    assert torch.isclose(t_at_split, param)
+
+    x_at_split, z_at_split, param_at_split = tuple(v[-1] for v in s_at_split)
+    dxdparam, = torch.autograd.grad(outputs=(x_at_split,), inputs=(param,), create_graph=True)
+
+    assert torch.isreal(dxdparam)
+    assert torch.isclose(dxdparam, tt(1.0))
+
+    dz = tt(1.0)
+
+    t_at_end, s_at_end = torchdiffeq.odeint_event(
+        lambda t, s: (dx, dz, tt(0.0)),
+        (x_at_split, z_at_split, param_at_split), t_at_split,
+        event_fn=lambda t, s: t - tt(10.0)  # Terminate at a constant t=10.
+    )
+
+    x_at_end, z_at_end, param_at_end = tuple(v[-1] for v in s_at_end)
+    dxdparam, = torch.autograd.grad(outputs=(x_at_end,), inputs=(param,), create_graph=True)
+
+    assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
+
+    dzdparam, = torch.autograd.grad(outputs=(z_at_end,), inputs=(param,), create_graph=True)
+
+    assert torch.isclose(dzdparam, tt(-1.0))
+
+    # Run a second time without the event function, but with the t_at_end terminating the tspan.
+    s_at_end2 = torchdiffeq.odeint(
+        func=lambda t, s: (dx, dz, tt(0.0)),
+        y0=(x_at_split, z_at_split, param_at_split),
+        t=torch.cat((t_at_split[None], t_at_end[None])),
+        # t=torch.tensor((t_at_split[None], t_at_end[None])),  <-- This is what breaks the gradient propagation.
+    )
+
+    x_at_end2, z_at_end2, param_at_end2 = tuple(v[-1] for v in s_at_end2)
+
+    dxdparam2, = torch.autograd.grad(outputs=(x_at_end2,), inputs=(param,), create_graph=True)
+
+    assert torch.isclose(dxdparam, dxdparam2)
+
+    dzdparam2, = torch.autograd.grad(outputs=(z_at_end2,), inputs=(param,), create_graph=True)
+
+    assert torch.isclose(dzdparam, dzdparam2)

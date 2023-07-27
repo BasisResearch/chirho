@@ -255,7 +255,7 @@ def torchdiffeq_ode_simulate_to_interruption(
         triggered_events.append(next_static_interruption)
 
     # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
-    timespan_2nd_pass = torch.tensor([*timespan[timespan < event_time], event_time])
+    timespan_2nd_pass = torch.cat((timespan[timespan < event_time], event_time.unsqueeze(0)))
 
     # Execute a standard, non-event based simulation on the new timespan.
     trajectory = simulate(dynamics, start_state, timespan_2nd_pass, **kwargs)
@@ -438,8 +438,8 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             # Construct the next timespan so that we simulate from the prevous interruption time.
             # TODO AZ — we should be able to detect when this eps is too small, as it will repeatedly trigger
             #  the same event at the same time.
-            span_timespan = torch.tensor(
-                [end_time, *full_timespan[full_timespan > end_time]]
+            span_timespan = torch.cat(
+                (end_time.unsqueeze(0), full_timespan[full_timespan > end_time])
             )
 
             # Update the starting state.
