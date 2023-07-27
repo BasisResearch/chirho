@@ -2,19 +2,22 @@ import logging
 
 import pytest
 import torch
+from torch import tensor as tt
 
 from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop, simulate, PointIntervention
+from chirho.dynamical.handlers import (
+    DynamicIntervention,
+    ODEDynamics,
+    SimulatorEventLoop,
+    simulate,
+)
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
-
-from chirho.dynamical.handlers import ODEDynamics
-from torch import tensor as tt
 
 logger = logging.getLogger(__name__)
 
@@ -328,7 +331,9 @@ def test_grad_of_dynamic_intervention_event_f_params():
             dX.x = tt(1.0)
             dX.z = X.dz
             dX.dz = tt(0.0)  # also a constant, this gets set by interventions.
-            dX.param = tt(0.0)  # this is a constant event function parameter, so no change.
+            dX.param = tt(
+                0.0
+            )  # this is a constant event function parameter, so no change.
 
     model = Model()
     param = torch.nn.Parameter(tt(5.0))
@@ -339,7 +344,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
         event_f=lambda t, s: t - s.param,
         intervention=State(dz=tt(1.0)),
         var_order=s0.var_order,
-        max_applications=1
+        max_applications=1,
     )
 
     # noinspection DuplicatedCode
@@ -347,11 +352,15 @@ def test_grad_of_dynamic_intervention_event_f_params():
         with dynamic_intervention:
             traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
 
-    dxdparam, = torch.autograd.grad(outputs=(traj.x[-1],), inputs=(param,), create_graph=True)
+    (dxdparam,) = torch.autograd.grad(
+        outputs=(traj.x[-1],), inputs=(param,), create_graph=True
+    )
     assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
 
     # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
-    dzdparam, = torch.autograd.grad(outputs=(traj.z[-1],), inputs=(param,), create_graph=True)
+    (dzdparam,) = torch.autograd.grad(
+        outputs=(traj.z[-1],), inputs=(param,), create_graph=True
+    )
     assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
 
 
@@ -402,15 +411,19 @@ def test_grad_of_event_f_params_torchdiffeq_only():
 
     t_at_split, s_at_split = torchdiffeq.odeint_event(
         lambda t, s: ds,
-        s0, t0,
+        s0,
+        t0,
         # Terminate when the final element of the state vector (the parameter) is equal to the time. i.e. terminate
         #  at t=param.
-        event_fn=lambda t, s: t - s[-1])
+        event_fn=lambda t, s: t - s[-1],
+    )
 
     assert torch.isclose(t_at_split, param)
 
     x_at_split, z_at_split, param_at_split = tuple(v[-1] for v in s_at_split)
-    dxdparam, = torch.autograd.grad(outputs=(x_at_split,), inputs=(param,), create_graph=True)
+    (dxdparam,) = torch.autograd.grad(
+        outputs=(x_at_split,), inputs=(param,), create_graph=True
+    )
 
     assert torch.isreal(dxdparam)
     assert torch.isclose(dxdparam, tt(1.0))
@@ -419,16 +432,21 @@ def test_grad_of_event_f_params_torchdiffeq_only():
 
     t_at_end, s_at_end = torchdiffeq.odeint_event(
         lambda t, s: (dx, dz, tt(0.0)),
-        (x_at_split, z_at_split, param_at_split), t_at_split,
-        event_fn=lambda t, s: t - tt(10.0)  # Terminate at a constant t=10.
+        (x_at_split, z_at_split, param_at_split),
+        t_at_split,
+        event_fn=lambda t, s: t - tt(10.0),  # Terminate at a constant t=10.
     )
 
     x_at_end, z_at_end, param_at_end = tuple(v[-1] for v in s_at_end)
-    dxdparam, = torch.autograd.grad(outputs=(x_at_end,), inputs=(param,), create_graph=True)
+    (dxdparam,) = torch.autograd.grad(
+        outputs=(x_at_end,), inputs=(param,), create_graph=True
+    )
 
     assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
 
-    dzdparam, = torch.autograd.grad(outputs=(z_at_end,), inputs=(param,), create_graph=True)
+    (dzdparam,) = torch.autograd.grad(
+        outputs=(z_at_end,), inputs=(param,), create_graph=True
+    )
 
     assert torch.isclose(dzdparam, tt(-1.0))
 
@@ -442,10 +460,14 @@ def test_grad_of_event_f_params_torchdiffeq_only():
 
     x_at_end2, z_at_end2, param_at_end2 = tuple(v[-1] for v in s_at_end2)
 
-    dxdparam2, = torch.autograd.grad(outputs=(x_at_end2,), inputs=(param,), create_graph=True)
+    (dxdparam2,) = torch.autograd.grad(
+        outputs=(x_at_end2,), inputs=(param,), create_graph=True
+    )
 
     assert torch.isclose(dxdparam, dxdparam2)
 
-    dzdparam2, = torch.autograd.grad(outputs=(z_at_end2,), inputs=(param,), create_graph=True)
+    (dzdparam2,) = torch.autograd.grad(
+        outputs=(z_at_end2,), inputs=(param,), create_graph=True
+    )
 
     assert torch.isclose(dzdparam, dzdparam2)
