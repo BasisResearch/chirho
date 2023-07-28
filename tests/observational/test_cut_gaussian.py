@@ -4,11 +4,13 @@ import pyro
 import pyro.distributions as dist
 import pyro.infer.reparam
 import torch
-from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.observational.handlers.soft_conditioning import IndexCutModule
+
+pyro.settings.set(module_local_params=True)
+
 
 # Simulated data configuration
 TRUE_ETA = torch.tensor(2.0)
@@ -42,17 +44,20 @@ def make_cut_index_model(model, module_one_vars, *args, **kwargs):
     return cut_index_model
 
 
-def run_svi_inference(model, n_steps=100, verbose=True, **model_kwargs):
+def run_svi_inference(model, n_steps=1000, verbose=True, lr=0.03, **model_kwargs):
     guide = AutoMultivariateNormal(model)
-    adam = pyro.optim.Adam({"lr": 0.03})
-    svi = SVI(model, guide, adam, loss=Trace_ELBO())
+    elbo = pyro.infer.Trace_ELBO()(model, guide)
+    # initialize parameters
+    elbo(**model_kwargs)
+    adam = torch.optim.Adam(elbo.parameters(), lr=lr)
     # Do gradient steps
-    pyro.clear_param_store()
     for step in range(1, n_steps + 1):
-        loss = svi.step(**model_kwargs)
+        adam.zero_grad()
+        loss = elbo(**model_kwargs)
+        loss.backward()
+        adam.step()
         if (step % 250 == 0) or (step == 1) & verbose:
             print("[iteration %04d] loss: %.4f" % (step, loss))
-
     return guide
 
 
@@ -78,6 +83,15 @@ def analytical_linear_gaussian_cut_posterior(data):
 
 
 def _test_linear_gaussian_inference():
+    """
+    This test compares the cut posterior to the true cut posterior from
+    analytical calculations for the linear Gaussian case.
+    This test is not run in our testing suite because
+    the results can vary substantially due to non-deterministic behavior
+    and challenges with optimization when using SVI for inference. Nevertheless,
+    this test prints out the differences between the approximate cut posterior
+    using `IndexCutModule` and the true cut posterior.
+    """
     data = observation_model(TRUE_ETA, TRUE_THETA)
 
     conditioned_model = pyro.condition(linear_gaussian_model, data=data)
