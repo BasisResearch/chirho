@@ -120,10 +120,19 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor],
         device: torch.device = torch.device("cpu"),
+        name: Optional[str] = None,
     ) -> torch.Tensor:
         raise NotImplementedError
 
     def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+
         device = get_sample_msg_device(msg["fn"], msg["value"])
         mask = self.get_mask(msg["fn"], msg["value"], device=device)
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
+
+        # expand distribution to make sure two copies of a variable are sampled
+        msg["fn"] = msg["fn"].expand(
+            torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
+        )

@@ -1,9 +1,9 @@
-from typing import Any, Dict, Set, TypeVar
+from typing import Any, Dict, Optional, Set, TypeVar
 
 import pyro
 import torch
 
-from chirho.indexed.handlers import add_indices
+from chirho.indexed.handlers import DependentMaskMessenger, add_indices
 from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
 
 T = TypeVar("T")
@@ -60,9 +60,7 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
             ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
 
 
-class SingleStageCut(
-    pyro.poutine.messenger.Messenger
-):  # TODO subclass DependentMaskMessenger
+class SingleStageCut(DependentMaskMessenger):
     """
     Represent module and complement in a single Pyro model using plates
     """
@@ -79,19 +77,15 @@ class SingleStageCut(
         add_indices(IndexSet(**{self.name: {0, 1}}))
         return super().__enter__()
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
-        if pyro.poutine.util.site_is_subsample(msg):
-            return
-        # TODO inherit this logic from indexed.handlers.DependentMaskMessenger
-        # use mask to remove the contribution of this observed site to the model log-joint
-
-        cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
-        mask = indexset_as_mask(cut_index)  # TODO device
-        msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
-
-        # expand distribution to make sure two copies of a variable are sampled
-        msg["fn"] = msg["fn"].expand(
-            torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
+    def get_mask(
+        self,
+        dist: pyro.distributions.Distribution,
+        value: Optional[torch.Tensor],
+        device: torch.device = torch.device("cpu"),
+        name: Optional[str] = None,
+    ) -> torch.Tensor:
+        return indexset_as_mask(
+            IndexSet(**{self.name: {0 if name in self.vars else 1}})
         )
 
     def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
