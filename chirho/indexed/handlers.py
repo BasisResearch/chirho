@@ -129,7 +129,8 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
             return
 
         device = get_sample_msg_device(msg["fn"], msg["value"])
-        mask = self.get_mask(msg["fn"], msg["value"], device=device)
+        name = msg["name"] if "name" in msg else None
+        mask = self.get_mask(msg["fn"], msg["value"], device=device, name=name)
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
 
         # expand distribution to make sure two copies of a variable are sampled
