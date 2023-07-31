@@ -3,6 +3,7 @@ import operator
 from typing import (
     Any,
     Callable,
+    Dict,
     Literal,
     Optional,
     Protocol,
@@ -216,7 +217,7 @@ class CutModule(pyro.poutine.messenger.Messenger):
         self.vars = vars
         super().__init__()
 
-    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         # There are 4 cases to consider for a sample site:
         # 1. The site appears in self.vars and is observed
         # 2. The site appears in self.vars and is not observed
@@ -243,7 +244,7 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
         self.vars = vars
         super().__init__()
 
-    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         # There are 4 cases to consider for a sample site:
         # 1. The site appears in self.vars and is observed
         # 2. The site appears in self.vars and is not observed
@@ -255,7 +256,7 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
                 msg["mask"] if msg["mask"] is not None else True
             ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
 
-    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
         if msg["name"] in self.vars:
             assert msg["is_observed"]
 
@@ -286,7 +287,7 @@ class IndexCutModule(
         add_indices(IndexSet(**{self.name: {0, 1}}))
         return super().__enter__()
 
-    def _pyro_sample(self, msg: dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
         # There are 4 cases to consider for a sample site:
@@ -307,7 +308,7 @@ class IndexCutModule(
             torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
         )
 
-    def _pyro_post_sample(self, msg: dict[str, Any]) -> None:
+    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
 
