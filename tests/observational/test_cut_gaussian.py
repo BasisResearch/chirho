@@ -7,7 +7,7 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.handlers.soft_conditioning import IndexCutModule
+from chirho.observational.handlers.cut import SingleStageCut
 
 pyro.settings.set(module_local_params=True)
 
@@ -38,7 +38,7 @@ def linear_gaussian_model():
 
 def make_cut_index_model(model, module_one_vars, *args, **kwargs):
     def cut_index_model():
-        with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
+        with IndexPlatesMessenger(), SingleStageCut(module_one_vars):
             model(*args, **kwargs)
 
     return cut_index_model
@@ -90,7 +90,7 @@ def _test_linear_gaussian_inference():
     the results can vary substantially due to non-deterministic behavior
     and challenges with optimization when using SVI for inference. Nevertheless,
     this test prints out the differences between the approximate cut posterior
-    using `IndexCutModule` and the true cut posterior.
+    using `SingleStageCut` and the true cut posterior.
     """
     data = observation_model(TRUE_ETA, TRUE_THETA)
 

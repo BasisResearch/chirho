@@ -6,7 +6,11 @@ import pyro.infer.reparam
 import torch
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.handlers.soft_conditioning import IndexCutModule, cut
+from chirho.observational.handlers.cut import (
+    CutComplementModule,
+    CutModule,
+    SingleStageCut,
+)
 
 # Observed data assumed in the closed-form posterior expressions
 BERN_DATA = {"z": torch.tensor(1.0), "w": torch.tensor(1.0)}
@@ -63,7 +67,7 @@ def linear_gaussian_model(N1=10, N2=10, sigma1=1.0, sigma2=1.0):
 def test_cut_module_raises_assertion_error():
     conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
     module_one_vars = ["eta", "w"]
-    module_one, module_two = cut(conditioned_model, vars=module_one_vars)
+    module_two = CutComplementModule(module_one_vars)(conditioned_model)
     try:
         pyro.infer.infer_discrete(module_two, first_available_dim=-2)
         assert (
@@ -77,21 +81,22 @@ def test_plate_cut_module_runs():
     # Runs for discrete model
     conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
     module_one_vars = ["eta", "w"]
-    with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
+    with IndexPlatesMessenger(), SingleStageCut(module_one_vars):
         conditioned_model()
 
     # Runs for continous model
     data = linear_gaussian_model()
     conditioned_model = pyro.condition(linear_gaussian_model, data=data)
     module_one_vars = ["eta", "w"]
-    with IndexPlatesMessenger(), IndexCutModule(module_one_vars):
+    with IndexPlatesMessenger(), SingleStageCut(module_one_vars):
         conditioned_model()
 
 
 def test_cut_module_discrete():
     conditioned_model = pyro.condition(bern_model, data=BERN_DATA)
     module_one_vars = ["eta", "w"]
-    module_one, module_two = cut(conditioned_model, vars=module_one_vars)
+    module_one = CutModule(module_one_vars)(conditioned_model)
+    module_two = CutComplementModule(module_one_vars)(conditioned_model)
     module_one_post = pyro.infer.infer_discrete(module_one, first_available_dim=-2)
     module_one_samples = []
 
@@ -135,7 +140,7 @@ def test_cut_module_discrete():
 
 def test_correctly_duplicates_module_one_vars():
     def dummy_model():
-        with IndexPlatesMessenger(), IndexCutModule(["x"]):
+        with IndexPlatesMessenger(), SingleStageCut(["x"]):
             return pyro.sample("x", dist.Normal(0.0, 1.0))
 
     x = dummy_model()
@@ -157,7 +162,7 @@ def test_correctly_duplicates_module_one_vars():
     # TODO: ask Eli if the test below should fail based on trace implementation. If not, then
     # the lines below should be uncommented.
     # with pyro.poutine.trace() as tr:
-    #     with IndexPlatesMessenger(), IndexCutModule(["x"]):
+    #     with IndexPlatesMessenger(), SingleStageCut(["x"]):
     #         pyro.sample("x", dist.Normal(0.0, 1.0))
 
     # assert tr.trace.nodes["x"]["value"][0] == tr.trace.nodes["x"]["value"][1]
