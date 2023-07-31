@@ -158,11 +158,10 @@ def test_correctly_duplicates_module_one_vars():
     assert replayed_model_x[0].squeeze() == dummy_guide_x[0].squeeze()
     assert replayed_model_x[1].squeeze() == dummy_guide_x[0].squeeze()
 
-    # Check composability with trace
-    # TODO: ask Eli if the test below should fail based on trace implementation. If not, then
-    # the lines below should be uncommented.
-    # with pyro.poutine.trace() as tr:
-    #     with IndexPlatesMessenger(), SingleStageCut(["x"]):
-    #         pyro.sample("x", dist.Normal(0.0, 1.0))
+    with IndexPlatesMessenger(), SingleStageCut(["x", "x2"]):
+        x2 = pyro.sample("x2", dist.Normal(0.0, 1.0))
+        with pyro.poutine.trace() as tr:
+            pyro.sample("x", dist.Normal(0.0, 1.0))
 
-    # assert tr.trace.nodes["x"]["value"][0] == tr.trace.nodes["x"]["value"][1]
+        assert x2[0] == x2[1]
+        assert tr.trace.nodes["x"]["value"][0] == tr.trace.nodes["x"]["value"][1]
