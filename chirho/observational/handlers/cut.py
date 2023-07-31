@@ -107,3 +107,58 @@ class SingleStageCut(DependentMaskMessenger):
                 },
                 event_dim=msg["fn"].event_dim,
             )
+
+
+class SingleStageCutOld(
+    pyro.poutine.messenger.Messenger
+):  # TODO subclass DependentMaskMessenger
+    """
+    Represent module and complement in a single Pyro model using plates
+    """
+
+    vars: Set[str]
+    name: str
+
+    def __init__(self, vars: Set[str], *, name: str = "__cut_plate"):
+        self.vars = vars
+        self.name = name
+        super().__init__()
+
+    def __enter__(self):
+        add_indices(IndexSet(**{self.name: {0, 1}}))
+        return super().__enter__()
+
+    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+        # TODO inherit this logic from indexed.handlers.DependentMaskMessenger
+        # use mask to remove the contribution of this observed site to the model log-joint
+
+        cut_index = IndexSet(**{self.name: {0 if msg["name"] in self.vars else 1}})
+        mask = indexset_as_mask(cut_index)  # TODO device
+        msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
+
+        # expand distribution to make sure two copies of a variable are sampled
+        msg["fn"] = msg["fn"].expand(
+            torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
+        )
+
+    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+        if pyro.poutine.util.site_is_subsample(msg):
+            return
+
+        if (not msg["is_observed"]) and (msg["name"] in self.vars):
+            # discard the second value
+            value_one = gather(
+                msg["value"],
+                IndexSet(**{self.name: {0}}),
+                event_dim=msg["fn"].event_dim,
+            )
+
+            msg["value"] = scatter(
+                {
+                    IndexSet(**{self.name: {0}}): value_one,
+                    IndexSet(**{self.name: {1}}): value_one.detach(),
+                },
+                event_dim=msg["fn"].event_dim,
+            )

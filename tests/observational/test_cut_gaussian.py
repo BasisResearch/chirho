@@ -7,7 +7,7 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.handlers.cut import SingleStageCut
+from chirho.observational.handlers.cut import SingleStageCut, SingleStageCutOld
 
 pyro.settings.set(module_local_params=True)
 
@@ -36,9 +36,9 @@ def linear_gaussian_model():
     return observation_model(eta, theta)
 
 
-def make_cut_index_model(model, module_one_vars, *args, **kwargs):
+def make_cut_index_model(model, module_one_vars, cut=SingleStageCut, *args, **kwargs):
     def cut_index_model():
-        with IndexPlatesMessenger(), SingleStageCut(module_one_vars):
+        with IndexPlatesMessenger(), cut(module_one_vars):
             model(*args, **kwargs)
 
     return cut_index_model
@@ -123,8 +123,8 @@ def _test_linear_gaussian_inference():
 
     # Formula here (assume mu_0=0 and tau_0=1 in the formula below):
     # https://stephens999.github.io/fiveMinuteStats/shiny_normal_example.html
-    cut_theta_mean = cut_theta_samps.mean()
 
+    cut_theta_mean = cut_theta_samps.mean()
     print("Cut eta mean: ", pr_eta_cut.loc.item())
     print("Cut eta estimate: ", guide_cut_eta.item())
     print("p(eta | z) estimate: ", guide_approx_post_cut_eta.item())
@@ -133,3 +133,47 @@ def _test_linear_gaussian_inference():
     print("Cut theta mean: ", cut_theta_mean.item())
     print("Cut theta estimate: ", guide_cut_theta.item())
     print("Posterior theta estimate: ", guide_vanilla_post_theta.item())
+
+
+def test_stage_mean_diffs():
+    data = observation_model(TRUE_ETA, TRUE_THETA)
+    conditioned_model = pyro.condition(linear_gaussian_model, data=data)
+    module_one_vars = ["eta", "w"]
+    cut_methods = [SingleStageCutOld, SingleStageCut]
+    eta_errors = []
+    theta_errors = []
+    for cut_method in cut_methods:
+        eta_errors_method = []
+        theta_errors_method = []
+        for _ in range(25):
+            cut_model = make_cut_index_model(
+                conditioned_model, module_one_vars, cut_method
+            )
+            guide_cut = run_svi_inference(cut_model, n_steps=1500)
+            guide_cut_eta = guide_cut.median()["eta"].squeeze()[0]
+
+            # theta estimates
+            guide_cut_theta = guide_cut.median()["theta"].squeeze()[1]
+            (
+                pr_eta_cut,
+                pr_theta_cut_cond_eta,
+            ) = analytical_linear_gaussian_cut_posterior(data)
+            cut_eta_samps = pr_eta_cut.sample((1000,))
+            cut_theta_samps = []
+            for eta_samp in cut_eta_samps:
+                cut_theta_samps.append(pr_theta_cut_cond_eta(eta_samp)())
+            cut_theta_samps = torch.tensor(cut_theta_samps).mean()
+            cut_theta_mean = cut_theta_samps.mean()
+            eta_errors_method.append(abs(pr_eta_cut.loc.item() - guide_cut_eta.item()))
+            theta_errors_method.append(
+                abs(cut_theta_mean.item() - guide_cut_theta.item())
+            )
+        eta_errors.append(eta_errors_method)
+        theta_errors.append(theta_errors_method)
+
+    import pdb
+
+    pdb.set_trace()
+
+    torch.tensor(eta_errors).mean()
+    torch.tensor(theta_errors).mean()
