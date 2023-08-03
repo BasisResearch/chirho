@@ -14,7 +14,9 @@ from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
+from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import SelectFactual
+from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
@@ -637,3 +639,57 @@ def test_cf_infer_discrete_mediation(cf_dim):
 
     assert torch.any(tr.nodes["z"]["value"] > 0)
     assert torch.any(tr.nodes["z"]["value"] < 1)
+
+
+def test_preempt_op_singleworld():
+    @SingleWorldCounterfactual()
+    @pyro.plate("data", size=1000, dim=-1)
+    def model():
+        x = pyro.sample("x", dist.Bernoulli(0.67))
+        x = pyro.deterministic(
+            "x_", split(x, (torch.tensor(0.0),), name="x", event_dim=0), event_dim=0
+        )
+        y = pyro.sample("y", dist.Bernoulli(0.67))
+        y_case = torch.tensor(1)
+        y = pyro.deterministic(
+            "y_",
+            preempt(y, (torch.tensor(1.0),), y_case, name="__y", event_dim=0),
+            event_dim=0,
+        )
+        z = pyro.sample("z", dist.Bernoulli(0.67))
+        return dict(x=x, y=y, z=z)
+
+    tr = pyro.poutine.trace(model).get_trace()
+    assert torch.all(tr.nodes["x_"]["value"] == 0.0)
+    assert torch.all(tr.nodes["y_"]["value"] == 1.0)
+
+
+@pytest.mark.parametrize("cf_dim", [-2, -3, None])
+def test_cf_handler_preemptions(cf_dim):
+    splits = {"x": torch.tensor(0.0)}
+    preemptions = {"y": torch.tensor(1.0)}
+
+    @do(actions=splits)
+    @Preemptions(actions=preemptions)
+    @pyro.plate("data", size=1000, dim=-1)
+    @pyro.infer.config_enumerate
+    def model():
+        w = pyro.sample("w", dist.Bernoulli(0.67))
+
+        p_x = torch.tensor([0.53, 0.43])
+        p_x_w = pyro.ops.indexing.Vindex(p_x)[..., w.long()]
+        x = pyro.sample("x", dist.Bernoulli(p_x_w))
+
+        p_y = torch.tensor([0.92, 0.23])
+        p_y_w = pyro.ops.indexing.Vindex(p_y)[..., w.long()]
+        y = pyro.sample("y", dist.Bernoulli(p_y_w))
+
+        p_z = torch.tensor([[0.3, 0.4], [0.8, 0.1]])
+        p_z_xy = pyro.ops.indexing.Vindex(p_z)[x.long(), y.long()]
+        z = pyro.sample("z", dist.Bernoulli(p_z_xy))
+        return dict(x=x, y=y, z=z)
+
+    with MultiWorldCounterfactual(cf_dim):
+        tr = pyro.poutine.trace(model).get_trace()
+        assert indices_of(tr.nodes["z"]["value"], event_dim=0) == IndexSet(x={0, 1})
+        assert indices_of(tr.nodes["y"]["value"], event_dim=0) == IndexSet()

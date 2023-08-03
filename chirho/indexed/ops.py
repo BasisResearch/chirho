@@ -303,8 +303,11 @@ def _cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs
     assert all(isinstance(k, IndexSet) for k in values.keys())
     result: Optional[T] = None
     for indices, value in values.items():
-        tst = functools.reduce(
-            operator.or_, [case == index for index in next(iter(indices.values()))]
+        tst = torch.as_tensor(
+            functools.reduce(
+                operator.or_, [case == index for index in next(iter(indices.values()))]
+            ),
+            dtype=torch.bool,
         )
         result = cond(result if result is not None else value, value, tst, **kwargs)
     return result
