@@ -83,6 +83,9 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
 
 
 class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
+    """
+    A messenger that preempts values in a probabilistic program.
+    """
     actions: Mapping[str, Intervention[T]]
 
     def __init__(self, actions: Mapping[str, Intervention[T]]):
