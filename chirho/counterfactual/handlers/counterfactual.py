@@ -83,9 +83,9 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
 
 
 class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
-    actions: Mapping[Hashable, Intervention[T]]
+    actions: Mapping[str, Intervention[T]]
 
-    def __init__(self, actions: Mapping[Hashable, Intervention[T]]):
+    def __init__(self, actions: Mapping[str, Intervention[T]]):
         self.actions = actions
         super().__init__()
 
