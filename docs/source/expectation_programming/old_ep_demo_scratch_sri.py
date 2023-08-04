@@ -605,17 +605,17 @@ if __name__ == '__main__':
 
     # plot_basic()
 
-    plot_cost_vs_parameter('lockdown_strength')
-    plot_cost_vs_parameter('lockdown_trigger')
-    plot_cost_vs_parameter('lockdown_lift_trigger')
+    # plot_cost_vs_parameter('lockdown_strength')
+    # plot_cost_vs_parameter('lockdown_trigger')
+    # plot_cost_vs_parameter('lockdown_lift_trigger')
     # plot_cost_vs_parameters('lockdown_strength', 'lockdown_trigger')
     # plot_cost_vs_parameters('lockdown_strength', 'lockdown_lift_trigger')
     # plot_cost_vs_parameters('lockdown_trigger', 'lockdown_lift_trigger')
 
-    # optimize_decision_2d_latent(constraint_type=ConstraintType.MEAN)
+    optimize_decision_2d_latent(constraint_type=ConstraintType.MEAN)
     # plot_basic(OrderedDict(lockdown_strength=tt(.663)))
 
     # _grad_debugging()
 
     # plot_cost_likelihood_convolution_for_stochastics(
-    #     'beta', 'gamma', pyro_prior_over_sirlo_params_2d, f_=stor.build_expectigrand_gradient(DDP, f))
+    #     'beta', 'gamma', pyro_prior_over_sirlo_params_2d, f_=stor.build_expectigrand_gradient(DDP, f_combined))
