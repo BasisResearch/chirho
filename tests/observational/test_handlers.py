@@ -18,6 +18,8 @@ from chirho.observational.handlers.soft_conditioning import (
     SoftEqKernel,
 )
 
+pyro.settings.set(module_local_params=True)
+
 logger = logging.getLogger(__name__)
 
 
@@ -177,29 +179,29 @@ def test_soft_conditioning_counterfactual_continuous_1(
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-def hmm_model(data):
-    transition_probs = pyro.param(
-        "transition_probs",
-        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
-        constraint=dist.constraints.simplex,
-    )
-    emission_probs = pyro.sample(
-        "emission_probs",
-        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
-    )
-    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
-    logger.debug(f"-1\t{tuple(x.shape)}")
-    for t, y in pyro.markov(enumerate(data)):
-        x = pyro.sample(
-            f"x_{t}",
-            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
-        )
+class HMM(pyro.nn.PyroModule):
+    @pyro.nn.PyroParam(constraint=dist.constraints.simplex)
+    def trans_probs(self):
+        return torch.tensor([[0.75, 0.25], [0.25, 0.75]])
 
-        pyro.sample(
-            f"y_{t}",
-            dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+    def forward(self, data):
+        emission_probs = pyro.sample(
+            "emission_probs",
+            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
         )
-        logger.debug(f"{t}\t{tuple(x.shape)}")
+        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+        logger.debug(f"-1\t{tuple(x.shape)}")
+        for t, y in pyro.markov(enumerate(data)):
+            x = pyro.sample(
+                f"x_{t}",
+                dist.Categorical(pyro.ops.indexing.Vindex(self.trans_probs)[..., x, :]),
+            )
+
+            pyro.sample(
+                f"y_{t}",
+                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+            )
+            logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
 @pytest.mark.parametrize("num_particles", [1, 10])
@@ -211,6 +213,7 @@ def test_smoke_condition_enumerate_hmm_elbo(
     num_steps, Elbo, use_guide, max_plate_nesting, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     assert issubclass(Elbo, pyro.infer.elbo.ELBO)
     elbo = Elbo(
