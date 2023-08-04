@@ -1,4 +1,4 @@
-from typing import Any, Dict, Generic, Hashable, Mapping, Optional, TypeVar
+from typing import Any, Dict, Generic, Mapping, TypeVar
 
 import pyro
 import torch
@@ -84,8 +84,24 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
 
 class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     """
-    A messenger that preempts values in a probabilistic program.
+    Effect handler that applies the operation :func:`~chirho.counterfactual.ops.preempt`
+    to sample sites in a probabilistic program,
+    similar to the handler :func:`~chirho.observational.handlers.condition`
+    for :func:`~chirho.observational.ops.observe` .
+    or the handler :func:`~chirho.interventional.handlers.do`
+    for :func:`~chirho.interventional.ops.intervene` .
+
+    See the documentation for :func:`~chirho.counterfactual.ops.preempt` for more details.
+
+    .. note:: This handler does not allow the direct specification of the ``case`` argument
+        to :func:`~chirho.counterfactual.ops.preempt` and therefore cannot be used alone.
+        Instead, the ``case`` argument to :func:`preempt` is assumed to be set separately
+        by :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger`
+        or one of its subclasses, typically from an auxiliary discrete random variable.
+
+    :param actions: A mapping from sample site names to interventions.
     """
+
     actions: Mapping[str, Intervention[T]]
 
     def __init__(self, actions: Mapping[str, Intervention[T]]):

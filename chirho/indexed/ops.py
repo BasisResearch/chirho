@@ -266,7 +266,7 @@ def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwarg
 
 
 @functools.singledispatch
-def cond(fst, snd: T, case, **kwargs):
+def cond(fst, snd, case: Optional[T] = None, **kwargs):
     """
     Selection operation that is the sum-type analogue of :func:`scatter`
     in the sense that where :func:`scatter` propagates both of its arguments,
