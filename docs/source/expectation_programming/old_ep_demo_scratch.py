@@ -584,17 +584,9 @@ class ConstraintHandler(pyro.poutine.messenger.Messenger):
 
 class MeanConstraintHandler(ConstraintHandler):
 
-    def __init__(self, *args, grad_expectation_handler: ExpectationHandler,
-                 expectation_handler: ExpectationHandler, **kwargs):
-
-        self.grad_expectation_handler = grad_expectation_handler
-        self.expectation_handler = expectation_handler
+    def __init__(self, *args, **kwargs):
 
         super().__init__(*args, **kwargs)
-
-    def _pyro_optimize_proposal(self, msg) -> None:
-        self.grad_expectation_handler.optimize_proposal(*msg["args"], **msg["kwargs"])
-        self.expectation_handler.optimize_proposal(*msg["args"], **msg["kwargs"])
 
     def _pyro_post_build_expectigrand_gradient(self, msg) -> None:
         kwargs = msg_args_kwargs_to_kwargs(msg)
