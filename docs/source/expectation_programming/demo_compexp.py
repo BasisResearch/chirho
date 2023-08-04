@@ -18,6 +18,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import chirho.contrib.compexp as compexp
 
+import old_ep_demo_scratch as stor
+
 pyro.settings.set(module_local_params=True)
 
 
