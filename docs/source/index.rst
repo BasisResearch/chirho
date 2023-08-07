@@ -27,6 +27,8 @@ Table of Contents
    deepscm
    slc
    mediation
+   sdid
+   dr_learner
 
 .. toctree::
    :maxdepth: 2
