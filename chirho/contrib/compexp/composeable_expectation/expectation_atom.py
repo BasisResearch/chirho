@@ -30,6 +30,9 @@ class ExpectationAtom(ComposedExpectation):
     def recursively_refresh_parts(self):
         self.parts = [self]
 
+    def __repr__(self):
+        return f"{self.name}"
+
     def __call__(self, p: ModelType) -> TT:
         """
         Overrides the non-atomic call to actually estimate the value of this expectation atom.
@@ -41,6 +44,10 @@ class ExpectationAtom(ComposedExpectation):
         return ret
 
     def build_pseudo_density(self, p: ModelType) -> ModelType:
+        """
+        Define a pseudo-density curve that convolutes the passed model p with the stochastic function
+         of interest for this atom.
+        """
 
         if not self._is_positive_everywhere:
             raise NotImplementedError("Non positive pseudo-density construction is not supported. "
@@ -82,6 +89,8 @@ class ExpectationAtom(ComposedExpectation):
         return ret
 
     def swap_self_for_other_child(self, other):
+        # TODO move this to the parent class ComposedExpectation? Even though we primarily use it for atoms.
+        # TODO also use this method in the grad function where this got copy/pasted from.
         for parent in self.parents:
             positions_as_child = [i for i, child in enumerate(parent.children) if child is self]
             assert len(positions_as_child) >= 1, "This shouldn't be possible." \
@@ -91,3 +100,73 @@ class ExpectationAtom(ComposedExpectation):
                 parent.children[pac] = other
                 other.parents.append(parent)
         self.parents = []
+
+    def _build_grad_f(self, params: TT, pi: int) -> StochasticFunction:
+
+        def grad_f(stochastics: KWType) -> TT:
+            y: TT = self.f(stochastics)
+
+            if y.ndim != 0:
+                raise ValueError(f"To take gradients, argument f to {ExpectationAtom.__name__} with name {self.name} "
+                                 f"must return a scalar, but got output of shape {y.shape} instead.")
+
+            df, = torch.autograd.grad(
+                outputs=y,
+                # Note 2j0s81 have to differentiate wrt whole tensor, cz indexing breaks grad apparently...
+                inputs=params,
+                retain_graph=True,
+                allow_unused=True
+            )[pi]  # Note 2j0s81
+            if df is None:
+                # df = tt(0.)
+                raise ValueError(f"Gradient of expectation atom named {self.name} is None. "
+                                 f"If this is desired, set require_grad=False on the atom or its parents.")
+            return df
+
+        return grad_f
+
+    def grad(self, params: TT, split_atoms=False) -> ComposedExpectation:
+        """
+        Build a new, composite expectation concatenating expected gradients for each parameter in params.
+        """
+
+        cegrad = self._get_grad0_if_grad0()
+        if cegrad is not None:
+            return cegrad
+
+        self._check_params(params)
+
+        assert len(self.parts) == 1 and self.parts[0] is self, "Internal Error: Atomic expectation definition violated?"
+
+        sub_atoms = []
+
+        for pi, _ in enumerate(params):
+
+            # Create a new atom just for this element of the gradient vector.
+            ea = ExpectationAtom(
+                f=self._build_grad_f(params, pi),
+                name=f"d{self.name}_dp{pi}",
+                log_fac_eps=self.log_fac_eps,
+                # TODO seed a new guide with the registered guide if present?
+            )
+
+            if split_atoms:
+                ea = ea.split_into_positive_components()
+
+            sub_atoms.append(ea)
+
+        def stack(*v):  # defining with name strictly for __repr__
+            return torch.stack(v, dim=0)
+
+        # Create composite that concatenates the sub-atoms into one tensor.
+        sub_atom_composite = ComposedExpectation(
+            children=sub_atoms,
+            op=stack,
+            # Note bm72gdi1: This will be updated before the return of this function.
+            parts=[]
+        )
+
+        # Note bm72gdi1
+        sub_atom_composite.recursively_refresh_parts()
+
+        return sub_atom_composite

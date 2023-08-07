@@ -1,7 +1,7 @@
-from typing import Callable, List, TYPE_CHECKING
+from typing import Callable, List, TYPE_CHECKING, Optional
 from ..typedecs import ModelType
 import torch
-from torch import Tensor as TT
+from torch import Tensor as TT, tensor as tt
 if TYPE_CHECKING:
     from .expectation_atom import ExpectationAtom
 
@@ -11,7 +11,8 @@ class ComposedExpectation:
             self,
             children: List["ComposedExpectation"],
             op: Callable[[TT, ...], TT],
-            parts: List["ExpectationAtom"]
+            parts: List["ExpectationAtom"],
+            requires_grad=True
     ):
         self.op = op
         self.children = children
@@ -19,6 +20,9 @@ class ComposedExpectation:
         self.parts = parts
 
         self._normalization_constant_cancels = False
+
+        self.requires_grad = requires_grad
+        self._const: Optional[TT] = None
 
     def recursively_refresh_parts(self):
         self.parts = None
@@ -39,6 +43,95 @@ class ComposedExpectation:
         other.parents.append(ce)
         return ce
 
+    def __op_self(self, op) -> "ComposedExpectation":
+        ce = ComposedExpectation(
+            children=[self],
+            op=op,
+            parts=self.parts)
+        self.parents.append(ce)
+        return ce
+
+    def _get_grad0_if_grad0(self) -> Optional["ComposedExpectation"]:
+
+        ce = None
+
+        def noop(*v):
+            raise NotImplementedError()
+
+        if (not self.requires_grad) or (self._const is not None):
+            # We use a composed expectation here because a constant doesn't need
+            #  the machinery built around the proposal distributions.
+            ce = ComposedExpectation(
+                children=[],
+                op=noop,
+                parts=[],
+                requires_grad=False)
+            # This will prevent any children from being evaluated when the call occurs.
+            ce._const = tt(0.0)
+
+        return ce
+
+    def _check_params(self, params: TT):
+        if params.ndim != 1:
+            raise NotImplementedError("Differentiating with respect to params of ndim != 1 is not yet supported.")
+
+        if not len(params) >= 1:
+            raise ValueError(f"{self.grad.__name__} requires at least one parameter to differentiate wrt, "
+                             f"but got an empty parameter vector.")
+
+    def __getitem__(self, item: str):
+        # TODO hash this.
+        for part in self.parts:
+            if part.name == item:
+                return part
+
+    def grad(self, params: TT, split_atoms=False) -> "ComposedExpectation":
+
+        sa = split_atoms
+
+        self._check_params(params)
+
+        cegrad = self._get_grad0_if_grad0()
+        if cegrad is not None:
+            return cegrad
+
+        # A first pass at taking an explicit gradient of a composed expectation.
+        # TODO figure out how to piggyback off of torch's autograd. The problem here is that we need to
+        #  explicitly propagate the gradient down to the atoms so they can split into one part per dimension.
+        #  E.g. this won't happen with a simple autograd call on the op.
+        if self.op is torch.add:
+            assert len(self.children) == 2, "Add operation should involve exactly two children."
+            cegrad = self.children[0].grad(params, sa) + self.children[1].grad(params, sa)
+        elif self.op is torch.neg:
+            assert len(self.children) == 1, "Negation operation should involve exactly one child."
+            cegrad = -self.children[0].grad(params, sa)
+        elif self.op is torch.multiply or self.op is torch.divide:
+            assert len(self.children) == 2, "Multiplication operation should involve exactly two children."
+            fgp = self.children[0].grad(params, sa) * self.children[1]
+            gfp = self.children[0] * self.children[1].grad(params, sa)
+            if self.op is torch.multiply:
+                cegrad = fgp + gfp
+            elif self.op is torch.divide:
+                cegrad = (fgp - gfp) / (self.children[1] * self.children[1])
+        elif self.op is torch.relu:
+            assert len(self.children) == 1, "Relu operation should involve exactly one child."
+
+            def ifgt0(*v):  # defining with name strictly for __repr__.
+                return torch.where(v[1] > 0, v[0], torch.zeros_like(v[0]))
+
+            cegrad = ComposedExpectation(
+                children=[self.children[0], self.children[0].grad(params, sa)],
+                op=ifgt0,
+                parts=self.parts + self.children[0].parts
+            )
+
+        if cegrad is None:
+            raise NotImplementedError("Gradient of composed expectation not implemented for this operation.")
+
+        cegrad.recursively_refresh_parts()
+
+        return cegrad
+
     def __truediv__(self, other: "ComposedExpectation") -> "ComposedExpectation":
         return self.__op_other(other, torch.divide)
 
@@ -49,7 +142,30 @@ class ComposedExpectation:
         return self.__op_other(other, torch.multiply)
 
     def __sub__(self, other: "ComposedExpectation") -> "ComposedExpectation":
-        return self.__op_other(other, torch.subtract)
+        return self.__op_other(-other, torch.add)
+
+    def relu(self) -> "ComposedExpectation":
+        return self.__op_self(torch.relu)
+
+    def __neg__(self):
+        return self.__op_self(torch.neg)
 
     def __call__(self, p: ModelType) -> TT:
-        return self.op(*[child(p) for child in self.children])
+        if self._const is not None:
+            return self._const
+        else:
+            return self.op(*[child(p) for child in self.children])
+
+    def __repr__(self):
+        if self._const is not None:
+            return f"{self._const.item()}"
+        if self.op is torch.add:
+            return f"({self.children[0]} + {self.children[1]})"
+        elif self.op is torch.neg:
+            return f"(-{self.children[0]})"
+        elif self.op is torch.multiply:
+            return f"({self.children[0]} * {self.children[1]})"
+        elif self.op is torch.divide:
+            return f"({self.children[0]} / {self.children[1]})"
+        else:
+            return f"{self.op.__name__}{tuple(self.children)}"
