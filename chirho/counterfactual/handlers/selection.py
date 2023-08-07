@@ -38,6 +38,7 @@ class SelectCounterfactual(DependentMaskMessenger):
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor],
         device: torch.device = torch.device("cpu"),
+        name: Optional[str] = None,
     ) -> torch.Tensor:
         indices = get_factual_indices()
         return ~indexset_as_mask(indices, device=device)  # negate == complement
@@ -62,6 +63,7 @@ class SelectFactual(DependentMaskMessenger):
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor] = None,
         device: torch.device = torch.device("cpu"),
+        name: Optional[str] = None,
     ) -> torch.Tensor:
         indices = get_factual_indices()
         return indexset_as_mask(indices, device=device)
