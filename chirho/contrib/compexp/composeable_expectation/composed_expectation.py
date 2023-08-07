@@ -22,7 +22,6 @@ class ComposedExpectation:
         self._normalization_constant_cancels = False
 
         self.requires_grad = requires_grad
-        self._const: Optional[TT] = None
 
     def recursively_refresh_parts(self):
         self.parts = None
@@ -52,22 +51,15 @@ class ComposedExpectation:
         return ce
 
     def _get_grad0_if_grad0(self) -> Optional["ComposedExpectation"]:
+        from .constant import Constant  # TODO 28sl2810 reorganize inheritance to avoid inline import.
 
         ce = None
 
         def noop(*v):
-            raise NotImplementedError()
+            assert False, "Internal Error: This should never be called b/c the constant should preempt."
 
-        if (not self.requires_grad) or (self._const is not None):
-            # We use a composed expectation here because a constant doesn't need
-            #  the machinery built around the proposal distributions.
-            ce = ComposedExpectation(
-                children=[],
-                op=noop,
-                parts=[],
-                requires_grad=False)
-            # This will prevent any children from being evaluated when the call occurs.
-            ce._const = tt(0.0)
+        if not self.requires_grad:
+            ce = Constant(tt(0.0))
 
         return ce
 
@@ -136,9 +128,19 @@ class ComposedExpectation:
         return self.__op_other(other, torch.divide)
 
     def __add__(self, other: "ComposedExpectation") -> "ComposedExpectation":
+        from .constant import Constant  # TODO 28sl2810 reorganize inheritance to avoid inline import.
+
+        if isinstance(other, Constant) and torch.isclose(other._const, tt(0.0)):
+            return self
+
         return self.__op_other(other, torch.add)
 
     def __mul__(self, other: "ComposedExpectation") -> "ComposedExpectation":
+        from .constant import Constant  # TODO 28sl2810 reorganize inheritance to avoid inline import.
+
+        if isinstance(other, Constant) and torch.isclose(other._const, tt(0.0)):
+            return other
+
         return self.__op_other(other, torch.multiply)
 
     def __sub__(self, other: "ComposedExpectation") -> "ComposedExpectation":
@@ -151,14 +153,9 @@ class ComposedExpectation:
         return self.__op_self(torch.neg)
 
     def __call__(self, p: ModelType) -> TT:
-        if self._const is not None:
-            return self._const
-        else:
-            return self.op(*[child(p) for child in self.children])
+        return self.op(*[child(p) for child in self.children])
 
     def __repr__(self):
-        if self._const is not None:
-            return f"{self._const.item()}"
         if self.op is torch.add:
             return f"({self.children[0]} + {self.children[1]})"
         elif self.op is torch.neg:

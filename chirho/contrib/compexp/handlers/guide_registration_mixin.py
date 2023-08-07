@@ -33,7 +33,8 @@ class _GuideRegistrationMixin:
             # noinspection PyTypeChecker
             elbo = pyro.infer.Trace_ELBO()(scaling_pseudo_density, guide)
             elbo()  # Call to surface parameters for optimizer.
-            optim = torch.optim.ASGD(elbo.parameters(), lr=lr)
+            # optim = torch.optim.ASGD(elbo.parameters(), lr=lr)
+            optim = torch.optim.Adam(elbo.parameters(), lr=lr)
 
             for i in range(n_steps):
 
