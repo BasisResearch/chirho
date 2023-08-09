@@ -39,7 +39,7 @@ def main():
     # noinspection PyPep8Naming
     ttE: compexp.ComposedExpectation = compexp.E(
         f=lambda s: 1e1*cost(d=tt(0.5), c=tt(1.), **s), name='ttE'
-    ).split_into_positive_components(
+    ).get_tabi_decomposition(
             # TODO bdt18dosjk
             pos_guide=lambda: OrderedDict(x=pyro.sample('x', toy_opt_guidep)),
             neg_guide=lambda: OrderedDict(x=pyro.sample('x', toy_opt_guiden)),
@@ -79,7 +79,7 @@ def main():
 
     ttE = compexp.E(
         f=lambda s: 1e1 * cost(d=tt(0.5), c=tt(1.), **s), name='ttE'
-    ).split_into_positive_components()
+    ).get_tabi_decomposition()
 
     iseh2 = compexp.ImportanceSamplingExpectationHandler(num_samples=300)
     iseh2.register_guides(
@@ -129,7 +129,7 @@ def main():
     tte1: compexp.ComposedExpectation = compexp.E(
         # f=lambda s: 1e1*cost(d=dps[0] * dps[1], c=tt(1.), **s), name='ttgradE'
         f=lambda s: 1e1*cost(d=dps[0], c=tt(1.), **s), name='tte1'
-    ).split_into_positive_components()
+    ).get_tabi_decomposition()
     tte1['tte1_split_den'].requires_grad = False
     dtte1_ddparams = tte1.grad(params=dps)
 
@@ -153,7 +153,7 @@ def main():
     # noinspection PyPep8Naming
     tte2: compexp.ComposedExpectation = compexp.E(
         f=lambda s: 1e1*cost(d=dps[0] * dps[1], c=tt(1.), **s), name='ttgradE'
-    ).split_into_positive_components()
+    ).get_tabi_decomposition()
     tte2['ttgradE_split_den'].requires_grad = False
     dtte2_ddparams = tte2.grad(params=dps)
 

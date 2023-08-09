@@ -150,6 +150,11 @@ class ComposedExpectation:
         return self.__op_self(torch.relu)
 
     def __neg__(self):
+        from .constant import Constant  # TODO 28sl2810 reorganize inheritance to avoid inline import.
+
+        if isinstance(self, Constant):
+            return Constant(-self._const)
+
         return self.__op_self(torch.neg)
 
     def __call__(self, p: ModelType) -> TT:

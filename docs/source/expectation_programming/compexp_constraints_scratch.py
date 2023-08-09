@@ -90,7 +90,7 @@ def main():
     # Before proceeding with the IS guide creation, we need to split the exp_grisk expectation into positive components.
     # TODO make split_atoms split stuff that doesn't get gradified.
     exp_grisk_atom = cvar_risk_constrained_obj_grad['exp_grisk']
-    exp_grisk_tabi = exp_grisk_atom.split_into_positive_components()
+    exp_grisk_tabi = exp_grisk_atom.get_tabi_decomposition()
     exp_grisk_atom.swap_self_for_other_child(
         exp_grisk_tabi
     )

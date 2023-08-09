@@ -1,6 +1,7 @@
 import pyro
 import torch
 import pyro.distributions as dist
+import numpy as np
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
@@ -9,9 +10,17 @@ from chirho.dynamical.handlers import (
     ODEDynamics,
 )
 
-from chirho.dynamical.ops import State
-from torch import tensor as tt
+from chirho.dynamical.ops import State, Trajectory
 from enum import Enum
+from collections import OrderedDict
+import matplotlib.pyplot as plt
+
+from chirho.contrib.compexp.typedecs import ModelType, KWType
+
+from typing import List
+
+TT = torch.Tensor
+tt = torch.tensor
 
 
 # Largely for debugging...
@@ -132,9 +141,40 @@ def lift_lockdown(t: torch.tensor, state: State[torch.tensor]):
 
 
 class ReuseableSimulation:
+    """
+    This reusable simulation can be used in both the cost and failure magnitude functions so the same
+     simulation doesn't have to be run twice.
+    """
     # TODO can something like this be accomplished with functools partial?
     def __init__(self):
         self.result = None
+
+    @staticmethod
+    def constrain_params(
+            lockdown_trigger, lockdown_lift_trigger, lockdown_strength,
+            beta, gamma, capacity, hospitalization_rate):
+
+        dparams = dict(
+            lockdown_trigger=lockdown_trigger,
+            lockdown_lift_trigger=lockdown_lift_trigger,
+            lockdown_strength=lockdown_strength
+        )
+        stochastics = dict(
+            beta=beta,
+            gamma=gamma,
+            capacity=capacity,
+            hospitalization_rate=hospitalization_rate
+        )
+
+        for k, v in stochastics.items():
+            # All stochastics need to be positive, so just do it here and not worry about it in the guide.
+            stochastics[k] = torch.abs(v)
+
+        for k, v in dparams.items():
+            # All dparams need to be positive and non-zero, so put them through a relu with eps added.
+            dparams[k] = torch.relu(v) + 1e-3
+
+        return dparams, stochastics
 
     @staticmethod
     def _inner_call(lockdown_trigger, lockdown_lift_trigger, lockdown_strength,
@@ -195,3 +235,118 @@ def failure_magnitude(dparams, stochastics, end_time, reuseable_sim) -> torch.Te
     # The failure magnitude of lockdown policy is the total time spent by infected individuals who needed
     #  hospitalization but could not get it.
     return sim_results[-1].O
+
+
+def get_traj(dparams: KWType, stochastics: KWType, timespan: TT, init_state: State):
+    rs = ReuseableSimulation()
+    d, s = rs.constrain_params(**dparams, **stochastics)
+    return rs(**d, **s, init_state=init_state, times=timespan)
+
+
+def plot_basic(dparams: KWType, stochastics: List[KWType], timespan: TT, init_state: State, ci=0.90):
+
+    d = dparams
+    t = timespan
+    x0 = init_state
+
+    Ss = []
+    Is = []
+    Rs = []
+    Ls = []
+    Os = []
+    ls = []
+    capacities = []
+    hospitalization_rates = []
+
+    for s in stochastics:
+        traj = get_traj(d, s, t, x0)
+        Ss.append(traj.S.detach().numpy())
+        Is.append(traj.I.detach().numpy())
+        Rs.append(traj.R.detach().numpy())
+        Ls.append(traj.L.detach().numpy())
+        Os.append(traj.O.detach().numpy())
+        ls.append(traj.l.detach().numpy())
+        capacities.append(s['capacity'].item())
+        hospitalization_rates.append(s['hospitalization_rate'].item())
+
+    Ss = np.array(Ss)
+    Is = np.array(Is)
+    Rs = np.array(Rs)
+    Ls = np.array(Ls)
+    Os = np.array(Os)
+    ls = np.array(ls)
+    t = t.detach().numpy()
+    capacities = np.array(capacities)
+    hospitalization_rates = np.array(hospitalization_rates)
+
+    fig, (ax2, ax3, ax1) = plt.subplots(3, 1, figsize=(7, 10))
+    tax3 = ax3.twinx()
+
+    def plot_elementwise_mean_and_error(ax, y, mean_kwargs, error_kwargs):
+        # Plot mean:
+        ax.plot(t, y.mean(axis=0), **mean_kwargs)
+        # Plot the confidence range specified by the ci argument passed by the user.
+        top = np.quantile(y, (1. + ci) / 2., axis=0)
+        bot = np.quantile(y, (1. - ci) / 2., axis=0)
+        ax.fill_between(t, top, bot, **error_kwargs)
+
+    def plot_axhline_error(ax, y, mean_kwargs, error_kwargs):
+        # Extend y, which is a 1d vector, to repeat for the length of t along a new axis.
+        y = np.repeat(y[:, np.newaxis], t.shape[0], axis=1)
+        plot_elementwise_mean_and_error(ax, y, mean_kwargs, error_kwargs)
+
+    plot_axhline_error(ax2, capacities * (1. / hospitalization_rates),
+                       mean_kwargs=dict(color='k', linestyle='--', label='Healthcare Capacity'),
+                       error_kwargs=dict(color='k', alpha=0.2))
+    plot_axhline_error(ax3, capacities * (1. / hospitalization_rates),
+                       mean_kwargs=dict(color='k', linestyle='--', label='Healthcare Capacity'),
+                       error_kwargs=dict(color='k', alpha=0.2))
+
+    plot_elementwise_mean_and_error(
+        ax2, Ss, mean_kwargs=dict(color='blue', label='Susceptible'),
+        error_kwargs=dict(color='blue', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        ax2, Is, mean_kwargs=dict(color='red', label='Infected'),
+        error_kwargs=dict(color='red', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        ax3, Is, mean_kwargs=dict(color='red', label='Infected'),
+        error_kwargs=dict(color='red', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        ax2, Rs, mean_kwargs=dict(color='green', label='Recovered'),
+        error_kwargs=dict(color='green', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        ax1, Ls, mean_kwargs=dict(color='orange', label='Lockdown Cost'),
+        error_kwargs=dict(color='orange', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        ax1, ls, mean_kwargs=dict(color='orange', label='Lockdown', linestyle='--'),
+        error_kwargs=dict(color='orange', alpha=0.2))
+    plot_elementwise_mean_and_error(
+        tax3, Os, mean_kwargs=dict(color='k', label='Aggregate Overrun'),
+        error_kwargs=dict(color='k', alpha=0.2))
+
+    ax1.legend()
+    ax2.legend()
+    # Make a combined legend for ax3 and tax3.
+    lines, labels = ax3.get_legend_handles_labels()
+    lines2, labels2 = tax3.get_legend_handles_labels()
+    ax3.legend(lines + lines2, labels + labels2, loc=0)
+
+    ax2.set_xlabel('Time')
+    ax1.set_ylabel('Lockdown Strength')
+    ax2.set_ylabel('Proportion of Population')
+    ax2.set_ylim(0, 1)
+    ax3.set_ylabel('Proportion of Population')
+    ax3.set_ylim(0, 1)
+    tax3.set_ylabel('Aggregate Overrun')
+
+    plt.tight_layout()
+
+    plt.show()
+
+
+def main():
+    # TODO delete just for debugging notebook.
+    pass
+
+if __name__ == "__main__":
+    main()

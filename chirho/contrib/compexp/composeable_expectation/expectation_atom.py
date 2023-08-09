@@ -7,6 +7,7 @@ from ..typedecs import ModelType, KWType
 from .composed_expectation import ComposedExpectation
 from ..typedecs import StochasticFunction
 from ..ops import _compute_expectation_atom
+from .constant import Constant
 
 
 class ExpectationAtom(ComposedExpectation):
@@ -52,7 +53,7 @@ class ExpectationAtom(ComposedExpectation):
         if not self._is_positive_everywhere:
             raise NotImplementedError("Non positive pseudo-density construction is not supported. "
                                       f"Convert atom named {self.name} by using output of "
-                                      "CompoundedExpectation.split_into_positive_components().")
+                                      "CompoundedExpectation.get_tabi_decomposition().")
 
         # This defines a new density that is the product of the density defined by p and this all-positive function
         #  we want to take the expectation wrt.
@@ -64,8 +65,7 @@ class ExpectationAtom(ComposedExpectation):
 
         return pseudo_density
 
-    # TODO maybe rename this to get_tabi_decomposition.
-    def split_into_positive_components(
+    def get_tabi_decomposition(
             self,
             # TODO bdt18dosjk maybe don't allow for guide specification, but rather handler specification that
             #  may specify a particular guide arrangement?
@@ -73,15 +73,15 @@ class ExpectationAtom(ComposedExpectation):
             neg_guide: Optional[ModelType] = None,
             den_guide: Optional[ModelType] = None) -> "ComposedExpectation":
 
-        if self._is_positive_everywhere:
-            return self
-
         pos_part = ExpectationAtom(
             f=lambda s: torch.relu(self.f(s)), name=self.name + "_split_pos", guide=pos_guide)
         pos_part._is_positive_everywhere = True
-        neg_part = ExpectationAtom(
-            f=lambda s: torch.relu(-self.f(s)), name=self.name + "_split_neg", guide=neg_guide)
-        neg_part._is_positive_everywhere = True
+        if not self._is_positive_everywhere:
+            neg_part = ExpectationAtom(
+                f=lambda s: torch.relu(-self.f(s)), name=self.name + "_split_neg", guide=neg_guide)
+            neg_part._is_positive_everywhere = True
+        else:
+            neg_part = Constant(tt(0.0))
         den_part = ExpectationAtom(
             lambda s: tt(1.), name=self.name + "_split_den", guide=den_guide)
         den_part._is_positive_everywhere = True
@@ -156,7 +156,7 @@ class ExpectationAtom(ComposedExpectation):
             )
 
             if split_atoms:
-                ea = ea.split_into_positive_components()
+                ea = ea.get_tabi_decomposition()
 
             sub_atoms.append(ea)
 
