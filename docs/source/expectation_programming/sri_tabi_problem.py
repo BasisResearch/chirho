@@ -243,12 +243,15 @@ def get_traj(
         timespan: TT,
         init_state: State,
         rs: Optional[ReuseableSimulation] = None):
+
     if rs is None:
         rs = ReuseableSimulation()
+
     d, s = rs.constrain_params(**dparams, **stochastics)
     return rs(**d, **s, init_state=init_state, times=timespan)
 
 
+# noinspection PyPep8Naming
 def plot_basic(dparams: KWType, stochastics: List[KWType], timespan: TT, init_state: State, ci=0.90):
 
     d = dparams
@@ -348,11 +351,3 @@ def plot_basic(dparams: KWType, stochastics: List[KWType], timespan: TT, init_st
     plt.tight_layout()
 
     plt.show()
-
-
-def main():
-    # TODO delete just for debugging notebook.
-    pass
-
-if __name__ == "__main__":
-    main()

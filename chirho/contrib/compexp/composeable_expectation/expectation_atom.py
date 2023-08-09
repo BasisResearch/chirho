@@ -120,12 +120,11 @@ class ExpectationAtom(ComposedExpectation):
                 retain_graph=True,
                 allow_unused=True
             )
-            # Note 2j0s81
-            df = df[pi]
             if df is None:
-                # df = tt(0.)
                 raise ValueError(f"Gradient of expectation atom named {self.name} is None. "
                                  f"If this is desired, set require_grad=False on the atom or its parents.")
+            # Note 2j0s81
+            df = df[pi]
             return df
 
         return grad_f
