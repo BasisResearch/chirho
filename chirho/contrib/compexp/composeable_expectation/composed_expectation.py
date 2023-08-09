@@ -109,7 +109,7 @@ class ComposedExpectation:
             assert len(self.children) == 1, "Relu operation should involve exactly one child."
 
             def ifgt0(*v):  # defining with name strictly for __repr__.
-                return torch.where(v[1] > 0, v[0], torch.zeros_like(v[0]))
+                return torch.where(v[0] > 0, v[1], torch.zeros_like(v[1]))
 
             cegrad = ComposedExpectation(
                 children=[self.children[0], self.children[0].grad(params, sa)],
