@@ -60,7 +60,7 @@ def main():
 
     # Now, take the gradient and split expectation atoms into TABI components.
     risk_mean_constrained_obj_grad = risk_mean_constrained_obj.grad(params=dps, split_atoms=True)
-    with compexp.MonteCarloExpectationHandler(num_samples=100):
+    with compexp.MonteCarloExpectationHandler(num_samples=1):
         print(risk_mean_constrained_obj_grad(model_ttp))
 
     # Now, define the CVaR constraint. For this, we need to add an auxiliary parameter to jointly optimize.
@@ -102,12 +102,13 @@ def main():
         ce=cvar_risk_constrained_obj_grad,
         # ce=exp_grisk.split_into_positive_components(),
         # ce=exp_cost.split_into_positive_components(),
+        # ce=(exp_cost.split_into_positive_components() + exp_grisk.split_into_positive_components()),
         auto_guide=pyro.infer.autoguide.AutoNormal,
         auto_guide_kwargs=dict(init_scale=1.)
     )
 
     def plot_callback_(k, i):
-        if i % 10000 == 0:
+        if i % 3000 == 0:
             figs = iseh.plot_guide_pseudo_likelihood(
                 rv_name='x',
                 guide_kde_kwargs=dict(bw_method=0.1, color='orange'),
@@ -119,9 +120,12 @@ def main():
                 plt.close(f)
 
     iseh.optimize_guides(
-        lr=1e-1, n_steps=20001,
+        lr=1e-3, n_steps=6001,
         callback=plot_callback_
     )
+
+    # with iseh:
+    #     print(exp_cost(model_ttp))
 
     return
 

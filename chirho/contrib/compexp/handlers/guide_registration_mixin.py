@@ -80,7 +80,7 @@ class _GuideRegistrationMixin:
             else:
                 if auto_guide is None:
                     raise ValueError("No guide preregistered and no no auto guide class provided.")
-                guide = auto_guide(model, **auto_guide_kwargs)
+                guide = auto_guide(pseudo_density, **auto_guide_kwargs)
 
             if not allow_repeated_names:
                 if part.name in self.pseudo_densities:

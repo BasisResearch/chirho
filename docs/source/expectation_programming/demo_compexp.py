@@ -49,31 +49,31 @@ def main():
     # Just to make sure everything still works after this is called.
     ttE.recursively_refresh_parts()
 
-    # # <Monte Carlo------------------------------------------------------>
-    # mcestimates = []
-    # for _ in range(1000):
-    #     with compexp.MonteCarloExpectationHandler(num_samples=100):
-    #         mcestimates.append(ttE(model_ttp))
-    #
-    # plt.suptitle("MC Estimate")
-    # plt.hist(mcestimates, bins=30)
-    # mcestimate = torch.mean(torch.stack(mcestimates))
-    # plt.axvline(x=mcestimate, color='r')
-    # plt.axvline(x=GT, color='black', linestyle='--')
-    # plt.suptitle(f"MC Estimate: {mcestimate}\n GT = {GT}")
-    # plt.show()
-    # # </Monte Carlo------------------------------------------------------>
-    #
-    # # <TABI------------------------------------------------------>
-    # # When using the decomposition above with per-atom guides and importance sampling, we get TABI. Because
-    # #  we've preset the optimal guides above, we will get an exact estimate.
-    # iseh = compexp.ImportanceSamplingExpectationHandler(num_samples=1)
-    # iseh.register_guides(ce=ttE, model=model_ttp, auto_guide=None, auto_guide_kwargs=None)
-    # with iseh:
-    #     tabiestimate = ttE(model_ttp)
-    # print(f"TABI Estimate: {tabiestimate}",  f"GT = {GT}")
-    # assert torch.isclose(tabiestimate, tt(GT), atol=1e-4)
-    # # </TABI------------------------------------------------------>
+    # <Monte Carlo------------------------------------------------------>
+    mcestimates = []
+    for _ in range(1000):
+        with compexp.MonteCarloExpectationHandler(num_samples=100):
+            mcestimates.append(ttE(model_ttp))
+
+    plt.suptitle("MC Estimate")
+    plt.hist(mcestimates, bins=30)
+    mcestimate = torch.mean(torch.stack(mcestimates))
+    plt.axvline(x=mcestimate, color='r')
+    plt.axvline(x=GT, color='black', linestyle='--')
+    plt.suptitle(f"MC Estimate: {mcestimate}\n GT = {GT}")
+    plt.show()
+    # </Monte Carlo------------------------------------------------------>
+
+    # <TABI------------------------------------------------------>
+    # When using the decomposition above with per-atom guides and importance sampling, we get TABI. Because
+    #  we've preset the optimal guides above, we will get an exact estimate.
+    iseh = compexp.ImportanceSamplingExpectationHandler(num_samples=1)
+    iseh.register_guides(ce=ttE, model=model_ttp, auto_guide=None, auto_guide_kwargs=None)
+    with iseh:
+        tabiestimate = ttE(model_ttp)
+    print(f"TABI Estimate: {tabiestimate}",  f"GT = {GT}")
+    assert torch.isclose(tabiestimate, tt(GT), atol=1e-4)
+    # </TABI------------------------------------------------------>
 
     # <TABI Learned Guides------------------------------------------------------>
 

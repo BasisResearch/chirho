@@ -15,7 +15,7 @@ class ExpectationAtom(ComposedExpectation):
             self,
             f: StochasticFunction,  # TODO say in docstring that this has to have scalar valued output.
             name: str,
-            log_fac_eps: float = 1e-45,
+            log_fac_eps: float = 1e-25,
             guide: Optional[ModelType] = None):
 
         self.f = f
@@ -72,6 +72,9 @@ class ExpectationAtom(ComposedExpectation):
             pos_guide: Optional[ModelType] = None,
             neg_guide: Optional[ModelType] = None,
             den_guide: Optional[ModelType] = None) -> "ComposedExpectation":
+
+        if self._is_positive_everywhere:
+            return self
 
         pos_part = ExpectationAtom(
             f=lambda s: torch.relu(self.f(s)), name=self.name + "_split_pos", guide=pos_guide)
