@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from chirho.contrib.compexp.typedecs import ModelType, KWType
 
-from typing import List
+from typing import List, Optional
 
 TT = torch.Tensor
 tt = torch.tensor
@@ -237,8 +237,14 @@ def failure_magnitude(dparams, stochastics, end_time, reuseable_sim) -> torch.Te
     return sim_results[-1].O
 
 
-def get_traj(dparams: KWType, stochastics: KWType, timespan: TT, init_state: State):
-    rs = ReuseableSimulation()
+def get_traj(
+        dparams: KWType,
+        stochastics: KWType,
+        timespan: TT,
+        init_state: State,
+        rs: Optional[ReuseableSimulation] = None):
+    if rs is None:
+        rs = ReuseableSimulation()
     d, s = rs.constrain_params(**dparams, **stochastics)
     return rs(**d, **s, init_state=init_state, times=timespan)
 
@@ -331,7 +337,7 @@ def plot_basic(dparams: KWType, stochastics: List[KWType], timespan: TT, init_st
     lines2, labels2 = tax3.get_legend_handles_labels()
     ax3.legend(lines + lines2, labels + labels2, loc=0)
 
-    ax2.set_xlabel('Time')
+    ax1.set_xlabel('Years')
     ax1.set_ylabel('Lockdown Strength')
     ax2.set_ylabel('Proportion of Population')
     ax2.set_ylim(0, 1)
