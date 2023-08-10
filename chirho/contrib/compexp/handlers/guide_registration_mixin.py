@@ -16,12 +16,12 @@ class _GuideRegistrationMixin:
     def optimize_guides(self, lr: float, n_steps: int,
                         adjust_grads_: Callable[[torch.nn.Parameter, ...], None] = None,
                         callback: Optional[Callable[[str, int], None]] = None,
-                        start_scale=1.0):
+                        start_scale=1.0, keys: Optional[List[str]] = None):
         if not len(self.keys()):
             raise ValueError("No guides registered. Did you call "
                              f"{_GuideRegistrationMixin.__name__}.register_guides?")
 
-        for k in self.keys():
+        for k in self.keys() if keys is None else keys:
             pseudo_density = self.pseudo_densities[k]
             guide = self.guides[k]
 
@@ -122,7 +122,9 @@ class _GuideRegistrationMixin:
         return p, q
 
     def plot_guide_pseudo_likelihood(
-            self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None):
+            self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,
+            n: int = 1000
+    ):
         # TODO move this to a separate class and inherit or something, just so plotting code doesn't clutter
         #  up functional code.
         import seaborn as sns
@@ -145,12 +147,12 @@ class _GuideRegistrationMixin:
                 raise ValueError("Can only plot pseudo likelihood/guide comparisons for univariates.")
 
             fig, ax = plt.subplots(1, 1)
-            sns.kdeplot([guide()[rv_name].item() for _ in range(1000)], label="guide", **guide_kde_kwargs)
+            sns.kdeplot([guide()[rv_name].item() for _ in range(n)], label="guide", **guide_kde_kwargs)
 
             tax = ax.twinx()
 
-            model_samples = torch.tensor([self.registered_model()[rv_name] for _ in range(1000)])
-            xx = torch.linspace(model_samples.min(), model_samples.max(), 1000).detach()
+            model_samples = torch.tensor([self.registered_model()[rv_name] for _ in range(n)])
+            xx = torch.linspace(model_samples.min(), model_samples.max(), n).detach()
 
             lps = []
             for x in xx:

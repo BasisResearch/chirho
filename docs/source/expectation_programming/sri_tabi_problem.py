@@ -152,7 +152,7 @@ class ReuseableSimulation:
     @staticmethod
     def constrain_params(
             lockdown_trigger, lockdown_lift_trigger, lockdown_strength,
-            beta, gamma, capacity, hospitalization_rate):
+            beta, gamma, capacity, hospitalization_rate, **kwargs):
 
         dparams = dict(
             lockdown_trigger=lockdown_trigger,
