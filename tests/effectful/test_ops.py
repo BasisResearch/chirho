@@ -6,12 +6,12 @@ from typing import Optional, TypeVar
 
 import pytest
 
-from causal_pyro.effectful.ops.interpretation import (
+from chirho.effectful.ops.interpretation import (
     Interpretation,
     interpreter,
     register,
 )
-from causal_pyro.effectful.ops.operation import Operation, define
+from chirho.effectful.ops.operation import Operation, define
 
 logger = logging.getLogger(__name__)
 

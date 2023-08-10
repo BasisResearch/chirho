@@ -3,7 +3,7 @@ import functools
 import typing
 from typing import Callable, ClassVar, Generic, Iterable, Optional, Protocol, TypeVar
 
-from causal_pyro.effectful.ops.operation import Operation, define
+from chirho.effectful.ops.operation import Operation, define
 
 S = TypeVar("S")
 T = TypeVar("T")
