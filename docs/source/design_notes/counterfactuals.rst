@@ -1,8 +1,4 @@
-Design notes: Counterfactual semantics from interventions and possible worlds
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-We can give different semantics to ``intervene`` and ``sample`` with
-Pyro’s effect handler API:
+Counterfactual functionality can be implemented by giving different semantics to ``intervene`` and ``sample`` with Pyro’s effect handler API. In the context of the ``BaseCounterfactual`` handler below, ``sample`` and ``intervene`` could have their effects modified via implementations of ``_pyro_sample`` and ``_pyro_intervene`` methods, respectively.
 
 .. code:: python
 
@@ -14,8 +10,13 @@ Pyro’s effect handler API:
      def _pyro_intervene(self, msg) -> NoneType:
        pass
 
-A trivial example of overloading ``intervene`` statements to ignore
-intervened values:
+    with BaseCounterfactual():
+      ...
+
+Before exploring the complexities of the counterfactual case, we first look at some simpler modifications of the
+``intervene`` operation. The ``Observational`` handler provides a trivial example of overloading ``intervene`` statements
+to ignore intervened values. By setting ``msg["done"] = True``, we ensure that the default implementation of ``intervene``
+will not be executed, while setting ``msg["value"]`` defines the return value of the modified ``intervene`` statement.
 
 .. code:: python
 
@@ -27,9 +28,8 @@ intervened values:
          msg["value"] = obs
          msg["done"] = True
 
-Another trivial example of a semantics for ``intervene``, this time of
-ignoring ``sample`` statements that have been intervened on through our
-query interface defined above:
+``Interventional`` gives another trivial example of a semantics for ``intervene``, this time of
+ignoring ``sample`` statements that have been intervened on:
 
 .. code:: python
 
@@ -45,7 +45,7 @@ query interface defined above:
          msg["value"] = act
          msg["done"] = True
 
-The first conceptually nontrivial example: single-world intervention
+``SingleWorldCounterfactual`` gives the first conceptually nontrivial example: single-world intervention
 graph semantics of ``intervene`` statements:
 
 .. code:: python
@@ -58,7 +58,7 @@ graph semantics of ``intervene`` statements:
          msg["value"] = act
          msg["done"] = True
 
-This prototyping effort will be focused on implementing a twin-world
+The most useful implementation comes in the form of a twin-world
 semantics, in which there is one factual world where no interventions
 happen and one counterfactual world where all interventions happen.
 
