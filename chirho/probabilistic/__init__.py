@@ -1,1 +1,1 @@
-import causal_pyro.probabilistic.internals  # noqa: F401
+import chirho.probabilistic.internals  # noqa: F401
