@@ -8,6 +8,7 @@ from .composed_expectation import ComposedExpectation
 from ..typedecs import StochasticFunction
 from ..ops import _compute_expectation_atom
 from .constant import Constant
+from ..utils import soft_relu
 
 
 class ExpectationAtom(ComposedExpectation):
@@ -72,12 +73,14 @@ class ExpectationAtom(ComposedExpectation):
             neg_guide: Optional[ModelType] = None,
             den_guide: Optional[ModelType] = None) -> "ComposedExpectation":
 
+        raise NotImplementedError("Expose these temperature variables as parameters in the atoms.")
+
         pos_part = ExpectationAtom(
-            f=lambda s: torch.relu(self.f(s)), name=self.name + "_split_pos", guide=pos_guide)
+            f=lambda s: soft_relu(self.f(s), temp=tt(5.)), name=self.name + "_split_pos", guide=pos_guide)
         pos_part._is_positive_everywhere = True
         if not self._is_positive_everywhere:
             neg_part = ExpectationAtom(
-                f=lambda s: torch.relu(-self.f(s)), name=self.name + "_split_neg", guide=neg_guide)
+                f=lambda s: soft_relu(-self.f(s), temp=tt(5.)), name=self.name + "_split_neg", guide=neg_guide)
             neg_part._is_positive_everywhere = True
         else:
             neg_part = Constant(tt(0.0))

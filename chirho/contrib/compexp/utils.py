@@ -31,6 +31,11 @@ def soft_relu(x: TT, temp: TT):
     """
 
     inflection_point = -torch.log(temp) / temp
-    lt_part = torch.exp(temp * x)
+    bounded_x = torch.where(x < inflection_point, x, tt(0.0))
+    lt_part = torch.exp(temp * bounded_x)
     gt_part = x + (1./temp) * (torch.log(temp) + 1)
-    return torch.where(x < inflection_point, lt_part, gt_part)
+    y = torch.where(x < inflection_point, lt_part, gt_part)
+
+    assert not torch.any(torch.isnan(y))
+
+    return y
