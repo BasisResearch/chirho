@@ -1,7 +1,11 @@
 from typing import Callable, List, TYPE_CHECKING, Optional
+
+import pyro.poutine.messenger
+
 from ..typedecs import ModelType
 import torch
 from torch import Tensor as TT, tensor as tt
+from ..handlers.expectation_handler import ExpectationHandler
 if TYPE_CHECKING:
     from .expectation_atom import ExpectationAtom
 
@@ -18,6 +22,7 @@ class ComposedExpectation:
         self.children = children
         self.parents: List[ComposedExpectation] = []
         self.parts = parts
+        self.handler: Optional[ExpectationHandler] = None
 
         self._normalization_constant_cancels = False
 
@@ -157,8 +162,18 @@ class ComposedExpectation:
 
         return self.__op_self(torch.neg)
 
-    def __call__(self, p: ModelType) -> TT:
+    def __inner_call(self, p: ModelType) -> TT:
         return self.op(*[child(p) for child in self.children])
+
+    def __call__(self, p: ModelType) -> TT:
+        if self.handler is None:
+            return self.__inner_call(p)
+        else:
+            with pyro.poutine.messenger.block_messengers(
+                    lambda m: isinstance(m, ExpectationHandler) and m is not self.handler):
+                with self.handler:
+                    return self.__inner_call(p)
+
 
     def __repr__(self):
         if self.op is torch.add:

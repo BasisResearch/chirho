@@ -121,6 +121,72 @@ class _GuideRegistrationMixin:
 
         return p, q
 
+    @staticmethod
+    def _evaluate_unnorm_likelihoods(p, samples, rv_names: List[str]):
+        # TODO how to vectorize this?
+        log_likelihoods = []
+        for sample in samples:
+            with pyro.poutine.condition(data={n: torch.tensor(s) for n, s in zip(rv_names, sample)}):
+                log_likelihood = pyro.poutine.trace(p).get_trace().log_prob_sum()
+                log_likelihoods.append(log_likelihood)
+
+        return torch.tensor(log_likelihoods).exp().detach()
+
+    def _gen_samples(self, p, n: int, rv_names: List[str]):
+        samples = []
+        for _ in range(n):
+            sample = p()
+            samples.append([sample[k].item() for k in rv_names])
+        return samples
+
+    # TODO change the 1d plotter plot_guide_pseudo_likelihood to also take an ax and single key,
+    #  and then plot to the ax.
+    def plot_guide_pseudo_likelihood_2d(
+            self, rv1_name, rv2_name, ax, key: str, n: int = 1000, resolution: int = 5, guide_kde_kwargs=None):
+
+        if not len(self.keys()):
+            raise ValueError("No guides registered. Did you call "
+                             f"{_GuideRegistrationMixin.__name__}.register_guides?")
+
+        # import here so that they are only imported if this method is called.
+        import matplotlib.pyplot as plt
+        import seaborn as sns
+        import numpy as np
+        from sklearn.neighbors import KernelDensity
+
+        # Generate samples from the model to compute bounds.
+        samples = np.array(
+            self._gen_samples(self.registered_model, n, [rv1_name, rv2_name]))
+
+        rv1_ls = np.linspace(0.00, 1.0, resolution)
+        rv2_ls = np.linspace(0.00, 1.0, resolution)
+
+        rv1_ls = rv1_ls * (samples[:, 0].max() - samples[:, 0].min()) + samples[:, 0].min()
+        rv2_ls = rv2_ls * (samples[:, 1].max() - samples[:, 1].min()) + samples[:, 1].min()
+
+        X, Y = np.meshgrid(rv1_ls, rv2_ls)
+        xy = np.vstack([X.ravel(), Y.ravel()]).T
+
+        guide, pseudo_density = self.guides[key], self.pseudo_densities[key]
+
+        # FIXME This doesn't work with guides for some reason.
+        # guide_y = self._evaluate_unnorm_likelihoods(guide, xy, [rv1_name, rv2_name])
+        # guide_y = np.array(guide_y).reshape(X.shape)
+        guide_samples = np.array(self._gen_samples(guide, n, [rv1_name, rv2_name]))
+        guide_kde_kwargs = guide_kde_kwargs or dict(kernel='gaussian', bandwidth=0.1)
+        guide_kde = KernelDensity(**guide_kde_kwargs).fit(guide_samples)
+        guide_y = np.exp(guide_kde.score_samples(xy)).reshape(X.shape)
+
+        pseudo_density_y = self._evaluate_unnorm_likelihoods(pseudo_density, xy, [rv1_name, rv2_name])
+        pseudo_density_y = np.array(pseudo_density_y).reshape(X.shape)
+        # TODO lazily do this one?
+        model_y = self._evaluate_unnorm_likelihoods(self.registered_model, xy, [rv1_name, rv2_name])
+        model_y = np.array(model_y).reshape(X.shape)
+
+        ax.contourf(X, Y, pseudo_density_y, levels=5)
+        ax.contour(X, Y, guide_y, colors='orange', levels=4)
+        ax.contour(X, Y, model_y, colors='gray', levels=2)
+
     def plot_guide_pseudo_likelihood(
             self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,
             n: int = 1000
