@@ -9,16 +9,16 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
+
+import os
+import sys
+sys.path.insert(0, os.path.abspath('../../'))
 import sphinx_rtd_theme
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'causal_pyro'
+project = 'chirho'
 copyright = '2022, Basis'
 author = 'Basis'
 
@@ -39,7 +39,11 @@ extensions = [
     "myst_parser",
     # "sphinx_gallery.gen_gallery",
     # "sphinx_search.extension",
+    "sphinxcontrib.bibtex"
 ]
+
+# Point sphinxcontrib.bibtex to the bibtex file.
+bibtex_bibfiles = ['refs.bib']
 
 # Enable documentation inheritance
 
@@ -80,7 +84,7 @@ exclude_patterns = []
 html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # logo
-html_logo = "_static/img/pyro_logo_wide.png"
+html_logo = "_static/img/chirho_logo_wide.png"
 
 
 # Add any paths that contain custom static files (such as style sheets) here,
