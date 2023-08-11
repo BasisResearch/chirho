@@ -16,36 +16,32 @@ class _GuideRegistrationMixin:
     def optimize_guides(self, lr: float, n_steps: int,
                         adjust_grads_: Callable[[torch.nn.Parameter, ...], None] = None,
                         callback: Optional[Callable[[str, int], None]] = None,
-                        start_scale=1.0, keys: Optional[List[str]] = None):
+                        keys: Optional[List[str]] = None):
         if not len(self.keys()):
             raise ValueError("No guides registered. Did you call "
                              f"{_GuideRegistrationMixin.__name__}.register_guides?")
 
+        losses = dict()
+
         for k in self.keys() if keys is None else keys:
             pseudo_density = self.pseudo_densities[k]
             guide = self.guides[k]
-
-            current_scale = start_scale
-
-            def scaling_pseudo_density() -> KWType:
-                return pyro.poutine.scale(pseudo_density, scale=current_scale)()
+            losses[k] = []
 
             # noinspection PyTypeChecker
-            elbo = pyro.infer.Trace_ELBO()(scaling_pseudo_density, guide)
+            elbo = pyro.infer.Trace_ELBO()(pseudo_density, guide)
             elbo()  # Call to surface parameters for optimizer.
             # optim = torch.optim.ASGD(elbo.parameters(), lr=lr)
             optim = torch.optim.Adam(elbo.parameters(), lr=lr)
 
             for i in range(n_steps):
 
-                # Scale from start_scale up to 1.
-                current_scale = start_scale + (1. - start_scale) * (i / n_steps)
-
                 for param in elbo.parameters():
                     param.grad = None
                 optim.zero_grad()
 
                 loss = elbo()
+                losses[k].append(loss)
                 loss.backward()
 
                 if adjust_grads_ is not None:
@@ -55,6 +51,8 @@ class _GuideRegistrationMixin:
                     callback(k, i)
 
                 optim.step()
+
+        return losses
 
     def register_guides(self, ce: ComposedExpectation, model: ModelType,
                         auto_guide: Optional[Type[AutoGuide]], auto_guide_kwargs=None,
@@ -80,7 +78,7 @@ class _GuideRegistrationMixin:
             else:
                 if auto_guide is None:
                     raise ValueError("No guide preregistered and no no auto guide class provided.")
-                guide = auto_guide(pseudo_density, **auto_guide_kwargs)
+                guide = auto_guide(model, **auto_guide_kwargs)
 
             if not allow_repeated_names:
                 if part.name in self.pseudo_densities:
@@ -142,7 +140,8 @@ class _GuideRegistrationMixin:
     # TODO change the 1d plotter plot_guide_pseudo_likelihood to also take an ax and single key,
     #  and then plot to the ax.
     def plot_guide_pseudo_likelihood_2d(
-            self, rv1_name, rv2_name, ax, key: str, n: int = 1000, resolution: int = 5, guide_kde_kwargs=None):
+            self, rv1_name, rv2_name, ax, key: str, n: int = 1000, resolution: int = 5,
+            guide_kde_kwargs=None, guide_scatter_kwargs=None):
 
         if not len(self.keys()):
             raise ValueError("No guides registered. Did you call "
@@ -164,18 +163,15 @@ class _GuideRegistrationMixin:
         rv1_ls = rv1_ls * (samples[:, 0].max() - samples[:, 0].min()) + samples[:, 0].min()
         rv2_ls = rv2_ls * (samples[:, 1].max() - samples[:, 1].min()) + samples[:, 1].min()
 
-        X, Y = np.meshgrid(rv1_ls, rv2_ls)
+        X, Y = np.meshgrid(rv1_ls, rv2_ls, indexing='ij')
         xy = np.vstack([X.ravel(), Y.ravel()]).T
 
         guide, pseudo_density = self.guides[key], self.pseudo_densities[key]
 
-        # FIXME This doesn't work with guides for some reason.
+        # FIXME 901dksk This doesn't work with guides for some reason.
         # guide_y = self._evaluate_unnorm_likelihoods(guide, xy, [rv1_name, rv2_name])
         # guide_y = np.array(guide_y).reshape(X.shape)
         guide_samples = np.array(self._gen_samples(guide, n, [rv1_name, rv2_name]))
-        guide_kde_kwargs = guide_kde_kwargs or dict(kernel='gaussian', bandwidth=0.1)
-        guide_kde = KernelDensity(**guide_kde_kwargs).fit(guide_samples)
-        guide_y = np.exp(guide_kde.score_samples(xy)).reshape(X.shape)
 
         pseudo_density_y = self._evaluate_unnorm_likelihoods(pseudo_density, xy, [rv1_name, rv2_name])
         pseudo_density_y = np.array(pseudo_density_y).reshape(X.shape)
@@ -183,9 +179,12 @@ class _GuideRegistrationMixin:
         model_y = self._evaluate_unnorm_likelihoods(self.registered_model, xy, [rv1_name, rv2_name])
         model_y = np.array(model_y).reshape(X.shape)
 
-        ax.contourf(X, Y, pseudo_density_y, levels=5)
-        ax.contour(X, Y, guide_y, colors='orange', levels=4)
-        ax.contour(X, Y, model_y, colors='gray', levels=2)
+        ax.contourf(X, Y, pseudo_density_y, levels=15)
+        # FIXME 901dksk
+        # ax.contour(X, Y, guide_y, colors='orange', levels=4)
+        guide_scatter_kwargs = guide_scatter_kwargs or dict(color='orange', alpha=0.5)
+        ax.scatter(guide_samples[:, 0], guide_samples[:, 1], **guide_scatter_kwargs)
+        ax.contour(X, Y, model_y, colors='gray', levels=8)
 
     def plot_guide_pseudo_likelihood(
             self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,

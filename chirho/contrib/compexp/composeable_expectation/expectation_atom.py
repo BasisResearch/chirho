@@ -59,8 +59,7 @@ class ExpectationAtom(ComposedExpectation):
         #  we want to take the expectation wrt.
         def pseudo_density() -> KWType:
             stochastics = p()
-            factor_name = self.name + "_factor"
-            pyro.factor(factor_name, torch.log(self.log_fac_eps + self.f(stochastics)))
+            pyro.factor(self.name + "_factor", torch.log(self.log_fac_eps + self.f(stochastics)))
             return stochastics
 
         return pseudo_density
