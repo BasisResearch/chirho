@@ -170,6 +170,9 @@ class ExpectationAtom(ComposedExpectation):
             parts=[]
         )
 
+        for sa in sub_atoms:
+            sa.parents.append(sub_atom_composite)
+
         # Note bm72gdi1
         sub_atom_composite.recursively_refresh_parts()
 

@@ -15,7 +15,10 @@ from enum import Enum
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 
+from sklearn.neighbors import KernelDensity
+
 from chirho.contrib.compexp.typedecs import ModelType, KWType
+import chirho.contrib.compexp as ep
 
 from typing import List, Optional
 
@@ -347,6 +350,115 @@ def plot_basic(dparams: KWType, stochastics: List[KWType], timespan: TT, init_st
     ax3.set_ylabel('Proportion of Population')
     ax3.set_ylim(0, 1)
     tax3.set_ylabel('Aggregate Overrun')
+
+    plt.tight_layout()
+
+    plt.show()
+
+
+def _NNM_vectorized(f_, N, M, X, Y):
+    out = np.empty((N, N, M))
+    it = np.nditer(out, flags=['multi_index'])
+    while not it.finished:
+        out[*it.multi_index[:-1], :] = f_(X[it.multi_index[:-1]], Y[it.multi_index[:-1]])
+        it.iternext()
+
+    return out
+
+
+# noinspection DuplicatedCode
+def plot_cost_likelihood_convolution_for_stochastics(
+        stochastic_name1: str, stochastic_name2: str,
+        p: ModelType, ce: ep.ComposedExpectation, n=500,
+        resolution=5, bandwidth=0.1):
+
+    ve = ValueError("Can only plot convolutions for stacked compositions.")
+
+    if not repr(ce).startswith('stack'):
+        raise ve
+
+    for c in ce.children:
+        if not isinstance(c, ep.ExpectationAtom):
+            raise ve
+
+    atoms: List[ep.ExpectationAtom] = [c for c in ce.children]
+
+    samples = []
+    for _ in range(n):  # Generate samples from the model.
+        sample = p()
+        samples.append((sample[stochastic_name1].item(), sample[stochastic_name2].item()))
+
+    samples = np.array(samples)
+
+    kde: KernelDensity = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(samples)
+
+    def density(s1, s2) -> np.ndarray:
+        return np.array([np.exp(kde.score_samples([[s1, s2]]))])
+
+    def cost(s1, s2) -> np.ndarray:
+        stochastics: KWType = OrderedDict({stochastic_name1: tt(s1), stochastic_name2: tt(s2)})
+        vals = [p.f(stochastics) for p in atoms]
+        return np.array(tuple(v.item() for v in vals))
+
+    def cust_colorbar(ax, arr):
+        ticks = np.linspace(0., 1.0, 10)
+        cbar = fig.colorbar(ax=ax, mappable=ax.collections[0], ticks=ticks)
+        arrmax = arr.max()
+        arrmin = arr.min()
+        tick_labels = ticks * (arrmax - arrmin) + arrmin
+        cbar.ax.set_yticklabels(['{:.1f}'.format(tick) for tick in tick_labels])
+
+    s1ls = np.linspace(0.00, 1.0, resolution)
+    s2ls = np.linspace(0.00, 1.0, resolution)
+
+    s1ls = s1ls * (samples[:, 0].max() - samples[:, 0].min()) + samples[:, 0].min()
+    s2ls = s2ls * (samples[:, 1].max() - samples[:, 1].min()) + samples[:, 1].min()
+
+    # noinspection PyPep8Naming
+    X, Y = np.meshgrid(s1ls, s2ls)
+
+    # Make a subplot for the density and one for each component of the cost.
+    cost_component_names = [c.name for c in atoms]
+    num_cost_components = len(cost_component_names)
+
+    fig, axs = plt.subplots(num_cost_components + 1, 3, figsize=(6*num_cost_components, 18))
+
+    # Plot the density in the top row.
+    density_array = _NNM_vectorized(f_=density, N=resolution, M=1, X=X, Y=Y)
+    for col_ in range(3):
+        axs[0][col_].contourf(X, Y, density_array[..., 0], cmap='viridis')
+        cust_colorbar(axs[0][col_], density_array[..., 0])
+
+    # Compute the cost array. We have to do this manually because there
+    cost_array = _NNM_vectorized(f_=cost, N=resolution, M=num_cost_components, X=X, Y=Y)
+
+    assert cost_array.shape == (resolution, resolution, num_cost_components)
+
+    # Plot the cost components in the left column.
+    for i_, cost_component_name_ in enumerate(cost_component_names):
+        axs[i_+1][0].contourf(X, Y, cost_array[:, :, i_], cmap='viridis')
+        axs[i_+1][0].set_title(cost_component_name_.capitalize())
+        cust_colorbar(axs[i_+1][0], cost_array[:, :, i_])
+
+    # This maybe doesn't give the right shape.
+    cost_density_convolution_array = cost_array * density_array
+    assert cost_density_convolution_array.shape == (resolution, resolution, num_cost_components)
+
+    # Plot the positive part of the convolved cost components in the middle column.
+
+    def plot_part(arr, col):
+        for i, cost_component_name in enumerate(cost_component_names):
+
+            axs[i+1][col].contourf(X, Y, arr[:, :, i], cmap='viridis')
+            axs[i+1][col].set_title(cost_component_name + (' +' if col == 1 else ' -'))
+            cust_colorbar(axs[i+1][col], arr[:, :, i])
+
+            # And draw crosshairs at the original density mean, for comparison.
+            axs[i+1][col].axvline(x=samples[:, 0].mean(), color='white', linestyle='--')
+            axs[i+1][col].axhline(y=samples[:, 1].mean(), color='white', linestyle='--')
+
+    plot_part(np.maximum(cost_density_convolution_array, 0.0), 1)
+    plot_part(-np.minimum(cost_density_convolution_array, 0.0), 2)
 
     plt.tight_layout()
 
