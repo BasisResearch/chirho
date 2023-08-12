@@ -31,7 +31,7 @@ def compose(
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [
-            (op, push_prompts(define(Interpretation)({fwd: intp[op]}), intp2[op]))
+            (op, push_prompts(define(Interpretation)({fwd: intp[op]}))(intp2[op]))
             for op in set(intp.keys()) & set(intp2.keys())
         ]
     )
@@ -82,19 +82,19 @@ def product(
     (intp2,) = intps
 
     intp_outer = define(Interpretation)({
-        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}), intp[op])
+        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}))(intp[op])
         for op in intp.keys()
     })
 
     intp_inner = define(Interpretation)({
-        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}), intp2[op])
+        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}))(intp2[op])
         for op in intp2.keys() if op in intp
     })
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)({
         op: push_prompts(
-            define(Interpretation)({reflect: interpreter(intp_outer)(_op_or_result(op))}),
-            interpreter(intp_inner)(intp2[op]),
-        ) for op in intp2.keys()
+            define(Interpretation)({reflect: interpreter(intp_outer)(_op_or_result(op))})
+        )(interpreter(intp_inner)(intp2[op]))
+        for op in intp2.keys()
     })

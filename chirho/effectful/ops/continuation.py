@@ -34,30 +34,35 @@ class _AffineContinuation(Generic[T]):
 
 
 @define(Operation)
-def push_prompts(conts: Interpretation[T], fn: Callable[..., T]) -> Callable[..., T]:
+def push_prompts(conts: Interpretation[T]) -> Callable[[Callable[..., T]], Callable[..., T]]:
 
     from ..internals.runtime import get_interpretation
 
-    @functools.wraps(fn)
-    def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
+    # TODO switch to using contextlib.contextmanager here
+    def _decorator(fn: Callable[..., T]) -> Callable[..., T]:
 
-        # TODO handle argument capture separately and just use conts here
-        conts_ = define(Interpretation)({
-            p: functools.partial(
-                lambda k, a, kw, _, res: k(res, *a, **kw),
-                conts[p], args, kwargs
-            ) for p in conts.keys()
-        })
+        @functools.wraps(fn)
+        def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
 
-        resets = define(Interpretation)({
-            p: _AffineContinuation(
-                interpreter(define(Interpretation)({
-                    p: get_interpretation()[p] if p in get_interpretation() else p.default
-                }))(conts_[p])
-            )
-            for p in conts.keys()
-        })
+            # TODO handle argument capture separately and just use conts here
+            conts_ = define(Interpretation)({
+                p: functools.partial(
+                    lambda k, a, kw, _, res: k(res, *a, **kw),
+                    conts[p], args, kwargs
+                ) for p in conts.keys()
+            })
 
-        return interpreter(resets)(fn)(result, *args, **kwargs)
+            resets = define(Interpretation)({
+                p: _AffineContinuation(
+                    interpreter(define(Interpretation)({
+                        p: get_interpretation()[p] if p in get_interpretation() else p.default
+                    }))(conts_[p])
+                )
+                for p in conts.keys()
+            })
 
-    return _wrapper
+            return interpreter(resets)(fn)(result, *args, **kwargs)
+
+        return _wrapper
+
+    return _decorator
