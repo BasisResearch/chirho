@@ -107,11 +107,7 @@ def runner(intp: Interpretation[T], *, reflect: Operation[T] = reflect, fwd: Ope
 
     old_intp = get_interpretation()
     try:
-        refls = define(Interpretation)({
-            op: lambda v, *_, **__: reflect(v)
-            for op in set(old_intp.keys()) - set(intp.keys())
-        })
-        new_intp = product(old_intp, compose(refls, intp, fwd=fwd), reflect=reflect, fwd=fwd)
+        new_intp = product(old_intp, intp, reflect=reflect, fwd=fwd)
         old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
