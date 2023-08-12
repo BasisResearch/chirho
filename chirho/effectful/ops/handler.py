@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Optional, TypeVar
+from typing import Callable, Optional, TypeVar
 
 from chirho.effectful.ops.continuation import push_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
@@ -12,15 +12,19 @@ T = TypeVar("T")
 
 @define(Operation)
 def fwd(result: Optional[T]) -> T:
-    return reflect(result)  # TODO should fwd default to reflect like this?
+    return result
 
 
 @define(Operation)
-def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
+def compose(
+    intp: Interpretation[T],
+    *intps: Interpretation[T],
+    fwd: Operation[T] = fwd
+) -> Interpretation[T]:
     if len(intps) == 0:
         return intp  # unit
     elif len(intps) > 1:
-        return compose(intp, compose(*intps))  # associativity
+        return compose(intp, compose(*intps, fwd=fwd), fwd=fwd)  # associativity
 
     (intp2,) = intps
     return define(Interpretation)(
@@ -35,12 +39,12 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
 
 @define(Operation)
 @contextlib.contextmanager
-def handler(intp: Interpretation[T]):
+def handler(intp: Interpretation[T], *, fwd: Operation[T] = fwd):
     from ..internals.runtime import get_interpretation, swap_interpretation
 
     old_intp = get_interpretation()
     try:
-        new_intp = compose(old_intp, intp)
+        new_intp = compose(old_intp, intp, fwd=fwd)
         old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
@@ -52,18 +56,24 @@ def handler(intp: Interpretation[T]):
 
 @define(Operation)
 def reflect(result: Optional[T]) -> T:
-    return result  # TODO reflect should default to op.default, somehow...
+    return result
 
 
 @define(Operation)
-def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretation[T]:
+def product(
+    intp: Interpretation[T],
+    *intps: Interpretation[T],
+    reflect: Operation[T] = reflect,
+    fwd: Operation[T] = fwd,
+) -> Interpretation[T]:
+
     if len(intps) == 0:
         return intp  # unit
-    elif len(intps) > 1:
-        return product(intp, product(*intps))  # associativity
+    elif len(intps) > 1:  # associativity
+        return product(intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd)
 
-    def _op_or_result(op: Operation[T], v: Optional[T], *args, **kwargs) -> T:
-        return v if v is not None else op(*args, **kwargs)
+    def _op_or_result(op: Operation[T]) -> Callable[..., T]:
+        return lambda v, *args, **kwargs: v if v is not None else op(*args, **kwargs)
 
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
@@ -71,27 +81,20 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    # compose interpretations with reflections to ensure compatibility with compose()
-    refls = {
-        op: lambda v, *_, **__: reflect(v)
-        for op in set(intp.keys()) | set(intp2.keys())
-    }
-    # TODO use interpreter instead of compose here to disentangle compose and product?
-    intp_inner = compose(
-        define(Interpretation)({op: refls[op] for op in intp.keys()}),
-        define(Interpretation)({op: intp2[op] for op in intp2.keys() if op in intp}),
-    )
-    intp_outer = compose(define(Interpretation)(refls), intp)
+    intp_outer = define(Interpretation)({
+        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}), intp[op])
+        for op in intp.keys()
+    })
+
+    intp_inner = define(Interpretation)({
+        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}), intp2[op])
+        for op in intp2.keys() if op in intp
+    })
 
     # on reflect, jump to the outer interpretation and interpret it using itself
-    return define(Interpretation)(
-        {
-            op: push_prompts(
-                # TODO is this call to interpreter correct for nested products?
-                define(Interpretation)({reflect: interpreter(intp_outer)(functools.partial(_op_or_result, op))}),
-                # TODO is this call to interpreter correct for nested products? is it even necessary?
-                interpreter(intp_inner)(intp2[op]),
-            )
-            for op in intp2.keys()
-        }
-    )
+    return define(Interpretation)({
+        op: push_prompts(
+            define(Interpretation)({reflect: interpreter(intp_outer)(_op_or_result(op))}),
+            interpreter(intp_inner)(intp2[op]),
+        ) for op in intp2.keys()
+    })
