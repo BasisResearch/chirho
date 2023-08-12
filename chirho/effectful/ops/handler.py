@@ -2,7 +2,7 @@ import contextlib
 import functools
 from typing import Optional, TypeVar
 
-from chirho.effectful.ops.continuation import reset_prompt
+from chirho.effectful.ops.continuation import push_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
@@ -27,7 +27,7 @@ def compose(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [
-            (op, functools.partial(reset_prompt, fwd, intp[op], intp2[op]))
+            (op, push_prompts(define(Interpretation)({fwd: intp[op]}), intp2[op]))
             for op in set(intp.keys()) & set(intp2.keys())
         ]
     )
@@ -86,11 +86,9 @@ def product(intp: Interpretation[T], *intps: Interpretation[T]) -> Interpretatio
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)(
         {
-            op: functools.partial(
-                reset_prompt,
-                reflect,
+            op: push_prompts(
                 # TODO is this call to interpreter correct for nested products?
-                interpreter(intp_outer)(functools.partial(_op_or_result, op)),
+                define(Interpretation)({reflect: interpreter(intp_outer)(functools.partial(_op_or_result, op))}),
                 # TODO is this call to interpreter correct for nested products? is it even necessary?
                 interpreter(intp_inner)(intp2[op]),
             )

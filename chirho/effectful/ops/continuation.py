@@ -1,5 +1,7 @@
 from typing import Callable, Generic, Optional, TypeVar
 
+import functools
+
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
@@ -32,30 +34,30 @@ class _AffineContinuation(Generic[T]):
 
 
 @define(Operation)
-def reset_prompt(
-    prompt_op: Operation[T],
-    continuation: Continuation[T],
-    fn: Callable[..., T],
-    result: Optional[T],
-    *args: T,
-    **kwargs,
-) -> T:
+def push_prompts(conts: Interpretation[T], fn: Callable[..., T]) -> Callable[..., T]:
+
     from ..internals.runtime import get_interpretation
 
-    if prompt_op in get_interpretation():
-        prev_continuation = get_interpretation()[prompt_op]
-    else:
-        prev_continuation = prompt_op.default
+    @functools.wraps(fn)
+    def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
 
-    continuation = _AffineContinuation(continuation)
-    prev_continuation: Continuation[T] = _AffineContinuation(prev_continuation)
+        # TODO handle argument capture separately and just use conts here
+        conts_ = define(Interpretation)({
+            p: functools.partial(
+                lambda k, a, kw, _, res: k(res, *a, **kw),
+                conts[p], args, kwargs
+            ) for p in conts.keys()
+        })
 
-    shift = define(Interpretation)({prompt_op: prev_continuation})
-    reset = define(Interpretation)(
-        {
-            prompt_op: lambda _, res: interpreter(shift)(continuation)(
-                res, *args, **kwargs
+        resets = define(Interpretation)({
+            p: _AffineContinuation(
+                interpreter(define(Interpretation)({
+                    p: get_interpretation()[p] if p in get_interpretation() else p.default
+                }))(conts_[p])
             )
-        }
-    )
-    return interpreter(reset)(fn)(result, *args, **kwargs)
+            for p in conts.keys()
+        })
+
+        return interpreter(resets)(fn)(result, *args, **kwargs)
+
+    return _wrapper
