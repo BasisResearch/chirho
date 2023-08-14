@@ -5,6 +5,8 @@ from typing import Callable, ClassVar, Generic, Iterable, Optional, Protocol, Ty
 
 from chirho.effectful.ops.operation import Operation, define
 
+from ..internals.base_interpretation import _BaseInterpretation
+
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -74,11 +76,6 @@ def register(
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
-@register(define(Interpretation))
-class _BaseInterpretation(Generic[T], dict[Operation[T], Callable[..., T]]):
-    pass
-
-
 @define(Operation)
 @contextlib.contextmanager
 def interpreter(intp: Interpretation):
@@ -96,3 +93,7 @@ def interpreter(intp: Interpretation):
         yield intp
     finally:
         swap_interpretation(old_intp)
+
+
+# bootstrap
+register(define(Interpretation))(_BaseInterpretation)
