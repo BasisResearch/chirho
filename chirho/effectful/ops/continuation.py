@@ -38,7 +38,7 @@ def push_prompts(conts: Interpretation[T]) -> Callable[[Callable[..., T]], Calla
 
     from ..internals.runtime import get_interpretation
 
-    # TODO switch to using contextlib.contextmanager here
+    # TODO switch to using interpreter/contextlib.contextmanager here
     def _decorator(fn: Callable[..., T]) -> Callable[..., T]:
 
         @functools.wraps(fn)
@@ -57,8 +57,7 @@ def push_prompts(conts: Interpretation[T]) -> Callable[[Callable[..., T]], Calla
                     interpreter(define(Interpretation)({
                         p: get_interpretation()[p] if p in get_interpretation() else p.default
                     }))(conts_[p])
-                )
-                for p in conts.keys()
+                ) for p in conts.keys()
             })
 
             return interpreter(resets)(fn)(result, *args, **kwargs)
