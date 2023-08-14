@@ -66,3 +66,18 @@ def push_prompts(conts: Interpretation[T]) -> Callable[[Callable[..., T]], Calla
         return _wrapper
 
     return _decorator
+
+
+# @define(Operation)
+# def push_prompts(conts: Interpretation[T]):
+#     from ..internals.runtime import get_interpretation
+#
+#     resets = define(Interpretation)({
+#         p: _AffineContinuation(
+#             interpreter(define(Interpretation)({
+#                 p: get_interpretation()[p] if p in get_interpretation() else p.default
+#             }))(conts[p])
+#         ) for p in conts.keys()
+#     })
+#
+#     return interpreter(resets)
