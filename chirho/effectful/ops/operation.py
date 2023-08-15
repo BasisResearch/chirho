@@ -38,7 +38,7 @@ def define(m):
         return _BaseOperation[Operation[m]](_BaseOperation[m])
 
     defop: Operation[Operation[m]] = define(Operation)
-    return defop(typing.get_origin(m) if typing.get_origin(m) is not None else m)
+    return defop(m)
 
 
 # triggers bootstrapping
