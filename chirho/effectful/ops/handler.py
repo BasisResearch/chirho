@@ -1,8 +1,8 @@
-import contextlib
-import functools
 from typing import Callable, Optional, TypeVar
 
-from chirho.effectful.ops.continuation import push_prompts, bind_and_push_prompts
+import contextlib
+
+from chirho.effectful.ops.continuation import bind_and_push_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
