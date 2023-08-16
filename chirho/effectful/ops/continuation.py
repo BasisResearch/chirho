@@ -54,7 +54,7 @@ def push_prompts(conts: Interpretation[T]):
 @weak_memoize
 def get_cont_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
     def _null_op():
-        raise NotImplementedError(f"null operation: {op}")
+        raise ValueError(f"No args stored for {op}")
     return define(Operation)(_null_op)
 
 
@@ -75,7 +75,6 @@ def bind_cont_args(
     op: Operation[T],
     unbound_conts: Interpretation[T],
 ) -> Interpretation[T]:
-
     return define(Interpretation)({
         p: functools.partial(
             lambda k, _, res: k(res, *get_cont_args(op)()[0], **get_cont_args(op)()[1]),

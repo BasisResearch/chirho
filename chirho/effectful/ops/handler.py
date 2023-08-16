@@ -40,15 +40,9 @@ def compose(
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[T], *, fwd: Operation[T] = fwd):
-    from ..internals.runtime import get_interpretation, swap_interpretation
-
-    old_intp = get_interpretation()
-    try:
-        new_intp = compose(old_intp, intp, fwd=fwd)
-        old_intp = swap_interpretation(new_intp)
+    from ..internals.runtime import get_interpretation
+    with interpreter(compose(get_interpretation(), intp, fwd=fwd)):
         yield intp
-    finally:
-        swap_interpretation(old_intp)
 
 
 ###############################################################################
@@ -104,12 +98,6 @@ def product(
 @define(Operation)
 @contextlib.contextmanager
 def runner(intp: Interpretation[T], *, reflect: Operation[T] = reflect, fwd: Operation[T] = fwd):
-    from ..internals.runtime import get_interpretation, swap_interpretation
-
-    old_intp = get_interpretation()
-    try:
-        new_intp = product(old_intp, intp, reflect=reflect, fwd=fwd)
-        old_intp = swap_interpretation(new_intp)
+    from ..internals.runtime import get_interpretation
+    with interpreter(product(get_interpretation(), intp, reflect=reflect, fwd=fwd)):
         yield intp
-    finally:
-        swap_interpretation(old_intp)
