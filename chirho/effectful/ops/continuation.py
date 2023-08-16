@@ -1,7 +1,9 @@
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Generic, Mapping, Optional, TypeVar
 
+import contextlib
 import functools
 
+from chirho.effectful.internals.runtime import weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
@@ -34,49 +36,58 @@ class _AffineContinuation(Generic[T]):
 
 
 @define(Operation)
-def push_prompts(conts: Interpretation[T]) -> Callable[[Callable[..., T]], Callable[..., T]]:
-
+@contextlib.contextmanager
+def push_prompts(conts: Interpretation[T]):
     from ..internals.runtime import get_interpretation
 
-    # TODO switch to using interpreter/contextlib.contextmanager here
-    def _decorator(fn: Callable[..., T]) -> Callable[..., T]:
-
-        @functools.wraps(fn)
-        def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
-
-            # TODO handle argument capture separately and just use conts here
-            conts_ = define(Interpretation)({
-                p: functools.partial(
-                    lambda k, a, kw, _, res: k(res, *a, **kw),
-                    conts[p], args, kwargs
-                ) for p in conts.keys()
-            })
-
-            resets = define(Interpretation)({
-                p: _AffineContinuation(
-                    interpreter(define(Interpretation)({
-                        p: get_interpretation()[p] if p in get_interpretation() else p.default
-                    }))(conts_[p])
-                ) for p in conts.keys()
-            })
-
-            return interpreter(resets)(fn)(result, *args, **kwargs)
-
-        return _wrapper
-
-    return _decorator
+    resets = define(Interpretation)({
+        p: _AffineContinuation(
+            interpreter(define(Interpretation)({
+                p: get_interpretation()[p] if p in get_interpretation() else p.default
+            }))(conts[p])
+        ) for p in conts.keys()
+    })
+    with interpreter(resets):
+        yield
 
 
-# @define(Operation)
-# def push_prompts(conts: Interpretation[T]):
-#     from ..internals.runtime import get_interpretation
-#
-#     resets = define(Interpretation)({
-#         p: _AffineContinuation(
-#             interpreter(define(Interpretation)({
-#                 p: get_interpretation()[p] if p in get_interpretation() else p.default
-#             }))(conts[p])
-#         ) for p in conts.keys()
-#     })
-#
-#     return interpreter(resets)
+@weak_memoize
+def get_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
+    def _null_op():
+        raise NotImplementedError(f"null operation: {op}")
+    return define(Operation)(_null_op)
+
+
+@define(Operation)
+def capture_cont_args(op: Operation[T], op_intp: Callable[..., T]) -> Callable[..., T]:
+
+    @functools.wraps(op_intp)
+    def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
+        return interpreter(
+            define(Interpretation)({get_args(op): lambda _: (args, kwargs)})
+        )(op_intp)(result, *args, **kwargs)
+
+    return _wrapper
+
+
+@define(Operation)
+def bind_cont_args(
+    op: Operation[T],
+    unbound_conts: Interpretation[T],
+) -> Interpretation[T]:
+
+    return define(Interpretation)({
+        p: functools.partial(
+            lambda k, _, res: k(res, *get_args(op)()[0], **get_args(op)()[1]),
+            unbound_conts[p]
+        ) for p in unbound_conts.keys()
+    })
+
+
+@define(Operation)
+def push_bound_prompts(
+    unbound_conts: Interpretation[T],
+    op: Operation[T],
+    op_intp: Callable[..., T],
+) -> Callable[..., T]:
+    return push_prompts(bind_cont_args(op, unbound_conts))(capture_cont_args(op, op_intp))

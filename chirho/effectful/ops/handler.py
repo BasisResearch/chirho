@@ -2,7 +2,7 @@ import contextlib
 import functools
 from typing import Callable, Optional, TypeVar
 
-from chirho.effectful.ops.continuation import push_prompts
+from chirho.effectful.ops.continuation import push_prompts, push_bound_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
@@ -31,7 +31,7 @@ def compose(
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [
-            (op, push_prompts(define(Interpretation)({fwd: intp[op]}))(intp2[op]))
+            (op, push_bound_prompts({fwd: intp[op]}, op, intp2[op]))
             for op in set(intp.keys()) & set(intp2.keys())
         ]
     )
@@ -82,21 +82,22 @@ def product(
     (intp2,) = intps
 
     intp_outer = define(Interpretation)({
-        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}))(intp[op])
+        op: push_bound_prompts({fwd: lambda _, v: reflect(v)}, op, intp[op])
         for op in intp.keys()
     })
 
     intp_inner = define(Interpretation)({
-        op: push_prompts(define(Interpretation)({fwd: lambda _, v: reflect(v)}))(intp2[op])
+        op: push_bound_prompts({fwd: lambda _, v: reflect(v)}, op, intp2[op])
         for op in intp2.keys() if op in intp
     })
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)({
-        op: push_prompts(
-            define(Interpretation)({reflect: interpreter(intp_outer)(_op_or_result(op))})
-        )(interpreter(intp_inner)(intp2[op]))
-        for op in intp2.keys()
+        op: push_bound_prompts(
+            {reflect: interpreter(intp_outer)(_op_or_result(op))},
+            op,
+            interpreter(intp_inner)(intp2[op]),
+        ) for op in intp2.keys()
     })
 
 
