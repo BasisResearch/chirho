@@ -52,7 +52,7 @@ def push_prompts(conts: Interpretation[T]):
 
 
 @weak_memoize
-def get_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
+def get_cont_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
     def _null_op():
         raise NotImplementedError(f"null operation: {op}")
     return define(Operation)(_null_op)
@@ -64,7 +64,7 @@ def capture_cont_args(op: Operation[T], op_intp: Callable[..., T]) -> Callable[.
     @functools.wraps(op_intp)
     def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
         return interpreter(
-            define(Interpretation)({get_args(op): lambda _: (args, kwargs)})
+            define(Interpretation)({get_cont_args(op): lambda _: (args, kwargs)})
         )(op_intp)(result, *args, **kwargs)
 
     return _wrapper
@@ -78,7 +78,7 @@ def bind_cont_args(
 
     return define(Interpretation)({
         p: functools.partial(
-            lambda k, _, res: k(res, *get_args(op)()[0], **get_args(op)()[1]),
+            lambda k, _, res: k(res, *get_cont_args(op)()[0], **get_cont_args(op)()[1]),
             unbound_conts[p]
         ) for p in unbound_conts.keys()
     })
