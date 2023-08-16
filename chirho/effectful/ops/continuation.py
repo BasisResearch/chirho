@@ -85,7 +85,7 @@ def bind_cont_args(
 
 
 @define(Operation)
-def push_bound_prompts(
+def bind_and_push_prompts(
     unbound_conts: Interpretation[T],
     op: Operation[T],
     op_intp: Callable[..., T],
