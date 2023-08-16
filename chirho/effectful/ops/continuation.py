@@ -1,4 +1,4 @@
-from typing import Callable, Generic, Mapping, Optional, TypeVar
+from typing import Callable, Generic, Optional, TypeVar
 
 import contextlib
 import functools
