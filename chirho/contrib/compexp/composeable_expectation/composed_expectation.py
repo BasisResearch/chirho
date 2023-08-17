@@ -81,6 +81,7 @@ class ComposedExpectation:
         for part in self.parts:
             if part.name == item:
                 return part
+        raise KeyError(f"Could not find part named {item} among parts {self.parts}.")
 
     def grad(self, params: TT, split_atoms=False) -> "ComposedExpectation":
 
@@ -173,7 +174,6 @@ class ComposedExpectation:
                     lambda m: isinstance(m, ExpectationHandler) and m is not self.handler):
                 with self.handler:
                     return self.__inner_call(p)
-
 
     def __repr__(self):
         if self.op is torch.add:

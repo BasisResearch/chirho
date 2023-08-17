@@ -4,6 +4,7 @@ import pyro
 import torch
 import pyro.distributions as dist
 from collections import OrderedDict
+import pytest
 
 TT = torch.Tensor
 tt = torch.tensor
@@ -59,6 +60,30 @@ def test_relu():
         assert torch.isclose(cost_relu_grad_estimate_p, tt(0.))
         cost_relu_grad_estimate_n = expected_cost_relu_n_grad(dirac_xy)
         assert torch.isclose(cost_relu_grad_estimate_n, tt(2.))
+
+
+def test_add():
+    expected_cost_add = ep.E(f=_cost, name="c") + ep.E(f=_cost, name="c")
+
+    with ep.MonteCarloExpectationHandler(num_samples=1):
+        cost_add_estimate = expected_cost_add(dirac_xy)
+        assert torch.isclose(cost_add_estimate, tt(-8.))
+
+    expected_cost_add_grad = expected_cost_add.grad(params=d)
+
+    with ep.MonteCarloExpectationHandler(num_samples=1):
+        cost_add_grad_estimate = expected_cost_add_grad(dirac_xy)
+        assert torch.isclose(cost_add_grad_estimate, tt(-4.))
+
+
+@pytest.mark.skip(reason="TODO")
+def test_mul():
+    raise NotImplementedError
+
+
+@pytest.mark.skip(reason="TODO")
+def test_div():
+    raise NotImplementedError
 
 
 def test_neg_relu_comp():
