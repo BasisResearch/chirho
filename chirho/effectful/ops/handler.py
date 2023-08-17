@@ -1,6 +1,5 @@
-from typing import Callable, Optional, TypeVar
-
 import contextlib
+from typing import Callable, Optional, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
@@ -17,9 +16,7 @@ def fwd(result: Optional[T]) -> T:
 
 @define(Operation)
 def compose(
-    intp: Interpretation[T],
-    *intps: Interpretation[T],
-    fwd: Operation[T] = fwd
+    intp: Interpretation[T], *intps: Interpretation[T], fwd: Operation[T] = fwd
 ) -> Interpretation[T]:
     if len(intps) == 0:
         return intp  # unit
@@ -41,6 +38,7 @@ def compose(
 @contextlib.contextmanager
 def handler(intp: Interpretation[T], *, fwd: Operation[T] = fwd):
     from ..internals.runtime import get_interpretation
+
     with interpreter(compose(get_interpretation(), intp, fwd=fwd)):
         yield intp
 
@@ -60,11 +58,12 @@ def product(
     reflect: Operation[T] = reflect,
     fwd: Operation[T] = fwd,
 ) -> Interpretation[T]:
-
     if len(intps) == 0:
         return intp  # unit
     elif len(intps) > 1:  # associativity
-        return product(intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd)
+        return product(
+            intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd
+        )
 
     def _op_or_result(op: Operation[T]) -> Callable[..., T]:
         return lambda v, *args, **kwargs: v if v is not None else op(*args, **kwargs)
@@ -75,29 +74,40 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    intp_outer = define(Interpretation)({
-        op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp[op])
-        for op in intp.keys()
-    })
+    intp_outer = define(Interpretation)(
+        {
+            op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp[op])
+            for op in intp.keys()
+        }
+    )
 
-    intp_inner = define(Interpretation)({
-        op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp2[op])
-        for op in intp2.keys() if op in intp
-    })
+    intp_inner = define(Interpretation)(
+        {
+            op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp2[op])
+            for op in intp2.keys()
+            if op in intp
+        }
+    )
 
     # on reflect, jump to the outer interpretation and interpret it using itself
-    return define(Interpretation)({
-        op: bind_and_push_prompts(
-            {reflect: interpreter(intp_outer)(_op_or_result(op))},
-            op,
-            interpreter(intp_inner)(intp2[op]),
-        ) for op in intp2.keys()
-    })
+    return define(Interpretation)(
+        {
+            op: bind_and_push_prompts(
+                {reflect: interpreter(intp_outer)(_op_or_result(op))},
+                op,
+                interpreter(intp_inner)(intp2[op]),
+            )
+            for op in intp2.keys()
+        }
+    )
 
 
 @define(Operation)
 @contextlib.contextmanager
-def runner(intp: Interpretation[T], *, reflect: Operation[T] = reflect, fwd: Operation[T] = fwd):
+def runner(
+    intp: Interpretation[T], *, reflect: Operation[T] = reflect, fwd: Operation[T] = fwd
+):
     from ..internals.runtime import get_interpretation
+
     with interpreter(product(get_interpretation(), intp, reflect=reflect, fwd=fwd)):
         yield intp

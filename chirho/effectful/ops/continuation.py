@@ -1,7 +1,6 @@
-from typing import Callable, Generic, Optional, TypeVar
-
 import contextlib
 import functools
+from typing import Callable, Generic, Optional, TypeVar
 
 from chirho.effectful.internals.runtime import get_interpretation, weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
@@ -38,13 +37,22 @@ class _AffineContinuation(Generic[T]):
 @define(Operation)
 @contextlib.contextmanager
 def push_prompts(conts: Interpretation[T]):
-    resets = define(Interpretation)({
-        p: _AffineContinuation(
-            interpreter(define(Interpretation)({
-                p: get_interpretation()[p] if p in get_interpretation() else p.default
-            }))(conts[p])
-        ) for p in conts.keys()
-    })
+    resets = define(Interpretation)(
+        {
+            p: _AffineContinuation(
+                interpreter(
+                    define(Interpretation)(
+                        {
+                            p: get_interpretation()[p]
+                            if p in get_interpretation()
+                            else p.default
+                        }
+                    )
+                )(conts[p])
+            )
+            for p in conts.keys()
+        }
+    )
     with interpreter(resets):
         yield
 
@@ -53,12 +61,12 @@ def push_prompts(conts: Interpretation[T]):
 def get_cont_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
     def _null_op():
         raise ValueError(f"No args stored for {op}")
+
     return define(Operation)(_null_op)
 
 
 @define(Operation)
 def capture_cont_args(op: Operation[T], op_intp: Callable[..., T]) -> Callable[..., T]:
-
     @functools.wraps(op_intp)
     def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
         return interpreter(
@@ -73,12 +81,17 @@ def bind_cont_args(
     op: Operation[T],
     unbound_conts: Interpretation[T],
 ) -> Interpretation[T]:
-    return define(Interpretation)({
-        p: functools.partial(
-            lambda k, _, res: k(res, *get_cont_args(op)()[0], **get_cont_args(op)()[1]),
-            unbound_conts[p]
-        ) for p in unbound_conts.keys()
-    })
+    return define(Interpretation)(
+        {
+            p: functools.partial(
+                lambda k, _, res: k(
+                    res, *get_cont_args(op)()[0], **get_cont_args(op)()[1]
+                ),
+                unbound_conts[p],
+            )
+            for p in unbound_conts.keys()
+        }
+    )
 
 
 @define(Operation)
@@ -87,4 +100,6 @@ def bind_and_push_prompts(
     op: Operation[T],
     op_intp: Callable[..., T],
 ) -> Callable[..., T]:
-    return push_prompts(bind_cont_args(op, unbound_conts))(capture_cont_args(op, op_intp))
+    return push_prompts(bind_cont_args(op, unbound_conts))(
+        capture_cont_args(op, op_intp)
+    )
