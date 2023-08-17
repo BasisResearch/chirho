@@ -55,7 +55,7 @@ class ExpectationAtom(ComposedExpectation):
             )
         else:
             return super().__sub__(other)
- 
+
     # TODO HACK dg81idi
     def __mul__(self, other):
         if isinstance(other, Constant):
@@ -115,14 +115,14 @@ class ExpectationAtom(ComposedExpectation):
             den_guide: Optional[ModelType] = None) -> "ComposedExpectation":
 
         pos_part = ExpectationAtom(
-            # f=lambda s: soft_relu(self.f(s), temp=tt(5.)),
+            # f=lambda s: soft_relu(self.f(s), temp=tt(0.03)),
             f=lambda s: torch.relu(self.f(s)),
             name=self.name + "_split_pos",
             guide=pos_guide)
         pos_part._is_positive_everywhere = True
         if not self._is_positive_everywhere:
             neg_part = ExpectationAtom(
-                # f=lambda s: soft_relu(-self.f(s), temp=tt(5.)),
+                # f=lambda s: soft_relu(-self.f(s), temp=tt(0.03)),
                 f=lambda s: torch.relu(-self.f(s)),
                 name=self.name + "_split_neg",
                 guide=neg_guide)
