@@ -1,6 +1,5 @@
-from typing import Callable, Optional, TypeVar
-
 import contextlib
+from typing import Callable, Optional, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts
 from chirho.effectful.ops.handler import fwd
