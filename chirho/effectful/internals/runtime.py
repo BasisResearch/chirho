@@ -34,10 +34,10 @@ def weak_memoize(f: Callable[[S], T]) -> Callable[[S], T]:
     whose keys are weak references to the arguments.
     """
 
-    cache = weakref.WeakKeyDictionary()
+    cache: weakref.WeakKeyDictionary[S, T] = weakref.WeakKeyDictionary()
 
     @functools.wraps(f)
-    def wrapper(x):
+    def wrapper(x: S) -> T:
         try:
             return cache[x]
         except KeyError:

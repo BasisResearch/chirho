@@ -35,6 +35,7 @@ def define(m):
 
     if m is Operation:
         from ..internals.base_operation import _BaseOperation
+
         return _BaseOperation[Operation[m]](_BaseOperation[m])
 
     defop: Operation[Operation[m]] = define(Operation)
