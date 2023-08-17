@@ -35,6 +35,47 @@ class ExpectationAtom(ComposedExpectation):
     def __repr__(self):
         return f"{self.name}"
 
+    # TODO HACK dg81idi these implicitly (bad) fold in constants only when the constant is on the right.
+    #  These were added to appease the constraint on grad(relu) only working on atoms.
+    def __add__(self, other):
+        if isinstance(other, Constant):
+            return ExpectationAtom(
+                f=lambda s: self.f(s) + other._const,
+                name=f"{self.name} + {other._const}",
+            )
+        else:
+            return super().__add__(other)
+
+    # TODO HACK dg81idi
+    def __sub__(self, other):
+        if isinstance(other, Constant):
+            return ExpectationAtom(
+                f=lambda s: self.f(s) - other._const,
+                name=f"{self.name} - {other._const}",
+            )
+        else:
+            return super().__sub__(other)
+ 
+    # TODO HACK dg81idi
+    def __mul__(self, other):
+        if isinstance(other, Constant):
+            return ExpectationAtom(
+                f=lambda s: self.f(s) * other._const,
+                name=f"{self.name} * {other._const}",
+            )
+        else:
+            return super().__mul__(other)
+
+    # TODO HACK dg81idi
+    def __truediv__(self, other):
+        if isinstance(other, Constant):
+            return ExpectationAtom(
+                f=lambda s: self.f(s) / other._const,
+                name=f"{self.name} / {other._const}",
+            )
+        else:
+            return super().__truediv__(other)
+
     def __call__(self, p: ModelType) -> TT:
         """
         Overrides the non-atomic call to actually estimate the value of this expectation atom.

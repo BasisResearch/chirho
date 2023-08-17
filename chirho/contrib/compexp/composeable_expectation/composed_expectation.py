@@ -60,9 +60,6 @@ class ComposedExpectation:
 
         ce = None
 
-        def noop(*v):
-            assert False, "Internal Error: This should never be called b/c the constant should preempt."
-
         if not self.requires_grad:
             ce = Constant(tt(0.0))
 
@@ -114,14 +111,33 @@ class ComposedExpectation:
         elif self.op is torch.relu:
             assert len(self.children) == 1, "Relu operation should involve exactly one child."
 
-            def ifgt0(*v):  # defining with name strictly for __repr__.
-                return torch.where(v[0] > 0, v[1], torch.zeros_like(v[1]))
+            # FIXME this requires further investigation, but a relu of sample expectations wrt the same variable doesn't
+            #  but different proposals is (probably) biased. This change (made below in uncommented part)
+            #  puts all that into a single atom so that only one sample actually gets executed. It also makes it so the
+            #  pseudo-density for each atom is still coherent.
 
-            cegrad = ComposedExpectation(
-                children=[self.children[0], self.children[0].grad(params, sa)],
-                op=ifgt0,
-                parts=self.parts + self.children[0].parts
+            # def ifgt0(*v):  # defining with name strictly for __repr__.
+            #     return torch.where(v[0] > 0, v[1], torch.zeros_like(v[1]))
+            #
+            # cegrad = ComposedExpectation(
+            #     children=[self.children[0], self.children[0].grad(params, sa)],
+            #     op=ifgt0,
+            #     parts=self.parts + self.children[0].parts
+            # )
+
+            from .expectation_atom import ExpectationAtom  # TODO 28sl2810
+
+            # noinspection PyTypeChecker
+            child: ExpectationAtom = self.children[0]
+            if not isinstance(child, ExpectationAtom):
+                raise NotImplementedError("Gradient of composed expectation not implemented for this relu.")
+
+            relu_child = ExpectationAtom(
+                f=lambda s: torch.relu(child.f(s)),
+                name=f"relu({child.name})",
             )
+
+            cegrad: ComposedExpectation = relu_child.grad(params, sa)
 
         if cegrad is None:
             raise NotImplementedError("Gradient of composed expectation not implemented for this operation.")
