@@ -3,7 +3,7 @@ from typing import Callable, Generic, Optional, TypeVar
 import contextlib
 import functools
 
-from chirho.effectful.internals.runtime import weak_memoize
+from chirho.effectful.internals.runtime import get_interpretation, weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
@@ -38,8 +38,6 @@ class _AffineContinuation(Generic[T]):
 @define(Operation)
 @contextlib.contextmanager
 def push_prompts(conts: Interpretation[T]):
-    from ..internals.runtime import get_interpretation
-
     resets = define(Interpretation)({
         p: _AffineContinuation(
             interpreter(define(Interpretation)({
