@@ -6,9 +6,10 @@ from typing import TypeVar
 import pytest
 
 from chirho.effectful.ops.continuation import AffineContinuationError
-from chirho.effectful.ops.handler import compose, fwd, handler, product, reflect
+from chirho.effectful.ops.handler import compose, fwd, handler
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
+from chirho.effectful.ops.runner import product, reflect
 
 logger = logging.getLogger(__name__)
 
