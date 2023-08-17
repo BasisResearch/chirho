@@ -1,7 +1,16 @@
 import contextlib
 import functools
 import typing
-from typing import Callable, ClassVar, Dict, Generic, Iterable, Optional, Protocol, TypeVar
+from typing import (
+    Callable,
+    ClassVar,
+    Dict,
+    Generic,
+    Iterable,
+    Optional,
+    Protocol,
+    TypeVar,
+)
 
 from chirho.effectful.ops.operation import Operation, define
 
@@ -84,11 +93,15 @@ def register(op, intp=None, interpret_op=None):
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        setattr(op, "default", functools.wraps(op.default)(
-            lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
-            if result is None
-            else result
-        ))
+        setattr(
+            op,
+            "default",
+            functools.wraps(op.default)(
+                lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
+                if result is None
+                else result
+            ),
+        )
         return interpret_op
     elif isinstance(intp, Interpretation):
         intp.__setitem__(op, interpret_op)

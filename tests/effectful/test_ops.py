@@ -6,11 +6,7 @@ from typing import Optional, TypeVar
 
 import pytest
 
-from chirho.effectful.ops.interpretation import (
-    Interpretation,
-    interpreter,
-    register,
-)
+from chirho.effectful.ops.interpretation import Interpretation, interpreter, register
 from chirho.effectful.ops.operation import Operation, define
 
 logger = logging.getLogger(__name__)
