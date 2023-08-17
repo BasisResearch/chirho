@@ -1,7 +1,7 @@
 import contextlib
 import functools
 import typing
-from typing import Callable, ClassVar, Generic, Iterable, Optional, Protocol, TypeVar
+from typing import Callable, ClassVar, Dict, Generic, Iterable, Optional, Protocol, TypeVar
 
 from chirho.effectful.ops.operation import Operation, define
 
@@ -29,7 +29,7 @@ class Interpretation(Protocol[T]):
 class StatefulInterpretation(Generic[S, T]):
     state: S
 
-    _op_interpretations: ClassVar[dict[Operation, Callable]] = {}
+    _op_interpretations: ClassVar[Dict[Operation, Callable]] = {}
 
     def __init_subclass__(cls) -> None:
         cls._op_interpretations = {}
@@ -54,21 +54,41 @@ class StatefulInterpretation(Generic[S, T]):
         return cls._op_interpretations.keys()
 
 
-@define(Operation)
+@typing.overload
 def register(
     op: Operation[T],
-    intp: Optional[Interpretation[T]] = None,
-    interpret_op: Optional[Callable[..., T]] = None,
-):
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    ...
+
+
+@typing.overload
+def register(
+    op: Operation[T],
+    intp: Optional[Interpretation[T]],
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    ...
+
+
+@typing.overload
+def register(
+    op: Operation[T],
+    intp: Optional[Interpretation[T]],
+    interpret_op: Callable[..., T],
+) -> Callable[..., T]:
+    ...
+
+
+@define(Operation)
+def register(op, intp=None, interpret_op=None):
     if interpret_op is None:
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        op.default = functools.wraps(op.default)(
+        setattr(op, "default", functools.wraps(op.default)(
             lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
             if result is None
             else result
-        )
+        ))
         return interpret_op
     elif isinstance(intp, Interpretation):
         intp.__setitem__(op, interpret_op)
@@ -96,4 +116,4 @@ def interpreter(intp: Interpretation):
 
 
 # bootstrap
-register(define(Interpretation))(_BaseInterpretation)
+register(define(Interpretation), None, _BaseInterpretation)
