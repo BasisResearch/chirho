@@ -1,7 +1,7 @@
 import contextlib
 import itertools
 import logging
-from typing import TypeVar
+from typing import ParamSpec, TypeVar
 
 import pytest
 
@@ -13,7 +13,7 @@ from chirho.effectful.ops.runner import product, reflect
 
 logger = logging.getLogger(__name__)
 
-
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -33,17 +33,17 @@ def times_plus_1(x: int, y: int) -> int:
     return x * y + 1
 
 
-def block(*ops: Operation[int]) -> Interpretation[int]:
+def block(*ops: Operation[..., int]) -> Interpretation[int]:
     return define(Interpretation)(
         {op: lambda v, *args, **kwargs: reflect(v) for op in ops}
     )
 
 
-def defaults(*ops: Operation[int]) -> Interpretation[int]:
+def defaults(*ops: Operation[..., int]) -> Interpretation[int]:
     return define(Interpretation)({op: op.default for op in ops})
 
 
-def times_n_handler(n: int, *ops: Operation[int]) -> Interpretation[int]:
+def times_n_handler(n: int, *ops: Operation[..., int]) -> Interpretation[int]:
     return define(Interpretation)(
         {op: lambda v, *args, **kwargs: fwd(v) * n for op in ops}
     )

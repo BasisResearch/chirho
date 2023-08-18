@@ -1,10 +1,11 @@
 import contextlib
-from typing import Optional, TypeVar
+from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -16,7 +17,9 @@ def fwd(result: Optional[T]) -> T:
 
 @define(Operation)
 def compose(
-    intp: Interpretation[T], *intps: Interpretation[T], fwd: Operation[T] = fwd
+    intp: Interpretation[T],
+    *intps: Interpretation[T],
+    fwd: Operation[[Optional[T]], T] = fwd
 ) -> Interpretation[T]:
     if len(intps) == 0:
         return intp  # unit
@@ -36,7 +39,7 @@ def compose(
 
 @define(Operation)
 @contextlib.contextmanager
-def handler(intp: Interpretation[T], *, fwd: Operation[T] = fwd):
+def handler(intp: Interpretation[T], *, fwd: Operation[[Optional[T]], T] = fwd):
     from ..internals.runtime import get_interpretation
 
     with interpreter(compose(get_interpretation(), intp, fwd=fwd)):

@@ -1,16 +1,17 @@
 import contextlib
 import functools
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Concatenate, Generic, Optional, ParamSpec, TypeVar
 
 from chirho.effectful.internals.runtime import get_interpretation, weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-Continuation = Callable[..., T]
+Continuation = Callable[[Optional[T], Optional[T]], T]
 
 
 class AffineContinuationError(Exception):
@@ -25,11 +26,11 @@ class _AffineContinuation(Generic[T]):
         self.cont = cont
         self.used = False
 
-    def __call__(self, *args, **kwargs) -> T:
+    def __call__(self, _res: Optional[T], value: Optional[T]) -> T:
         try:
             if self.used:
                 raise AffineContinuationError(f"can use {self.cont} at most once")
-            return self.cont(*args, **kwargs)
+            return self.cont(_res, value)
         finally:
             self.used = True
 
@@ -58,7 +59,7 @@ def push_prompts(conts: Interpretation[T]):
 
 
 @weak_memoize
-def get_cont_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
+def get_cont_args(op: Operation[..., T]) -> Operation[[], tuple[tuple, dict]]:
     def _null_op():
         raise ValueError(f"No args stored for {op}")
 
@@ -66,9 +67,11 @@ def get_cont_args(op: Operation[T]) -> Operation[tuple[tuple[T, ...], dict]]:
 
 
 @define(Operation)
-def capture_cont_args(op: Operation[T], op_intp: Callable[..., T]) -> Callable[..., T]:
+def capture_cont_args(
+    op: Operation[P, T], op_intp: Callable[Concatenate[Optional[T], P], T]
+) -> Callable[Concatenate[Optional[T], P], T]:
     @functools.wraps(op_intp)
-    def _wrapper(result: Optional[T], *args: T, **kwargs) -> T:
+    def _wrapper(result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
         return interpreter(
             define(Interpretation)({get_cont_args(op): lambda _: (args, kwargs)})
         )(op_intp)(result, *args, **kwargs)
@@ -78,7 +81,7 @@ def capture_cont_args(op: Operation[T], op_intp: Callable[..., T]) -> Callable[.
 
 @define(Operation)
 def bind_cont_args(
-    op: Operation[T],
+    op: Operation[P, T],
     unbound_conts: Interpretation[T],
 ) -> Interpretation[T]:
     return define(Interpretation)(
@@ -97,9 +100,9 @@ def bind_cont_args(
 @define(Operation)
 def bind_and_push_prompts(
     unbound_conts: Interpretation[T],
-    op: Operation[T],
-    op_intp: Callable[..., T],
-) -> Callable[..., T]:
+    op: Operation[P, T],
+    op_intp: Callable[Concatenate[Optional[T], P], T],
+) -> Callable[Concatenate[Optional[T], P], T]:
     return push_prompts(bind_cont_args(op, unbound_conts))(
         capture_cont_args(op, op_intp)
     )

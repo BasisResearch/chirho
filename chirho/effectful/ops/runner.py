@@ -1,11 +1,13 @@
 import contextlib
-from typing import Callable, Optional, TypeVar
+import functools
+from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts
 from chirho.effectful.ops.handler import fwd
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -19,8 +21,8 @@ def reflect(result: Optional[T]) -> T:
 def product(
     intp: Interpretation[T],
     *intps: Interpretation[T],
-    reflect: Operation[T] = reflect,
-    fwd: Operation[T] = fwd,
+    reflect: Operation[[Optional[T]], T] = reflect,
+    fwd: Operation[[Optional[T]], T] = fwd,
 ) -> Interpretation[T]:
     if len(intps) == 0:
         return intp  # unit
@@ -29,8 +31,10 @@ def product(
             intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd
         )
 
-    def _op_or_result(op: Operation[T]) -> Callable[..., T]:
-        return lambda v, *args, **kwargs: v if v is not None else op(*args, **kwargs)
+    def _op_or_result(
+        op: Operation[P, T], result: Optional[T], *args: P.args, **kwargs: P.kwargs
+    ) -> T:
+        return result if result is not None else op(*args, **kwargs)
 
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
@@ -57,7 +61,11 @@ def product(
     return define(Interpretation)(
         {
             op: bind_and_push_prompts(
-                {reflect: interpreter(intp_outer)(_op_or_result(op))},
+                {
+                    reflect: interpreter(intp_outer)(
+                        functools.partial(_op_or_result, op)
+                    )
+                },
                 op,
                 interpreter(intp_inner)(intp2[op]),
             )
@@ -69,7 +77,10 @@ def product(
 @define(Operation)
 @contextlib.contextmanager
 def runner(
-    intp: Interpretation[T], *, reflect: Operation[T] = reflect, fwd: Operation[T] = fwd
+    intp: Interpretation[T],
+    *,
+    reflect: Operation[[Optional[T]], T] = reflect,
+    fwd: Operation[[Optional[T]], T] = fwd,
 ):
     from ..internals.runtime import get_interpretation
 
