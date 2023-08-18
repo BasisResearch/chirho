@@ -2,7 +2,7 @@ import contextlib
 import functools
 import itertools
 import logging
-from typing import Optional, TypeVar
+from typing import Optional, ParamSpec, TypeVar
 
 import pytest
 
@@ -12,6 +12,7 @@ from chirho.effectful.ops.operation import Operation, define
 logger = logging.getLogger(__name__)
 
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -31,9 +32,9 @@ def times_plus_1(x: int, y: int) -> int:
     return x * y + 1
 
 
-def times_n(n: int, *ops: Operation[int]) -> Interpretation[int]:
+def times_n(n: int, *ops: Operation[..., int]) -> Interpretation[int]:
     def _op_times_n(
-        n: int, op: Operation[int], result: Optional[int], *args: int
+        n: int, op: Operation[..., int], result: Optional[int], *args: int
     ) -> int:
         return op.default(result, *args) * n
 
@@ -58,9 +59,9 @@ def test_memoized_define():
     assert define(Interpretation[int]) is define(Interpretation)
 
     assert define(Operation) is define(Operation)
-    assert define(Operation[int]) is define(Operation[int])
-    assert define(Operation[int]) is define(Operation[float])
-    assert define(Operation[int]) is define(Operation)
+    assert define(Operation[P, int]) is define(Operation[P, int])
+    assert define(Operation[P, int]) is define(Operation[P, float])
+    assert define(Operation[P, int]) is define(Operation)
 
     assert define(Operation) is not define(Interpretation)
 

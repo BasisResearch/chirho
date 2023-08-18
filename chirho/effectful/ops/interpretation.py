@@ -4,10 +4,12 @@ import typing
 from typing import (
     Callable,
     ClassVar,
+    Concatenate,
     Dict,
     Generic,
     Iterable,
     Optional,
+    ParamSpec,
     Protocol,
     TypeVar,
 )
@@ -16,63 +18,75 @@ from chirho.effectful.ops.operation import Operation, define
 
 from ..internals.base_interpretation import _BaseInterpretation
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
 @typing.runtime_checkable
 class Interpretation(Protocol[T]):
-    def __setitem__(self, op: Operation[T], interpret: Callable[..., T]) -> None:
+    def __setitem__(
+        self, op: Operation[P, T], interpret: Callable[Concatenate[Optional[T], P], T]
+    ) -> None:
         ...
 
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
+    def __getitem__(
+        self, op: Operation[P, T]
+    ) -> Callable[Concatenate[Optional[T], P], T]:
         ...
 
-    def __contains__(self, op: Operation[T]) -> bool:
+    def __contains__(self, op: Operation[..., T]) -> bool:
         ...
 
-    def keys(self) -> Iterable[Operation[T]]:
+    def keys(self) -> Iterable[Operation[..., T]]:
         ...
 
 
 class StatefulInterpretation(Generic[S, T]):
     state: S
 
-    _op_interpretations: ClassVar[Dict[Operation, Callable]] = {}
+    _op_intps: ClassVar[Dict[Operation, Callable]] = {}
 
     def __init_subclass__(cls) -> None:
-        cls._op_interpretations = {}
+        cls._op_intps = {}
         return super().__init_subclass__()
 
     def __init__(self, state: S):
         self.state = state
 
     @classmethod
-    def __setitem__(cls, op: Operation[T], interpret_op: Callable[..., T]) -> None:
-        cls._op_interpretations[op] = interpret_op
+    def __setitem__(
+        cls,
+        op: Operation[P, T],
+        interpret_op: Callable[Concatenate[S, Optional[T], P], T],
+    ) -> None:
+        cls._op_intps[op] = interpret_op
 
     @classmethod
-    def __contains__(cls, op: Operation[T]) -> bool:
-        return op in cls._op_interpretations
+    def __contains__(cls, op: Operation[..., T]) -> bool:
+        return op in cls._op_intps
 
-    def __getitem__(self, op: Operation[T]) -> Callable[..., T]:
-        return functools.partial(self._op_interpretations[op], self.state)
+    def __getitem__(
+        self, op: Operation[P, T]
+    ) -> Callable[Concatenate[Optional[T], P], T]:
+        op_intp: Callable[Concatenate[S, Optional[T], P], T] = self._op_intps[op]
+        return functools.partial(op_intp, self.state)
 
     @classmethod
-    def keys(cls) -> Iterable[Operation[T]]:
-        return cls._op_interpretations.keys()
+    def keys(cls) -> Iterable[Operation[..., T]]:
+        return cls._op_intps.keys()
 
 
 @typing.overload
 def register(
-    op: Operation[T],
+    op: Operation[P, T],
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     ...
 
 
 @typing.overload
 def register(
-    op: Operation[T],
+    op: Operation[P, T],
     intp: Optional[Interpretation[T]],
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     ...
@@ -80,10 +94,10 @@ def register(
 
 @typing.overload
 def register(
-    op: Operation[T],
+    op: Operation[P, T],
     intp: Optional[Interpretation[T]],
-    interpret_op: Callable[..., T],
-) -> Callable[..., T]:
+    interpret_op: Callable[Concatenate[Optional[T], P], T],
+) -> Callable[Concatenate[Optional[T], P], T]:
     ...
 
 
