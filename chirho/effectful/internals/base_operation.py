@@ -1,13 +1,14 @@
-from typing import Callable, Generic, Optional, TypeVar
+from typing import Callable, Generic, Optional, ParamSpec, TypeVar
 
 from ..internals import runtime
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-class _BaseOperation(Generic[T]):
-    def __init__(self, body: Callable[..., T]):
+class _BaseOperation(Generic[P, T]):
+    def __init__(self, body: Callable[P, T]):
         self._body = body
 
     def __repr__(self) -> str:
@@ -15,10 +16,10 @@ class _BaseOperation(Generic[T]):
             f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
         )
 
-    def default(self, result: Optional[T], *args, **kwargs) -> T:
+    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
         return result if result is not None else self._body(*args, **kwargs)
 
-    def __call__(self, *args, **kwargs) -> T:
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         intp = (
             runtime.get_runtime().interpretation
             if self is runtime.get_interpretation

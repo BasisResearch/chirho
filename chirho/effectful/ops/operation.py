@@ -1,44 +1,36 @@
 import typing
-from typing import Optional, Protocol, Type, TypeVar
+from typing import Optional, ParamSpec, Protocol, Type, TypeVar
 
 from ..internals import runtime
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
 @typing.runtime_checkable
-class Operation(Protocol[T]):
-    def __call__(self, *args, **kwargs) -> T:
+class Operation(Protocol[P, T]):
+    def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
-    def default(self, result: Optional[T], *args, **kwargs) -> T:
+    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
 
-@typing.overload
-def define(m: Type[Operation[T]]) -> Operation[Operation[T]]:
-    ...
-
-
-@typing.overload
-def define(m: Type[T]) -> Operation[T]:
-    ...
-
-
-def define(m):
+def define(m: Type[T]) -> Operation[P, T]:
     """
     Scott encoding of a type as its constructor.
     """
-    if typing.get_origin(m) not in (m, None):
-        return define(typing.get_origin(m))
+    if not typing.TYPE_CHECKING:
+        if typing.get_origin(m) not in (m, None):
+            return define(typing.get_origin(m))
 
     if m is Operation:
         from ..internals.base_operation import _BaseOperation
 
-        return _BaseOperation[Operation[m]](_BaseOperation[m])
+        return _BaseOperation(_BaseOperation)
 
-    defop: Operation[Operation[m]] = define(Operation)
+    defop: Operation[..., Operation[P, T]] = define(Operation[P, T])
     return defop(m)
 
 
