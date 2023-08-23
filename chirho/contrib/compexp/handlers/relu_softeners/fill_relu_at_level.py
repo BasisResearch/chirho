@@ -33,11 +33,8 @@ class FillReluAtLevel(pyro.poutine.messenger.Messenger):
     def _symmetric_absx(self, x):
         return self._tan_pi_8 * torch.abs(x)
 
-    def _pyro_srelu(self, msg) -> None:
-        x = msg["args"][0]
-
-        b = self.beta
-
+    # @torch.compile
+    def _srelu_compiled(self, b, x):
         # Negative boundary of quadratic piece.
         nb = -b * self._cos_a + self._symmetric_absx(b) * self._sin_a
 
@@ -56,8 +53,8 @@ class FillReluAtLevel(pyro.poutine.messenger.Messenger):
             b * (2 * b - x[mask_between_nb_pb] * self._sqrt_2_minus_sqrt_2)) * torch.sqrt(
             -1 + self._sqrt_2) / self._4_minus_3_sqrt_2
         term2[mask_between_nb_pb] = torch.sqrt(self._sqrt_2 + 2) * (
-            2 * b - self._sqrt_2 * x[mask_between_nb_pb] * self._sqrt_2_minus_sqrt_2 +
-            x[mask_between_nb_pb] * self._sqrt_2_minus_sqrt_2) / self._4_minus_3_sqrt_2
+                2 * b - self._sqrt_2 * x[mask_between_nb_pb] * self._sqrt_2_minus_sqrt_2 +
+                x[mask_between_nb_pb] * self._sqrt_2_minus_sqrt_2) / self._4_minus_3_sqrt_2
 
         # Compute the result based on the masks
         result = torch.zeros_like(x)
@@ -65,7 +62,10 @@ class FillReluAtLevel(pyro.poutine.messenger.Messenger):
         result[mask_between_nb_pb] = term1[mask_between_nb_pb] - term2[mask_between_nb_pb]
         result[mask_gt_pb] = x[mask_gt_pb]
 
-        msg["value"] = result
+        return result
+
+    def _pyro_srelu(self, msg) -> None:
+        msg["value"] = self._srelu_compiled(self.beta, msg["args"][0])
 
 
 if __name__ == "__main__":
@@ -73,9 +73,27 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     xx = torch.linspace(-10., 10., 1000)
+    px = torch.nn.Parameter(tt(0.0))
     with FillReluAtLevel(beta=tt(5.0)):
         yy = srelu(xx)
+        yn = srelu(xx[0])
+        yq = srelu(xx[500])
+        yp = srelu(xx[-1])
 
-    plt.plot(xx, torch.relu(xx))
-    plt.plot(xx, yy, linestyle='--')
+        py = srelu(px)
+
+    print(yn, yq, yp)
+
+    with FillReluAtLevel(beta=tt(5.0)):
+        grad_x = []
+        for x_ in xx:
+            px.data = x_
+            py = srelu(px)
+            grad_x.append(torch.autograd.grad(py, px)[0].item())
+    plt.plot(xx, grad_x, linestyle='-.', label='d/dx srelu(beta=5.0)')
+
+    plt.plot(xx, srelu(xx), linestyle='-', label='relu')
+    plt.plot(xx, yy, linestyle='--', label='srelu(beta=5.0)')
+    plt.legend()
+
     plt.show()
