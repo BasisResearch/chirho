@@ -56,7 +56,7 @@ class _GuideRegistrationMixin:
 
     def register_guides(self, ce: ComposedExpectation, model: ModelType,
                         auto_guide: Optional[Type[AutoGuide]], auto_guide_kwargs=None,
-                        allow_repeated_names=False):
+                        allow_repeated_names=False, auto_guide_model_wrap: Optional[Callable] = None):
         self.clear_guides()
 
         if auto_guide_kwargs is None:
@@ -78,7 +78,9 @@ class _GuideRegistrationMixin:
             else:
                 if auto_guide is None:
                     raise ValueError("No guide preregistered and no no auto guide class provided.")
-                guide = auto_guide(model, **auto_guide_kwargs)
+                if auto_guide_model_wrap is None:
+                    auto_guide_model_wrap = lambda m: m
+                guide = auto_guide(auto_guide_model_wrap(model), **auto_guide_kwargs)
 
             if not allow_repeated_names:
                 if part.name in self.pseudo_densities:

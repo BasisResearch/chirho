@@ -10,6 +10,11 @@ class MonteCarloExpectationHandler(ExpectationHandler):
     def __init__(self, num_samples: int):
         self.num_samples = num_samples
 
+    def _pyro_condition(self, msg) -> None:
+        raise NotImplementedError("MonteCarloExpectationHandler does not support conditioning"
+                                  " directly, as sampling from the posterior requires inference."
+                                  "Try running SVI and then calling the expectation with the guide.")
+
     def _pyro__compute_expectation_atom(self, msg) -> None:
         super()._pyro_compute_expectation_atom(msg)
 
