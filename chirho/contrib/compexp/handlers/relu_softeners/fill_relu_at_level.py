@@ -34,7 +34,9 @@ class FillReluAtLevel(pyro.poutine.messenger.Messenger):
         return self._tan_pi_8 * torch.abs(x)
 
     # @torch.compile
-    def _srelu_compiled(self, b, x):
+    def _srelu_compiled(self, x):
+        b = self.beta
+
         # Negative boundary of quadratic piece.
         nb = -b * self._cos_a + self._symmetric_absx(b) * self._sin_a
 
@@ -58,14 +60,14 @@ class FillReluAtLevel(pyro.poutine.messenger.Messenger):
 
         # Compute the result based on the masks
         result = torch.zeros_like(x)
-        result[mask_lt_nb] = tt(0.0)
+        result[mask_lt_nb] = tt(0.0).type(x.dtype)
         result[mask_between_nb_pb] = term1[mask_between_nb_pb] - term2[mask_between_nb_pb]
         result[mask_gt_pb] = x[mask_gt_pb]
 
         return result
 
     def _pyro_srelu(self, msg) -> None:
-        msg["value"] = self._srelu_compiled(self.beta, msg["args"][0])
+        msg["value"] = self._srelu_compiled(msg["args"][0])
 
 
 if __name__ == "__main__":
