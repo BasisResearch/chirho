@@ -5,6 +5,5 @@ from .handlers.expectation_handler import ExpectationHandler
 from .handlers.importance_sampling_expectation_handler import ImportanceSamplingExpectationHandler
 from .handlers.montecarlo_expectation_handler import MonteCarloExpectationHandler
 from .typedecs import StochasticFunction, ExpectationFunction
-from .utils import soft_relu
 E = ExpectationAtom
 C = Constant
