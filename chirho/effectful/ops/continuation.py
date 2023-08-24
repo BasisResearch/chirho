@@ -1,9 +1,10 @@
 import contextlib
 import functools
-from typing import Callable, Concatenate, Generic, Optional, ParamSpec, TypeVar
+from typing import Callable, Concatenate, Optional, ParamSpec, Protocol, TypeVar
 
-from chirho.effectful.internals.runtime import get_interpretation, weak_memoize
-from chirho.effectful.ops.interpretation import Interpretation, interpreter
+from chirho.effectful.internals.base_continuation import _BaseAffineContinuation
+from chirho.effectful.internals.runtime import weak_memoize
+from chirho.effectful.ops.interpretation import Interpretation, interpreter, register
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -11,36 +12,23 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-Continuation = Callable[[Optional[T], Optional[T]], T]
+class Continuation(Protocol[T]):
+    def __call__(self, result: Optional[T], value: Optional[T]) -> T:
+        ...
 
 
 class AffineContinuationError(Exception):
     pass
 
 
-class _AffineContinuation(Generic[T]):
-    cont: Continuation[T]
-    used: bool
-
-    def __init__(self, cont: Continuation[T]):
-        self.cont = cont
-        self.used = False
-
-    def __call__(self, _res: Optional[T], value: Optional[T]) -> T:
-        try:
-            if self.used:
-                raise AffineContinuationError(f"can use {self.cont} at most once")
-            return self.cont(_res, value)
-        finally:
-            self.used = True
-
-
 @define(Operation)
 @contextlib.contextmanager
 def push_prompts(conts: Interpretation[T]):
+    from chirho.effectful.internals.runtime import get_interpretation
+
     resets = define(Interpretation)(
         {
-            p: _AffineContinuation(
+            p: define(Continuation)(
                 interpreter(
                     define(Interpretation)(
                         {
@@ -106,3 +94,7 @@ def bind_and_push_prompts(
     return push_prompts(bind_cont_args(op, unbound_conts))(
         capture_cont_args(op, op_intp)
     )
+
+
+# bootstrap
+register(define(Continuation), None, _BaseAffineContinuation)
