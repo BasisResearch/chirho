@@ -6,6 +6,7 @@ from ..typedecs import ModelType
 import torch
 from torch import Tensor as TT, tensor as tt
 from ..handlers.expectation_handler import ExpectationHandler
+from ..ops import srelu
 if TYPE_CHECKING:
     from .expectation_atom import ExpectationAtom
 
@@ -108,7 +109,7 @@ class ComposedExpectation:
                 cegrad = fgp + gfp
             elif self.op is torch.divide:
                 cegrad = (fgp - gfp) / (self.children[1] * self.children[1])
-        elif self.op is torch.relu:
+        elif self.op is srelu:
             assert len(self.children) == 1, "Relu operation should involve exactly one child."
 
             # FIXME this requires further investigation, but a relu of sample expectations wrt the same variable doesn't
@@ -133,7 +134,7 @@ class ComposedExpectation:
                 raise NotImplementedError("Gradient of composed expectation not implemented for this relu.")
 
             relu_child = ExpectationAtom(
-                f=lambda s: torch.relu(child.f(s)),
+                f=lambda s: srelu(child.f(s)),
                 name=f"relu({child.name})",
             )
 
@@ -169,7 +170,7 @@ class ComposedExpectation:
         return self.__op_other(-other, torch.add)
 
     def relu(self) -> "ComposedExpectation":
-        return self.__op_self(torch.relu)
+        return self.__op_self(srelu)
 
     def __neg__(self):
         from .constant import Constant  # TODO 28sl2810 reorganize inheritance to avoid inline import.

@@ -8,6 +8,7 @@ class FillReluAtLevelExp(pyro.poutine.messenger.Messenger):
     def __init__(self, beta):
         self.beta = beta
 
+        # TODO c wasn't originally a constant, now that it is we can greatly simplify the equation in _srelu_compiled.
         self._c = torch.exp(tt(-1.))
 
     # @torch.compile
