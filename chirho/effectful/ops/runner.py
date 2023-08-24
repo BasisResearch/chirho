@@ -42,14 +42,14 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    intp_outer = define(Interpretation)(
+    block_outer = define(Interpretation)(
         {
             op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp[op])
             for op in intp.keys()
         }
     )
 
-    intp_inner = define(Interpretation)(
+    block_inner = define(Interpretation)(
         {
             op: bind_and_push_prompts({fwd: lambda _, v: reflect(v)}, op, intp2[op])
             for op in intp2.keys()
@@ -62,12 +62,12 @@ def product(
         {
             op: bind_and_push_prompts(
                 {
-                    reflect: interpreter(intp_outer)(
+                    reflect: interpreter(block_outer)(
                         functools.partial(_op_or_result, op)
                     )
                 },
                 op,
-                interpreter(intp_inner)(intp2[op]),
+                interpreter(block_inner)(intp2[op]),
             )
             for op in intp2.keys()
         }
