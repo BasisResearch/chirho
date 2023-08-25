@@ -28,6 +28,8 @@ class _GuideRegistrationMixin:
             guide = self.guides[k]
             losses[k] = []
 
+            # print("Training guide: ", k)
+
             # noinspection PyTypeChecker
             elbo = pyro.infer.Trace_ELBO()(pseudo_density, guide)
             elbo()  # Call to surface parameters for optimizer.
@@ -143,7 +145,7 @@ class _GuideRegistrationMixin:
     #  and then plot to the ax.
     def plot_guide_pseudo_likelihood_2d(
             self, rv1_name, rv2_name, ax, key: str, n: int = 1000, resolution: int = 5,
-            guide_kde_kwargs=None, guide_scatter_kwargs=None):
+            guide_kde_kwargs=None, guide_scatter_kwargs=None, model_contour_kwargs=None):
 
         if not len(self.keys()):
             raise ValueError("No guides registered. Did you call "
@@ -186,7 +188,8 @@ class _GuideRegistrationMixin:
         # ax.contour(X, Y, guide_y, colors='orange', levels=4)
         guide_scatter_kwargs = guide_scatter_kwargs or dict(color='orange', alpha=0.5)
         ax.scatter(guide_samples[:, 0], guide_samples[:, 1], **guide_scatter_kwargs)
-        ax.contour(X, Y, model_y, colors='gray', levels=8)
+        model_contour_kwargs = model_contour_kwargs or dict(colors='gray', levels=6, linewidths=0.7)
+        ax.contour(X, Y, model_y, **model_contour_kwargs)
 
     def plot_guide_pseudo_likelihood(
             self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,
