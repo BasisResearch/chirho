@@ -41,3 +41,7 @@ def test_toy_tabi_exact(d_c_gt):
         with iseh:
             cost_estimate = expected_cost(toy.model)
             assert torch.isclose(cost_estimate, torch.tensor(gt), atol=1e-4)
+
+
+def test_toy_tabi_grad_exact():
+    raise NotImplementedError("TODO")

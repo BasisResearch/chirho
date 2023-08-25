@@ -163,7 +163,8 @@ class ExpectationAtom(ComposedExpectation):
                 # Note 2j0s81 have to differentiate wrt whole tensor, cz indexing breaks grad apparently...
                 inputs=params,
                 retain_graph=True,
-                allow_unused=True
+                create_graph=True,
+                allow_unused=True,
             )
             if df is None:
                 raise ValueError(f"Gradient of expectation atom named {self.name} is None. "

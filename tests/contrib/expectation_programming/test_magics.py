@@ -91,3 +91,8 @@ def test_neg_relu_comp():
 
     with ep.MonteCarloExpectationHandler(num_samples=1):
         assert torch.isclose(expected_cost_neg_relu(dirac_xy), tt(4.))
+
+
+@pytest.mark.skip(reason="TODO")
+def test_second_deriv_correct():
+    raise NotImplementedError
