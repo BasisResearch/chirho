@@ -1,11 +1,11 @@
 import typing
-from typing import Optional, ParamSpec, Protocol, Type, TypeVar
+from typing import ParamSpec, Protocol, Type, TypeVar
 
 from ..internals import runtime
 
 P = ParamSpec("P")
 S = TypeVar("S")
-T = TypeVar("T")
+T = TypeVar("T", covariant=True)
 
 
 @typing.runtime_checkable
@@ -13,7 +13,7 @@ class Operation(Protocol[P, T]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
-    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+    def default(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
 
