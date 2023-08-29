@@ -1,4 +1,4 @@
-from typing import Callable, Generic, ParamSpec, TypeVar
+from typing import Callable, Generic, Optional, ParamSpec, TypeVar
 
 from ..internals import runtime
 
@@ -16,8 +16,8 @@ class _BaseOperation(Generic[P, T]):
             f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
         )
 
-    def default(self, *args: P.args, **kwargs: P.kwargs) -> T:
-        return self._body(*args, **kwargs)
+    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+        return result if result is not None else self._body(*args, **kwargs)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         intp = (
@@ -29,4 +29,4 @@ class _BaseOperation(Generic[P, T]):
             interpret = intp[self]
         except KeyError:
             interpret = self.default
-        return interpret(*args, **kwargs)
+        return interpret(None, *args, **kwargs)
