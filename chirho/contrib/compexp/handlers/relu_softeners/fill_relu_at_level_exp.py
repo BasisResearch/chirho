@@ -16,7 +16,7 @@ class FillReluAtLevelExp(pyro.poutine.messenger.Messenger):
         """
         An experimental temperature based relaxation of the relu that maintains a non-negative
         range.
-        See https://www.desmos.com/calculator/vnjgtf4f6l for more details.
+        See https://www.desmos.com/calculator/5u7wealjpq for more details.
         """
 
         c = self._c

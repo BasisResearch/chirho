@@ -43,7 +43,7 @@ class _GuideRegistrationMixin:
                 optim.zero_grad()
 
                 loss = elbo()
-                losses[k].append(loss)
+                losses[k].append(loss.clone().detach())
                 loss.backward()
 
                 if adjust_grads_ is not None:
