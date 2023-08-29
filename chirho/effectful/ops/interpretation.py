@@ -25,10 +25,14 @@ T = TypeVar("T")
 
 @typing.runtime_checkable
 class Interpretation(Protocol[T]):
-    def __setitem__(self, op: Operation[P, T], interpret: Callable[P, T]) -> None:
+    def __setitem__(
+        self, op: Operation[P, T], interpret: Callable[Concatenate[Optional[T], P], T]
+    ) -> None:
         ...
 
-    def __getitem__(self, op: Operation[P, T]) -> Callable[P, T]:
+    def __getitem__(
+        self, op: Operation[P, T]
+    ) -> Callable[Concatenate[Optional[T], P], T]:
         ...
 
     def __contains__(self, op: Operation[..., T]) -> bool:
@@ -54,7 +58,7 @@ class StatefulInterpretation(Generic[S, T]):
     def __setitem__(
         cls,
         op: Operation[P, T],
-        interpret_op: Callable[Concatenate[S, P], T],
+        interpret_op: Callable[Concatenate[S, Optional[T], P], T],
     ) -> None:
         cls._op_intps[op] = interpret_op
 
@@ -62,8 +66,10 @@ class StatefulInterpretation(Generic[S, T]):
     def __contains__(cls, op: Operation[..., T]) -> bool:
         return op in cls._op_intps
 
-    def __getitem__(self, op: Operation[P, T]) -> Callable[P, T]:
-        op_intp: Callable[Concatenate[S, P], T] = self._op_intps[op]
+    def __getitem__(
+        self, op: Operation[P, T]
+    ) -> Callable[Concatenate[Optional[T], P], T]:
+        op_intp: Callable[Concatenate[S, Optional[T], P], T] = self._op_intps[op]
         return functools.partial(op_intp, self.state)
 
     @classmethod
@@ -90,8 +96,8 @@ def register(
 def register(
     op: Operation[P, T],
     intp: Optional[Interpretation[T]],
-    interpret_op: Callable[P, T],
-) -> Callable[P, T]:
+    interpret_op: Callable[Concatenate[Optional[T], P], T],
+) -> Callable[Concatenate[Optional[T], P], T]:
     ...
 
 
@@ -101,7 +107,15 @@ def register(op, intp=None, interpret_op=None):
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        setattr(op, "default", interpret_op)
+        setattr(
+            op,
+            "default",
+            functools.wraps(op.default)(
+                lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
+                if result is None
+                else result
+            ),
+        )
         return interpret_op
     elif isinstance(intp, Interpretation):
         intp.__setitem__(op, interpret_op)
