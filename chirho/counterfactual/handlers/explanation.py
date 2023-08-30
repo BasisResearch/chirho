@@ -7,10 +7,12 @@ import pyro
 import pyro.distributions
 import torch
 
+from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.counterfactual.ops import preempt
-from chirho.indexed.ops import IndexSet, gather, indices_of, scatter
+from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter, indexset_as_mask
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
+from chirho.observational.handlers.soft_conditioning import SoftEqKernel
 
 T = TypeVar("T")
 
@@ -111,3 +113,57 @@ def PartOfCause(
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
+
+
+class Factors(pyro.poutine.messenger.Messenger):
+    def __init__(
+        self,
+        factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
+        prefix: str = "__factor_",
+    ):
+        self.factors = factors
+        self.prefix = prefix
+        super().__init__()
+
+    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+        try:
+            factor = self.factors[msg["name"]]
+        except KeyError:
+            return
+
+        pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
+
+
+def consequent_differs(
+    consequent: torch.Tensor, *, alpha: float | torch.Tensor = 1e-6, event_dim: int = 0
+) -> torch.Tensor:
+    observed_consequent = gather(consequent, get_factual_indices(), event_dim=event_dim)
+    log_factor = -SoftEqKernel(alpha, event_dim=event_dim)(consequent, observed_consequent)
+    return cond(torch.as_tensor(0.), log_factor, indexset_as_mask(get_factual_indices()), event_dim=0)
+
+
+@contextlib.contextmanager
+def Responsibility(
+    antecedents: Mapping[str, Intervention[torch.Tensor]],
+    treatments: Mapping[str, Intervention[torch.Tensor]],
+    witnesses: Mapping[str, Intervention[torch.Tensor]],
+    consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
+    *,
+    antecedent_bias: float = 0.0,
+    treatment_bias: float = 0.0,
+    witness_bias: float = 0.0,
+):
+    antecedent_handler = PartOfCause(
+        antecedents, bias=antecedent_bias, prefix="__antecedent_"
+    )
+    treatment_handler = PartOfCause(
+        treatments, bias=treatment_bias, prefix="__treatment_"
+    )
+    witness_handler = BiasedPreemptions(
+        actions=witnesses, bias=witness_bias, prefix="__witness_"
+    )
+    consequent_handler = Factors(factors=consequents, prefix="__consequent_")
+
+    with antecedent_handler, treatment_handler, witness_handler, consequent_handler:
+        with pyro.poutine.trace() as tr:
+            yield tr.trace
