@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Any, Dict, List, TypeVar
+from typing import Any, Dict, Iterable, Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -17,12 +17,15 @@ T = TypeVar("T")
 def preempt_with_factual(
     value: T,
     *,
-    antecedents: List[str] = [],
+    antecedents: Optional[Iterable[str]] = None,
     event_dim: int = 0,
 ) -> T:
-    antecedents = [
-        a for a in antecedents if a in indices_of(value, event_dim=event_dim)
-    ]
+    if antecedents is None:
+        antecedents = list(indices_of(value, event_dim=event_dim).keys())
+    else:
+        antecedents = [
+            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+        ]
 
     factual_value = gather(
         value,
