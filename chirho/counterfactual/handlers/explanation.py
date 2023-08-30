@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Any, Dict, Iterable, Optional, TypeVar
+from typing import Any, Dict, Iterable, Mapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -45,7 +45,7 @@ def preempt_with_factual(
 class BiasedPreemptions(pyro.poutine.messenger.Messenger):
     def __init__(
         self,
-        actions: Dict[str, Intervention[torch.Tensor]],
+        actions: Mapping[str, Intervention[torch.Tensor]],
         *,
         bias: float = 0.0,
         prefix: str = "__witness_split_",
@@ -56,7 +56,9 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
-        if msg["name"] not in self.actions:
+        try:
+            action = self.actions[msg["name"]]
+        except KeyError:
             return
 
         weights = torch.tensor(
@@ -67,7 +69,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 
         msg["value"] = preempt(
             msg["value"],
-            (self.actions[msg["name"]],),
+            (action,),
             case,
             event_dim=len(msg["fn"].event_shape),
             name=f"{self.prefix}{msg['name']}",
@@ -76,7 +78,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 
 @contextlib.contextmanager
 def PartOfCause(
-    actions: Dict[str, Intervention[torch.Tensor]],
+    actions: Mapping[str, Intervention[torch.Tensor]],
     bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
@@ -91,3 +93,5 @@ def PartOfCause(
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
+
+
