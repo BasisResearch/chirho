@@ -24,7 +24,7 @@ T = TypeVar("T")
 
 
 def factual_preemption(
-    *, antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
+    antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
 ) -> Callable[[T], T]:
     def _preemption_with_factual(value: T) -> T:
         if antecedents is None:
@@ -96,6 +96,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 @contextlib.contextmanager
 def PartOfCause(
     actions: Mapping[str, Intervention[torch.Tensor]],
+    *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
@@ -117,6 +118,7 @@ class Factors(pyro.poutine.messenger.Messenger):
     def __init__(
         self,
         factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
+        *,
         prefix: str = "__factor_",
     ):
         self.factors = factors
@@ -133,7 +135,7 @@ class Factors(pyro.poutine.messenger.Messenger):
 
 
 def consequent_differs_factor(
-    *, alpha: float = 1e-6, event_dim: int = 0
+    alpha: float = 1e-6, event_dim: int = 0
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
         observed_consequent = gather(
