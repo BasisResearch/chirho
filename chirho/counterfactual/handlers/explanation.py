@@ -23,7 +23,7 @@ P = ParamSpec("P")
 T = TypeVar("T")
 
 
-def preemption_with_factual(
+def factual_preemption(
     *, antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
 ) -> Callable[[T], T]:
     def _preemption_with_factual(value: T) -> T:
@@ -101,7 +101,7 @@ def PartOfCause(
 ):
     # TODO support event_dim != 0
     preemptions = {
-        antecedent: preemption_with_factual(antecedents=list(actions.keys()))
+        antecedent: factual_preemption(antecedents=list(actions.keys()))
         for antecedent in actions.keys()
     }
 
@@ -132,7 +132,7 @@ class Factors(pyro.poutine.messenger.Messenger):
         pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
 
 
-def consequent_differs(
+def consequent_differs_factor(
     *, alpha: float = 1e-6, event_dim: int = 0
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
