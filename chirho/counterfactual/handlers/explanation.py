@@ -64,7 +64,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         self,
         actions: Mapping[str, Intervention[torch.Tensor]],
         *,
-        bias: float = 0.0,
+        bias: float = 0.5,
         prefix: str = "__witness_split_",
     ):
         self.actions = actions
@@ -78,15 +78,18 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         except KeyError:
             return
 
+        action = (action,) if not isinstance(action, tuple) else action
+        num_actions = len(action) if isinstance(action, tuple) else 1
         weights = torch.tensor(
-            [0.5 - self.bias, 0.5 + self.bias], device=msg["value"].device
+            [1 - self.bias] + ([self.bias / num_actions] * num_actions),
+            device=msg["value"].device
         )
         case_dist = pyro.distributions.Categorical(weights)
         case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist)
 
         msg["value"] = preempt(
             msg["value"],
-            (action,),
+            action,
             case,
             event_dim=len(msg["fn"].event_shape),
             name=f"{self.prefix}{msg['name']}",
