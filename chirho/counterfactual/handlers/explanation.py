@@ -100,7 +100,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 def PartOfCause(
     actions: Mapping[str, Intervention[torch.Tensor]],
     *,
-    bias: float = 0.0,
+    bias: float = 0.5,
     prefix: str = "__cause_split_",
 ):
     # TODO support event_dim != 0
@@ -164,9 +164,9 @@ def Responsibility(
     witnesses: Mapping[str, Intervention[torch.Tensor]],
     consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
     *,
-    antecedent_bias: float = 0.0,
-    treatment_bias: float = 0.0,
-    witness_bias: float = 0.0,
+    antecedent_bias: float = 0.5,
+    treatment_bias: float = 0.5,
+    witness_bias: float = 0.5,
 ):
     antecedent_handler = PartOfCause(
         antecedents, bias=antecedent_bias, prefix="__antecedent_"
