@@ -1,15 +1,21 @@
-from typing import TypeVar
-
 import functools
 import logging
+from typing import TypeVar
 
 import pyro
 import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual, Preemptions
-from chirho.counterfactual.handlers.explanation import PartOfCause
+from chirho.counterfactual.handlers.counterfactual import (
+    MultiWorldCounterfactual,
+    Preemptions,
+)
+from chirho.counterfactual.handlers.explanation import (
+    BiasedPreemptions,
+    part_of_cause,
+    preempt_with_factual,
+)
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.observational.handlers import condition
 
@@ -73,7 +79,7 @@ def test_single_layer_stones():
     }
 
     with MultiWorldCounterfactual() as mwc:
-        with PartOfCause({"sally_throws": 0.0}, prefix="preempt_"):
+        with part_of_cause({"sally_throws": 0.0}, prefix="preempt_"):
             with condition(
                 data={k: torch.as_tensor(v) for k, v in observations.items()}
             ):
@@ -130,22 +136,27 @@ def test_two_layer_stones():
     evaluated_node_counterfactual = {"sally_throws": 0.0}
     witness_preemptions = {
         "bill_hits": functools.partial(
-            PartOfCause.preempt_with_factual,
-            antecedents=["sally_throws"]  # fails with incorrect antecedents=["bill_hits"]
+            preempt_with_factual,
+            antecedents=[
+                "sally_throws"
+            ],  # fails with incorrect antecedents=["bill_hits"]
         ),
     }
 
     pinned_preemption_variables = {
         "preempt_sally_throws": torch.tensor(0),
-        "__split_bill_hits": torch.tensor(1),
+        "witness_preempt_bill_hits": torch.tensor(1),
     }
 
-    with MultiWorldCounterfactual() as mwc, \
-            PartOfCause(evaluated_node_counterfactual, prefix="preempt_"), \
-            Preemptions(actions=witness_preemptions), \
-            condition(data=pinned_preemption_variables), \
-            condition(data={k: torch.as_tensor(v) for k, v in observations.items()}), \
-            pyro.poutine.trace() as trace:
+    with MultiWorldCounterfactual() as mwc, part_of_cause(
+        evaluated_node_counterfactual, prefix="preempt_"
+    ), BiasedPreemptions(
+        actions=witness_preemptions, prefix="witness_preempt_"
+    ), condition(
+        data=pinned_preemption_variables
+    ), condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    ), pyro.poutine.trace() as trace:
         stones_bayesian_model()
 
     tr = trace.trace.nodes
@@ -158,7 +169,7 @@ def test_two_layer_stones():
             event_dim=0,
         )
 
-        preempt_bill_hits = tr["__split_bill_hits"]["value"]
+        preempt_bill_hits = tr["witness_preempt_bill_hits"]["value"]
         obs_bill_hits = gather(
             tr["bill_hits"]["value"],
             IndexSet(**{"sally_throws": {0}}),
@@ -178,7 +189,7 @@ def test_two_layer_stones():
     outcome = {
         "preempt_sally_throws": preempt_sally_throws.item(),
         "int_sally_hits": int_sally_hits.item(),
-        "__split_bill_hits": preempt_bill_hits.item(),
+        "witness_preempt_bill_hits": preempt_bill_hits.item(),
         "obs_bill_hits": obs_bill_hits.item(),
         "int_bill_hits": int_bill_hits.item(),
         "intervened_bottle_shatters": int_bottle_shatters.item(),
