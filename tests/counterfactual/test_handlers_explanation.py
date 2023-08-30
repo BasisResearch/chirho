@@ -123,7 +123,8 @@ def test_single_layer_stones():
     ) == [1, 1.0, 0.0, 0.0, 1.0]
 
 
-def test_two_layer_stones():
+@pytest.mark.parametrize("antecedents", [None, ("sally_throws",), ("bill_hits",)])
+def test_two_layer_stones(antecedents):
     observations = {
         "prob_sally_throws": 1.0,
         "prob_bill_throws": 1.0,
@@ -137,9 +138,7 @@ def test_two_layer_stones():
     witness_preemptions = {
         "bill_hits": functools.partial(
             preempt_with_factual,
-            antecedents=[
-                "sally_throws"
-            ],  # fails with incorrect antecedents=["bill_hits"]
+            antecedents=antecedents
         ),
     }
 
@@ -195,4 +194,8 @@ def test_two_layer_stones():
         "intervened_bottle_shatters": int_bottle_shatters.item(),
     }
 
-    assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
+    if antecedents == ("bill_hits",):
+        with pytest.raises(AssertionError):
+            assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
+    else:
+        assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
