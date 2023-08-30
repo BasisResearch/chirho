@@ -1,12 +1,13 @@
 import contextlib
 import functools
-from typing import Any, Dict, Iterable, Mapping, Optional, TypeVar
+import typing
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions
 import torch
 
-from chirho.counterfactual.ops import preempt, split
+from chirho.counterfactual.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
@@ -14,12 +15,31 @@ from chirho.interventional.ops import Intervention
 T = TypeVar("T")
 
 
+@typing.overload
+def preempt_with_factual(
+    *, antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
+) -> Callable[[T], T]:
+    ...
+
+
+@typing.overload
 def preempt_with_factual(
     value: T,
     *,
     antecedents: Optional[Iterable[str]] = None,
     event_dim: int = 0,
 ) -> T:
+    ...
+
+
+def preempt_with_factual(value=None, *, antecedents=None, event_dim=0):
+    if value is None:
+        return functools.partial(
+            preempt_with_factual,
+            antecedents=antecedents,
+            event_dim=event_dim,
+        )
+
     if antecedents is None:
         antecedents = list(indices_of(value, event_dim=event_dim).keys())
     else:
@@ -82,16 +102,12 @@ def PartOfCause(
     bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
+    # TODO support event_dim != 0
     preemptions = {
-        antecedent: functools.partial(
-            preempt_with_factual,
-            antecedents=list(actions.keys()),
-        )
+        antecedent: preempt_with_factual(antecedents=list(actions.keys()))
         for antecedent in actions.keys()
     }
 
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
-
-

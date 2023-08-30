@@ -135,12 +135,7 @@ def test_two_layer_stones(antecedents):
     }
 
     evaluated_node_counterfactual = {"sally_throws": 0.0}
-    witness_preemptions = {
-        "bill_hits": functools.partial(
-            preempt_with_factual,
-            antecedents=antecedents
-        ),
-    }
+    witness_preemptions = {"bill_hits": preempt_with_factual(antecedents=antecedents)}
 
     pinned_preemption_variables = {
         "preempt_sally_throws": torch.tensor(0),
