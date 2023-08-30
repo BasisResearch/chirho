@@ -14,7 +14,7 @@ from chirho.counterfactual.handlers.counterfactual import (
 from chirho.counterfactual.handlers.explanation import (
     BiasedPreemptions,
     PartOfCause,
-    preempt_with_factual,
+    preemption_with_factual,
 )
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.observational.handlers import condition
@@ -135,7 +135,9 @@ def test_two_layer_stones(antecedents):
     }
 
     evaluated_node_counterfactual = {"sally_throws": 0.0}
-    witness_preemptions = {"bill_hits": preempt_with_factual(antecedents=antecedents)}
+    witness_preemptions = {
+        "bill_hits": preemption_with_factual(antecedents=antecedents)
+    }
 
     pinned_preemption_variables = {
         "preempt_sally_throws": torch.tensor(0),

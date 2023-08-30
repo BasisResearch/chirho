@@ -1,7 +1,5 @@
 import contextlib
-import functools
-import typing
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, TypeVar
+from typing import Any, Callable, Dict, Iterable, Mapping, Optional, ParamSpec, TypeVar
 
 import pyro
 import pyro.distributions
@@ -9,62 +7,59 @@ import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.counterfactual.ops import preempt
-from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter, indexset_as_mask
+from chirho.indexed.ops import (
+    IndexSet,
+    cond,
+    gather,
+    indexset_as_mask,
+    indices_of,
+    scatter,
+)
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.soft_conditioning import SoftEqKernel
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 
-@typing.overload
-def preempt_with_factual(
+def preemption_with_factual(
     *, antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
 ) -> Callable[[T], T]:
-    ...
+    def _preemption_with_factual(value: T) -> T:
+        if antecedents is None:
+            antecedents_ = list(indices_of(value, event_dim=event_dim).keys())
+        else:
+            antecedents_ = [
+                a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+            ]
 
-
-@typing.overload
-def preempt_with_factual(
-    value: T,
-    *,
-    antecedents: Optional[Iterable[str]] = None,
-    event_dim: int = 0,
-) -> T:
-    ...
-
-
-def preempt_with_factual(value=None, *, antecedents=None, event_dim=0):
-    if value is None:
-        return functools.partial(
-            preempt_with_factual,
-            antecedents=antecedents,
+        factual_value = gather(
+            value,
+            IndexSet(**{antecedent: {0} for antecedent in antecedents_}),
             event_dim=event_dim,
         )
 
-    if antecedents is None:
-        antecedents = list(indices_of(value, event_dim=event_dim).keys())
-    else:
-        antecedents = [
-            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
-        ]
+        return scatter(
+            {
+                IndexSet(
+                    **{antecedent: {0} for antecedent in antecedents_}
+                ): factual_value,
+                IndexSet(
+                    **{antecedent: {1} for antecedent in antecedents_}
+                ): factual_value,
+            },
+            event_dim=event_dim,
+        )
 
-    factual_value = gather(
-        value,
-        IndexSet(**{antecedent: {0} for antecedent in antecedents}),
-        event_dim=event_dim,
-    )
-
-    return scatter(
-        {
-            IndexSet(**{antecedent: {0} for antecedent in antecedents}): factual_value,
-            IndexSet(**{antecedent: {1} for antecedent in antecedents}): factual_value,
-        },
-        event_dim=event_dim,
-    )
+    return _preemption_with_factual
 
 
 class BiasedPreemptions(pyro.poutine.messenger.Messenger):
+    actions: Mapping[str, Intervention[torch.Tensor]]
+    bias: float
+    prefix: str
+
     def __init__(
         self,
         actions: Mapping[str, Intervention[torch.Tensor]],
@@ -106,7 +101,7 @@ def PartOfCause(
 ):
     # TODO support event_dim != 0
     preemptions = {
-        antecedent: preempt_with_factual(antecedents=list(actions.keys()))
+        antecedent: preemption_with_factual(antecedents=list(actions.keys()))
         for antecedent in actions.keys()
     }
 
@@ -116,6 +111,9 @@ def PartOfCause(
 
 
 class Factors(pyro.poutine.messenger.Messenger):
+    factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]]
+    prefix: str
+
     def __init__(
         self,
         factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
@@ -135,11 +133,23 @@ class Factors(pyro.poutine.messenger.Messenger):
 
 
 def consequent_differs(
-    consequent: torch.Tensor, *, alpha: float | torch.Tensor = 1e-6, event_dim: int = 0
-) -> torch.Tensor:
-    observed_consequent = gather(consequent, get_factual_indices(), event_dim=event_dim)
-    log_factor = -SoftEqKernel(alpha, event_dim=event_dim)(consequent, observed_consequent)
-    return cond(torch.as_tensor(0.), log_factor, indexset_as_mask(get_factual_indices()), event_dim=0)
+    *, alpha: float = 1e-6, event_dim: int = 0
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
+        observed_consequent = gather(
+            consequent, get_factual_indices(), event_dim=event_dim
+        )
+        log_factor = -SoftEqKernel(alpha, event_dim=event_dim)(
+            consequent, observed_consequent
+        )
+        return cond(
+            log_factor,
+            torch.as_tensor(0.0),
+            indexset_as_mask(get_factual_indices()),
+            event_dim=0,
+        )
+
+    return _consequent_differs
 
 
 @contextlib.contextmanager
