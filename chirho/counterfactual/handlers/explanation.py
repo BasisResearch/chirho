@@ -64,9 +64,10 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         self,
         actions: Mapping[str, Intervention[torch.Tensor]],
         *,
-        bias: float = 0.5,
+        bias: float = 0.0,
         prefix: str = "__witness_split_",
     ):
+        assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
         self.actions = actions
         self.bias = bias
         self.prefix = prefix
@@ -81,8 +82,8 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         action = (action,) if not isinstance(action, tuple) else action
         num_actions = len(action) if isinstance(action, tuple) else 1
         weights = torch.tensor(
-            [1 - self.bias] + ([self.bias / num_actions] * num_actions),
-            device=msg["value"].device
+            [0.5 - self.bias] + ([(0.5 + self.bias) / num_actions] * num_actions),
+            device=msg["value"].device,
         )
         case_dist = pyro.distributions.Categorical(weights)
         case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist)
@@ -100,7 +101,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 def PartOfCause(
     actions: Mapping[str, Intervention[torch.Tensor]],
     *,
-    bias: float = 0.5,
+    bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
     # TODO support event_dim != 0
@@ -164,9 +165,9 @@ def Responsibility(
     witnesses: Mapping[str, Intervention[torch.Tensor]],
     consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
     *,
-    antecedent_bias: float = 0.5,
-    treatment_bias: float = 0.5,
-    witness_bias: float = 0.5,
+    antecedent_bias: float = 0.0,
+    treatment_bias: float = 0.0,
+    witness_bias: float = 0.0,
 ):
     antecedent_handler = PartOfCause(
         antecedents, bias=antecedent_bias, prefix="__antecedent_"
@@ -180,5 +181,27 @@ def Responsibility(
     consequent_handler = Factors(factors=consequents, prefix="__consequent_")
 
     with antecedent_handler, treatment_handler, witness_handler, consequent_handler:
+        with pyro.poutine.trace() as tr:
+            yield tr.trace
+
+
+@contextlib.contextmanager
+def ActualCausality(
+    antecedents: Mapping[str, Intervention[torch.Tensor]],
+    witnesses: Mapping[str, Intervention[torch.Tensor]],
+    consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
+    *,
+    antecedent_bias: float = 0.5,
+    witness_bias: float = 0.5,
+):
+    antecedent_handler = PartOfCause(
+        antecedents, bias=antecedent_bias, prefix="__antecedent_"
+    )
+    witness_handler = BiasedPreemptions(
+        actions=witnesses, bias=witness_bias, prefix="__witness_"
+    )
+    consequent_handler = Factors(factors=consequents, prefix="__consequent_")
+
+    with antecedent_handler, witness_handler, consequent_handler:
         with pyro.poutine.trace() as tr:
             yield tr.trace
