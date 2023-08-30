@@ -17,7 +17,9 @@ from chirho.indexed.ops import (
 )
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
+from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import SoftEqKernel
+from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
 T = TypeVar("T")
@@ -189,6 +191,7 @@ def Responsibility(
 def ActualCausality(
     antecedents: Mapping[str, Intervention[torch.Tensor]],
     witnesses: Mapping[str, Intervention[torch.Tensor]],
+    observations: Mapping[str, Observation[torch.Tensor]],
     consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
     *,
     antecedent_bias: float = 0.5,
@@ -200,8 +203,9 @@ def ActualCausality(
     witness_handler = BiasedPreemptions(
         actions=witnesses, bias=witness_bias, prefix="__witness_"
     )
+    observation_handler = condition(data=observations)
     consequent_handler = Factors(factors=consequents, prefix="__consequent_")
 
-    with antecedent_handler, witness_handler, consequent_handler:
+    with antecedent_handler, witness_handler, observation_handler, consequent_handler:
         with pyro.poutine.trace() as tr:
             yield tr.trace
