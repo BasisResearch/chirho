@@ -48,7 +48,7 @@ class PartOfCause(pyro.poutine.messenger.Messenger):
             event_dim=event_dim,
         )
 
-        return scatter(
+        result = scatter(
             {
                 IndexSet(
                     **{antecedent: {0} for antecedent in antecedents}
@@ -59,6 +59,8 @@ class PartOfCause(pyro.poutine.messenger.Messenger):
             },
             event_dim=event_dim,
         )
+        import pdb; pdb.set_trace()  # DEBUG
+        return result
 
     def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
         if msg["name"] not in self.evaluated_node_counterfactual:

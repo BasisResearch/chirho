@@ -1,11 +1,14 @@
 from typing import TypeVar
 
+import functools
+import logging
+
 import pyro
 import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual, Preemptions
 from chirho.counterfactual.handlers.explanation import PartOfCause
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.observational.handlers import condition
@@ -125,25 +128,27 @@ def test_two_layer_stones():
     }
 
     evaluated_node_counterfactual = {"sally_throws": 0.0}
-    witness_node_counterfactual = {"bill_hits": 0.0}
+    witness_preemptions = {
+        "bill_hits": functools.partial(
+            PartOfCause.preempt_with_factual,
+            antecedents=["sally_throws"]  # fails with incorrect antecedents=["bill_hits"]
+        ),
+    }
 
-    with MultiWorldCounterfactual() as mwc:
-        with PartOfCause(evaluated_node_counterfactual, prefix="preempt_"), PartOfCause(
-            witness_node_counterfactual, prefix="witness_"
-        ), condition(
-            data={k: torch.as_tensor(v) for k, v in observations.items()}
-        ), pyro.poutine.trace() as trace:
-            stones_bayesian_model()
+    pinned_preemption_variables = {
+        "preempt_sally_throws": torch.tensor(0),
+        "__split_bill_hits": torch.tensor(1),
+    }
+
+    with MultiWorldCounterfactual() as mwc, \
+            PartOfCause(evaluated_node_counterfactual, prefix="preempt_"), \
+            Preemptions(actions=witness_preemptions), \
+            condition(data=pinned_preemption_variables), \
+            condition(data={k: torch.as_tensor(v) for k, v in observations.items()}), \
+            pyro.poutine.trace() as trace:
+        stones_bayesian_model()
 
     tr = trace.trace.nodes
-
-    print("preempt_sally_throws:", tr["preempt_sally_throws"]["value"])
-    print("sally_throws:", tr["sally_throws"]["value"])
-
-    print("witness_bill_hits:", tr["witness_bill_hits"]["value"])
-    print("bill_hits:", tr["bill_hits"]["value"])
-
-    print("bottle_shatters:", tr["bottle_shatters"]["value"])
 
     with mwc:
         preempt_sally_throws = tr["preempt_sally_throws"]["value"]
@@ -153,7 +158,7 @@ def test_two_layer_stones():
             event_dim=0,
         )
 
-        preempt_bill_hits = tr["witness_bill_hits"]["value"]
+        preempt_bill_hits = tr["__split_bill_hits"]["value"]
         obs_bill_hits = gather(
             tr["bill_hits"]["value"],
             IndexSet(**{"sally_throws": {0}}),
@@ -173,15 +178,10 @@ def test_two_layer_stones():
     outcome = {
         "preempt_sally_throws": preempt_sally_throws.item(),
         "int_sally_hits": int_sally_hits.item(),
-        "preempt_bill_hits": preempt_bill_hits.item(),
+        "__split_bill_hits": preempt_bill_hits.item(),
         "obs_bill_hits": obs_bill_hits.item(),
         "int_bill_hits": int_bill_hits.item(),
         "intervened_bottle_shatters": int_bottle_shatters.item(),
     }
 
-    if outcome["preempt_sally_throws"] == 0 and outcome["preempt_bill_hits"] == 1:
-        raise Exception(
-            "Intervened bill_hits is ",
-            outcome["int_bill_hits"],
-            " and it should be 0!",
-        )
+    assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
