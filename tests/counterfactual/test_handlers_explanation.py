@@ -13,7 +13,7 @@ from chirho.counterfactual.handlers.counterfactual import (
 )
 from chirho.counterfactual.handlers.explanation import (
     BiasedPreemptions,
-    part_of_cause,
+    PartOfCause,
     preempt_with_factual,
 )
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
@@ -79,7 +79,7 @@ def test_single_layer_stones():
     }
 
     with MultiWorldCounterfactual() as mwc:
-        with part_of_cause({"sally_throws": 0.0}, prefix="preempt_"):
+        with PartOfCause({"sally_throws": 0.0}, prefix="preempt_"):
             with condition(
                 data={k: torch.as_tensor(v) for k, v in observations.items()}
             ):
@@ -148,7 +148,7 @@ def test_two_layer_stones():
         "witness_preempt_bill_hits": torch.tensor(1),
     }
 
-    with MultiWorldCounterfactual() as mwc, part_of_cause(
+    with MultiWorldCounterfactual() as mwc, PartOfCause(
         evaluated_node_counterfactual, prefix="preempt_"
     ), BiasedPreemptions(
         actions=witness_preemptions, prefix="witness_preempt_"

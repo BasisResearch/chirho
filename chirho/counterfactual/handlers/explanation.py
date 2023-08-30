@@ -72,7 +72,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
 
 
 @contextlib.contextmanager
-def part_of_cause(
+def PartOfCause(
     actions: Dict[str, Intervention[torch.Tensor]],
     bias: float = 0.0,
     prefix: str = "__cause_split_",
