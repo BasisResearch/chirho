@@ -1,11 +1,57 @@
-from typing import Generic, Hashable, Mapping, TypeVar
+from typing import Callable, Generic, Hashable, Mapping, TypeVar
 
 import pyro
+import torch
 
 from chirho.observational.internals import ObserveNameMessenger
 from chirho.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
+
+
+class Factors(Generic[T], pyro.poutine.messenger.Messenger):
+    """
+    Effect handler that adds new log-factors to the unnormalized
+    joint log-density of a probabilistic program.
+
+    After a :func:`pyro.sample` site whose name appears in ``factors``,
+    this handler inserts a new :func:`pyro.factor` site
+    whose name is prefixed with the string ``prefix``
+    and whose log-weight is the result of applying the corresponding function
+    to the value of the sample site. ::
+
+        >>> with Factors(factors={"x": lambda x: -(x - 1) ** 2}, prefix="__factor_"):
+        ...   with pyro.poutine.trace() as tr:
+        ...     x = pyro.sample("x", dist.Normal(0, 1))
+        ... tr.trace.compute_log_prob()
+        >>> assert {"x", "__factor_x"} <= set(tr.trace.nodes.keys())
+        >>> assert tr.trace.log_prob_sum() == tr.trace.nodes["x"]["log_prob"] + \
+        ...   tr.trace.nodes["x"]["log_prob"] - (tr.trace.nodes["x"]["value"] - 1) ** 2
+
+    :param factors: A mapping from sample site names to log-factor functions.
+    :param prefix: The prefix to use for the names of the factor sites.
+    """
+
+    factors: Mapping[str, Callable[[T], torch.Tensor]]
+    prefix: str
+
+    def __init__(
+        self,
+        factors: Mapping[str, Callable[[T], torch.Tensor]],
+        *,
+        prefix: str = "__factor_",
+    ):
+        self.factors = factors
+        self.prefix = prefix
+        super().__init__()
+
+    def _pyro_post_sample(self, msg: dict) -> None:
+        try:
+            factor = self.factors[msg["name"]]
+        except KeyError:
+            return
+
+        pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
 
 
 class ConditionMessenger(Generic[T], ObserveNameMessenger):
