@@ -7,6 +7,7 @@ from chirho.observational.internals import ObserveNameMessenger
 from chirho.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
+R = float | torch.Tensor
 
 
 class Factors(Generic[T], pyro.poutine.messenger.Messenger):
@@ -25,19 +26,18 @@ class Factors(Generic[T], pyro.poutine.messenger.Messenger):
         ...     x = pyro.sample("x", dist.Normal(0, 1))
         ... tr.trace.compute_log_prob()
         >>> assert {"x", "__factor_x"} <= set(tr.trace.nodes.keys())
-        >>> assert tr.trace.log_prob_sum() == tr.trace.nodes["x"]["log_prob"] + \
-        ...   tr.trace.nodes["x"]["log_prob"] - (tr.trace.nodes["x"]["value"] - 1) ** 2
+        >>> assert torch.all(tr.trace.nodes["x"]["log_prob"] == -(x - 1) ** 2)
 
     :param factors: A mapping from sample site names to log-factor functions.
     :param prefix: The prefix to use for the names of the factor sites.
     """
 
-    factors: Mapping[str, Callable[[T], torch.Tensor]]
+    factors: Mapping[str, Callable[[T], R]]
     prefix: str
 
     def __init__(
         self,
-        factors: Mapping[str, Callable[[T], torch.Tensor]],
+        factors: Mapping[str, Callable[[T], R]],
         *,
         prefix: str = "__factor_",
     ):
