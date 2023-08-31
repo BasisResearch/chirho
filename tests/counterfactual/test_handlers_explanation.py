@@ -1,4 +1,3 @@
-import functools
 import logging
 from typing import TypeVar
 
@@ -8,16 +7,18 @@ import pytest
 import torch
 
 from chirho.counterfactual.handlers.counterfactual import (
-    MultiWorldCounterfactual,
-    Preemptions,
-)
-from chirho.counterfactual.handlers.explanation import (
     BiasedPreemptions,
-    PartOfCause,
-    factual_preemption,
+    MultiWorldCounterfactual,
 )
-from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
+from chirho.counterfactual.handlers.explanation import PartOfCause, factual_preemption
+from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers import condition
+
+T = TypeVar("T")
+
+pyro.settings.set(module_local_params=True)
+
+logger = logging.getLogger(__name__)
 
 
 def stones_bayesian_model():
