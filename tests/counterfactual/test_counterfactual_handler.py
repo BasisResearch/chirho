@@ -6,6 +6,7 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
+from pyro.infer.autoguide import AutoMultivariateNormal
 
 import chirho.interventional.handlers  # noqa: F401
 from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
@@ -14,12 +15,17 @@ from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
+from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import SelectFactual
+from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
 from chirho.observational.handlers import condition
+from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from chirho.observational.ops import observe
+
+pyro.settings.set(module_local_params=True)
 
 logger = logging.getLogger(__name__)
 
@@ -309,35 +315,35 @@ def test_cf_condition_commutes():
                 }
 
 
-def hmm_model(data: Iterable, use_condition: bool):
-    transition_probs = pyro.param(
-        "transition_probs",
-        torch.tensor([[0.75, 0.25], [0.25, 0.75]]),
-        constraint=dist.constraints.simplex,
-    )
-    emission_probs = pyro.sample(
-        "emission_probs",
-        dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
-    )
-    x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
-    logger.debug(f"-1\t{tuple(x.shape)}")
-    for t, y in pyro.markov(enumerate(data)):
-        x = pyro.sample(
-            f"x_{t}",
-            dist.Categorical(pyro.ops.indexing.Vindex(transition_probs)[..., x, :]),
-        )
+class HMM(pyro.nn.PyroModule):
+    @pyro.nn.PyroParam(constraint=dist.constraints.simplex)
+    def trans_probs(self):
+        return torch.tensor([[0.75, 0.25], [0.25, 0.75]])
 
-        if use_condition:
-            pyro.sample(
-                f"y_{t}",
-                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
+    def forward(self, data: Iterable, use_condition: bool):
+        emit_probs = pyro.sample(
+            "emission_probs",
+            dist.Dirichlet(torch.tensor([0.5, 0.5])).expand([2]).to_event(1),
+        )
+        x = pyro.sample("x", dist.Categorical(torch.tensor([0.5, 0.5])))
+        logger.debug(f"-1\t{tuple(x.shape)}")
+        for t, y in pyro.markov(enumerate(data)):
+            x = pyro.sample(
+                f"x_{t}",
+                dist.Categorical(pyro.ops.indexing.Vindex(self.trans_probs)[..., x, :]),
             )
-        else:
-            observe(
-                dist.Categorical(pyro.ops.indexing.Vindex(emission_probs)[..., x, :]),
-                y,
-                name=f"y_{t}",
-            )
+
+            if use_condition:
+                pyro.sample(
+                    f"y_{t}",
+                    dist.Categorical(pyro.ops.indexing.Vindex(emit_probs)[..., x, :]),
+                )
+            else:
+                observe(
+                    dist.Categorical(pyro.ops.indexing.Vindex(emit_probs)[..., x, :]),
+                    y,
+                    name=f"y_{t}",
+                )
         logger.debug(f"{t}\t{tuple(x.shape)}")
 
 
@@ -352,6 +358,7 @@ def test_smoke_cf_enumerate_hmm_elbo(
     num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     def model(data):
@@ -397,6 +404,7 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
     num_steps, use_condition, max_plate_nesting, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -437,6 +445,7 @@ def test_smoke_cf_enumerate_hmm_infer_discrete(
     num_steps, use_condition, max_plate_nesting, cf_dim, num_particles
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -473,6 +482,7 @@ def test_smoke_cf_enumerate_hmm_mcmc(
     num_steps, use_condition, max_plate_nesting, Kernel, cf_dim
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     @do(actions={"x_0": torch.tensor(0), "x_1": torch.tensor(0)})
     @condition(data={"x": torch.as_tensor(0)})
@@ -560,6 +570,7 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
 @pytest.mark.parametrize("num_steps", [3, 4, 5, 10])
 def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
+    hmm_model = HMM()
 
     pin_tr = pyro.poutine.trace(hmm_model).get_trace(data, True)
     pinned = {
@@ -637,3 +648,121 @@ def test_cf_infer_discrete_mediation(cf_dim):
 
     assert torch.any(tr.nodes["z"]["value"] > 0)
     assert torch.any(tr.nodes["z"]["value"] < 1)
+
+
+def test_preempt_op_singleworld():
+    @SingleWorldCounterfactual()
+    @pyro.plate("data", size=1000, dim=-1)
+    def model():
+        x = pyro.sample("x", dist.Bernoulli(0.67))
+        x = pyro.deterministic(
+            "x_", split(x, (torch.tensor(0.0),), name="x", event_dim=0), event_dim=0
+        )
+        y = pyro.sample("y", dist.Bernoulli(0.67))
+        y_case = torch.tensor(1)
+        y = pyro.deterministic(
+            "y_",
+            preempt(y, (torch.tensor(1.0),), y_case, name="__y", event_dim=0),
+            event_dim=0,
+        )
+        z = pyro.sample("z", dist.Bernoulli(0.67))
+        return dict(x=x, y=y, z=z)
+
+    tr = pyro.poutine.trace(model).get_trace()
+    assert torch.all(tr.nodes["x_"]["value"] == 0.0)
+    assert torch.all(tr.nodes["y_"]["value"] == 1.0)
+
+
+@pytest.mark.parametrize("cf_dim", [-2, -3, None])
+@pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
+def test_cf_handler_preemptions(cf_dim, event_shape):
+    event_dim = len(event_shape)
+
+    splits = {"x": torch.tensor(0.0)}
+    preemptions = {"y": torch.tensor(1.0)}
+
+    @do(actions=splits)
+    @Preemptions(actions=preemptions)
+    @pyro.plate("data", size=1000, dim=-1)
+    def model():
+        w = pyro.sample(
+            "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
+        )
+        x = pyro.sample("x", dist.Normal(w, 1).to_event(len(event_shape)))
+        y = pyro.sample("y", dist.Normal(w + x, 1).to_event(len(event_shape)))
+        z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
+        return dict(w=w, x=x, y=y, z=z)
+
+    with MultiWorldCounterfactual(cf_dim):
+        tr = pyro.poutine.trace(model).get_trace()
+        assert all(f"__split_{k}" in tr.nodes for k in preemptions.keys())
+        assert indices_of(tr.nodes["w"]["value"], event_dim=event_dim) == IndexSet()
+        assert indices_of(tr.nodes["y"]["value"], event_dim=event_dim) == IndexSet(
+            x={0, 1}
+        )
+        assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(
+            x={0, 1}
+        )
+
+
+# Define a helper function to run SVI. (Generally, Pyro users like to have more control over the training process!)
+def run_svi_inference(model, n_steps=1000, verbose=True, lr=0.03, **model_kwargs):
+    guide = AutoMultivariateNormal(model)
+    elbo = pyro.infer.Trace_ELBO()(model, guide)
+    # initialize parameters
+    elbo(**model_kwargs)
+    adam = torch.optim.Adam(elbo.parameters(), lr=lr)
+    # Do gradient steps
+    for step in range(1, n_steps + 1):
+        adam.zero_grad()
+        loss = elbo(**model_kwargs)
+        loss.backward()
+        adam.step()
+        if (step % 100 == 0) or (step == 1) & verbose:
+            print("[iteration %04d] loss: %.4f" % (step, loss))
+    return guide
+
+
+def test_cf_inference_with_soft_conditioner():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        u_x = pyro.sample("u_x", dist.Normal(0, 1))
+        x = pyro.deterministic("x", z + u_x, event_dim=0)
+        u_y = pyro.sample("u_y", dist.Normal(0, 1))
+        y = pyro.deterministic("y", x + z + u_y, event_dim=0)
+        return dict(x=x, y=y, z=z)
+
+    h_cond = condition(data={"x": torch.tensor(0.0), "y": torch.tensor(1.0)})
+    h_do = do(actions={"z": torch.tensor(0.0)})
+    scale = 0.01
+    reparam_config = AutoSoftConditioning(scale=scale, alpha=0.5)
+
+    def model_cf():
+        with pyro.poutine.reparam(config=reparam_config):
+            with TwinWorldCounterfactual(), h_do, h_cond:
+                model()
+
+    def model_conditioned():
+        with pyro.poutine.reparam(config=reparam_config):
+            with h_cond:
+                model()
+
+    # Run SVI inference
+    guide = run_svi_inference(model_conditioned, n_steps=2500, verbose=False)
+    est_u_x = guide.median()["u_x"]
+    est_u_y = guide.median()["u_y"]
+
+    assert torch.allclose(
+        est_u_x, torch.tensor(-0.1), atol=5 * scale
+    )  # p(u_x | z=.1, x=0, y=1) is a point mass at -0.1
+    assert torch.allclose(
+        est_u_y, torch.tensor(0.9), atol=5 * scale
+    )  # p(u_y | z=.1, x=0, y=1) is a point mass at 0.9
+
+    # Compute counterfactuals
+    cf_samps = pyro.infer.Predictive(model_cf, guide=guide, num_samples=100)()
+    avg_x_cf = cf_samps["x"].squeeze()[:, 1].mean()
+    avg_y_cf = cf_samps["y"].squeeze()[:, 1].mean()
+
+    assert torch.allclose(avg_x_cf, torch.tensor(-0.1), atol=5 * scale)
+    assert torch.allclose(avg_y_cf, torch.tensor(0.8), atol=5 * scale)

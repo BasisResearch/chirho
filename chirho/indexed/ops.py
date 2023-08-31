@@ -1,4 +1,5 @@
 import functools
+import operator
 from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import pyro
@@ -261,6 +262,54 @@ def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwarg
     assert all(isinstance(k, IndexSet) for k in values)
     for indices, value in values.items():
         result = scatter(value, indices, result=result, **kwargs)
+    return result
+
+
+@functools.singledispatch
+def cond(fst, snd, case: Optional[T] = None, **kwargs):
+    """
+    Selection operation that is the sum-type analogue of :func:`scatter`
+    in the sense that where :func:`scatter` propagates both of its arguments,
+    :func:`cond` propagates only one, depending on the value of a boolean ``case`` .
+
+    For a given ``fst`` , ``snd`` , and ``case`` , :func:`cond` returns
+    ``snd`` if the ``case`` is true, and ``fst`` otherwise,
+    analogous to a Python conditional expression ``snd if case else fst`` .
+    Unlike a Python conditional expression, however, the case may be a tensor,
+    and both branches are evaluated, as with :func:`torch.where` ::
+
+        >> fst, snd = torch.randn(2, 3), torch.randn(2, 3)
+        >> case = (fst < snd).all(-1)
+        >> x = cond(fst, snd, case, event_dim=1)
+        >> assert (x == torch.where(case[..., None], snd, fst)).all()
+
+    .. note::
+
+        :func:`cond` can be extended to new value types by registering
+        an implementation for the type using :func:`functools.singledispatch` .
+
+    :param fst: The value to return if ``case`` is ``False`` .
+    :param snd: The value to return if ``case`` is ``True`` .
+    :param case: A boolean value or tensor. If a tensor, should have event shape ``()`` .
+    :param kwargs: Additional keyword arguments used by specific implementations.
+    """
+    raise NotImplementedError(f"cond not implemented for {type(fst)}")
+
+
+@cond.register(dict)
+@pyro.poutine.runtime.effectful(type="cond_n")
+def _cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
+    assert len(values) > 0
+    assert all(isinstance(k, IndexSet) for k in values.keys())
+    result: Optional[T] = None
+    for indices, value in values.items():
+        tst = torch.as_tensor(
+            functools.reduce(
+                operator.or_, [case == index for index in next(iter(indices.values()))]
+            ),
+            dtype=torch.bool,
+        )
+        result = cond(result if result is not None else value, value, tst, **kwargs)
     return result
 
 

@@ -8,6 +8,7 @@ from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from chirho.indexed.ops import (
     IndexSet,
+    cond,
     gather,
     get_index_plates,
     indices_of,
@@ -177,6 +178,32 @@ def _indices_of_distribution(
 ) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
+
+
+@cond.register(int)
+@cond.register(float)
+@cond.register(bool)
+def _cond_number(
+    fst: Union[bool, numbers.Number],
+    snd: Union[bool, numbers.Number, torch.Tensor],
+    case: Union[bool, torch.Tensor],
+    **kwargs,
+) -> torch.Tensor:
+    return cond(
+        torch.as_tensor(fst), torch.as_tensor(snd), torch.as_tensor(case), **kwargs
+    )
+
+
+@cond.register
+def _cond_tensor(
+    fst: torch.Tensor,
+    snd: torch.Tensor,
+    case: torch.Tensor,
+    *,
+    event_dim: int = 0,
+    **kwargs,
+) -> torch.Tensor:
+    return torch.where(case[(...,) + (None,) * event_dim], snd, fst)
 
 
 class _LazyPlateMessenger(IndepMessenger):

@@ -1,9 +1,12 @@
 |Build Status|
 
+.. image:: docs/source/_static/img/chirho_logo_wide.png
+   :alt: ChiRho logo
+   :align: center
+
 .. index-inclusion-marker
 
-Causal Probabilistic Programming with ChiRho
-=================================================
+Causal Reasoning with ChiRho
 
 ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
@@ -125,6 +128,10 @@ approximations that power much of the modern probabilistic machine learning land
   - Counterfactuals with normalizing flows
 - `Example: Structured Latent Confounders <https://basisresearch.github.io/chirho/slc.html>`_
   - Causal effect estimation when latent confounders are shared across groups
+- `Example: Synthetic difference-in-differences <https://basisresearch.github.io/chirho/sdid.html>`_
+  - Counterfactual estimation from longitudinal data
+- `Example: Robust estimation with the DR learner <https://basisresearch.github.io/chirho/dr_learner.html>`_
+  - Heterogeneous causal effect estimation with a misspecified model
 - `Design notes <https://basisresearch.github.io/chirho/design_notes>`_
   - Technical implementation details of ChiRho using effect handlers
 
