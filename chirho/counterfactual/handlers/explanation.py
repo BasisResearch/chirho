@@ -1,24 +1,17 @@
 import contextlib
-from typing import Any, Callable, Dict, Iterable, Mapping, Optional, ParamSpec, TypeVar
+from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeVar
 
 import pyro
 import pyro.distributions
 import torch
 
+from chirho.counterfactual.handlers.counterfactual import BiasedPreemptions
 from chirho.counterfactual.handlers.selection import get_factual_indices
-from chirho.counterfactual.ops import preempt
-from chirho.indexed.ops import (
-    IndexSet,
-    cond,
-    gather,
-    indexset_as_mask,
-    indices_of,
-    scatter,
-)
+from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers import condition
-from chirho.observational.handlers.soft_conditioning import SoftEqKernel
+from chirho.observational.handlers.condition import Factors
 from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
@@ -57,46 +50,16 @@ def factual_preemption(
     return _preemption_with_factual
 
 
-class BiasedPreemptions(pyro.poutine.messenger.Messenger):
-    actions: Mapping[str, Intervention[torch.Tensor]]
-    bias: float
-    prefix: str
+def consequent_differs_factor(
+    eps: float = -1e8, event_dim: int = 0
+) -> Callable[[torch.Tensor], torch.Tensor]:
 
-    def __init__(
-        self,
-        actions: Mapping[str, Intervention[torch.Tensor]],
-        *,
-        bias: float = 0.0,
-        prefix: str = "__witness_split_",
-    ):
-        assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
-        self.actions = actions
-        self.bias = bias
-        self.prefix = prefix
-        super().__init__()
+    def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
+        consequent_differs = consequent != \
+            gather(consequent, get_factual_indices(), event_dim=event_dim)
+        return cond(eps, 0.0, consequent_differs, event_dim=event_dim)
 
-    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
-        try:
-            action = self.actions[msg["name"]]
-        except KeyError:
-            return
-
-        action = (action,) if not isinstance(action, tuple) else action
-        num_actions = len(action) if isinstance(action, tuple) else 1
-        weights = torch.tensor(
-            [0.5 - self.bias] + ([(0.5 + self.bias) / num_actions] * num_actions),
-            device=msg["value"].device,
-        )
-        case_dist = pyro.distributions.Categorical(weights)
-        case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist)
-
-        msg["value"] = preempt(
-            msg["value"],
-            action,
-            case,
-            event_dim=len(msg["fn"].event_shape),
-            name=f"{self.prefix}{msg['name']}",
-        )
+    return _consequent_differs
 
 
 @contextlib.contextmanager
@@ -106,7 +69,7 @@ def PartOfCause(
     bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
-    # TODO support event_dim != 0
+    # TODO support event_dim != 0 propagation in factual_preemption
     preemptions = {
         antecedent: factual_preemption(antecedents=list(actions.keys()))
         for antecedent in actions.keys()
@@ -115,49 +78,6 @@ def PartOfCause(
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
-
-
-class Factors(pyro.poutine.messenger.Messenger):
-    factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]]
-    prefix: str
-
-    def __init__(
-        self,
-        factors: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
-        *,
-        prefix: str = "__factor_",
-    ):
-        self.factors = factors
-        self.prefix = prefix
-        super().__init__()
-
-    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
-        try:
-            factor = self.factors[msg["name"]]
-        except KeyError:
-            return
-
-        pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
-
-
-def consequent_differs_factor(
-    alpha: float = 1e-6, event_dim: int = 0
-) -> Callable[[torch.Tensor], torch.Tensor]:
-    def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
-        observed_consequent = gather(
-            consequent, get_factual_indices(), event_dim=event_dim
-        )
-        log_factor = -SoftEqKernel(alpha, event_dim=event_dim)(
-            consequent, observed_consequent
-        )
-        return cond(
-            log_factor,
-            torch.as_tensor(0.0),
-            indexset_as_mask(get_factual_indices()),
-            event_dim=0,
-        )
-
-    return _consequent_differs
 
 
 @contextlib.contextmanager
