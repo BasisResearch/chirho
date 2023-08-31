@@ -35,6 +35,7 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
         case = pyro.sample(msg["kwargs"]["name"], case_dist.mask(False), obs=case)
         msg["args"] = (obs, acts, case)
 
+
 class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the intervened value.
@@ -79,6 +80,7 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
         msg["kwargs"]["name"] = msg["name"] = cls.default_name
+
 
 class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     """
