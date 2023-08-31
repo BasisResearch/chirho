@@ -53,10 +53,10 @@ def factual_preemption(
 def consequent_differs_factor(
     eps: float = -1e8, event_dim: int = 0
 ) -> Callable[[torch.Tensor], torch.Tensor]:
-
     def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
-        consequent_differs = consequent != \
-            gather(consequent, get_factual_indices(), event_dim=event_dim)
+        consequent_differs = consequent != gather(
+            consequent, get_factual_indices(), event_dim=event_dim
+        )
         return cond(eps, 0.0, consequent_differs, event_dim=event_dim)
 
     return _consequent_differs
