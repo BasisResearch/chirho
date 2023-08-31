@@ -22,6 +22,7 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
 
     return scatter(act_values, event_dim=kwargs.get("event_dim", 0))
 
+
 @pyro.poutine.runtime.effectful(type="preempt")
 @pyro.poutine.block(hide_types=["intervene"])
 def preempt(
