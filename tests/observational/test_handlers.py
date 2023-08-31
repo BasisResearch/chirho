@@ -178,6 +178,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
+
 class HMM(pyro.nn.PyroModule):
     @pyro.nn.PyroParam(constraint=dist.constraints.simplex)
     def trans_probs(self):
