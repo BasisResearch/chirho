@@ -11,6 +11,7 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
+from chirho.observational.handlers.condition import Factors
 from chirho.observational.handlers.soft_conditioning import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
@@ -284,3 +285,36 @@ def test_condition_commutes():
             assert torch.allclose(node["value"], tr3.trace.nodes[name]["value"])
             assert torch.allclose(node["log_prob"], tr2.trace.nodes[name]["log_prob"])
             assert torch.allclose(node["log_prob"], tr3.trace.nodes[name]["log_prob"])
+
+
+def test_factors_handler():
+    def model():
+        z = pyro.sample("z", dist.Normal(0, 1), obs=torch.tensor(0.1))
+        with pyro.plate("data", 2):
+            x = pyro.sample("x", dist.Normal(z, 1))
+            y = pyro.sample("y", dist.Normal(x + z, 1))
+        return z, x, y
+
+    prefix = "__factor_"
+    factors = {
+        "z": lambda z: -((z - 1.5) ** 2),
+        "x": lambda x: -((x - 1) ** 2),
+    }
+
+    with Factors[torch.Tensor](factors=factors, prefix=prefix):
+        with pyro.poutine.trace() as tr:
+            model()
+
+    tr.trace.compute_log_prob()
+
+    for name in factors:
+        assert name in tr.trace.nodes
+        assert f"{prefix}{name}" in tr.trace.nodes
+        assert (
+            tr.trace.nodes[name]["fn"].batch_shape
+            == tr.trace.nodes[f"{prefix}{name}"]["fn"].batch_shape
+        )
+        assert torch.allclose(
+            tr.trace.nodes[f"{prefix}{name}"]["log_prob"],
+            factors[name](tr.trace.nodes[name]["value"]),
+        )
