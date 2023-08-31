@@ -7,6 +7,7 @@
 .. index-inclusion-marker
 
 Causal Reasoning with ChiRho
+============================
 
 ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
