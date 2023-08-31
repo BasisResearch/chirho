@@ -1,4 +1,4 @@
-from typing import Callable, Generic, Hashable, Mapping, TypeVar
+from typing import Callable, Generic, Hashable, Mapping, TypeVar, Union
 
 import pyro
 import torch
@@ -7,7 +7,7 @@ from chirho.observational.internals import ObserveNameMessenger
 from chirho.observational.ops import AtomicObservation, observe
 
 T = TypeVar("T")
-R = float | torch.Tensor
+R = Union[float, torch.Tensor]
 
 
 class Factors(Generic[T], pyro.poutine.messenger.Messenger):
