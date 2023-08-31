@@ -27,13 +27,13 @@ Handlers
    :members:
    :undoc-members:
 
+.. automodule:: chirho.observational.handlers.cut
+   :members:
+   :undoc-members:
+
 Internals
 ---------
 
 .. automodule:: chirho.observational.internals
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.observational.handlers.cut
    :members:
    :undoc-members:
