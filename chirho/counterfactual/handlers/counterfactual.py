@@ -1,4 +1,4 @@
-from typing import Any, Dict, Generic, Mapping, Tuple, TypeVar
+from typing import Any, Dict, Generic, Mapping, TypeVar
 
 import pyro
 import torch
@@ -30,12 +30,14 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
     @staticmethod
     def _pyro_preempt(msg: Dict[str, Any]) -> None:
         obs, acts, case = msg["args"]
+        if msg["kwargs"].get("name", None) is None:
+            msg["kwargs"]["name"] = msg["name"]
+
         if case is not None:
             return
 
-        msg["kwargs"]["name"] = f"__split_{msg['name']}"
         case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1))
-        case = pyro.sample(msg["kwargs"]["name"], case_dist.mask(False), obs=case)
+        case = pyro.sample(msg["name"], case_dist.mask(False), obs=case)
         msg["args"] = (obs, acts, case)
 
 
@@ -103,25 +105,30 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
         or one of its subclasses, typically from an auxiliary discrete random variable.
 
     :param actions: A mapping from sample site names to interventions.
+    :param prefix: Prefix usable for naming any auxiliary random variables.
     """
 
     actions: Mapping[str, Intervention[T]]
+    prefix: str
 
-    def __init__(self, actions: Mapping[str, Intervention[T]]):
+    def __init__(
+        self, actions: Mapping[str, Intervention[T]], *, prefix: str = "__split_"
+    ):
         self.actions = actions
+        self.prefix = prefix
         super().__init__()
 
-    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_post_sample(self, msg):
         try:
             action = self.actions[msg["name"]]
         except KeyError:
             return
         msg["value"] = preempt(
             msg["value"],
-            (action,),
+            (action,) if not isinstance(action, tuple) else action,
             None,
             event_dim=len(msg["fn"].event_shape),
-            name=msg["name"],
+            name=f"{self.prefix}{msg['name']}",
         )
 
 
