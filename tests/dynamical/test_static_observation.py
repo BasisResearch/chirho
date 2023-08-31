@@ -4,7 +4,6 @@ from contextlib import ExitStack
 import pyro
 import pytest
 import torch
-from pyro.infer import SVI, Trace_ELBO
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
 tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
+
 
 def run_svi_inference(model, n_steps=10, verbose=False, lr=0.03, **model_kwargs):
     guide = AutoMultivariateNormal(model)
@@ -135,7 +135,7 @@ def test_svi_composition_test_one(model, obs_handler):
                 with _get_compatible_observations(obs_handler, time=2.9, data=data1):
                     traj = simulate(sir, init_state, tspan)
             return traj
-        
+
     conditioned_sir = ConditionedSIR()
 
     guide = run_svi_inference(conditioned_sir)
@@ -224,7 +224,7 @@ def test_svi_composition_test_multi_point_obs(model):
                         stack.enter_context(manager)
                     traj = simulate(sir, init_state, tspan)
             return traj
-        
+
     conditioned_sir = ConditionedSIR()
 
     guide = run_svi_inference(conditioned_sir)
