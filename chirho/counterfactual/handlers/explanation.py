@@ -1,4 +1,7 @@
+import collections
+import collections.abc
 import contextlib
+import functools
 from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeVar
 
 import pyro
@@ -10,24 +13,19 @@ from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
-from chirho.observational.handlers import condition
 from chirho.observational.handlers.condition import Factors
-from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
 T = TypeVar("T")
 
 
-def factual_preemption(
-    antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
+def undo_split(
+    antecedents: Iterable[str] = [], event_dim: int = 0
 ) -> Callable[[T], T]:
-    def _preemption_with_factual(value: T) -> T:
-        if antecedents is None:
-            antecedents_ = list(indices_of(value, event_dim=event_dim).keys())
-        else:
-            antecedents_ = [
-                a for a in antecedents if a in indices_of(value, event_dim=event_dim)
-            ]
+    def _undo_split(value: T) -> T:
+        antecedents_ = [
+            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+        ]
 
         factual_value = gather(
             value,
@@ -47,13 +45,14 @@ def factual_preemption(
             event_dim=event_dim,
         )
 
-    return _preemption_with_factual
+    return _undo_split
 
 
-def consequent_differs_factor(
+def consequent_differs(
     eps: float = -1e8, event_dim: int = 0
-) -> Callable[[torch.Tensor], torch.Tensor]:
-    def _consequent_differs(consequent: torch.Tensor) -> torch.Tensor:
+) -> Callable[[T], torch.Tensor]:
+
+    def _consequent_differs(consequent: T) -> torch.Tensor:
         consequent_differs = consequent != gather(
             consequent, get_factual_indices(), event_dim=event_dim
         )
@@ -62,70 +61,141 @@ def consequent_differs_factor(
     return _consequent_differs
 
 
+@functools.singledispatch
+def uniform_proposal(
+    support: pyro.distributions.constraints.Constraint, **kwargs,
+) -> pyro.distributions.Distribution:
+    """
+    Heuristic for creating a uniform distribution on a given support.
+    """
+    if support is pyro.distributions.constraints.real:
+        return pyro.distributions.Uniform(-0.5, 0.5)
+    elif support is pyro.distributions.constraints.boolean:
+        return pyro.distributions.Bernoulli(logits=torch.zeros(()))
+    else:
+        tfm = pyro.distributions.transforms.biject_to(support)
+        base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
+        return pyro.distributions.TransformedDistribution(base, tfm)
+
+
+@uniform_proposal.register
+def _uniform_proposal_indep(
+    support: pyro.distributions.constraints.independent, **kwargs,
+) -> pyro.distributions.Distribution:
+    d = uniform_proposal(support.base_constraint, **kwargs)
+    return d.expand(kwargs["event_shape"]).to_event(support.reinterpreted_batch_ndims)
+
+
+@uniform_proposal.register
+def _uniform_proposal_integer(
+    support: pyro.distributions.constraints.integer_interval, **kwargs,
+) -> pyro.distributions.Distribution:
+    n = support.upper_bound - support.lower_bound + 1
+    return pyro.distributions.Categorical(probs=torch.ones((n,)))
+
+
+def random_intervention(
+    support: pyro.distributions.constraints.Constraint,
+    name: str,
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """
+    Creates a simple random intervention on a single site.
+
+    :param support: The support of the sample site to be intervened on.
+    :param name: The name of the sample site to be intervened on.
+    """
+    def _random_intervention(value: torch.Tensor) -> torch.Tensor:
+        event_shape = value.shape[len(value.shape) - support.event_dim:]
+        proposal_dist = uniform_proposal(support, event_shape=event_shape)
+        return pyro.sample(name, proposal_dist)
+
+    return _random_intervention
+
+
 @contextlib.contextmanager
 def PartOfCause(
-    actions: Mapping[str, Intervention[torch.Tensor]],
+    actions: Mapping[str, Intervention[T]],
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
 ):
     # TODO support event_dim != 0 propagation in factual_preemption
     preemptions = {
-        antecedent: factual_preemption(antecedents=list(actions.keys()))
+        antecedent: undo_split(antecedents=[antecedent])
         for antecedent in actions.keys()
     }
 
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
-            yield
+            with pyro.poutine.trace() as tr:
+                yield tr.trace
 
 
 @contextlib.contextmanager
-def Responsibility(
-    antecedents: Mapping[str, Intervention[torch.Tensor]],
-    treatments: Mapping[str, Intervention[torch.Tensor]],
-    witnesses: Mapping[str, Intervention[torch.Tensor]],
-    consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
-    *,
-    antecedent_bias: float = 0.0,
-    treatment_bias: float = 0.0,
-    witness_bias: float = 0.0,
-):
-    antecedent_handler = PartOfCause(
-        antecedents, bias=antecedent_bias, prefix="__antecedent_"
-    )
-    treatment_handler = PartOfCause(
-        treatments, bias=treatment_bias, prefix="__treatment_"
-    )
-    witness_handler = BiasedPreemptions(
-        actions=witnesses, bias=witness_bias, prefix="__witness_"
-    )
-    consequent_handler = Factors(factors=consequents, prefix="__consequent_")
-
-    with antecedent_handler, treatment_handler, witness_handler, consequent_handler:
-        with pyro.poutine.trace() as tr:
-            yield tr.trace
-
-
-@contextlib.contextmanager
-def ActualCausality(
-    antecedents: Mapping[str, Intervention[torch.Tensor]],
-    witnesses: Mapping[str, Intervention[torch.Tensor]],
-    observations: Mapping[str, Observation[torch.Tensor]],
-    consequents: Mapping[str, Callable[[torch.Tensor], torch.Tensor]],
+def ExplainCauses(
+    antecedents: Mapping[str, Intervention[T]] | Mapping[str, pyro.distributions.constraints.Constraint],
+    witnesses: Mapping[str, Intervention[T]] | Iterable[str],
+    consequents: Mapping[str, Callable[[T], float | torch.Tensor]] | Iterable[str],
     *,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
+    consequent_eps: float = -1e8,
+    antecedent_prefix: str = "__antecedent_",
+    witness_prefix: str = "__witness_",
+    consequent_prefix: str = "__consequent_",
 ):
-    antecedent_handler = PartOfCause(
-        antecedents, bias=antecedent_bias, prefix="__antecedent_"
-    )
-    witness_handler = BiasedPreemptions(
-        actions=witnesses, bias=witness_bias, prefix="__witness_"
-    )
-    observation_handler = condition(data=observations)
-    consequent_handler = Factors(factors=consequents, prefix="__consequent_")
+    """
+    Effect handler for causal explanation.
 
-    with antecedent_handler, witness_handler, observation_handler, consequent_handler:
+    :param antecedents: A mapping from antecedent names to interventions.
+    :param witnesses: A mapping from witness names to interventions.
+    :param consequents: A mapping from consequent names to factor functions.
+    """
+    # condition on the evidence (which may include antecedents, consequents) in the factual world (factivity)
+    # intervene on the antecedents with proposal values (sufficiency)
+    # preempt the witnesses with their factual values (necessity)
+    # condition on the consequents differing from the factual world (sufficiency / necessity)
+
+    # only remaining tricky point: how to enforce SC3 (sufficiency) in explanation
+    # also need to clarify what happens if witness candidates and antecedent candidates overlap?
+
+    # claim: causality = probability of causation = marginal likelihood (fraction of worlds where antecedents cause consequent)
+    # claim: actual causality = conditioning on all exogenous variables
+    # claim: grading / normality = evidence + priors + proposals
+
+    # claim: responsibility = univariate posterior marginals on antecedents
+    # claim: blame = univariate marginals on antecedents given only consequents without other evidence (exists on continuum)
+
+    # claim: explanation = posterior samples from antecedents in factual world (modulo SC3)
+    # claim: explanatory power = posterior probability of antecedents in factual world
+    # claim: explanatory goodness alpha = probability of necessity = marginal likelihood
+    # claim: explanatory goodness beta = probability of sufficiency = marginal likelihood given consequent and intervention on all antecedents but no evidence or witnesses
+
+    if isinstance(next(iter(antecedents.values())), pyro.distributions.constraints.Constraint):
+        antecedents = {
+            a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
+            for a, s in antecedents.items()
+        }
+
+    if not isinstance(witnesses, collections.abc.Mapping):
+        witnesses = {w: undo_split(antecedents=list(antecedents.keys())) for w in witnesses}
+
+    if not isinstance(consequents, collections.abc.Mapping):
+        consequents = {c: consequent_differs(consequent_eps) for c in consequents}
+
+    if len(consequents) == 0:
+        raise ValueError("must have at least one consequent")
+    
+    if set(consequents.keys()) & set(antecedents.keys()):
+        raise ValueError("consequents and possible antecedents must be disjoint")
+
+    if set(consequents.keys()) & set(witnesses.keys()):
+        raise ValueError("consequents and possible witnesses must be disjoint")
+
+    antecedent_handler = PartOfCause(actions=antecedents, bias=antecedent_bias, prefix=antecedent_prefix)
+    witness_handler = BiasedPreemptions(actions=witnesses, bias=witness_bias, prefix=witness_prefix)
+    consequent_handler = Factors(factors=consequents, prefix=consequent_prefix)
+
+    with antecedent_handler, witness_handler, consequent_handler:
         with pyro.poutine.trace() as tr:
             yield tr.trace
