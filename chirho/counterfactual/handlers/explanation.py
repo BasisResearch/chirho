@@ -1,7 +1,7 @@
 import collections.abc
 import contextlib
 import functools
-from typing import Callable, Iterable, Mapping, Optional, ParamSpec, TypeVar
+from typing import Callable, Iterable, Mapping, ParamSpec, TypeVar
 
 import pyro
 import pyro.distributions
@@ -48,14 +48,16 @@ def undo_split(
 
 
 def consequent_differs(
-    eps: float = -1e8, event_dim: int = 0
+    antecedents: Iterable[str] = [], eps: float = -1e8, event_dim: int = 0
 ) -> Callable[[T], torch.Tensor]:
 
     def _consequent_differs(consequent: T) -> torch.Tensor:
-        consequent_differs = consequent != gather(
-            consequent, get_factual_indices(), event_dim=event_dim
-        )
-        return cond(eps, 0.0, consequent_differs, event_dim=event_dim)
+        indices = IndexSet(**{
+            name: ind for name, ind in get_factual_indices().items()
+            if name in antecedents
+        })
+        not_eq = consequent != gather(consequent, indices, event_dim=event_dim)
+        return cond(eps, 0.0, not_eq, event_dim=event_dim)
 
     return _consequent_differs
 
@@ -163,11 +165,17 @@ def ExplainCauses(
         witnesses = {w: undo_split(antecedents=list(antecedents.keys())) for w in witnesses}
 
     if not isinstance(consequents, collections.abc.Mapping):
-        consequents = {c: consequent_differs(consequent_eps) for c in consequents}
+        consequents = {
+            c: consequent_differs(antecedents=list(antecedents.keys()), eps=consequent_eps)
+            for c in consequents
+        }
 
     if len(consequents) == 0:
         raise ValueError("must have at least one consequent")
-    
+
+    if len(antecedents) == 0:
+        raise ValueError("must have at least one antecedent")
+
     if set(consequents.keys()) & set(antecedents.keys()):
         raise ValueError("consequents and possible antecedents must be disjoint")
 
