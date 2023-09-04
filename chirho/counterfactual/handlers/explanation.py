@@ -153,26 +153,6 @@ def ExplainCauses(
     :param witnesses: A mapping from witness names to interventions.
     :param consequents: A mapping from consequent names to factor functions.
     """
-    # condition on the evidence (which may include antecedents, consequents) in the factual world (factivity)
-    # intervene on the antecedents with proposal values (sufficiency)
-    # preempt the witnesses with their factual values (necessity)
-    # condition on the consequents differing from the factual world (sufficiency / necessity)
-
-    # only remaining tricky point: how to enforce SC3 (sufficiency) in explanation
-    # also need to clarify what happens if witness candidates and antecedent candidates overlap?
-
-    # claim: causality = probability of causation = marginal likelihood (fraction of worlds where antecedents cause consequent)
-    # claim: actual causality = conditioning on all exogenous variables
-    # claim: grading / normality = evidence + priors + proposals
-
-    # claim: responsibility = univariate posterior marginals on antecedents
-    # claim: blame = univariate marginals on antecedents given only consequents without other evidence (exists on continuum)
-
-    # claim: explanation = posterior samples from antecedents in factual world (modulo SC3)
-    # claim: explanatory power = posterior probability of antecedents in factual world
-    # claim: explanatory goodness alpha = probability of necessity = marginal likelihood
-    # claim: explanatory goodness beta = probability of sufficiency = marginal likelihood given consequent and intervention on all antecedents but no evidence or witnesses
-
     if isinstance(next(iter(antecedents.values())), pyro.distributions.constraints.Constraint):
         antecedents = {
             a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
