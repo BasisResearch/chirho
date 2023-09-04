@@ -29,16 +29,8 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
 
     @staticmethod
     def _pyro_preempt(msg: Dict[str, Any]) -> None:
-        obs, acts, case = msg["args"]
         if msg["kwargs"].get("name", None) is None:
             msg["kwargs"]["name"] = msg["name"]
-
-        if case is not None:
-            return
-
-        case_dist = pyro.distributions.Categorical(torch.ones(len(acts) + 1))
-        case = pyro.sample(msg["name"], case_dist.mask(False), obs=case)
-        msg["args"] = (obs, acts, case)
 
 
 class SingleWorldCounterfactual(BaseCounterfactualMessenger):
