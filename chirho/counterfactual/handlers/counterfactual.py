@@ -98,51 +98,6 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
 
     See the documentation for :func:`~chirho.counterfactual.ops.preempt` for more details.
 
-    .. note:: This handler does not allow the direct specification of the ``case`` argument
-        to :func:`~chirho.counterfactual.ops.preempt` and therefore cannot be used alone.
-        Instead, the ``case`` argument to :func:`preempt` is assumed to be set separately
-        by :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger`
-        or one of its subclasses, typically from an auxiliary discrete random variable.
-
-    :param actions: A mapping from sample site names to interventions.
-    :param prefix: Prefix usable for naming any auxiliary random variables.
-    """
-
-    actions: Mapping[str, Intervention[T]]
-    prefix: str
-
-    def __init__(
-        self, actions: Mapping[str, Intervention[T]], *, prefix: str = "__split_"
-    ):
-        self.actions = actions
-        self.prefix = prefix
-        super().__init__()
-
-    def _pyro_post_sample(self, msg):
-        try:
-            action = self.actions[msg["name"]]
-        except KeyError:
-            return
-        msg["value"] = preempt(
-            msg["value"],
-            (action,) if not isinstance(action, tuple) else action,
-            None,
-            event_dim=len(msg["fn"].event_shape),
-            name=f"{self.prefix}{msg['name']}",
-        )
-
-
-class BiasedPreemptions(pyro.poutine.messenger.Messenger):
-    """
-    Effect handler that applies the operation :func:`~chirho.counterfactual.ops.preempt`
-    to sample sites in a probabilistic program,
-    similar to the handler :func:`~chirho.observational.handlers.condition`
-    for :func:`~chirho.observational.ops.observe` .
-    or the handler :func:`~chirho.interventional.handlers.do`
-    for :func:`~chirho.interventional.ops.intervene` .
-
-    See the documentation for :func:`~chirho.counterfactual.ops.preempt` for more details.
-
     This handler introduces an auxiliary discrete random variable at each preempted sample site
     whose name is the name of the sample site prefixed by ``prefix``, and
     whose value is used as the ``case`` argument to :func:`preempt`,
@@ -165,16 +120,16 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
     :param prefix: The prefix for naming the auxiliary discrete random variables.
     """
 
-    actions: Mapping[str, Intervention[torch.Tensor]]
-    bias: float
+    actions: Mapping[str, Intervention[T]]
     prefix: str
+    bias: float
 
     def __init__(
         self,
-        actions: Mapping[str, Intervention[torch.Tensor]],
+        actions: Mapping[str, Intervention[T]],
         *,
-        bias: float = 0.0,
         prefix: str = "__witness_split_",
+        bias: float = 0.0,
     ):
         assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
         self.actions = actions
