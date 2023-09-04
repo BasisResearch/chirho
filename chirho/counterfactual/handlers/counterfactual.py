@@ -132,7 +132,7 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
 
-class BiasedPreemptions(Generic[T], pyro.poutine.messenger.Messenger):
+class BiasedPreemptions(pyro.poutine.messenger.Messenger):
     """
     Effect handler that applies the operation :func:`~chirho.counterfactual.ops.preempt`
     to sample sites in a probabilistic program,
@@ -165,13 +165,13 @@ class BiasedPreemptions(Generic[T], pyro.poutine.messenger.Messenger):
     :param prefix: The prefix for naming the auxiliary discrete random variables.
     """
 
-    actions: Mapping[str, Intervention[T]]
+    actions: Mapping[str, Intervention[torch.Tensor]]
     bias: float
     prefix: str
 
     def __init__(
         self,
-        actions: Mapping[str, Intervention[T]],
+        actions: Mapping[str, Intervention[torch.Tensor]],
         *,
         bias: float = 0.0,
         prefix: str = "__witness_split_",
