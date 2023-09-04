@@ -692,9 +692,7 @@ def test_cf_handler_preemptions(cf_dim, event_shape):
         z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
         return dict(w=w, x=x, y=y, z=z)
 
-    preemption_handler = Preemptions(
-        actions=preemptions, bias=0.1, prefix="__split_"
-    )
+    preemption_handler = Preemptions(actions=preemptions, bias=0.1, prefix="__split_")
 
     with MultiWorldCounterfactual(cf_dim), preemption_handler:
         tr = pyro.poutine.trace(model).get_trace()
