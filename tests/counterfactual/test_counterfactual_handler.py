@@ -15,7 +15,7 @@ from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from chirho.counterfactual.handlers.counterfactual import Preemptions
+from chirho.counterfactual.handlers.counterfactual import BiasedPreemptions, Preemptions
 from chirho.counterfactual.handlers.selection import SelectFactual
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
@@ -675,14 +675,14 @@ def test_preempt_op_singleworld():
 
 @pytest.mark.parametrize("cf_dim", [-2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-def test_cf_handler_preemptions(cf_dim, event_shape):
+@pytest.mark.parametrize("use_biased_preemption", [False, True])
+def test_cf_handler_preemptions(cf_dim, event_shape, use_biased_preemption):
     event_dim = len(event_shape)
 
     splits = {"x": torch.tensor(0.0)}
     preemptions = {"y": torch.tensor(1.0)}
 
     @do(actions=splits)
-    @Preemptions(actions=preemptions)
     @pyro.plate("data", size=1000, dim=-1)
     def model():
         w = pyro.sample(
@@ -693,7 +693,14 @@ def test_cf_handler_preemptions(cf_dim, event_shape):
         z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
         return dict(w=w, x=x, y=y, z=z)
 
-    with MultiWorldCounterfactual(cf_dim):
+    if use_biased_preemption:
+        preemption_handler = BiasedPreemptions(
+            actions=preemptions, bias=0.1, prefix="__split_"
+        )
+    else:
+        preemption_handler = Preemptions(actions=preemptions)
+
+    with MultiWorldCounterfactual(cf_dim), preemption_handler:
         tr = pyro.poutine.trace(model).get_trace()
         assert all(f"__split_{k}" in tr.nodes for k in preemptions.keys())
         assert indices_of(tr.nodes["w"]["value"], event_dim=event_dim) == IndexSet()
