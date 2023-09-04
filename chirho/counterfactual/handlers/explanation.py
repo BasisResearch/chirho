@@ -1,4 +1,3 @@
-import collections
 import collections.abc
 import contextlib
 import functools
@@ -80,9 +79,12 @@ def uniform_proposal(
 
 @uniform_proposal.register
 def _uniform_proposal_indep(
-    support: pyro.distributions.constraints.independent, **kwargs,
+    support: pyro.distributions.constraints.independent,
+    *,
+    event_shape: torch.Size = torch.Size([]),
+    **kwargs,
 ) -> pyro.distributions.Distribution:
-    d = uniform_proposal(support.base_constraint, **kwargs)
+    d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(kwargs["event_shape"]).to_event(support.reinterpreted_batch_ndims)
 
 
