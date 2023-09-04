@@ -131,8 +131,8 @@ def PartOfCause(
 
     with do(actions=actions):
         with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
-            with pyro.poutine.trace() as tr:
-                yield tr.trace
+            with pyro.poutine.trace() as logging_tr:
+                yield logging_tr.trace
 
 
 @contextlib.contextmanager
@@ -187,5 +187,5 @@ def ExplainCauses(
     consequent_handler = Factors(factors=consequents, prefix=consequent_prefix)
 
     with antecedent_handler, witness_handler, consequent_handler:
-        with pyro.poutine.trace() as tr:
-            yield tr.trace
+        with pyro.poutine.trace() as logging_tr:
+            yield logging_tr.trace
