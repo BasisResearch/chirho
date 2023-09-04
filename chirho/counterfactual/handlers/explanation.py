@@ -47,6 +47,25 @@ def undo_split(
     return _undo_split
 
 
+@contextlib.contextmanager
+def PartOfCause(
+    actions: Mapping[str, Intervention[T]],
+    *,
+    bias: float = 0.0,
+    prefix: str = "__cause_split_",
+):
+    # TODO support event_dim != 0 propagation in factual_preemption
+    preemptions = {
+        antecedent: undo_split(antecedents=[antecedent])
+        for antecedent in actions.keys()
+    }
+
+    with do(actions=actions):
+        with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
+            with pyro.poutine.trace() as logging_tr:
+                yield logging_tr.trace
+
+
 def consequent_differs(
     antecedents: Iterable[str] = [], eps: float = -1e8, event_dim: int = 0
 ) -> Callable[[T], torch.Tensor]:
@@ -70,7 +89,7 @@ def uniform_proposal(
     Heuristic for creating a uniform distribution on a given support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Uniform(-0.5, 0.5)
+        return pyro.distributions.Normal(0., 1.).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
@@ -116,25 +135,6 @@ def random_intervention(
         return pyro.sample(name, proposal_dist)
 
     return _random_intervention
-
-
-@contextlib.contextmanager
-def PartOfCause(
-    actions: Mapping[str, Intervention[T]],
-    *,
-    bias: float = 0.0,
-    prefix: str = "__cause_split_",
-):
-    # TODO support event_dim != 0 propagation in factual_preemption
-    preemptions = {
-        antecedent: undo_split(antecedents=[antecedent])
-        for antecedent in actions.keys()
-    }
-
-    with do(actions=actions):
-        with BiasedPreemptions(actions=preemptions, bias=bias, prefix=prefix):
-            with pyro.poutine.trace() as logging_tr:
-                yield logging_tr.trace
 
 
 @contextlib.contextmanager
