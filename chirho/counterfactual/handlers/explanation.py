@@ -116,7 +116,7 @@ def _uniform_proposal_integer(
     support: pyro.distributions.constraints.integer_interval, **kwargs,
 ) -> pyro.distributions.Distribution:
     if support.lower_bound != 0:
-        raise NotImplementedError("non-zero lower bound not yet supported")
+        raise NotImplementedError("integer_interval with lower_bound > 0 not yet supported")
     n = support.upper_bound - support.lower_bound + 1
     return pyro.distributions.Categorical(probs=torch.ones((n,)))
 
