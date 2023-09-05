@@ -10,10 +10,12 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    ODEDynamics,
     SimulatorEventLoop,
     simulate,
 )
+
+from chirho.dynamical.ODE import ODEDynamics
+
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 

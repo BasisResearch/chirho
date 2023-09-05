@@ -12,6 +12,8 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
     simulate,
 )
+
+from chirho.dynamical.ODE.handlers import simulate
 from chirho.dynamical.ops import State
 
 from .dynamical_fixtures import (
