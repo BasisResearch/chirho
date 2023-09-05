@@ -87,8 +87,8 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         full_trajs: List[Trajectory[T]] = []
         first = True
 
-        last_terminal_interruptions = tuple()  # type: Tuple[Interruption, ...]
-        interruption_counts = dict()  # type: Dict[Interruption, int]
+        last_terminal_interruptions: Tuple[Interruption, ...] = tuple()
+        interruption_counts: Dict[Interruption, int] = dict()
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
@@ -124,7 +124,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     # We just pass nothing here, as any interruption handlers will be responsible for
                     #  accruing themselves to the message. Leaving explicit for documentation.
                     dynamic_interruptions=None,
-                )  # type: Trajectory[T], Tuple['Interruption', ...], torch.Tensor, State[T]
+                )  # type: Trajectory[T], Tuple["Interruption", ...], torch.Tensor, State[T]
 
             if len(terminal_interruptions) > 1:
                 warnings.warn(
