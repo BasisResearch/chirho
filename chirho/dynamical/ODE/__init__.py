@@ -1,14 +1,7 @@
-from __future__ import annotations
-
-from typing import TypeVar
-
 import torch
 
 from chirho.dynamical import Dynamics
 from chirho.dynamical.ops import State, simulate
-
-S = TypeVar("S")
-T = TypeVar("T")
 
 
 # noinspection PyPep8Naming
