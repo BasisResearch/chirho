@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Callable, List, Optional, Tuple, TypeVar
+from typing import Callable, List, Optional, Tuple
 
 import pyro
 import torch
@@ -15,11 +15,7 @@ from chirho.dynamical.handlers import (
 from chirho.dynamical.ODE import ODEDynamics
 from chirho.dynamical.ops import State, Trajectory, simulate, simulate_to_interruption
 
-S = TypeVar("S")
-T = TypeVar("T")
 
-
-# noinspection PyMethodParameters
 def _deriv(
     dynamics: "ODEDynamics",
     var_order: Tuple[str, ...],
