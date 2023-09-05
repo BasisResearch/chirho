@@ -1,19 +1,16 @@
 from __future__ import annotations
 
-import functools
 import warnings
 from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
-import torchdiffeq
 
 from chirho.dynamical.ops import (
     State,
     Trajectory,
     apply_interruptions,
     concatenate,
-    simulate,
     simulate_to_interruption,
 )
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
@@ -70,7 +67,6 @@ def _gather_trajectory(
     )
 
 
-
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def __enter__(self):
         return super().__enter__()
@@ -88,7 +84,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             time=span_timespan[-1],
         )
 
-        full_trajs = []  # type: List[Trajectory[T]]
+        full_trajs: List[Trajectory[T]] = []
         first = True
 
         last_terminal_interruptions = tuple()  # type: Tuple[Interruption, ...]

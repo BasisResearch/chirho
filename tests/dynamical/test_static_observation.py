@@ -10,9 +10,7 @@ from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
     PointObservation,
     SimulatorEventLoop,
-    simulate,
 )
-
 from chirho.dynamical.ODE.handlers import simulate
 from chirho.dynamical.ops import State
 

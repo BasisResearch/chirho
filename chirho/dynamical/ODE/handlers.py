@@ -1,30 +1,23 @@
 from __future__ import annotations
 
 import functools
-import warnings
-from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Callable, List, Optional, Tuple, TypeVar
 
 import pyro
 import torch
 import torchdiffeq
 
-from chirho.dynamical.ops import (
-    State,
-    Trajectory,
-    apply_interruptions,
-    concatenate,
-    simulate,
-    simulate_to_interruption,
+from chirho.dynamical.handlers import (
+    DynamicInterruption,
+    Interruption,
+    PointInterruption,
 )
-
 from chirho.dynamical.ODE import ODEDynamics
-
-from chirho.indexed.ops import IndexSet, gather, indices_of, union
-from chirho.interventional.handlers import intervene
-from chirho.observational.handlers import condition
+from chirho.dynamical.ops import State, Trajectory, simulate, simulate_to_interruption
 
 S = TypeVar("S")
 T = TypeVar("T")
+
 
 # noinspection PyMethodParameters
 def _deriv(
@@ -39,6 +32,7 @@ def _deriv(
         setattr(env, var, value)
     dynamics.diff(ddt, env)
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
+
 
 # TODO - determine if this is needed.
 # @pyro.nn.pyro_method
@@ -60,6 +54,7 @@ def _torchdiffeq_ode_simulate_inner(
         setattr(trajectory, var, soln)
 
     return trajectory
+
 
 def _batched_odeint(
     func: Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], Tuple[torch.Tensor, ...]],
