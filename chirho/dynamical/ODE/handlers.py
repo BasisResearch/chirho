@@ -30,8 +30,6 @@ def _deriv(
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
-# TODO - determine if this is needed.
-# @pyro.nn.pyro_method
 @pyro.poutine.runtime.effectful(type="simulate")
 def _torchdiffeq_ode_simulate_inner(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
