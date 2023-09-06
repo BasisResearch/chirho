@@ -46,7 +46,7 @@ def test_error_without_backend(model, init_state, tspan):
         # Throw an error if the generic SimulatorEventLoop is used, without a particular backend.
         with SimulatorEventLoop():
             simulate(model, init_state, tspan)
-    
+
     # Don't throw an error when using a specific backend (e.g. torchdiffeq)
     with TorchDiffEq():
         result = simulate(model, init_state, tspan)
