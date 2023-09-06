@@ -7,6 +7,7 @@ from chirho.dynamical.handlers import (
     DynamicInterruption,
     PointInterruption,
     PointIntervention,
+    SimulatorEventLoop,
 )
 from chirho.dynamical.internals import State
 from chirho.dynamical.ODE.backends.torchdiffeq.handlers import TorchDiffEq
@@ -31,6 +32,26 @@ intervene_states = [
     State(S=torch.tensor(10.0), R=torch.tensor(5.0)),
     State(S=torch.tensor(20.0), I=torch.tensor(11.0), R=torch.tensor(4.0)),
 ]
+
+
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("init_state", [init_state_values])
+@pytest.mark.parametrize("tspan", [tspan_values])
+def test_error_without_backend(model, init_state, tspan):
+    with pytest.raises(NotImplementedError):
+        # Throw an error if no SimulatorEventLoop is used
+        simulate(model, init_state, tspan)
+
+    with pytest.raises(NotImplementedError):
+        # Throw an error if the generic SimulatorEventLoop is used, without a particular backend.
+        with SimulatorEventLoop():
+            simulate(model, init_state, tspan)
+    
+    # Don't throw an error when using a specific backend (e.g. torchdiffeq)
+    with TorchDiffEq():
+        result = simulate(model, init_state, tspan)
+
+    assert result is not None
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
