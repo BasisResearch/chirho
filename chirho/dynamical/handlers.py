@@ -124,7 +124,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     # We just pass nothing here, as any interruption handlers will be responsible for
                     #  accruing themselves to the message. Leaving explicit for documentation.
                     dynamic_interruptions=None,
-                )  # type: Trajectory[T], Tuple["Interruption", ...], torch.Tensor, State[T]
+                )
 
             if len(terminal_interruptions) > 1:
                 warnings.warn(
