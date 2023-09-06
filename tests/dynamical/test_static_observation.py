@@ -270,7 +270,8 @@ def test_simulate_persistent_pyrosample(use_event_loop):
     model = RandBetaUnifiedFixtureDynamics()
 
     if not use_event_loop:
-        result = simulate(model, init_state, tspan)
+        with TorchDiffEq():
+            result = simulate(model, init_state, tspan)
     else:
         S_obs = torch.tensor(10.0)
         data1 = {"S_obs": S_obs}

@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 from typing import Callable, List, Optional, Tuple
 
-import pyro
 import torch
 import torchdiffeq
 
@@ -13,8 +12,8 @@ from chirho.dynamical.handlers import (
     PointInterruption,
     SimulatorEventLoop,
 )
+from chirho.dynamical.internals import State, Trajectory
 from chirho.dynamical.ODE.ops import ODEDynamics
-from chirho.dynamical.ops import State, Trajectory, simulate, simulate_to_interruption
 
 
 class TorchDiffEq(SimulatorEventLoop):
@@ -23,7 +22,18 @@ class TorchDiffEq(SimulatorEventLoop):
     """
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        pass  # TODO
+        '''
+        Prevent the default implementation of `simulate_to_interruption` from being run.
+        '''
+        msg["done"] = True
+
+    def _pyro_post_simulate_to_interruption(self, msg) -> None:
+        '''
+        Run the specialized implementation of `simulat_to_interruption` using the `torchdiffeq` solver package.
+        '''
+        msg["value"] = _torchdiffeq_ode_simulate_to_interruption(
+            *msg["args"], **msg["kwargs"]
+        )
 
 
 def _deriv(
@@ -40,7 +50,6 @@ def _deriv(
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
-@pyro.poutine.runtime.effectful(type="simulate")
 def _torchdiffeq_ode_simulate_inner(
     dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
 ):
@@ -102,17 +111,7 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-@simulate.register(ODEDynamics)
-def torchdiffeq_ode_simulate(
-    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
-):
-    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
-
-
-@simulate_to_interruption.register(ODEDynamics)
-@pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-@pyro.poutine.block(hide_types=["simulate"])
-def torchdiffeq_ode_simulate_to_interruption(
+def _torchdiffeq_ode_simulate_to_interruption(
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
     timespan,  # The first element of timespan is assumed to be the starting time.
@@ -130,7 +129,9 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = simulate(dynamics, start_state, timespan, **kwargs)
+        trajectory = _torchdiffeq_ode_simulate_inner(
+            dynamics, start_state, timespan, **kwargs
+        )
         # TODO support event_dim > 0
         return trajectory, (), timespan[-1], trajectory[..., -1]
 
@@ -201,7 +202,9 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # Execute a standard, non-event based simulation on the new timespan.
-    trajectory = simulate(dynamics, start_state, timespan_2nd_pass, **kwargs)
+    trajectory = _torchdiffeq_ode_simulate_inner(
+        dynamics, start_state, timespan_2nd_pass, **kwargs
+    )
 
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.

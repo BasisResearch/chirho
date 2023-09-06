@@ -52,7 +52,8 @@ eps = 1e-3
 def test_point_intervention_causes_difference(
     model, init_state, tspan, intervene_state, intervene_time
 ):
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with TorchDiffEq():
@@ -105,7 +106,8 @@ def test_nested_point_interventions_cause_difference(
     intervene_state2,
     intervene_time2,
 ):
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with TorchDiffEq():
@@ -193,7 +195,8 @@ def test_split_odeint_broadcast(
 ):
     with TwinWorldCounterfactual() as cf:
         cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
-        trajectory = simulate(model, cf_init_state, tspan)
+        with TorchDiffEq():
+            trajectory = simulate(model, cf_init_state, tspan)
 
     with cf:
         for k in trajectory.keys:

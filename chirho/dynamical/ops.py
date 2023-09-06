@@ -17,7 +17,6 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@functools.singledispatch
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
 def apply_interruptions(
     dynamics: Dynamics[S, T], start_state: State[T]
@@ -29,8 +28,9 @@ def apply_interruptions(
     return dynamics, start_state
 
 
-# noinspection PyUnusedLocal
-@functools.singledispatch
+# Separating out the effectful operation from the non-effectful dispatch on the default implementation
+@pyro.poutine.runtime.effectful(type="simulate_to_interruption")
+@pyro.poutine.block(hide_types=["simulate"])
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
@@ -49,21 +49,51 @@ def simulate_to_interruption(
      the simulation ended, and the end state. The initial trajectory object does not include state measurements at
      the end-point.
     """
+    return _simulate_to_interruption(
+        dynamics,
+        start_state,
+        timespan,
+        next_static_interruption=next_static_interruption,
+        dynamic_interruptions=dynamic_interruptions,
+        **kwargs,
+    )
+
+
+# noinspection PyUnusedLocal
+@functools.singledispatch
+def _simulate_to_interruption(
+    dynamics: Dynamics[S, T],
+    start_state: State[T],
+    timespan,  # The first element of timespan is assumed to be the starting time.
+    *,
+    next_static_interruption: Optional["PointInterruption"] = None,
+    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    **kwargs,
+) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )
 
 
-@functools.singledispatch
+# Separating out the effectful operation from the non-effectful dispatch on the default implementation
+@pyro.poutine.runtime.effectful(type="concatenate")
 def concatenate(*inputs, **kwargs):
+    """
+    Concatenate multiple inputs of type T into a single output of type T.
+    """
+    return _concatenate(*inputs, **kwargs)
+
+
+@functools.singledispatch
+def _concatenate(*inputs, **kwargs):
     """
     Concatenate multiple inputs of type T into a single output of type T.
     """
     raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
 
 
-@concatenate.register(Trajectory)
-def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
+@_concatenate.register(Trajectory)
+def _trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
     """
     Concatenate multiple trajectories into a single trajectory.
     """
@@ -89,9 +119,19 @@ def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory
     return full_trajectory
 
 
+@pyro.poutine.runtime.effectful(type="simulate")
+def simulate(
+    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
+    return _simulate(dynamics, initial_state, timespan, **kwargs)
+
+
 # noinspection PyUnusedLocal
 @functools.singledispatch
-def simulate(
+def _simulate(
     dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
 ) -> Trajectory[T]:
     """
@@ -100,4 +140,4 @@ def simulate(
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
 
 
-simulate.register(ODEDynamics, ode_simulate)  # type: ignore
+_simulate.register(ODEDynamics, ode_simulate)  # type: ignore

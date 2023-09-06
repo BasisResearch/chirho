@@ -37,7 +37,8 @@ intervene_states = [
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_noop_point_interruptions(model, init_state, tspan):
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     # Test with standard point interruptions within timespan.
     with TorchDiffEq():
@@ -78,8 +79,8 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
     """
 
     post_measurement_intervention_time = tspan_values.max() + 1.0
-
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     # Test a single point intervention.
     with pytest.warns(
@@ -131,7 +132,8 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_point_interruption_at_start(model, init_state, tspan):
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     with TorchDiffEq():
         with PointInterruption(time=1.0):
@@ -145,7 +147,8 @@ def test_point_interruption_at_start(model, init_state, tspan):
 @pytest.mark.parametrize("tspan", [tspan_values])
 @pytest.mark.parametrize("intervene_state", intervene_states)
 def test_noop_dynamic_interruption(model, init_state, tspan, intervene_state):
-    observational_execution_result = simulate(model, init_state, tspan)
+    with TorchDiffEq():
+        observational_execution_result = simulate(model, init_state, tspan)
 
     with TorchDiffEq():
         tt = (tspan[-1] - tspan[0]) / 2.0
