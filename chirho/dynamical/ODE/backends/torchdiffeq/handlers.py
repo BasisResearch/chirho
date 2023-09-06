@@ -11,9 +11,19 @@ from chirho.dynamical.handlers import (
     DynamicInterruption,
     Interruption,
     PointInterruption,
+    SimulatorEventLoop,
 )
-from chirho.dynamical.ODE import ODEDynamics
+from chirho.dynamical.ODE.ops import ODEDynamics
 from chirho.dynamical.ops import State, Trajectory, simulate, simulate_to_interruption
+
+
+class TorchDiffEq(SimulatorEventLoop):
+    """
+    A simulator event loop that uses torchdiffeq.odeint_event to simulate from the differential equation.
+    """
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        pass  # TODO
 
 
 def _deriv(

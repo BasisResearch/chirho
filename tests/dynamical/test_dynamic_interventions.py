@@ -8,10 +8,11 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop
-from chirho.dynamical.ODE import ODEDynamics
-from chirho.dynamical.ODE.handlers import simulate
-from chirho.dynamical.ops import State
+from chirho.dynamical.handlers import DynamicIntervention
+from chirho.dynamical.internals import State
+from chirho.dynamical.ODE.backends.torchdiffeq.handlers import TorchDiffEq
+from chirho.dynamical.ODE.internals import ODEDynamics
+from chirho.dynamical.ops import simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -69,7 +70,7 @@ def test_nested_dynamic_intervention_causes_change(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -130,7 +131,7 @@ def test_nested_dynamic_intervention_causes_change(
 def test_dynamic_intervention_causes_change(
     model, init_state, tspan, trigger_state, intervene_state
 ):
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(trigger_state),
             intervention=intervene_state,
@@ -178,7 +179,7 @@ def test_split_twinworld_dynamic_intervention(
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -217,7 +218,7 @@ def test_split_multiworld_dynamic_intervention(
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -255,7 +256,7 @@ def test_split_twinworld_dynamic_matches_output(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -271,7 +272,7 @@ def test_split_twinworld_dynamic_matches_output(
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(model, init_state, tspan)
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -286,7 +287,7 @@ def test_split_twinworld_dynamic_matches_output(
             ):
                 expected_cf = simulate(model, init_state, tspan)
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         expected_factual = simulate(model, init_state, tspan)
 
     with cf:
@@ -345,7 +346,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     )
 
     # noinspection DuplicatedCode
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with dynamic_intervention:
             traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
 
@@ -373,7 +374,7 @@ def test_grad_of_point_intervention_params():
     # )
     #
     # # noinspection DuplicatedCode
-    # with SimulatorEventLoop():
+    # with TorchDiffEq():
     #     with point_intervention:
     #         traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
     #

@@ -9,10 +9,10 @@ from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
     PointIntervention,
-    SimulatorEventLoop,
 )
-from chirho.dynamical.ODE.handlers import simulate
-from chirho.dynamical.ops import State
+from chirho.dynamical.internals import State
+from chirho.dynamical.ODE.backends.torchdiffeq.handlers import TorchDiffEq
+from chirho.dynamical.ops import simulate
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamics,
@@ -59,7 +59,7 @@ vec_obs3 = NonInterruptingPointObservationArray(
 
 
 def counterf_model():
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with vec_obs3, reparam, twin_world, intervention:
             return simulate(
                 UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
@@ -70,7 +70,7 @@ def counterf_model():
 
 def conditioned_model():
     # This is equivalent to the following:
-    # with SimulatorEventLoop():
+    # with TorchDiffEq():
     #   with vec_obs3:
     #       return simulate(...)
     # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from

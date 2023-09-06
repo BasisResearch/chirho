@@ -11,9 +11,9 @@ from chirho.dynamical.handlers import (
     DynamicIntervention,
     NonInterruptingPointObservation,
     ODEDynamics,
-    SimulatorEventLoop,
     simulate,
 )
+from chirho.dynamical.ODE.backends.torchdiffeq.handlers import TorchDiffEq
 from chirho.dynamical.ops import State
 
 
@@ -67,7 +67,7 @@ def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
             )
         )
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with ExitStack() as stack:
             for manager in managers:
                 stack.enter_context(manager)

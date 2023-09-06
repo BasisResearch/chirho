@@ -7,9 +7,10 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop
-from chirho.dynamical.ODE.handlers import simulate
-from chirho.dynamical.ops import State
+from chirho.dynamical.handlers import PointIntervention
+from chirho.dynamical.internals import State
+from chirho.dynamical.ODE.backends.torchdiffeq.handlers import TorchDiffEq
+from chirho.dynamical.ops import simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 
@@ -54,7 +55,7 @@ def test_point_intervention_causes_difference(
     observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             if intervene_time < tspan[0]:
                 with pytest.raises(
@@ -107,7 +108,7 @@ def test_nested_point_interventions_cause_difference(
     observational_execution_result = simulate(model, init_state, tspan)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time1, intervention=intervene_state1):
             with PointIntervention(time=intervene_time2, intervention=intervene_state2):
                 if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
@@ -147,7 +148,7 @@ def test_twinworld_point_intervention(
     model, init_state, tspan, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             with PointIntervention(
                 time=intervene_time + 0.5, intervention=intervene_state
@@ -169,7 +170,7 @@ def test_multiworld_point_intervention(
     model, init_state, tspan, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             with PointIntervention(
                 time=intervene_time + 0.5, intervention=intervene_state
@@ -208,7 +209,7 @@ def test_twinworld_matches_output(
     model, init_state, tspan, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             with PointIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
@@ -216,14 +217,14 @@ def test_twinworld_matches_output(
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(model, init_state, tspan)
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         with PointIntervention(time=intervene_time, intervention=intervene_state):
             with PointIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
                 expected_cf = simulate(model, init_state, tspan)
 
-    with SimulatorEventLoop():
+    with TorchDiffEq():
         expected_factual = simulate(model, init_state, tspan)
 
     with cf:
