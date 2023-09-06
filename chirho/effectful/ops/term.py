@@ -27,7 +27,6 @@ def evaluate(term: Term[T]) -> T:
     )
 
 
-@define(Operation)
 def LazyInterpretation(*ops: Operation[P, T]) -> Interpretation[T | Term[T]]:
     return define(Interpretation)({
         op: lambda _, *args, **kwargs: define(Term)(op, args, kwargs)
