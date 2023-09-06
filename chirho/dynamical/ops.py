@@ -11,7 +11,7 @@ import functools
 import pyro
 import torch
 
-from chirho.dynamical.ODE.ops import ode_simulate
+from chirho.dynamical.ODE.ops import _ode_simulate, _ode_simulate_to_interruption
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -73,6 +73,9 @@ def _simulate_to_interruption(
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )
+
+
+_simulate_to_interruption.register(ODEDynamics, _ode_simulate_to_interruption)  # type: ignore
 
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
@@ -140,4 +143,4 @@ def _simulate(
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
 
 
-_simulate.register(ODEDynamics, ode_simulate)  # type: ignore
+_simulate.register(ODEDynamics, _ode_simulate)  # type: ignore

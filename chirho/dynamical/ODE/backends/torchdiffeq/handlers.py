@@ -22,15 +22,15 @@ class TorchDiffEq(SimulatorEventLoop):
     """
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        '''
+        """
         Prevent the default implementation of `simulate_to_interruption` from being run.
-        '''
+        """
         msg["done"] = True
 
     def _pyro_post_simulate_to_interruption(self, msg) -> None:
-        '''
+        """
         Run the specialized implementation of `simulat_to_interruption` using the `torchdiffeq` solver package.
-        '''
+        """
         msg["value"] = _torchdiffeq_ode_simulate_to_interruption(
             *msg["args"], **msg["kwargs"]
         )
