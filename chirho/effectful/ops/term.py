@@ -14,16 +14,16 @@ T = TypeVar("T")
 
 @typing.runtime_checkable
 class Term(Protocol[T]):
-    __op__: Operation[..., T]
-    __args__: Iterable["Term[T]" | T]
-    __kwargs__: Mapping[str, "Term[T]" | T]
+    op: Operation[..., T]
+    args: Iterable["Term[T]" | T]
+    kwargs: Mapping[str, "Term[T]" | T]
 
 
 @define(Operation)
 def evaluate(term: Term[T]) -> T:
-    return term.__op__(
-        *(evaluate(a) if isinstance(a, Term) else a for a in term.__args__),
-        **{k: (evaluate(v) if isinstance(v, Term) else v) for k, v in term.__kwargs__.items()}
+    return term.op(
+        *(evaluate(a) if isinstance(a, Term) else a for a in term.args),
+        **{k: (evaluate(v) if isinstance(v, Term) else v) for k, v in term.kwargs.items()}
     )
 
 

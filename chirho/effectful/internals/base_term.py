@@ -7,9 +7,9 @@ T = TypeVar("T")
 
 
 class _BaseTerm(Generic[T]):
-    __op__: Operation[..., T]
-    __args__: tuple["_BaseTerm[T]" | T, ...]
-    __kwargs__: dict[str, "_BaseTerm[T]" | T]
+    op: Operation[..., T]
+    args: tuple["_BaseTerm[T]" | T, ...]
+    kwargs: dict[str, "_BaseTerm[T]" | T]
 
     def __init__(
         self,
@@ -17,11 +17,11 @@ class _BaseTerm(Generic[T]):
         __args: Iterable["_BaseTerm[T]" | T],
         __kwargs: Mapping[str, "_BaseTerm[T]" | T]
     ):
-        self.__op__ = __op
-        self.__args__ = tuple(__args)
-        self.__kwargs__ = dict(__kwargs)
+        self.op = __op
+        self.args = tuple(__args)
+        self.kwargs = dict(__kwargs)
 
     def __repr__(self) -> str:
-        return f"{self.__op__}(" + \
-            f"{', '.join(map(repr, self.__args__))}," + \
-            f"{', '.join(f'{k}={v}' for k, v in self.__kwargs__.items())})"
+        return f"{self.op}(" + \
+            f"{', '.join(map(repr, self.args))}," + \
+            f"{', '.join(f'{k}={v}' for k, v in self.kwargs.items())})"
