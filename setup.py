@@ -55,7 +55,6 @@ setup(
             "sphinx_rtd_theme",
             "myst_parser",
             "nbsphinx",
-            "pypandoc-binary"
         ],
     },
     python_requires=">=3.8",
