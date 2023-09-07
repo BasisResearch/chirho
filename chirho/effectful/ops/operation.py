@@ -14,7 +14,7 @@ class Operation(Protocol[P, T]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
-    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+    def default(self, __result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
 

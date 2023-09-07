@@ -16,16 +16,16 @@ V = TypeVar("V")
 @typing.runtime_checkable
 class Interpretation(Protocol[T, V]):
     def __setitem__(
-        self, op: Operation[P, T], interpret: Callable[Concatenate[Optional[V], Q], V]
+        self, __op: Operation[P, T], __interpret: Callable[Concatenate[Optional[V], Q], V]
     ) -> None:
         ...
 
     def __getitem__(
-        self, op: Operation[P, T]
+        self, __op: Operation[P, T]
     ) -> Callable[Concatenate[Optional[V], Q], V]:
         ...
 
-    def __contains__(self, op: Operation[..., T]) -> bool:
+    def __contains__(self, __op: Operation[..., T]) -> bool:
         ...
 
     def keys(self) -> Iterable[Operation[..., T]]:

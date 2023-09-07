@@ -16,7 +16,7 @@ S_ = TypeVar("S_", contravariant=True)
 
 
 class Continuation(Protocol[S_, T]):
-    def __call__(self, result: Optional[T], value: Optional[S_]) -> T:
+    def __call__(self, __result: Optional[T], __value: Optional[S_]) -> T:
         ...
 
 

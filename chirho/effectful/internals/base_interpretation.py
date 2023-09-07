@@ -30,19 +30,19 @@ class _StatefulInterpretation(Generic[S, T, V]):
     @classmethod
     def __setitem__(
         cls,
-        op: Operation[P, T],
-        interpret_op: Callable[Concatenate[S, Optional[V], Q], V],
+        __op: Operation[P, T],
+        __interpret_op: Callable[Concatenate[S, Optional[V], Q], V],
     ) -> None:
-        cls._op_intps[op] = interpret_op
+        cls._op_intps[__op] = __interpret_op
 
     @classmethod
-    def __contains__(cls, op: Operation[..., T]) -> bool:
-        return op in cls._op_intps
+    def __contains__(cls, __op: Operation[..., T]) -> bool:
+        return __op in cls._op_intps
 
     def __getitem__(
-        self, op: Operation[P, T]
+        self, __op: Operation[P, T]
     ) -> Callable[Concatenate[Optional[V], Q], V]:
-        return functools.partial(self._op_intps[op], self.state)
+        return functools.partial(self._op_intps[__op], self.state)
 
     @classmethod
     def keys(cls) -> Iterable[Operation[..., T]]:

@@ -9,16 +9,16 @@ T = TypeVar("T")
 
 
 class _BaseOperation(Generic[P, T]):
-    def __init__(self, body: Callable[P, T]):
-        self._body = body
+    def __init__(self, __body: Callable[P, T]):
+        self._body = __body
 
     def __repr__(self) -> str:
         return (
             f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
         )
 
-    def default(self, result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
-        return result if result is not None else self._body(*args, **kwargs)
+    def default(self, __result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+        return __result if __result is not None else self._body(*args, **kwargs)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         if self is runtime.get_runtime:

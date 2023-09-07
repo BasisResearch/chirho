@@ -9,15 +9,15 @@ class _BaseAffineContinuation(Generic[S, T]):
     cont: Callable[[Optional[T], Optional[S]], T]
     used: bool
 
-    def __init__(self, cont: Callable[[Optional[T], Optional[S]], T]):
-        self.cont = cont
+    def __init__(self, __cont: Callable[[Optional[T], Optional[S]], T]):
+        self.cont = __cont
         self.used = False
 
-    def __call__(self, _res: Optional[T], value: Optional[S]) -> T:
+    def __call__(self, __res: Optional[T], __value: Optional[S]) -> T:
         try:
             if self.used:
                 from chirho.effectful.ops.continuation import AffineContinuationError
                 raise AffineContinuationError(f"can use {self.cont} at most once")
-            return self.cont(_res, value)
+            return self.cont(__res, __value)
         finally:
             self.used = True
