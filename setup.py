@@ -50,7 +50,7 @@ setup(
             "black",
             "flake8",
             "isort",
-            "sphinx",
+            "sphinx==7.1.2",
             "sphinxcontrib-bibtex",
             "sphinx_rtd_theme",
             "myst_parser",
