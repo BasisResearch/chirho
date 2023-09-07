@@ -17,10 +17,10 @@ def fwd(result: Optional[T]) -> T:
 
 @define(Operation)
 def compose(
-    intp: Interpretation[T, T],
-    *intps: Interpretation[T, T],
+    intp: Interpretation[S, T],
+    *intps: Interpretation[S, T],
     fwd: Operation[[Optional[T]], T] = fwd
-) -> Interpretation[T, T]:
+) -> Interpretation[S, T]:
     if len(intps) == 0:
         return intp  # unit
     elif len(intps) > 1:
@@ -39,7 +39,7 @@ def compose(
 
 @define(Operation)
 @contextlib.contextmanager
-def handler(intp: Interpretation[T, T], *, fwd: Operation[[Optional[T]], T] = fwd):
+def handler(intp: Interpretation[S, T], *, fwd: Operation[[Optional[T]], T] = fwd):
     from ..internals.runtime import get_interpretation
 
     with interpreter(compose(get_interpretation(), intp, fwd=fwd)):

@@ -19,11 +19,11 @@ def reflect(result: Optional[T]) -> T:
 
 @define(Operation)
 def product(
-    intp: Interpretation[T, T],
-    *intps: Interpretation[T, T],
+    intp: Interpretation[S, T],
+    *intps: Interpretation[S, T],
     reflect: Operation[[Optional[T]], T] = reflect,
     fwd: Operation[[Optional[T]], T] = fwd,
-) -> Interpretation[T, T]:
+) -> Interpretation[S, T]:
     if len(intps) == 0:
         return intp  # unit
     elif len(intps) > 1:  # associativity
@@ -77,7 +77,7 @@ def product(
 @define(Operation)
 @contextlib.contextmanager
 def runner(
-    intp: Interpretation[T, T],
+    intp: Interpretation[S, T],
     *,
     reflect: Operation[[Optional[T]], T] = reflect,
     fwd: Operation[[Optional[T]], T] = fwd,
