@@ -34,14 +34,14 @@ class Interpretation(Protocol[T, V]):
 
 @typing.overload
 def register(
-    op: Operation[P, T],
+    __op: Operation[P, T],
 ) -> Callable[[Callable[Concatenate[Optional[T], P], T]], Callable[Concatenate[Optional[T], P], T]]:
     ...
 
 
 @typing.overload
 def register(
-    op: Operation[P, T],
+    __op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
 ) -> Callable[[Callable[Concatenate[Optional[V], Q], V]], Callable[Concatenate[Optional[V], Q], V]]:
     ...
@@ -49,7 +49,7 @@ def register(
 
 @typing.overload
 def register(
-    op: Operation[P, T],
+    __op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
     interpret_op: Callable[Concatenate[Optional[V], Q], V],
 ) -> Callable[Concatenate[Optional[V], Q], V]:
@@ -57,15 +57,15 @@ def register(
 
 
 @define(Operation)
-def register(op, intp=None, interpret_op=None):
+def register(__op, intp=None, interpret_op=None):
     if interpret_op is None:
-        return lambda interpret_op: register(op, intp, interpret_op)
+        return lambda interpret_op: register(__op, intp, interpret_op)
 
     if intp is None:
         setattr(
-            op,
+            __op,
             "default",
-            functools.wraps(op.default)(
+            functools.wraps(__op.default)(
                 lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
                 if result is None
                 else result
@@ -73,9 +73,9 @@ def register(op, intp=None, interpret_op=None):
         )
         return interpret_op
     elif isinstance(intp, Interpretation):
-        intp.__setitem__(op, interpret_op)
+        intp.__setitem__(__op, interpret_op)
         return interpret_op
-    raise NotImplementedError(f"Cannot register {op} in {intp}")
+    raise NotImplementedError(f"Cannot register {__op} in {intp}")
 
 
 @define(Operation)
