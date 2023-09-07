@@ -32,8 +32,17 @@ def apply(
     return interpret(None, *args, **kwargs)
 
 
-@runtime.weak_memoize
+@typing.overload
 def define(m: Type[T]) -> Operation[P, T]:
+    ...
+
+
+@typing.overload
+def define(m: Type[Operation[Q, S]]) -> Operation[[Callable[Q, S]], Operation[Q, S]]:
+    ...
+
+
+def define(m):
     """
     Scott encoding of a type as its constructor.
     """
@@ -46,5 +55,8 @@ def define(m: Type[T]) -> Operation[P, T]:
 
         return _BaseOperation(_BaseOperation)
 
-    defop: Operation[..., Operation[P, T]] = define(Operation[P, T])
-    return defop(m)
+    return define(Operation)(m)
+
+
+if not typing.TYPE_CHECKING:
+    define = runtime.weak_memoize(define)

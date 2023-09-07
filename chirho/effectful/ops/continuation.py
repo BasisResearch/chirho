@@ -59,13 +59,13 @@ def get_cont_args(op: Operation) -> Operation[[], tuple[tuple, dict]]:
 
 @define(Operation)
 def capture_cont_args(
-    op: Operation[P, T], op_intp: Callable[Concatenate[Optional[T], P], T]
-) -> Callable[Concatenate[Optional[T], P], T]:
+    op: Operation[P, S], op_intp: Callable[Concatenate[Optional[T], Q], T]
+) -> Callable[Concatenate[Optional[T], Q], T]:
     @functools.wraps(op_intp)
-    def _wrapper(result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+    def _wrapper(__result: Optional[T], *args: Q.args, **kwargs: Q.kwargs) -> T:
         return interpreter(
             define(Interpretation)({get_cont_args(op): lambda _: (args, kwargs)})
-        )(op_intp)(result, *args, **kwargs)
+        )(op_intp)(__result, *args, **kwargs)
 
     return _wrapper
 
