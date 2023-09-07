@@ -26,7 +26,7 @@ class _BaseOperation(Generic[P, T]):
             return operation.apply.default(None, intp, self, *args, **kwargs)
         elif self is operation.apply:
             intp = runtime.get_interpretation()
-            return self.default(None, intp, self, *args, **kwargs)
+            return operation.apply.default(None, intp, self, *args, **kwargs)
         else:
             intp = runtime.get_interpretation()
             return operation.apply(intp, self, *args, **kwargs)

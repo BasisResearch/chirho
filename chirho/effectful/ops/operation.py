@@ -33,7 +33,7 @@ def apply(
 
 
 @typing.overload
-def define(m: Type[T]) -> Operation[P, T]:
+def define(m: Type[T] | Callable[Q, T]) -> Operation[P, T]:
     ...
 
 

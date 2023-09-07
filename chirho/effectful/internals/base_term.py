@@ -13,13 +13,13 @@ class _BaseTerm(Generic[T]):
 
     def __init__(
         self,
-        op: Operation[..., T],
-        args: Iterable["_BaseTerm[T]" | T],
-        kwargs: Mapping[str, "_BaseTerm[T]" | T]
+        __op: Operation[..., T],
+        __args: Iterable["_BaseTerm[T]" | T],
+        __kwargs: Mapping[str, "_BaseTerm[T]" | T]
     ):
-        self.__op__ = op
-        self.__args__ = tuple(args)
-        self.__kwargs__ = dict(kwargs)
+        self.__op__ = __op
+        self.__args__ = tuple(__args)
+        self.__kwargs__ = dict(__kwargs)
 
     def __repr__(self) -> str:
         return f"{self.__op__}(" + \

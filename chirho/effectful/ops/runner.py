@@ -1,5 +1,6 @@
 import contextlib
 import functools
+import typing
 from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts, push_prompts
@@ -8,13 +9,14 @@ from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
+Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
 @define(Operation)
-def reflect(result: Optional[T]) -> T:
-    return result
+def reflect(__result: Optional[T]) -> T:
+    return __result
 
 
 @define(Operation)
@@ -32,9 +34,9 @@ def product(
         )
 
     def _op_or_result(
-        op: Operation[P, T], result: Optional[T], *args: P.args, **kwargs: P.kwargs
+        op: Operation[P, S], result: Optional[T], *args: Q.args, **kwargs: Q.kwargs
     ) -> T:
-        return result if result is not None else op(*args, **kwargs)
+        return result if result is not None else typing.cast(T, op(*args, **kwargs))
 
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
