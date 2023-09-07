@@ -8,12 +8,15 @@ from chirho.effectful.ops.interpretation import Interpretation, interpreter, reg
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
+Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 
+S_ = TypeVar("S_", contravariant=True)
 
-class Continuation(Protocol[T]):
-    def __call__(self, result: Optional[T], value: Optional[T]) -> T:
+
+class Continuation(Protocol[S_, T]):
+    def __call__(self, result: Optional[T], value: Optional[S_]) -> T:
         ...
 
 
@@ -23,7 +26,7 @@ class AffineContinuationError(Exception):
 
 @define(Operation)
 @contextlib.contextmanager
-def push_prompts(conts: Interpretation[T]):
+def push_prompts(conts: Interpretation):
     from chirho.effectful.internals.runtime import get_interpretation
 
     resets = define(Interpretation)(
@@ -47,7 +50,7 @@ def push_prompts(conts: Interpretation[T]):
 
 
 @weak_memoize
-def get_cont_args(op: Operation[..., T]) -> Operation[[], tuple[tuple, dict]]:
+def get_cont_args(op: Operation) -> Operation[[], tuple[tuple, dict]]:
     def _null_op():
         raise ValueError(f"No args stored for {op}")
 
@@ -69,9 +72,9 @@ def capture_cont_args(
 
 @define(Operation)
 def bind_cont_args(
-    op: Operation[P, T],
-    unbound_conts: Interpretation[T],
-) -> Interpretation[T]:
+    op: Operation[P, S],
+    unbound_conts: Interpretation[S, T],
+) -> Interpretation[S, T]:
     return define(Interpretation)(
         {
             p: functools.partial(
@@ -87,8 +90,8 @@ def bind_cont_args(
 
 @define(Operation)
 def bind_and_push_prompts(
-    unbound_conts: Interpretation[T],
-    op: Operation[P, T],
+    unbound_conts: Interpretation[S, T],
+    op: Operation[P, S],
     op_intp: Callable[Concatenate[Optional[T], P], T],
 ) -> Callable[Concatenate[Optional[T], P], T]:
     return push_prompts(bind_cont_args(op, unbound_conts))(

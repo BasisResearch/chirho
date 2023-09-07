@@ -5,15 +5,15 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class _BaseAffineContinuation(Generic[T]):
-    cont: Callable[[Optional[T], Optional[T]], T]
+class _BaseAffineContinuation(Generic[S, T]):
+    cont: Callable[[Optional[T], Optional[S]], T]
     used: bool
 
-    def __init__(self, cont: Callable[[Optional[T], Optional[T]], T]):
+    def __init__(self, cont: Callable[[Optional[T], Optional[S]], T]):
         self.cont = cont
         self.used = False
 
-    def __call__(self, _res: Optional[T], value: Optional[T]) -> T:
+    def __call__(self, _res: Optional[T], value: Optional[S]) -> T:
         try:
             if self.used:
                 from chirho.effectful.ops.continuation import AffineContinuationError

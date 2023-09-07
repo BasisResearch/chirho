@@ -32,7 +32,7 @@ def times_plus_1(x: int, y: int) -> int:
     return x * y + 1
 
 
-def times_n(n: int, *ops: Operation[..., int]) -> Interpretation[int]:
+def times_n(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
     def _op_times_n(
         n: int, op: Operation[..., int], result: Optional[int], *args: int
     ) -> int:
@@ -54,9 +54,9 @@ DEPTH_CASES = [1, 2, 3]
 
 def test_memoized_define():
     assert define(Interpretation) is define(Interpretation)
-    assert define(Interpretation[int]) is define(Interpretation[int])
-    assert define(Interpretation[int]) is define(Interpretation[float])
-    assert define(Interpretation[int]) is define(Interpretation)
+    assert define(Interpretation[int, int]) is define(Interpretation[int, int])
+    assert define(Interpretation[int, int]) is define(Interpretation[int, float])
+    assert define(Interpretation[int, int]) is define(Interpretation)
 
     assert define(Operation) is define(Operation)
     assert define(Operation[P, int]) is define(Operation[P, int])
