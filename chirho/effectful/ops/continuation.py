@@ -57,7 +57,6 @@ def get_cont_args(op: Operation) -> Operation[[], tuple[tuple, dict]]:
     return define(Operation)(_null_op)
 
 
-@define(Operation)
 def capture_cont_args(
     op: Operation[P, S], op_intp: Callable[Concatenate[Optional[T], Q], T]
 ) -> Callable[Concatenate[Optional[T], Q], T]:
@@ -70,7 +69,6 @@ def capture_cont_args(
     return _wrapper
 
 
-@define(Operation)
 def bind_cont_args(
     op: Operation[P, S],
     unbound_conts: Interpretation[S, T],
@@ -88,7 +86,6 @@ def bind_cont_args(
     )
 
 
-@define(Operation)
 def bind_and_push_prompts(
     unbound_conts: Interpretation[S, T],
     op: Operation[P, S],
