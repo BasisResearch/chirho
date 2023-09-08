@@ -3,7 +3,7 @@ name: Deploy Sphinx documentation to Pages
 
 on:
   push:
-    branches: [master] # branch to trigger deployment
+    branches: [master, staging-docs] # branch to trigger deployment
   pull_request:
     branches: [staging-docs]
 
