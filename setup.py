@@ -52,7 +52,7 @@ setup(
             "isort",
             "sphinx==7.1.2",
             "sphinxcontrib-bibtex",
-            "sphinx_rtd_theme",
+            "sphinx_rtd_theme==1.2.2",
             "myst_parser",
             "nbsphinx",
         ],
