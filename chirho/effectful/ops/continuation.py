@@ -3,7 +3,7 @@ import functools
 from typing import Callable, Concatenate, Optional, ParamSpec, Protocol, TypeVar
 
 from chirho.effectful.internals.base_continuation import _BaseAffineContinuation
-from chirho.effectful.internals.runtime import weak_memoize
+from chirho.effectful.ops._utils import weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter, register
 from chirho.effectful.ops.operation import Operation, define
 
@@ -27,7 +27,7 @@ class AffineContinuationError(Exception):
 @define(Operation)
 @contextlib.contextmanager
 def push_prompts(conts: Interpretation):
-    from chirho.effectful.internals.runtime import get_interpretation
+    from chirho.effectful.ops.runtime import get_interpretation
 
     resets = define(Interpretation)(
         {

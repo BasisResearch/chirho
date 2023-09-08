@@ -81,7 +81,7 @@ def register(__op, intp=None, interpret_op=None):
 @define(Operation)
 @contextlib.contextmanager
 def interpreter(intp: Interpretation):
-    from ..internals.runtime import get_interpretation, swap_interpretation
+    from .runtime import get_interpretation, swap_interpretation
 
     old_intp = get_interpretation()
     try:

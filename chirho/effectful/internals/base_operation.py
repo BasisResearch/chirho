@@ -1,6 +1,6 @@
 from typing import Callable, Generic, Optional, ParamSpec, TypeVar
 
-from ..internals import runtime
+from ..ops import runtime
 from ..ops import operation
 
 P = ParamSpec("P")

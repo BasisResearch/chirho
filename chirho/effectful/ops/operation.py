@@ -1,7 +1,7 @@
 import typing
 from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Protocol, Type, TypeVar
 
-from ..internals import runtime
+from ._utils import weak_memoize
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -59,4 +59,4 @@ def define(m):
 
 
 if not typing.TYPE_CHECKING:
-    define = runtime.weak_memoize(define)
+    define = weak_memoize(define)

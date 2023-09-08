@@ -84,7 +84,7 @@ def runner(
     reflect: Operation[[Optional[T]], T] = reflect,
     fwd: Operation[[Optional[T]], T] = fwd,
 ):
-    from ..internals.runtime import get_interpretation
+    from .runtime import get_interpretation
 
     with interpreter(product(get_interpretation(), intp, reflect=reflect, fwd=fwd)):
         yield intp

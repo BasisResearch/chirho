@@ -40,7 +40,7 @@ def compose(
 @define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[S, T], *, fwd: Operation[[Optional[T]], T] = fwd):
-    from ..internals.runtime import get_interpretation
+    from .runtime import get_interpretation
 
     with interpreter(compose(get_interpretation(), intp, fwd=fwd)):
         yield intp
