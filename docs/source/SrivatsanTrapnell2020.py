@@ -23,7 +23,6 @@ var.columns = ["gene_id", "gene_name"]
 var = var.set_index("gene_name")
 
 obs2 = pd.read_csv("GSM4150378_sciPlex3_pData.txt", sep=" ")
-counts = [x for x in files if "UMI.count.matrix" in x][0]
 
 UMI_counts = pd.read_csv(
     "GSM4150378_sciPlex3_A549_MCF7_K562_screen_UMI.count.matrix", sep="\t", header=None
