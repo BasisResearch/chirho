@@ -23,7 +23,9 @@ def undo_split(
 ) -> Callable[[T], T]:
     def _undo_split(value: T) -> T:
         antecedents_ = [
-            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+            a
+            for a in antecedents
+            if a in indices_of(value, event_dim=event_dim)
         ]
 
         factual_value = gather(
@@ -69,12 +71,14 @@ def PartOfCause(
 def consequent_differs(
     antecedents: Iterable[str] = [], eps: float = -1e8, event_dim: int = 0
 ) -> Callable[[T], torch.Tensor]:
-
     def _consequent_differs(consequent: T) -> torch.Tensor:
-        indices = IndexSet(**{
-            name: ind for name, ind in get_factual_indices().items()
-            if name in antecedents
-        })
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
         not_eq = consequent != gather(consequent, indices, event_dim=event_dim)
         for _ in range(event_dim):
             not_eq = torch.all(not_eq, dim=-1, keepdim=False)
@@ -85,13 +89,14 @@ def consequent_differs(
 
 @functools.singledispatch
 def uniform_proposal(
-    support: pyro.distributions.constraints.Constraint, **kwargs,
+    support: pyro.distributions.constraints.Constraint,
+    **kwargs,
 ) -> pyro.distributions.Distribution:
     """
     Heuristic for creating a uniform distribution on a given support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0., 1.).mask(False)
+        return pyro.distributions.Normal(0.0, 1.0).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
@@ -107,16 +112,23 @@ def _uniform_proposal_indep(
     event_shape: torch.Size = torch.Size([]),
     **kwargs,
 ) -> pyro.distributions.Distribution:
-    d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
-    return d.expand(kwargs["event_shape"]).to_event(support.reinterpreted_batch_ndims)
+    d = uniform_proposal(
+        support.base_constraint, event_shape=event_shape, **kwargs
+    )
+    return d.expand(kwargs["event_shape"]).to_event(
+        support.reinterpreted_batch_ndims
+    )
 
 
 @uniform_proposal.register
 def _uniform_proposal_integer(
-    support: pyro.distributions.constraints.integer_interval, **kwargs,
+    support: pyro.distributions.constraints.integer_interval,
+    **kwargs,
 ) -> pyro.distributions.Distribution:
     if support.lower_bound != 0:
-        raise NotImplementedError("integer_interval with lower_bound > 0 not yet supported")
+        raise NotImplementedError(
+            "integer_interval with lower_bound > 0 not yet supported"
+        )
     n = support.upper_bound - support.lower_bound + 1
     return pyro.distributions.Categorical(probs=torch.ones((n,)))
 
@@ -131,8 +143,9 @@ def random_intervention(
     :param support: The support of the sample site to be intervened on.
     :param name: The name of the sample site to be intervened on.
     """
+
     def _random_intervention(value: torch.Tensor) -> torch.Tensor:
-        event_shape = value.shape[len(value.shape) - support.event_dim:]
+        event_shape = value.shape[len(value.shape) - support.event_dim :]
         proposal_dist = uniform_proposal(support, event_shape=event_shape)
         return pyro.sample(name, proposal_dist)
 
@@ -141,9 +154,11 @@ def random_intervention(
 
 @contextlib.contextmanager
 def ExplainCauses(
-    antecedents: Mapping[str, Intervention[T]] | Mapping[str, pyro.distributions.constraints.Constraint],
+    antecedents: Mapping[str, Intervention[T]]
+    | Mapping[str, pyro.distributions.constraints.Constraint],
     witnesses: Mapping[str, Intervention[T]] | Iterable[str],
-    consequents: Mapping[str, Callable[[T], float | torch.Tensor]] | Iterable[str],
+    consequents: Mapping[str, Callable[[T], float | torch.Tensor]]
+    | Iterable[str],
     *,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
@@ -159,18 +174,26 @@ def ExplainCauses(
     :param witnesses: A mapping from witness names to interventions.
     :param consequents: A mapping from consequent names to factor functions.
     """
-    if isinstance(next(iter(antecedents.values())), pyro.distributions.constraints.Constraint):
+    if isinstance(
+        next(iter(antecedents.values())),
+        pyro.distributions.constraints.Constraint,
+    ):
         antecedents = {
             a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
             for a, s in antecedents.items()
         }
 
     if not isinstance(witnesses, collections.abc.Mapping):
-        witnesses = {w: undo_split(antecedents=list(antecedents.keys())) for w in witnesses}
+        witnesses = {
+            w: undo_split(antecedents=list(antecedents.keys()))
+            for w in witnesses
+        }
 
     if not isinstance(consequents, collections.abc.Mapping):
         consequents = {
-            c: consequent_differs(antecedents=list(antecedents.keys()), eps=consequent_eps)
+            c: consequent_differs(
+                antecedents=list(antecedents.keys()), eps=consequent_eps
+            )
             for c in consequents
         }
 
@@ -181,13 +204,19 @@ def ExplainCauses(
         raise ValueError("must have at least one antecedent")
 
     if set(consequents.keys()) & set(antecedents.keys()):
-        raise ValueError("consequents and possible antecedents must be disjoint")
+        raise ValueError(
+            "consequents and possible antecedents must be disjoint"
+        )
 
     if set(consequents.keys()) & set(witnesses.keys()):
         raise ValueError("consequents and possible witnesses must be disjoint")
 
-    antecedent_handler = PartOfCause(actions=antecedents, bias=antecedent_bias, prefix=antecedent_prefix)
-    witness_handler = BiasedPreemptions(actions=witnesses, bias=witness_bias, prefix=witness_prefix)
+    antecedent_handler = PartOfCause(
+        actions=antecedents, bias=antecedent_bias, prefix=antecedent_prefix
+    )
+    witness_handler = BiasedPreemptions(
+        actions=witnesses, bias=witness_bias, prefix=witness_prefix
+    )
     consequent_handler = Factors(factors=consequents, prefix=consequent_prefix)
 
     with antecedent_handler, witness_handler, consequent_handler:
