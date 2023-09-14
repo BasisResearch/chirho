@@ -1,6 +1,7 @@
 from typing import Optional, Tuple, TypeVar
 
 import pyro
+
 from chirho.indexed.ops import IndexSet, cond, scatter
 from chirho.interventional.ops import Intervention, intervene
 
