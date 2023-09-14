@@ -3,9 +3,7 @@ from typing import Any, Dict, Generic, Mapping, TypeVar
 import pyro
 import torch
 
-from chirho.counterfactual.handlers.ambiguity import (
-    FactualConditioningMessenger,
-)
+from chirho.counterfactual.handlers.ambiguity import FactualConditioningMessenger
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
@@ -69,9 +67,7 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
         msg["stop"] = True
 
 
-class MultiWorldCounterfactual(
-    IndexPlatesMessenger, BaseCounterfactualMessenger
-):
+class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
     default_name: str = "intervened"
 
     @classmethod
@@ -83,9 +79,7 @@ class MultiWorldCounterfactual(
         msg["kwargs"]["name"] = msg["name"] = name
 
 
-class TwinWorldCounterfactual(
-    IndexPlatesMessenger, BaseCounterfactualMessenger
-):
+class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
     default_name: str = "intervened"
 
     @classmethod
@@ -118,10 +112,7 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     prefix: str
 
     def __init__(
-        self,
-        actions: Mapping[str, Intervention[T]],
-        *,
-        prefix: str = "__split_",
+        self, actions: Mapping[str, Intervention[T]], *, prefix: str = "__split_"
     ):
         self.actions = actions
         self.prefix = prefix
@@ -200,8 +191,7 @@ class BiasedPreemptions(pyro.poutine.messenger.Messenger):
         action = (action,) if not isinstance(action, tuple) else action
         num_actions = len(action) if isinstance(action, tuple) else 1
         weights = torch.tensor(
-            [0.5 - self.bias]
-            + ([(0.5 + self.bias) / num_actions] * num_actions),
+            [0.5 - self.bias] + ([(0.5 + self.bias) / num_actions] * num_actions),
             device=msg["value"].device,
         )
         case_dist = pyro.distributions.Categorical(probs=weights)
