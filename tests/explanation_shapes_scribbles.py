@@ -65,34 +65,69 @@ from chirho.observational.ops import observe
 #@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
 #def test_cf_handler_preemptions(cf_dim, event_shape):
 
-event_shape = (3,)
+plate_size = 4
+event_shape = ()
+
 cf_dim = None
 
 event_dim = len(event_shape)
 
 #splits = {"x": torch.tensor(0.0)}
-preemptions = {"y": torch.tensor(1.0)}
+
+# w = pyro.sample(
+#         "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+# print(w)
+
+shape = torch.Size([plate_size, *event_shape])
+print(shape)
+replace1 = torch.ones(shape)
+print("replace", replace1, replace1.shape)
+
+preemption_tensor = replace1 * 5 
+print("preemption_tensor", preemption_tensor, preemption_tensor.shape)
+
+# print("replace", replace1, replace1.shape)
+# print("preempt", preempt, preempt.shape)
+case = torch.randint(0, 2, size=shape)
+print("case", case, case.shape)
+
+
 
 
 #@do(actions=splits)
-@pyro.plate("data", size=4, dim=-1)
+@pyro.plate("data", size=plate_size, dim=-1)
 def model():
-    #w = pyro.sample(
-    #    "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-    #)
-
     w = pyro.sample(
         "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
-    print(w)
+    print(w, w.shape)
 
-    replace1 = torch.ones_like(w)
 
     w = split(w, (replace1,), name="split1")
     print("split1", w)
 
 
+    w = pyro.deterministic(
+            "w_preempted",
+            preempt(w, preemption_tensor, case, name="w_preempted")
+    )
+    print("w_preempted", w)
+
+    w = pyro.deterministic(
+            "w_undone", undo_split(antecedents=["w_preempted"])(w)
+        )
+    
+    print("w_undone", w)
+
+
+    
+
+
+
 with MultiWorldCounterfactual() as mwc:
-    model()
+    with pyro.poutine.trace() as tr:
+       model()
+
+nd = tr.trace.nodes
     
 #    .expand(event_shape).to_event(len(event_shape)
 
