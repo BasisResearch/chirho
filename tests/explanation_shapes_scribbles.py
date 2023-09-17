@@ -60,15 +60,13 @@ from chirho.observational.ops import observe
 
 
 
- 
-#@pytest.mark.parametrize("cf_dim", [-2, -3, None])
 #@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
 #def test_cf_handler_preemptions(cf_dim, event_shape):
 
 plate_size = 4
-event_shape = ()
+event_shape = (3, 2)
 
-cf_dim = None
+
 
 event_dim = len(event_shape)
 
@@ -79,22 +77,10 @@ event_dim = len(event_shape)
 # print(w)
 
 shape = torch.Size([plate_size, *event_shape])
-print(shape)
 replace1 = torch.ones(shape)
-print("replace", replace1, replace1.shape)
-
 preemption_tensor = replace1 * 5 
-print("preemption_tensor", preemption_tensor, preemption_tensor.shape)
-
-# print("replace", replace1, replace1.shape)
-# print("preempt", preempt, preempt.shape)
 case = torch.randint(0, 2, size=shape)
-print("case", case, case.shape)
 
-
-
-
-#@do(actions=splits)
 @pyro.plate("data", size=plate_size, dim=-1)
 def model():
     w = pyro.sample(
@@ -113,10 +99,12 @@ def model():
     print("w_preempted", w)
 
     w = pyro.deterministic(
-            "w_undone", undo_split(antecedents=["w_preempted"])(w)
+            "w_undone", undo_split(antecedents=["split1"])(w)
         )
     
     print("w_undone", w)
+
+
 
 
     
@@ -128,30 +116,24 @@ with MultiWorldCounterfactual() as mwc:
        model()
 
 nd = tr.trace.nodes
+
+print(nd.keys())
+with mwc:
+    assert  indices_of(nd["w_undone"]["value"])  == IndexSet(split1 = {0, 1}) 
+
+    w_undone_shape = "w_undone", nd["w_undone"]["value"].shape
+
+    print("w_undone", nd["w_undone"]["value"])
+    print("w_undone", nd["w_undone"]["value"].shape)
+
+    print(
+    (2,) + (1,) + (plate_size,) + event_shape 
+    )
+
+    print(
+        w_undone_shape == torch.Size((2,) + (1,) + (plate_size,) + event_shape )
+    )
+
+    #print ( IndexSet({'split1': {0, 1}})
     
-#    .expand(event_shape).to_event(len(event_shape)
-
-    # x = pyro.sample("x", dist.Normal(w, 1).to_event(len(event_shape)))
-    # y = pyro.sample("y", dist.Normal(w + x, 1).to_event(len(event_shape)))
-    # z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
-    # return dict(w=w, x=x, y=y, z=z)
-
-
-
-# Z = intervene(
-#             Z, torch.full(event_shape, x_cf_value - 1.0), event_dim=len(event_shape)
-#         )
-
-# preemption_handler = Preemptions(actions=preemptions, bias=0.1, prefix="__split_")
-
-#with MultiWorldCounterfactual(cf_dim), preemption_handler:
-#     tr = pyro.poutine.trace(model).get_trace()
-#     assert all(f"__split_{k}" in tr.nodes for k in preemptions.keys())
-#     assert indices_of(tr.nodes["w"]["value"], event_dim=event_dim) == IndexSet()
-#     assert indices_of(tr.nodes["y"]["value"], event_dim=event_dim) == IndexSet(
-#         x={0, 1}
-#     )
-#     assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(
-#         x={0, 1}
-#     )
 
