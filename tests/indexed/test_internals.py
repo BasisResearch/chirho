@@ -5,6 +5,7 @@ import logging
 import pyro.distributions as dist
 import pytest
 import torch
+
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.internals import add_indices
 from chirho.indexed.ops import (
