@@ -7,8 +7,16 @@ import pytest
 import torch
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.internals import add_indices
-from chirho.indexed.ops import (IndexSet, cond, gather, get_index_plates,
-                                indexset_as_mask, indices_of, scatter, union)
+from chirho.indexed.ops import (
+    IndexSet,
+    cond,
+    gather,
+    get_index_plates,
+    indexset_as_mask,
+    indices_of,
+    scatter,
+    union,
+)
 
 logger = logging.getLogger(__name__)
 
