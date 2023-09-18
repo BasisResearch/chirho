@@ -1,4 +1,4 @@
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Optional, TypeVar
 
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter
 
@@ -6,7 +6,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def undo_split(antecedents: Iterable[str] = None, event_dim: int = 0) -> Callable[[T], T]:
+def undo_split(antecedents: Optional[Iterable[str]] = None, event_dim: int = 0) -> Callable[[T], T]:
     """
     A helper function that undoes an upstream `chirho.counterfactual.ops.split` operation,
     meant to meant to be used to create arguments to pass to `intervene`/`split`/`preempt`.
