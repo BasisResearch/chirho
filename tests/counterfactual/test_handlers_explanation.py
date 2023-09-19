@@ -3,7 +3,6 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
-
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
 from chirho.counterfactual.handlers.explanation import undo_split
 from chirho.counterfactual.ops import preempt, split
@@ -37,10 +36,14 @@ def test_undo_split_parametrized(event_shape, plate_size):
 
     @pyro.plate("data", size=plate_size, dim=-1)
     def model():
-        w = pyro.sample("w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+        w = pyro.sample(
+            "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
+        )
         w = split(w, (replace1,), name="split1")
 
-        w = pyro.deterministic("w_preempted", preempt(w, preemption_tensor, case, name="w_preempted"))
+        w = pyro.deterministic(
+            "w_preempted", preempt(w, preemption_tensor, case, name="w_preempted")
+        )
 
         w = pyro.deterministic("w_undone", undo_split(antecedents=["split1"])(w))
 
@@ -54,11 +57,18 @@ def test_undo_split_parametrized(event_shape, plate_size):
         assert indices_of(nd["w_undone"]["value"]) == IndexSet(split1={0, 1})
 
         w_undone_shape = list(nd["w_undone"]["value"].shape)
-        desired_shape = list((2,) + (1,) * (len(w_undone_shape) - len(event_shape) - 2) + (plate_size,) + event_shape)
+        desired_shape = list(
+            (2,)
+            + (1,) * (len(w_undone_shape) - len(event_shape) - 2)
+            + (plate_size,)
+            + event_shape
+        )
         assert w_undone_shape == desired_shape
 
         cf_values = gather(nd["w_undone"]["value"], IndexSet(split1={1})).squeeze()
-        observed_values = gather(nd["w_undone"]["value"], IndexSet(split1={0})).squeeze()
+        observed_values = gather(
+            nd["w_undone"]["value"], IndexSet(split1={0})
+        ).squeeze()
 
         preempted_values = cf_values[case == 1.0]
         reverted_values = cf_values[case == 0.0]
@@ -78,7 +88,9 @@ def test_undo_split_with_interaction():
             event_dim=0,
         )
 
-        x = pyro.deterministic("x_undone", undo_split(antecedents=["x_split"])(x), event_dim=0)
+        x = pyro.deterministic(
+            "x_undone", undo_split(antecedents=["x_split"])(x), event_dim=0
+        )
 
         x_case = torch.tensor(1)
         x = pyro.deterministic(
@@ -87,11 +99,21 @@ def test_undo_split_with_interaction():
             event_dim=0,
         )
 
-        x = pyro.deterministic("x_undone_2", undo_split(antecedents=["x"])(x), event_dim=0)
+        x = pyro.deterministic(
+            "x_undone_2", undo_split(antecedents=["x"])(x), event_dim=0
+        )
 
-        x = pyro.deterministic("x_split2", split(x, (torch.tensor(2.0),), name="x_split2", event_dim=0), event_dim=0)
+        x = pyro.deterministic(
+            "x_split2",
+            split(x, (torch.tensor(2.0),), name="x_split2", event_dim=0),
+            event_dim=0,
+        )
 
-        x = pyro.deterministic("x_undone_3", undo_split(antecedents=["x_split", "x_split2"])(x), event_dim=0)
+        x = pyro.deterministic(
+            "x_undone_3",
+            undo_split(antecedents=["x_split", "x_split2"])(x),
+            event_dim=0,
+        )
 
     with MultiWorldCounterfactual() as mwc:
         with pyro.poutine.trace() as tr:
@@ -102,10 +124,18 @@ def test_undo_split_with_interaction():
     with mwc:
 
         x_split_2 = nd["x_split2"]["value"]
-        x_00 = gather(x_split_2, IndexSet(x_split={0}, x_split2={0}), event_dim=0)  # 5.0
-        x_10 = gather(x_split_2, IndexSet(x_split={1}, x_split2={0}), event_dim=0)  # 5.0
-        x_01 = gather(x_split_2, IndexSet(x_split={0}, x_split2={1}), event_dim=0)  # 2.0
-        x_11 = gather(x_split_2, IndexSet(x_split={1}, x_split2={1}), event_dim=0)  # 2.0
+        x_00 = gather(
+            x_split_2, IndexSet(x_split={0}, x_split2={0}), event_dim=0
+        )  # 5.0
+        x_10 = gather(
+            x_split_2, IndexSet(x_split={1}, x_split2={0}), event_dim=0
+        )  # 5.0
+        x_01 = gather(
+            x_split_2, IndexSet(x_split={0}, x_split2={1}), event_dim=0
+        )  # 2.0
+        x_11 = gather(
+            x_split_2, IndexSet(x_split={1}, x_split2={1}), event_dim=0
+        )  # 2.0
 
         # part of a failing test
         # x_undone3 = nd["x_undone_3"]["value"]
@@ -114,13 +144,25 @@ def test_undo_split_with_interaction():
         # x3_01 = gather(x_undone3, IndexSet(x_split={0}, x_split2={1}), event_dim=0)  # should be 5.0?
         # x3_11 = gather(x_undone3, IndexSet(x_split={1}, x_split2={1}), event_dim=0)  # should be 5.0?
 
-        assert nd["x_split"]["value"][0].item() == 1.0 and nd["x_split"]["value"][1].item() == 0.0
+        assert (
+            nd["x_split"]["value"][0].item() == 1.0
+            and nd["x_split"]["value"][1].item() == 0.0
+        )
 
-        assert nd["x_undone"]["value"][0].item() == 1.0 and nd["x_undone"]["value"][1].item() == 1.0
+        assert (
+            nd["x_undone"]["value"][0].item() == 1.0
+            and nd["x_undone"]["value"][1].item() == 1.0
+        )
 
-        assert nd["x_preempted"]["value"][0].item() == 5.0 and nd["x_preempted"]["value"][1].item() == 5.0
+        assert (
+            nd["x_preempted"]["value"][0].item() == 5.0
+            and nd["x_preempted"]["value"][1].item() == 5.0
+        )
 
-        assert nd["x_undone_2"]["value"][0].item() == 5.0 and nd["x_undone_2"]["value"][1].item() == 5.0
+        assert (
+            nd["x_undone_2"]["value"][0].item() == 5.0
+            and nd["x_undone_2"]["value"][1].item() == 5.0
+        )
 
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 

@@ -6,7 +6,9 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def undo_split(antecedents: Optional[Iterable[str]] = None, event_dim: int = 0) -> Callable[[T], T]:
+def undo_split(
+    antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
+) -> Callable[[T], T]:
     """
     A helper function that undoes an upstream `chirho.counterfactual.ops.split` operation,
     meant to meant to be used to create arguments to pass to `intervene`/`split`/`preempt`.
@@ -22,7 +24,9 @@ def undo_split(antecedents: Optional[Iterable[str]] = None, event_dim: int = 0) 
         antecedents = []
 
     def _undo_split(value: T) -> T:
-        antecedents_ = [a for a in antecedents if a in indices_of(value, event_dim=event_dim)]
+        antecedents_ = [
+            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+        ]
 
         factual_value = gather(
             value,
@@ -32,8 +36,12 @@ def undo_split(antecedents: Optional[Iterable[str]] = None, event_dim: int = 0) 
 
         return scatter(
             {
-                IndexSet(**{antecedent: {0} for antecedent in antecedents_}): factual_value,
-                IndexSet(**{antecedent: {1} for antecedent in antecedents_}): factual_value,
+                IndexSet(
+                    **{antecedent: {0} for antecedent in antecedents_}
+                ): factual_value,
+                IndexSet(
+                    **{antecedent: {1} for antecedent in antecedents_}
+                ): factual_value,
             },
             event_dim=event_dim,
         )
