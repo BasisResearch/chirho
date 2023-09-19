@@ -11,7 +11,7 @@ Causal Reasoning with ChiRho
 
 ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
-modern probablistic programming systems, such as Pyro, and the needs of
+modern probabilistic programming systems, such as Pyro, and the needs of
 policymakers, scientists, and AI researchers, who often want to use
 models to answer their questions about cause-and-effect relationships.
 As a non-exhaustive set of examples, ChiRho makes it easier to
