@@ -49,31 +49,13 @@ case = torch.randint(0, 2, size=joint_dims)
 @pyro.plate("data", size=plate_size, dim=-1)
 def model_cd():
     w = pyro.sample("w", dist.Normal(0, .1).expand(event_shape).to_event(len(event_shape)))
-    print("w", w)
     new_w = w.clone()
     new_w[1::2] = 10
-    print("new_w_", new_w)
     w = split(w, (new_w,), name="split")
-    print("w after split", w)
     consequent = pyro.deterministic("consequent", w * .1)
-    print("consequent", consequent)
-    
-    antecedents = ["split"]
-    
-    indices = IndexSet(
-            **{
-                name: ind
-                for name, ind in get_factual_indices().items()
-                if name in antecedents
-            }
-        )
-    print(indices)
-     
-    factual_consequent = gather(consequent, indices, event_dim=0)
-    print("factual_con", factual_consequent)
-    
     con_dif = pyro.deterministic("con_dif", consequent_differs(antecedents=["split"])(consequent))
-    print("applied to con", con_dif)
+    
+    
 
 
 with MultiWorldCounterfactual() as mwc:
@@ -82,19 +64,9 @@ with MultiWorldCounterfactual() as mwc:
 
 nd = tr.trace.nodes
 
-print(nd.keys())
+with mwc: 
+    int_con_dif = gather(nd["con_dif"]["value"], IndexSet(**{"split": {1}})).squeeze()
 
-with mwc:  
-    con_dif_indices = indices_of(nd["con_dif"]["value"])
-    print("indices", con_dif_indices)
-    print("value", nd["con_dif"]["value"])
-    con_that_should_dif = gather(nd["con_dif"]["value"], IndexSet(split={0}))
+assert torch.all(int_con_dif[1::2] == 0.0)
+assert torch.all(int_con_dif[0::2] == -1e8)
 
-    print("gathered",
-          con_that_should_dif
-    )
-
-
-#with MultiWorldCounterfactual() as mwc:
-#    with pyro.poutine.trace() as tr:
-        
