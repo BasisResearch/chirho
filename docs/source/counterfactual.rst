@@ -5,13 +5,6 @@ Counterfactual
    :members:
    :undoc-members:
 
-Operations
-----------
-
-.. automodule:: chirho.counterfactual.ops
-   :members:
-   :undoc-members:
-
 Handlers
 --------
 
