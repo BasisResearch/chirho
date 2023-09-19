@@ -9,7 +9,7 @@ import pyro.distributions as dist
 import pytest
 
 from chirho.counterfactual.ops import split, preempt
-from chirho.indexed.ops import IndexSet, cond, gather
+from chirho.indexed.ops import IndexSet, cond, gather, indices_of
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
 
@@ -51,7 +51,7 @@ def model_cd():
     w = pyro.sample("w", dist.Normal(0, .1).expand(event_shape).to_event(len(event_shape)))
     print("w", w)
     new_w = w.clone()
-    new_w[1::2] = 10 
+    new_w[1::2] = 10
     print("new_w_", new_w)
     w = split(w, (new_w,), name="split")
     print("w after split", w)
@@ -72,22 +72,27 @@ def model_cd():
     factual_consequent = gather(consequent, indices, event_dim=0)
     print("factual_con", factual_consequent)
     
-    
-    
-    
-    #con_dif = consequent_differs(antecedents=["w"])(consequent)
-    #print("applied to con", con_dif)
+    con_dif = pyro.deterministic("con_dif", consequent_differs(antecedents=["split"])(consequent))
+    print("applied to con", con_dif)
 
 
 with MultiWorldCounterfactual() as mwc:
     with pyro.poutine.trace() as tr:
         model_cd()
 
+nd = tr.trace.nodes
 
-# with MultiWorldCounterfactual():
-        
-        
-        
+print(nd.keys())
+
+with mwc:  
+    con_dif_indices = indices_of(nd["con_dif"]["value"])
+    print("indices", con_dif_indices)
+    print("value", nd["con_dif"]["value"])
+    con_that_should_dif = gather(nd["con_dif"]["value"], IndexSet(split={0}))
+
+    print("gathered",
+          con_that_should_dif
+    )
 
 
 #with MultiWorldCounterfactual() as mwc:
