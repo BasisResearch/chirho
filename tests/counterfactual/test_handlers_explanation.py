@@ -3,9 +3,8 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
-
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
-from chirho.counterfactual.handlers.explanation import undo_split
+from chirho.counterfactual.handlers.explanation import consequent_differs, undo_split
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of
 
@@ -126,3 +125,29 @@ def test_undo_split_with_interaction():
 
         # this will fail
         # assert (x3_00, x3_10, x3_01, x3_11) == (5.0, 5.0, 5.0, 5.0)
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
+def test_consequent_differs(plate_size, event_shape):
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def model_cd():
+        w = pyro.sample("w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)))
+        new_w = w.clone()
+        new_w[1::2] = 10
+        w = split(w, (new_w,), name="split")
+        consequent = pyro.deterministic("consequent", w * 0.1)
+        con_dif = pyro.deterministic("con_dif", consequent_differs(antecedents=["split"])(consequent))
+        return con_dif
+
+    with MultiWorldCounterfactual() as mwc:
+        with pyro.poutine.trace() as tr:
+            model_cd()
+
+    nd = tr.trace.nodes
+
+    with mwc:
+        int_con_dif = gather(nd["con_dif"]["value"], IndexSet(**{"split": {1}})).squeeze()
+
+    assert torch.all(int_con_dif[1::2] == 0.0)
+    assert torch.all(int_con_dif[0::2] == -1e8)

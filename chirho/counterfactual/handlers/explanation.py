@@ -1,5 +1,6 @@
 from typing import Callable, Iterable, Optional, TypeVar
 
+import torch  # noqa: F401
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 
