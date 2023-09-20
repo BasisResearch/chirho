@@ -705,6 +705,16 @@ def test_cf_handler_preemptions(cf_dim, event_shape):
             x={0, 1}
         )
 
+    for k in preemptions.keys():
+        tst = tr.nodes[f"__split_{k}"]["value"]
+        assert torch.allclose(
+            tr.nodes[f"__split_{k}"]["fn"].log_prob(torch.tensor(0)).exp(),
+            torch.tensor(0.5 - 0.1),
+        )
+        tst_0 = (tst == 0).expand(tr.nodes[k]["fn"].batch_shape)
+        assert torch.all(tr.nodes[k]["value"][~tst_0] == preemptions[k])
+        assert torch.all(tr.nodes[k]["value"][tst_0] != preemptions[k])
+
 
 # Define a helper function to run SVI. (Generally, Pyro users like to have more control over the training process!)
 def run_svi_inference(model, n_steps=1000, verbose=True, lr=0.03, **model_kwargs):

@@ -108,7 +108,7 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     where ``num_actions`` is the number of counterfactual actions for the sample site (usually 1).
 
     :param actions: A mapping from sample site names to interventions.
-    :param bias: The scalar bias towards the factual case. Must be between -0.5 and 0.5.
+    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5.
     :param prefix: The prefix for naming the auxiliary discrete random variables.
     """
 
