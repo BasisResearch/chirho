@@ -138,13 +138,6 @@ def test_undo_split_with_interaction():
             x_split_2, IndexSet(x_split={1}, x_split2={1}), event_dim=0
         )  # 2.0
 
-        # part of a failing test
-        # x_undone3 = nd["x_undone_3"]["value"]
-        # x3_00 = gather(x_undone3, IndexSet(x_split={0}, x_split2={0}), event_dim=0)  # should be 5.0?
-        # x3_10 = gather(x_undone3, IndexSet(x_split={1}, x_split2={0}), event_dim=0)  # should be 5.0?
-        # x3_01 = gather(x_undone3, IndexSet(x_split={0}, x_split2={1}), event_dim=0)  # should be 5.0?
-        # x3_11 = gather(x_undone3, IndexSet(x_split={1}, x_split2={1}), event_dim=0)  # should be 5.0?
-
         assert (
             nd["x_split"]["value"][0].item() == 1.0
             and nd["x_split"]["value"][1].item() == 0.5
@@ -168,6 +161,3 @@ def test_undo_split_with_interaction():
         assert torch.all(nd["x_undone_3"]["value"] == 5.0)
 
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
-
-        # this will fail
-        # assert (x3_00, x3_10, x3_01, x3_11) == (5.0, 5.0, 5.0, 5.0)
