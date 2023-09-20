@@ -1,7 +1,10 @@
 import itertools
 from typing import Callable, Iterable, TypeVar
 
-from chirho.indexed.ops import IndexSet, gather, indices_of, scatter
+import torch  # noqa: F401
+
+from chirho.counterfactual.handlers.selection import get_factual_indices
+from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -43,3 +46,37 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
         )
 
     return _undo_split
+
+
+def consequent_differs(
+    antecedents: Iterable[str] = [], eps: float = -1e8, event_dim: int = 0
+) -> Callable[[T], torch.Tensor]:
+    """
+    A helper function for assessing whether values at a site differ from their observed values, assigning
+    `eps` if a value differs from its observed state and `0.0` otherwise.
+
+    :param antecedents: A list of names of upstream intervened sites to consider when assessing differences.
+    :param eps: A numerical value assigned if the values differ, defaults to -1e8.
+    :param event_dim: The event dimension of the value object.
+
+    :return: A callable which applied to a site value object (`consequent`), returns a tensor where each
+             element indicates whether the corresponding element of `consequent` differs from its factual value
+             (`eps` if there is a difference, `0.0` otherwise).
+    """
+
+    def _consequent_differs(consequent: T) -> torch.Tensor:
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+        not_eq: torch.Tensor = consequent != gather(
+            consequent, indices, event_dim=event_dim
+        )
+        for _ in range(event_dim):
+            not_eq = torch.all(not_eq, dim=-1, keepdim=False)
+        return cond(eps, 0.0, not_eq, event_dim=event_dim)
+
+    return _consequent_differs
