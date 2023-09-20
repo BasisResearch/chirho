@@ -68,7 +68,12 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     of intervention assignments ``acts``, ignoring all other intervention assignments and observed values ``obs``.
     This can be thought of as marginalizing out all of the factual and counterfactual variables except for the
     counterfactual induced by the final element in the collection of intervention assignments in the probabilistic
-    program.
+    program. ::
+
+        >> with SingleWorldCounterfactual():
+        >>     x = torch.tensor(1.)
+        >>     x = intervene(x, torch.tensor(0.))
+        >> assert (x == torch.tensor(0.))
     """
 
     @pyro.poutine.block(hide_types=["intervene"])
@@ -92,7 +97,12 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
     :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldFactual` handles
     :func:`~chirho.counterfactual.ops.split` by returning only the observed value ``obs``,
     ignoring all intervention assignments ``act``. This can be thought of as marginalizing out
-    all of the counterfactual variables in the probabilistic program.
+    all of the counterfactual variables in the probabilistic program. ::
+
+        >> with SingleWorldFactual():
+        >>     x = torch.tensor(1.)
+        >>     x = intervene(x, torch.tensor(0.))
+        >> assert (x == torch.tensor(1.))
     """
 
     @staticmethod
