@@ -72,7 +72,9 @@ def consequent_differs(
                 if name in antecedents
             }
         )
-        not_eq = consequent != gather(consequent, indices, event_dim=event_dim)
+        not_eq: torch.Tensor = consequent != gather(
+            consequent, indices, event_dim=event_dim
+        )
         for _ in range(event_dim):
             not_eq = torch.all(not_eq, dim=-1, keepdim=False)
         return cond(eps, 0.0, not_eq, event_dim=event_dim)
