@@ -28,7 +28,6 @@ def test_undo_split():
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
 def test_undo_split_parametrized(event_shape, plate_size):
-
     joint_dims = torch.Size([plate_size, *event_shape])
 
     replace1 = torch.ones(joint_dims)
@@ -123,7 +122,6 @@ def test_undo_split_with_interaction():
     nd = tr.trace.nodes
 
     with mwc:
-
         x_split_2 = nd["x_split2"]["value"]
         x_00 = gather(
             x_split_2, IndexSet(x_split={0}, x_split2={0}), event_dim=0
