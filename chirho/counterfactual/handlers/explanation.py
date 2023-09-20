@@ -1,3 +1,4 @@
+import itertools
 from typing import Callable, Iterable, TypeVar
 
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter
@@ -30,14 +31,13 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
             event_dim=event_dim,
         )
 
+        # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
         return scatter(
             {
                 IndexSet(
-                    **{antecedent: {0} for antecedent in antecedents_}
-                ): factual_value,
-                IndexSet(
-                    **{antecedent: {1} for antecedent in antecedents_}
-                ): factual_value,
+                    **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}
+                ): factual_value
+                for inds in itertools.product(*[[0, 1]] * len(antecedents_))
             },
             event_dim=event_dim,
         )

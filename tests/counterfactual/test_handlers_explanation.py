@@ -82,36 +82,38 @@ def test_undo_split_with_interaction():
     def model():
         x = pyro.sample("x", dist.Delta(torch.tensor(1.0)))
 
-        x = pyro.deterministic(
+        x_split = pyro.deterministic(
             "x_split",
-            split(x, (torch.tensor(0.0),), name="x_split", event_dim=0),
+            split(x, (torch.tensor(0.5),), name="x_split", event_dim=0),
             event_dim=0,
         )
 
-        x = pyro.deterministic(
-            "x_undone", undo_split(antecedents=["x_split"])(x), event_dim=0
+        x_undone = pyro.deterministic(
+            "x_undone", undo_split(antecedents=["x_split"])(x_split), event_dim=0
         )
 
         x_case = torch.tensor(1)
-        x = pyro.deterministic(
+        x_preempted = pyro.deterministic(
             "x_preempted",
-            preempt(x, (torch.tensor(5.0),), x_case, name="x_preempted", event_dim=0),
+            preempt(
+                x_undone, (torch.tensor(5.0),), x_case, name="x_preempted", event_dim=0
+            ),
             event_dim=0,
         )
 
-        x = pyro.deterministic(
-            "x_undone_2", undo_split(antecedents=["x"])(x), event_dim=0
+        x_undone_2 = pyro.deterministic(
+            "x_undone_2", undo_split(antecedents=["x"])(x_preempted), event_dim=0
         )
 
-        x = pyro.deterministic(
+        x_split2 = pyro.deterministic(
             "x_split2",
-            split(x, (torch.tensor(2.0),), name="x_split2", event_dim=0),
+            split(x_undone_2, (torch.tensor(2.0),), name="x_split2", event_dim=0),
             event_dim=0,
         )
 
-        x = pyro.deterministic(
+        x_undone_3 = pyro.deterministic(
             "x_undone_3",
-            undo_split(antecedents=["x_split", "x_split2"])(x),
+            undo_split(antecedents=["x_split", "x_split2"])(x_split2),
             event_dim=0,
         )
 
@@ -145,7 +147,7 @@ def test_undo_split_with_interaction():
 
         assert (
             nd["x_split"]["value"][0].item() == 1.0
-            and nd["x_split"]["value"][1].item() == 0.0
+            and nd["x_split"]["value"][1].item() == 0.5
         )
 
         assert (
@@ -162,6 +164,8 @@ def test_undo_split_with_interaction():
             nd["x_undone_2"]["value"][0].item() == 5.0
             and nd["x_undone_2"]["value"][1].item() == 5.0
         )
+
+        assert torch.all(nd["x_undone_3"]["value"] == 5.0)
 
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 
