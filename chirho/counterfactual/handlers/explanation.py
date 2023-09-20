@@ -1,6 +1,7 @@
-from typing import Callable, Iterable, Optional, TypeVar
+from typing import Callable, Iterable, TypeVar
 
 import torch  # noqa: F401
+
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 
@@ -8,9 +9,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def undo_split(
-    antecedents: Optional[Iterable[str]] = None, event_dim: int = 0
-) -> Callable[[T], T]:
+def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[[T], T]:
     """
     A helper function that undoes an upstream `chirho.counterfactual.ops.split` operation,
     meant to meant to be used to create arguments to pass to `intervene`/`split`/`preempt`.
@@ -22,8 +21,6 @@ def undo_split(
     :return: A callable that applied to a site value object returns a site value object in which
     the factual value has been scattered back into two alternative cases.
     """
-    if antecedents is None:
-        antecedents = []
 
     def _undo_split(value: T) -> T:
         antecedents_ = [
