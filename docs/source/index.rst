@@ -27,6 +27,7 @@ Table of Contents
    deepscm
    slc
    mediation
+   sciplex
    sdid
    dr_learner
 

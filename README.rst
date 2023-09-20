@@ -133,6 +133,8 @@ approximations that power much of the modern probabilistic machine learning land
   - Counterfactual estimation from longitudinal data
 - `Example: Robust estimation with the DR learner <https://basisresearch.github.io/chirho/dr_learner.html>`_
   - Heterogeneous causal effect estimation with a misspecified model
+- `Example: Estimating the effects of drugs on gene expression <https://basisresearch.github.io/chirho/sciplex.html>`_
+  - Causal inference with single-cell RNA-seq data
 - `Design notes <https://basisresearch.github.io/chirho/design_notes>`_
   - Technical implementation details of ChiRho using effect handlers
 
