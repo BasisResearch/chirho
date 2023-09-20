@@ -162,6 +162,41 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
 
 
 class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    """
+    Counterfactual handler that returns all observed values and the final intervened value.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.TwinWorldCounterfactual` is an effect handler
+    that subclasses :class:`~chirho.indexed.handlers.IndexPlatesMessenger` and
+    :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` base classes.
+
+
+    .. note:: Handlers that subclass :class:`~chirho.indexed.handlers.IndexPlatesMessenger` such as
+       :class:`~chirho.counterfactual.handlers.counterfactual.TwinWorldCounterfactual` return tensors that can
+       be cumbersome to index into directly. Therefore, we strongly recommend using ``chirho``'s indexing operations
+       :func:`~chirho.indexed.ops.gather` and :class:`~chirho.indexed.ops.IndexSet` whenever using
+       :class:`~chirho.counterfactual.handlers.counterfactual.TwinWorldCounterfactual` handlers.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.TwinWorldCounterfactual`
+    handles :func:`~chirho.counterfactual.ops.split` primitive operations. See the documentation for
+    :func:`~chirho.counterfactual.ops.split` for more details about the interaction between the enclosing
+    counterfactual handler and the induced joint marginal distribution over factual and counterfactual variables.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.TwinWorldCounterfactual` handles
+    :func:`~chirho.counterfactual.ops.split` by returning the observed values ``obs`` and the
+    final intervened values ``act`` in the probabilistic program. This can be thought of as returning
+    the joint distribution over factual and counterfactual variables, marginalizing out all but the final
+    configuration of intervention assignments in the probabilistic program.::
+
+        >> with TwinWorldCounterfactual():
+        >>    x = torch.tensor(1.)
+        >>    x = intervene(x, torch.tensor(0.))
+        >>    x = intervene(x, torch.tensor(2.))
+        >> # TwinWorldCounterfactual ignores the first intervention
+        >> assert(x.squeeze().shape == torch.Size([2]))
+        >> assert(x.squeeze()[0] == torch.tensor(1.))
+        >> assert(x.squeeze()[1] == torch.tensor(2.))
+    """
+
     default_name: str = "intervened"
 
     @classmethod
