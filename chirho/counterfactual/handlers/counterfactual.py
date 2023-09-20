@@ -15,6 +15,18 @@ T = TypeVar("T")
 class BaseCounterfactualMessenger(FactualConditioningMessenger):
     """
     Base class for counterfactual handlers.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` is an effect handler
+    for imbuing :func:`~chirho.interventional.ops.intervene` operations with world-splitting
+    semantics that is useful for downstream causal and counterfactual reasoning. Specifically,
+    :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` handles
+    :func:`~chirho.interventional.ops.intervene` by instantiating the primitive operation
+    :func:`~chirho.counterfactual.ops.split`, which is then subsequently handled by subclasses
+    such as :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual`.
+
+    In addition, :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger`
+    handles :func:`~chirho.counterfactual.ops.preempt` operations by introducing an auxiliary categorical
+    variable at each of the preempted addresses.
     """
 
     @staticmethod
