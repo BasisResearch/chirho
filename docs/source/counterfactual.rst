@@ -31,6 +31,10 @@ Handlers
    :members:
    :undoc-members:
 
+.. automodule:: chirho.counterfactual.handlers.explanation
+   :members:
+   :undoc-members:
+
 Internals
 ---------
 
