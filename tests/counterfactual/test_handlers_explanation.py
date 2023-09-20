@@ -117,6 +117,8 @@ def test_undo_split_with_interaction():
             event_dim=0,
         )
 
+        return x_undone_3
+
     with MultiWorldCounterfactual() as mwc:
         with pyro.poutine.trace() as tr:
             model()
