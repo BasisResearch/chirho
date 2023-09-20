@@ -1,3 +1,4 @@
+import functools
 from typing import Optional, Tuple, TypeVar
 
 import pyro
@@ -10,7 +11,7 @@ T = TypeVar("T")
 
 
 @pyro.poutine.runtime.effectful(type="split")
-@pyro.poutine.block(hide_types=["intervene"])
+@functools.partial(pyro.poutine.block, hide_types=["intervene"])
 def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     """
     Effectful primitive operation for "splitting" a combination of observational and interventional values in a
@@ -40,7 +41,7 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
 
 
 @pyro.poutine.runtime.effectful(type="preempt")
-@pyro.poutine.block(hide_types=["intervene"])
+@functools.partial(pyro.poutine.block, hide_types=["intervene"])
 def preempt(
     obs: T, acts: Tuple[Intervention[T], ...], case: Optional[S] = None, **kwargs
 ) -> T:
