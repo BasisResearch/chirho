@@ -56,6 +56,14 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
 class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the intervened value.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldCounterfactual` is an effect handler
+    that subclasses :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` and
+    handles :func:`~chirho.counterfactual.ops.split` primitive operations.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldCounterfactual` handles
+    :func:`~chirho.counterfactual.ops.split` by returning only the final element in the collection
+    of intervention assignments (`acts`), ignoring all other intervention assignments and observed values (`obs`).
     """
 
     @pyro.poutine.block(hide_types=["intervene"])
