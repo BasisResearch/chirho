@@ -15,7 +15,7 @@ from chirho.counterfactual.handlers import (  # TwinWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from chirho.counterfactual.handlers.counterfactual import BiasedPreemptions, Preemptions
+from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import SelectFactual
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
@@ -675,8 +675,7 @@ def test_preempt_op_singleworld():
 
 @pytest.mark.parametrize("cf_dim", [-2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
-@pytest.mark.parametrize("use_biased_preemption", [False, True])
-def test_cf_handler_preemptions(cf_dim, event_shape, use_biased_preemption):
+def test_cf_handler_preemptions(cf_dim, event_shape):
     event_dim = len(event_shape)
 
     splits = {"x": torch.tensor(0.0)}
@@ -693,12 +692,7 @@ def test_cf_handler_preemptions(cf_dim, event_shape, use_biased_preemption):
         z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
         return dict(w=w, x=x, y=y, z=z)
 
-    if use_biased_preemption:
-        preemption_handler = BiasedPreemptions(
-            actions=preemptions, bias=0.1, prefix="__split_"
-        )
-    else:
-        preemption_handler = Preemptions(actions=preemptions)
+    preemption_handler = Preemptions(actions=preemptions, bias=0.1, prefix="__split_")
 
     with MultiWorldCounterfactual(cf_dim), preemption_handler:
         tr = pyro.poutine.trace(model).get_trace()
@@ -710,6 +704,16 @@ def test_cf_handler_preemptions(cf_dim, event_shape, use_biased_preemption):
         assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(
             x={0, 1}
         )
+
+    for k in preemptions.keys():
+        tst = tr.nodes[f"__split_{k}"]["value"]
+        assert torch.allclose(
+            tr.nodes[f"__split_{k}"]["fn"].log_prob(torch.tensor(0)).exp(),
+            torch.tensor(0.5 - 0.1),
+        )
+        tst_0 = (tst == 0).expand(tr.nodes[k]["fn"].batch_shape)
+        assert torch.all(tr.nodes[k]["value"][~tst_0] == preemptions[k])
+        assert torch.all(tr.nodes[k]["value"][tst_0] != preemptions[k])
 
 
 # Define a helper function to run SVI. (Generally, Pyro users like to have more control over the training process!)
