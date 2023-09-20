@@ -67,7 +67,7 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     :func:`~chirho.counterfactual.ops.split` by returning only the final element in the collection
     of intervention assignments ``acts``, ignoring all other intervention assignments and observed values ``obs``.
     This can be thought of as marginalizing out all of the factual and counterfactual variables except for the
-    counterfactual induced by the final element in the collection of intervention assignments in the probabilsitic
+    counterfactual induced by the final element in the collection of intervention assignments in the probabilistic
     program.
     """
 
@@ -91,7 +91,7 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
 
     :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldFactual` handles
     :func:`~chirho.counterfactual.ops.split` by returning only the observed value ``obs``,
-    ignoring all intervention assignments ``act``. This can be thought of as marginalizing out 
+    ignoring all intervention assignments ``act``. This can be thought of as marginalizing out
     all of the counterfactual variables in the probabilistic program.
     """
 
