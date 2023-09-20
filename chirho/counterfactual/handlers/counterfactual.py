@@ -114,6 +114,42 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
 
 
 class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    """
+    Counterfactual handler that returns all observed and intervened values.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` is an effect handler
+    that subclasses :class:`~chirho.indexed.handlers.IndexPlatesMessenger` and
+    :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` base classes.
+
+
+    .. note:: Handlers that subclass :class:`~chirho.indexed.handlers.IndexPlatesMessenger` such as
+       :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` return tensors that can
+       be cumbersome to index into directly. Therefore, we strongly recommend using ``chirho``'s indexing operations
+       :func:`~chirho.indexed.ops.gather` and :class:`~chirho.indexed.ops.IndexSet` whenever using
+       :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` handlers.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual`
+    handles :func:`~chirho.counterfactual.ops.split` primitive operations. See the documentation for
+    :func:`~chirho.counterfactual.ops.split` for more details about the interaction between the enclosing
+    counterfactual handler and the induced joint marginal distribution over factual and counterfactual variables.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` handles
+    :func:`~chirho.counterfactual.ops.split` by returning all observed values ``obs`` and intervened values ``act``.
+    This can be thought of as returning the full joint distribution over all factual and counterfactual variables.::
+
+        >> with MultiWorldCounterfactual():
+        >>    x = torch.tensor(1.)
+        >>    x = intervene(x, torch.tensor(0.), name="x_ax_1")
+        >>    x = intervene(x, torch.tensor(2.), name="x_ax_2")
+        >>    x_factual = gather(x, IndexSet(x_ax_1={0}, x_ax_2={0}))
+        >>    x_counterfactual_1 = gather(x, IndexSet(x_ax_1={1}, x_ax_2={0}))
+        >>    x_counterfactual_2 = gather(x, IndexSet(x_ax_1={0}, x_ax_2={1}))
+
+        >> assert(x_factual.squeeze() == torch.tensor(1.))
+        >> assert(x_counterfactual_1.squeeze() == torch.tensor(0.))
+        >> assert(x_counterfactual_2.squeeze() == torch.tensor(2.))
+    """
+
     default_name: str = "intervened"
 
     @classmethod
