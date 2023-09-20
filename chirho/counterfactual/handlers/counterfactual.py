@@ -59,11 +59,16 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
 
     :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldCounterfactual` is an effect handler
     that subclasses :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` and
-    handles :func:`~chirho.counterfactual.ops.split` primitive operations.
+    handles :func:`~chirho.counterfactual.ops.split` primitive operations. See the documentation for
+    :func:`~chirho.counterfactual.ops.split` for more details about the interaction between the enclosing
+    counterfactual handler and the induced joint marginal distribution over factual and counterfactual variables.
 
     :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldCounterfactual` handles
     :func:`~chirho.counterfactual.ops.split` by returning only the final element in the collection
-    of intervention assignments (`acts`), ignoring all other intervention assignments and observed values (`obs`).
+    of intervention assignments ``acts``, ignoring all other intervention assignments and observed values ``obs``.
+    This can be thought of as marginalizing out all of the factual and counterfactual variables except for the
+    counterfactual induced by the final element in the collection of intervention assignments in the probabilsitic
+    program.
     """
 
     @pyro.poutine.block(hide_types=["intervene"])
@@ -77,6 +82,17 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
 class SingleWorldFactual(BaseCounterfactualMessenger):
     """
     Trivial counterfactual handler that returns the observed value.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldFactual` is an effect handler
+    that subclasses :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger` and
+    handles :func:`~chirho.counterfactual.ops.split` primitive operations. See the documentation for
+    :func:`~chirho.counterfactual.ops.split` for more details about the interaction between the enclosing
+    counterfactual handler and the induced joint marginal distribution over factual and counterfactual variables.
+
+    :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldFactual` handles
+    :func:`~chirho.counterfactual.ops.split` by returning only the observed value ``obs``,
+    ignoring all intervention assignments ``act``. This can be thought of as marginalizing out 
+    all of the counterfactual variables in the probabilistic program.
     """
 
     @staticmethod
