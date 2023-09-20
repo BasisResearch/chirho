@@ -21,10 +21,10 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     probabilistic program and ``acts`` represents the collection of intervention assignments.
     
     In a probabilistic program, :func:`split` induces a joint distribution over factual and counterfactual variables,
-    where some variables are implicitly marginalized out according to the choice of the counterfactual handler. For example,
+    where some variables are implicitly marginalized out by enclosing counterfactual handlers. For example,
     :func:`split` in the context of a :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` handler
     induces a joint distribution over all combinations of ``obs`` and ``acts``, whereas 
-    :class:`~chirho.counterfactual.handlers.counterfactual.Factual` marginalizes out all counterfactual variables.
+    :class:`~chirho.counterfactual.handlers.counterfactual.SingleWorldFactual` marginalizes out all ``acts``.
 
     :param obs: The observed value.
     :param acts: The interventions to apply.
