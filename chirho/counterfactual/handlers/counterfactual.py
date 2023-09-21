@@ -62,10 +62,10 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     counterfactual induced by the final element in the collection of intervention assignments in the probabilistic
     program. ::
 
-        >> with SingleWorldCounterfactual():
-        >>     x = torch.tensor(1.)
-        >>     x = intervene(x, torch.tensor(0.))
-        >> assert (x == torch.tensor(0.))
+        >>> with SingleWorldCounterfactual():
+        ...     x = torch.tensor(1.)
+        ...     x = intervene(x, torch.tensor(0.))
+        >>> assert (x == torch.tensor(0.))
     """
 
     @pyro.poutine.block(hide_types=["intervene"])
@@ -91,10 +91,10 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
     ignoring all intervention assignments ``act``. This can be thought of as marginalizing out
     all of the counterfactual variables in the probabilistic program. ::
 
-        >> with SingleWorldFactual():
-        >>     x = torch.tensor(1.)
-        >>     x = intervene(x, torch.tensor(0.))
-        >> assert (x == torch.tensor(1.))
+        >>> with SingleWorldFactual():
+        ...    x = torch.tensor(1.)
+        ...    x = intervene(x, torch.tensor(0.))
+        >>> assert (x == torch.tensor(1.))
     """
 
     @staticmethod
@@ -129,17 +129,17 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
     :func:`~chirho.counterfactual.ops.split` by returning all observed values ``obs`` and intervened values ``act``.
     This can be thought of as returning the full joint distribution over all factual and counterfactual variables.::
 
-        >> with MultiWorldCounterfactual():
-        >>    x = torch.tensor(1.)
-        >>    x = intervene(x, torch.tensor(0.), name="x_ax_1")
-        >>    x = intervene(x, torch.tensor(2.), name="x_ax_2")
-        >>    x_factual = gather(x, IndexSet(x_ax_1={0}, x_ax_2={0}))
-        >>    x_counterfactual_1 = gather(x, IndexSet(x_ax_1={1}, x_ax_2={0}))
-        >>    x_counterfactual_2 = gather(x, IndexSet(x_ax_1={0}, x_ax_2={1}))
+        >>> with MultiWorldCounterfactual():
+        ...    x = torch.tensor(1.)
+        ...    x = intervene(x, torch.tensor(0.), name="x_ax_1")
+        ...    x = intervene(x, torch.tensor(2.), name="x_ax_2")
+        ...    x_factual = gather(x, IndexSet(x_ax_1={0}, x_ax_2={0}))
+        ...    x_counterfactual_1 = gather(x, IndexSet(x_ax_1={1}, x_ax_2={0}))
+        ...    x_counterfactual_2 = gather(x, IndexSet(x_ax_1={0}, x_ax_2={1}))
 
-        >> assert(x_factual.squeeze() == torch.tensor(1.))
-        >> assert(x_counterfactual_1.squeeze() == torch.tensor(0.))
-        >> assert(x_counterfactual_2.squeeze() == torch.tensor(2.))
+        >>> assert(x_factual.squeeze() == torch.tensor(1.))
+        >>> assert(x_counterfactual_1.squeeze() == torch.tensor(0.))
+        >>> assert(x_counterfactual_2.squeeze() == torch.tensor(2.))
     """
 
     default_name: str = "intervened"
@@ -179,14 +179,14 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     the joint distribution over factual and counterfactual variables, marginalizing out all but the final
     configuration of intervention assignments in the probabilistic program.::
 
-        >> with TwinWorldCounterfactual():
-        >>    x = torch.tensor(1.)
-        >>    x = intervene(x, torch.tensor(0.))
-        >>    x = intervene(x, torch.tensor(2.))
-        >> # TwinWorldCounterfactual ignores the first intervention
-        >> assert(x.squeeze().shape == torch.Size([2]))
-        >> assert(x.squeeze()[0] == torch.tensor(1.))
-        >> assert(x.squeeze()[1] == torch.tensor(2.))
+        >>> with TwinWorldCounterfactual():
+        ...    x = torch.tensor(1.)
+        ...    x = intervene(x, torch.tensor(0.))
+        ...    x = intervene(x, torch.tensor(2.))
+        >>> # TwinWorldCounterfactual ignores the first intervention
+        >>> assert(x.squeeze().shape == torch.Size([2]))
+        >>> assert(x.squeeze()[0] == torch.tensor(1.))
+        >>> assert(x.squeeze()[1] == torch.tensor(2.))
     """
 
     default_name: str = "intervened"
