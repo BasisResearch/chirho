@@ -19,7 +19,7 @@ import sphinx_rtd_theme
 # -- Project information -----------------------------------------------------
 
 project = 'chirho'
-copyright = '2022, Basis'
+copyright = '2023, Basis'
 author = 'Basis'
 
 

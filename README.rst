@@ -11,7 +11,7 @@ Causal Reasoning with ChiRho
 
 ChiRho is a causal extension to the Pyro probabilistic programming
 language. It was built to bridge the gap between the capabilities of
-modern probablistic programming systems, such as Pyro, and the needs of
+modern probabilistic programming systems, such as Pyro, and the needs of
 policymakers, scientists, and AI researchers, who often want to use
 models to answer their questions about cause-and-effect relationships.
 As a non-exhaustive set of examples, ChiRho makes it easier to
@@ -133,6 +133,8 @@ approximations that power much of the modern probabilistic machine learning land
   - Counterfactual estimation from longitudinal data
 - `Example: Robust estimation with the DR learner <https://basisresearch.github.io/chirho/dr_learner.html>`_
   - Heterogeneous causal effect estimation with a misspecified model
+- `Example: Estimating the effects of drugs on gene expression <https://basisresearch.github.io/chirho/sciplex.html>`_
+  - Causal inference with single-cell RNA-seq data
 - `Design notes <https://basisresearch.github.io/chirho/design_notes>`_
   - Technical implementation details of ChiRho using effect handlers
 
