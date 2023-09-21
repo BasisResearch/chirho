@@ -2,7 +2,7 @@ import sys
 
 from setuptools import find_packages, setup
 
-VERSION = "0.1.0-alpha2"
+VERSION = "0.1.0"
 
 try:
     long_description = open("README.rst", encoding="utf-8").read()
@@ -52,9 +52,9 @@ setup(
             "black",
             "flake8",
             "isort",
-            "sphinx",
+            "sphinx==7.1.2",
             "sphinxcontrib-bibtex",
-            "sphinx_rtd_theme",
+            "sphinx_rtd_theme==1.3.0",
             "myst_parser",
             "nbsphinx",
         ],
