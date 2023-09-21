@@ -162,18 +162,15 @@ class Trajectory(State[T]):
 class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
-
+# noinspection PyUnusedLocal
 @functools.singledispatch
-@pyro.poutine.runtime.effectful(type="apply_interruptions")
-def apply_interruptions(
-    dynamics: Dynamics[S, T], start_state: State[T]
-) -> Tuple[Dynamics[S, T], State[T]]:
+def simulate(
+    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+) -> Trajectory[T]:
     """
-    Apply the effects of an interruption to a dynamical system.
+    Simulate a dynamical system.
     """
-    # Default is to do nothing.
-    return dynamics, start_state
-
+    raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
 
 # noinspection PyUnusedLocal
 @functools.singledispatch
@@ -198,7 +195,6 @@ def simulate_to_interruption(
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )
-
 
 @functools.singledispatch
 def concatenate(*inputs, **kwargs):
@@ -234,13 +230,16 @@ def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory
                 )
     return full_trajectory
 
-
-# noinspection PyUnusedLocal
 @functools.singledispatch
-def simulate(
-    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
-) -> Trajectory[T]:
+@pyro.poutine.runtime.effectful(type="apply_interruptions")
+def apply_interruptions(
+    dynamics: Dynamics[S, T], start_state: State[T]
+) -> Tuple[Dynamics[S, T], State[T]]:
     """
-    Simulate a dynamical system.
+    Apply the effects of an interruption to a dynamical system.
     """
-    raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+    # Default is to do nothing.
+    return dynamics, start_state
+
+
+

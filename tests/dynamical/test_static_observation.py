@@ -14,7 +14,7 @@ from chirho.dynamical.handlers import (
 )
 
 from chirho.dynamical.ODE.handlers import simulate
-from chirho.dynamical.ops import State
+from chirho.dynamical.internals import State
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,

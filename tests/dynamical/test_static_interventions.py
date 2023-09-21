@@ -8,7 +8,7 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop, simulate
-from chirho.dynamical.ops import State
+from chirho.dynamical.internals import State
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 

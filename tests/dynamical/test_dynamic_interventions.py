@@ -16,7 +16,7 @@ from chirho.dynamical.handlers import (
 
 from chirho.dynamical.ODE import ODEDynamics
 
-from chirho.dynamical.ops import State
+from chirho.dynamical.internals import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics

@@ -10,7 +10,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
     simulate,
 )
-from chirho.dynamical.ops import State
+from chirho.dynamical.internals import State
 
 from .dynamical_fixtures import UnifiedFixtureDynamics, check_trajectories_match
 
