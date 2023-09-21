@@ -127,7 +127,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
 
     :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual` handles
     :func:`~chirho.counterfactual.ops.split` by returning all observed values ``obs`` and intervened values ``act``.
-    This can be thought of as returning the full joint distribution over all factual and counterfactual variables.::
+    This can be thought of as returning the full joint distribution over all factual and counterfactual variables. ::
 
         >>> with MultiWorldCounterfactual():
         ...    x = torch.tensor(1.)
@@ -177,7 +177,7 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     :func:`~chirho.counterfactual.ops.split` by returning the observed values ``obs`` and the
     final intervened values ``act`` in the probabilistic program. This can be thought of as returning
     the joint distribution over factual and counterfactual variables, marginalizing out all but the final
-    configuration of intervention assignments in the probabilistic program.::
+    configuration of intervention assignments in the probabilistic program. ::
 
         >>> with TwinWorldCounterfactual():
         ...    x = torch.tensor(1.)
