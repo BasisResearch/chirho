@@ -1,6 +1,7 @@
 import functools
 from typing import Callable, FrozenSet, Generic, Protocol, TypeVar, runtime_checkable
 
+import pyro
 import torch
 
 from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
@@ -114,12 +115,24 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
-# noinspection PyUnusedLocal
-@functools.singledispatch
+@pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
     dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
 ) -> Trajectory[T]:
     """
     Simulate a dynamical system.
     """
+    return _simulate(dynamics, initial_state, timespan, **kwargs)
+
+
+@functools.singledispatch
+def _simulate(
+    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+
+
+simulate.register = _simulate.register
