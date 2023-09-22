@@ -1,18 +1,11 @@
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    FrozenSet,
-    Generic,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    TypeVar,
-    runtime_checkable,
-)
+from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar
 
 if TYPE_CHECKING:
-    from .handlers import DynamicInterruption, PointInterruption, Interruption
+    from chirho.dynamical.handlers import (
+        DynamicInterruption,
+        PointInterruption,
+        Interruption,
+    )
 
 import functools
 
@@ -23,6 +16,7 @@ from chirho.dynamical.ops import Dynamics, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
+
 
 # noinspection PyUnusedLocal
 @functools.singledispatch

@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-import functools
 import warnings
 from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
-import torchdiffeq
-
-from chirho.dynamical.internals.indexed import gather, indices_of
 
 # from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.dynamical.internals.interruption import (

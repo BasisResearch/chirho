@@ -1,22 +1,6 @@
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    FrozenSet,
-    Generic,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    TypeVar,
-    runtime_checkable,
-)
-
-if TYPE_CHECKING:
-    from .handlers import DynamicInterruption, PointInterruption, Interruption
-
 import functools
+from typing import TypeVar
 
-import pyro
 import torch
 
 S = TypeVar("S")

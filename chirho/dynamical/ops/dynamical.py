@@ -1,22 +1,6 @@
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    FrozenSet,
-    Generic,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    TypeVar,
-    runtime_checkable,
-)
-
-if TYPE_CHECKING:
-    from .handlers import DynamicInterruption, PointInterruption, Interruption
-
 import functools
+from typing import Callable, FrozenSet, Generic, Protocol, TypeVar, runtime_checkable
 
-import pyro
 import torch
 
 from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask

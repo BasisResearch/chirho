@@ -1,26 +1,26 @@
 from __future__ import annotations
 
 import functools
-import warnings
-from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, TypeVar
 
 import pyro
 import torch
 import torchdiffeq
 
-from chirho.dynamical.internals.interruption import (
-    apply_interruptions,
-    concatenate,
-    simulate_to_interruption,
-)
+from chirho.dynamical.internals.interruption import simulate_to_interruption
 from chirho.dynamical.ops import State, Trajectory, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.indexed.ops import IndexSet, gather, indices_of, union
-from chirho.interventional.handlers import intervene
-from chirho.observational.handlers import condition
+
+if TYPE_CHECKING:
+    from chirho.dynamical.internals.interruption import (
+        DynamicInterruption,
+        Interruption,
+        PointInterruption,
+    )
 
 S = TypeVar("S")
 T = TypeVar("T")
+
 
 # noinspection PyMethodParameters
 def _deriv(
