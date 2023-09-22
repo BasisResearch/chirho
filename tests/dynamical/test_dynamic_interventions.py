@@ -346,7 +346,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     # noinspection DuplicatedCode
     with SimulatorEventLoop():
         with dynamic_intervention:
-            traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
+            traj = simulate(model, s0, torch.tensor([0.0, 10.0]))
 
     (dxdparam,) = torch.autograd.grad(
         outputs=(traj.x[-1],), inputs=(param,), create_graph=True
