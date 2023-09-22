@@ -8,9 +8,8 @@ from chirho.dynamical.handlers import (
     PointInterruption,
     PointIntervention,
     SimulatorEventLoop,
-    simulate,
 )
-from chirho.dynamical.internals import State
+from chirho.dynamical.ops import simulate, State
 
 from .dynamical_fixtures import UnifiedFixtureDynamics, check_trajectories_match
 

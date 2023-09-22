@@ -1,1 +1,1 @@
-from .dynamical import Dynamics, simulate
+from .dynamical import Dynamics, simulate, State, Trajectory

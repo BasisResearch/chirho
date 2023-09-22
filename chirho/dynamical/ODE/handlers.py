@@ -8,16 +8,10 @@ import pyro
 import torch
 import torchdiffeq
 
-from chirho.dynamical.internals import (
-    State,
-    Trajectory,
-    apply_interruptions,
-    concatenate,
-    simulate_to_interruption,
-)
-from chirho.dynamical.ops import simulate
-from chirho.dynamical.ODE import ODEDynamics
+from chirho.dynamical.internals.interruption import apply_interruptions, simulate_to_interruption, concatenate
 
+from chirho.dynamical.ODE import ODEDynamics
+from chirho.dynamical.ops import simulate, State, Trajectory
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 from chirho.observational.handlers import condition
@@ -39,6 +33,7 @@ def _deriv(
     dynamics.diff(ddt, env)
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
+
 # TODO - determine if this is needed.
 # @pyro.nn.pyro_method
 @pyro.poutine.runtime.effectful(type="simulate")
@@ -59,6 +54,7 @@ def _torchdiffeq_ode_simulate_inner(
         setattr(trajectory, var, soln)
 
     return trajectory
+
 
 def _batched_odeint(
     func: Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], Tuple[torch.Tensor, ...]],

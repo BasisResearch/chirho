@@ -2,8 +2,8 @@ import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
+from chirho.dynamical.ops import State, Trajectory
 from chirho.dynamical.ODE import ODEDynamics
-from chirho.dynamical.internals import State, Trajectory
 
 
 class UnifiedFixtureDynamics(ODEDynamics):
