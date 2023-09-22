@@ -37,11 +37,11 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             time=span_timespan[-1],
         )
 
-        full_trajs = []  # type: List[Trajectory[T]]
+        full_trajs: List[Trajectory[T]] = []
         first = True
 
-        last_terminal_interruptions = tuple()  # type: Tuple[Interruption, ...]
-        interruption_counts = dict()  # type: Dict[Interruption, int]
+        last_terminal_interruptions: Tuple[Interruption, ...] = tuple()
+        interruption_counts: Dict[Interruption, int] = dict()
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
