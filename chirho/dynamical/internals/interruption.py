@@ -60,6 +60,7 @@ def apply_interruptions(
     # Default is to do nothing.
     return dynamics, start_state
 
+
 @functools.singledispatch
 def concatenate(*inputs, **kwargs):
     """

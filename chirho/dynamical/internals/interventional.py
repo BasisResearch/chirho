@@ -8,8 +8,12 @@ import pyro
 import torch
 import torchdiffeq
 
-from chirho.dynamical.internals.interruption import apply_interruptions, simulate_to_interruption, concatenate
-from chirho.dynamical.ops import simulate, State, Trajectory
+from chirho.dynamical.internals.interruption import (
+    apply_interruptions,
+    concatenate,
+    simulate_to_interruption,
+)
+from chirho.dynamical.ops import State, Trajectory, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 from chirho.observational.handlers import condition

@@ -9,8 +9,8 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop
-from chirho.dynamical.ODE import ODEDynamics
-from chirho.dynamical.ops import simulate, State
+from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops.ODE import ODEDynamics
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics

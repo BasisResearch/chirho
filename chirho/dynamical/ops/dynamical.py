@@ -14,15 +14,16 @@ from typing import (
 if TYPE_CHECKING:
     from .handlers import DynamicInterruption, PointInterruption, Interruption
 
-from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
-
 import functools
 
 import pyro
 import torch
 
+from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
+
 S = TypeVar("S")
 T = TypeVar("T")
+
 
 class State(Generic[T]):
     def __init__(self, **values: T):
@@ -81,6 +82,7 @@ class State(Generic[T]):
         )
         return ret
 
+
 # TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
 #  we expect multiple vs. a single state in the vectors, but it's likely confusing/not useful for the user? Maybe,
 #  maybe not. If we do keep it we need more explicit guarantees that the State won't have more than a single entry?
@@ -137,4 +139,3 @@ def simulate(
     Simulate a dynamical system.
     """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
-

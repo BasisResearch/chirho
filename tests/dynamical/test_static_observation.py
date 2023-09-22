@@ -11,8 +11,7 @@ from chirho.dynamical.handlers import (
     PointObservation,
     SimulatorEventLoop,
 )
-from chirho.dynamical.ops import simulate, State
-from chirho.dynamical.ODE.handlers import simulate
+from chirho.dynamical.ops import State, simulate
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,

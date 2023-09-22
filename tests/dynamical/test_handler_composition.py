@@ -11,7 +11,7 @@ from chirho.dynamical.handlers import (
     PointIntervention,
     SimulatorEventLoop,
 )
-from chirho.dynamical.ops import simulate, State
+from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamics,
