@@ -6,7 +6,6 @@ from typing import Callable, Dict, Generic, List, Optional, Tuple, TypeVar, Unio
 import pyro
 import torch
 
-# from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.dynamical.internals.interruption import (
     apply_interruptions,
     concatenate,
