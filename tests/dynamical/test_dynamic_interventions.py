@@ -11,6 +11,7 @@ from chirho.counterfactual.handlers import (
 from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
+from chirho.dynamical.ops.ODE.backends import TorchDiffEqBackend
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -81,7 +82,7 @@ def test_nested_dynamic_intervention_causes_change(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                res = simulate(model, init_state, tspan)
+                res = simulate(model, init_state, tspan, backend=TorchDiffEqBackend())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
