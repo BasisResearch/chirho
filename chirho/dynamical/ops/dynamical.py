@@ -125,6 +125,8 @@ def simulate(
     return _simulate(dynamics, initial_state, timespan, **kwargs)
 
 
+# This redirection distinguishes between the effectful operation, and the
+# type-directed dispatch on Dynamics
 @functools.singledispatch
 def _simulate(
     dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
