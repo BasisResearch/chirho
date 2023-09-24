@@ -10,9 +10,8 @@ from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
     PointObservation,
     SimulatorEventLoop,
-    simulate,
 )
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops import State, simulate
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
