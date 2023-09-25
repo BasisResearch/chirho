@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING, Dict, Generic, List, Tuple, TypeVar
+from typing import Dict, Generic, List, Tuple, TypeVar
 
 import pyro
 import torch
@@ -16,10 +16,6 @@ from chirho.dynamical.internals.interruption import (
     concatenate,
     simulate_to_interruption,
 )
-
-if TYPE_CHECKING:
-    from chirho.dynamical.ops import State
-
 from chirho.dynamical.ops import Trajectory
 
 S = TypeVar("S")
@@ -89,7 +85,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     # We just pass nothing here, as any interruption handlers will be responsible for
                     #  accruing themselves to the message. Leaving explicit for documentation.
                     dynamic_interruptions=None,
-                )  # type: Trajectory[T], Tuple['Interruption', ...], torch.Tensor, State[T]
+                )
 
             if len(terminal_interruptions) > 1:
                 warnings.warn(
