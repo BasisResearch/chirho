@@ -12,7 +12,7 @@ from chirho.dynamical.internals.ODE.ode_simulate import (
 )
 from chirho.dynamical.ops import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.dynamical.ops.ODE.backends import TorchDiffEqBackend
+from chirho.dynamical.ops.ODE.backends import TorchDiffEq
 
 if TYPE_CHECKING:
     from chirho.dynamical.internals.interruption import (
@@ -101,9 +101,9 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-@ode_simulate.register(TorchDiffEqBackend)
+@ode_simulate.register(TorchDiffEq)
 def torchdiffeq_ode_simulate(
-    backend: TorchDiffEqBackend,
+    backend: TorchDiffEq,
     dynamics: ODEDynamics,
     initial_state: State[torch.Tensor],
     timespan,
@@ -113,9 +113,9 @@ def torchdiffeq_ode_simulate(
     )
 
 
-@ode_simulate_to_interruption.register(TorchDiffEqBackend)
+@ode_simulate_to_interruption.register(TorchDiffEq)
 def torchdiffeq_ode_simulate_to_interruption(
-    backend: TorchDiffEqBackend,
+    backend: TorchDiffEq,
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
     timespan,  # The first element of timespan is assumed to be the starting time.

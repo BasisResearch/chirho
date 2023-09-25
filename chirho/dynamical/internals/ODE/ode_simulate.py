@@ -6,7 +6,6 @@ from typing import TypeVar
 from chirho.dynamical.internals.interruption import simulate_to_interruption
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.ops.ODE import ODEBackend, ODEDynamics
-from chirho.dynamical.ops.ODE.backends import TorchDiffEqBackend
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -18,7 +17,7 @@ def ode_simulate(
     initial_state: State[T],
     timespan,
     *,
-    backend: ODEBackend = TorchDiffEqBackend(),
+    backend: ODEBackend,
     **kwargs,
 ):
     return _ode_simulate(backend, dynamics, initial_state, timespan, **kwargs)
@@ -49,7 +48,7 @@ def ode_simulate_to_interruption(
     initial_state: State[T],
     timespan,
     *,
-    backend: ODEBackend = TorchDiffEqBackend(),
+    backend: ODEBackend,
     **kwargs,
 ):
     return _ode_simulate_to_interruption(

@@ -29,6 +29,11 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     # noinspection PyMethodMayBeStatic
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
+        if "backend" in msg["kwargs"]:
+            backend = msg["kwargs"]["backend"]
+        else:
+            # Early return to trigger `simulate` ValueError for not having a backend.
+            return
 
         # Initial values. These will be updated in the loop below.
         span_start_state = initial_state
@@ -73,6 +78,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     dynamics,
                     span_start_state,
                     span_timespan,
+                    backend=backend,
                     # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
                     #  interruption handlers may replace this with themselves if they happen before the end.
                     next_static_interruption=default_terminal_interruption,

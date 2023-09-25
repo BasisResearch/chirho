@@ -11,4 +11,5 @@ class BackendHandler(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_simulate(self, msg) -> None:
-        pass
+        # Overwrite the backend in the message with the one we're handling.
+        msg["kwargs"]["backend"] = self.backend

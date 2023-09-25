@@ -1,1 +1,1 @@
-from .torchdiffeq import TorchDiffEqBackend  # noqa: F401
+from .torchdiffeq import TorchDiffEq  # noqa: F401

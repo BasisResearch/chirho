@@ -1,5 +1,13 @@
 import functools
-from typing import Callable, FrozenSet, Generic, Protocol, TypeVar, runtime_checkable
+from typing import (
+    Callable,
+    FrozenSet,
+    Generic,
+    Optional,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
 
 import pyro
 import torch
@@ -115,21 +123,43 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
+class Backend:
+    pass
+
+
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
-    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan,
+    *,
+    backend: Optional[Backend] = None,
+    **kwargs,
 ) -> Trajectory[T]:
     """
     Simulate a dynamical system.
     """
-    return _simulate(dynamics, initial_state, timespan, **kwargs)
+    if backend is None:
+        raise ValueError(
+                    "SimulatorEventLoop requires a backend. To specify a backend, use the keyword argument `backend` in"
+                    " the call to `simulate` or use with a backend effect handler as a context manager. For example, \n \n"
+                    "`with SimulatorEventLoop():` \n"
+                    "\t `with SimulatorBackend(TorchDiffEq()):` \n"
+                    "\t \t `simulate(dynamics, initial_state, timespan)`"
+                )
+    return _simulate(dynamics, initial_state, timespan, backend=backend, **kwargs)
 
 
 # This redirection distinguishes between the effectful operation, and the
 # type-directed dispatch on Dynamics
 @functools.singledispatch
 def _simulate(
-    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan,
+    *,
+    backend: Optional[Backend] = None,
+    **kwargs,
 ) -> Trajectory[T]:
     """
     Simulate a dynamical system.
@@ -138,7 +168,3 @@ def _simulate(
 
 
 simulate.register = _simulate.register
-
-
-class Backend:
-    pass
