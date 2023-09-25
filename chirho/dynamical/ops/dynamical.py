@@ -141,12 +141,12 @@ def simulate(
     """
     if backend is None:
         raise ValueError(
-                    "SimulatorEventLoop requires a backend. To specify a backend, use the keyword argument `backend` in"
-                    " the call to `simulate` or use with a backend effect handler as a context manager. For example, \n \n"
-                    "`with SimulatorEventLoop():` \n"
-                    "\t `with SimulatorBackend(TorchDiffEq()):` \n"
-                    "\t \t `simulate(dynamics, initial_state, timespan)`"
-                )
+            "SimulatorEventLoop requires a backend. To specify a backend, use the keyword argument `backend` in"
+            " the call to `simulate` or use with a backend effect handler as a context manager. For example, \n \n"
+            "`with SimulatorEventLoop():` \n"
+            "\t `with SimulatorBackend(TorchDiffEq()):` \n"
+            "\t \t `simulate(dynamics, initial_state, timespan)`"
+        )
     return _simulate(dynamics, initial_state, timespan, backend=backend, **kwargs)
 
 
