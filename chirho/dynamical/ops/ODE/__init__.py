@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from chirho.dynamical.ops import Dynamics, State, simulate
+from chirho.dynamical.ops import Backend, Dynamics, State, simulate
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-class ODEBackend:
+class ODEBackend(Backend):
     pass
 
 

@@ -138,3 +138,7 @@ def _simulate(
 
 
 simulate.register = _simulate.register
+
+
+class Backend:
+    pass
