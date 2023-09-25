@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Protocol, TypeVar, runtime_checkable
+from typing import TypeVar
 
 from chirho.dynamical.ops import Dynamics, State, simulate
 
@@ -8,9 +8,8 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@runtime_checkable
-class ODEBackend(Protocol[T]):
-    simulation_args: Dict[str, T]
+class ODEBackend:
+    pass
 
 
 # noinspection PyPep8Naming

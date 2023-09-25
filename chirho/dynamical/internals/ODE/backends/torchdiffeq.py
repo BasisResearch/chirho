@@ -10,7 +10,7 @@ from chirho.dynamical.internals.ODE.ode_simulate import (
     ode_simulate,
     ode_simulate_to_interruption,
 )
-from chirho.dynamical.ops import State, Trajectory, simulate
+from chirho.dynamical.ops import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
 from chirho.dynamical.ops.ODE.backends import TorchDiffEqBackend
 
@@ -41,7 +41,7 @@ def _deriv(
 
 
 def _torchdiffeq_ode_simulate_inner(
-    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **kwargs
+    dynamics: ODEDynamics, initial_state: State[torch.Tensor], timespan, **odeint_kwargs
 ):
     var_order = initial_state.var_order  # arbitrary, but fixed
 
@@ -49,7 +49,7 @@ def _torchdiffeq_ode_simulate_inner(
         functools.partial(_deriv, dynamics, var_order),
         tuple(getattr(initial_state, v) for v in var_order),
         timespan,
-        **kwargs,
+        **odeint_kwargs,
     )
 
     trajectory: Trajectory[torch.Tensor] = Trajectory()
@@ -65,7 +65,7 @@ def _batched_odeint(
     t: torch.Tensor,
     *,
     event_fn=None,
-    **kwargs,
+    **odeint_kwargs,
 ) -> Tuple[torch.Tensor, ...]:
     """
     Vectorized torchdiffeq.odeint.
@@ -85,10 +85,10 @@ def _batched_odeint(
 
     if event_fn is not None:
         event_t, yt_raw = torchdiffeq.odeint_event(
-            func, y0_expanded, t, event_fn=event_fn, **kwargs
+            func, y0_expanded, t, event_fn=event_fn, **odeint_kwargs
         )
     else:
-        yt_raw = torchdiffeq.odeint(func, y0_expanded, t, **kwargs)
+        yt_raw = torchdiffeq.odeint(func, y0_expanded, t, **odeint_kwargs)
 
     yt = tuple(
         torch.transpose(
@@ -107,9 +107,10 @@ def torchdiffeq_ode_simulate(
     dynamics: ODEDynamics,
     initial_state: State[torch.Tensor],
     timespan,
-    **kwargs,
 ):
-    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
+    return _torchdiffeq_ode_simulate_inner(
+        dynamics, initial_state, timespan, **backend.odeint_kwargs
+    )
 
 
 @ode_simulate_to_interruption.register(TorchDiffEqBackend)
@@ -132,7 +133,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = simulate(dynamics, start_state, timespan, **kwargs)
+        trajectory = ode_simulate(dynamics, start_state, timespan, backend=backend)
         # TODO support event_dim > 0
         return trajectory, (), timespan[-1], trajectory[..., -1]
 
@@ -203,7 +204,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # Execute a standard, non-event based simulation on the new timespan.
-    trajectory = simulate(dynamics, start_state, timespan_2nd_pass, **kwargs)
+    trajectory = ode_simulate(dynamics, start_state, timespan_2nd_pass, backend=backend)
 
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.

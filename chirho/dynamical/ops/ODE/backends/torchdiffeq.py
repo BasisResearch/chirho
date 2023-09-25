@@ -1,8 +1,15 @@
-import torch
-
 from chirho.dynamical.ops.ODE import ODEBackend
 
 
-class TorchDiffEqBackend(ODEBackend[torch.Tensor]):
-    def __init__(self, simulation_args={}):
-        self.simulation_args = simulation_args
+class TorchDiffEqBackend(ODEBackend):
+    def __init__(self, rtol=1e-7, atol=1e-9, method=None, options=None):
+        self.rtol = rtol
+        self.atol = atol
+        self.method = method
+        self.options = options
+        self.odeint_kwargs = {
+            "rtol": rtol,
+            "atol": atol,
+            "method": method,
+            "options": options,
+        }
