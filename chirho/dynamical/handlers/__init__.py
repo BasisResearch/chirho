@@ -1,4 +1,5 @@
-from .dynamical import (  # noqa: F401
+from .dynamical import SimulatorEventLoop  # noqa: F401
+from .interruption import (  # noqa: F401
     DynamicInterruption,
     DynamicIntervention,
     Interruption,
@@ -6,5 +7,4 @@ from .dynamical import (  # noqa: F401
     PointInterruption,
     PointIntervention,
     PointObservation,
-    SimulatorEventLoop,
 )
