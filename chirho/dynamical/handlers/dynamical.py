@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Dict, Generic, List, Tuple, TypeVar
+from typing import TYPE_CHECKING, Dict, Generic, List, Tuple, TypeVar
 
 import pyro
 import torch
@@ -16,7 +16,11 @@ from chirho.dynamical.internals.interruption import (
     concatenate,
     simulate_to_interruption,
 )
-from chirho.dynamical.ops import State, Trajectory
+
+if TYPE_CHECKING:
+    from chirho.dynamical.ops import State
+
+from chirho.dynamical.ops import Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
