@@ -1,6 +1,15 @@
 import functools
-from typing import Callable, FrozenSet, Generic, Protocol, TypeVar, runtime_checkable
+from typing import (
+    Callable,
+    FrozenSet,
+    Generic,
+    Optional,
+    Protocol,
+    TypeVar,
+    runtime_checkable,
+)
 
+import pyro
 import torch
 
 from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
@@ -114,12 +123,48 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
-# noinspection PyUnusedLocal
-@functools.singledispatch
+class Solver:
+    pass
+
+
+@pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
-    dynamics: Dynamics[S, T], initial_state: State[T], timespan, **kwargs
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan,
+    *,
+    solver: Optional[Solver] = None,
+    **kwargs,
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
+    if solver is None:
+        raise ValueError(
+            "SimulatorEventLoop requires a solver. To specify a solver, use the keyword argument `solver` in"
+            " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
+            "`with SimulatorEventLoop():` \n"
+            "\t `with SimulatorBackend(TorchDiffEq()):` \n"
+            "\t \t `simulate(dynamics, initial_state, timespan)`"
+        )
+    return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)
+
+
+# This redirection distinguishes between the effectful operation, and the
+# type-directed dispatch on Dynamics
+@functools.singledispatch
+def _simulate(
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan,
+    *,
+    solver: Optional[Solver] = None,
+    **kwargs,
 ) -> Trajectory[T]:
     """
     Simulate a dynamical system.
     """
     raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+
+
+simulate.register = _simulate.register

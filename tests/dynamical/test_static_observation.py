@@ -12,6 +12,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
 )
 from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
@@ -56,7 +57,7 @@ def test_multiple_point_observations(model):
     with SimulatorEventLoop():
         with PointObservation(time=3.1, data=data2):
             with PointObservation(time=2.9, data=data1):
-                result = simulate(model, init_state, tspan)
+                result = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5
@@ -91,7 +92,7 @@ def test_log_prob_exists(model, obs_handler):
     with pyro.poutine.trace() as tr:
         with SimulatorEventLoop():
             with _get_compatible_observations(obs_handler, time=2.9, data=data):
-                simulate(model, init_state, tspan)
+                simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert isinstance(tr.trace.log_prob_sum(), torch.Tensor), "No log_prob found!"
 
@@ -109,7 +110,7 @@ def test_tspan_collision(model, obs_handler):
     data = {"S_obs": S_obs}
     with SimulatorEventLoop():
         with _get_compatible_observations(obs_handler, time=tspan[1], data=data):
-            result = simulate(model, init_state, tspan)
+            result = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5
@@ -132,7 +133,7 @@ def test_svi_composition_test_one(model, obs_handler):
             sir = model()
             with SimulatorEventLoop():
                 with _get_compatible_observations(obs_handler, time=2.9, data=data1):
-                    traj = simulate(sir, init_state, tspan)
+                    traj = simulate(sir, init_state, tspan, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -165,12 +166,16 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
                     with PointObservation(
                         time=times[2].item(), data={k: v[2] for k, v in data.items()}
                     ):
-                        interrupting_ret = simulate(model, init_state, tspan)
+                        interrupting_ret = simulate(
+                            model, init_state, tspan, solver=TorchDiffEq()
+                        )
 
     with pyro.poutine.trace() as tr2:
         with SimulatorEventLoop():
             with NonInterruptingPointObservationArray(times=times, data=data):
-                non_interrupting_ret = simulate(model, init_state, tspan)
+                non_interrupting_ret = simulate(
+                    model, init_state, tspan, solver=TorchDiffEq()
+                )
 
     assert check_trajectories_match(interrupting_ret, non_interrupting_ret)
 
@@ -189,7 +194,7 @@ def test_point_observation_at_tspan_start_excepts(model, init_state, tspan):
     with SimulatorEventLoop():
         with pytest.raises(ValueError, match="occurred at the start of the timespan"):
             with PointObservation(time=tspan[0], data={"S_obs": torch.tensor(10.0)}):
-                simulate(model, init_state, tspan)
+                simulate(model, init_state, tspan, solver=TorchDiffEq())
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
@@ -221,7 +226,7 @@ def test_svi_composition_test_multi_point_obs(model):
                 with ExitStack() as stack:
                     for manager in observation_managers:
                         stack.enter_context(manager)
-                    traj = simulate(sir, init_state, tspan)
+                    traj = simulate(sir, init_state, tspan, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -245,7 +250,7 @@ def test_svi_composition_vectorized_obs(model):
             sir = model()
             with SimulatorEventLoop():
                 with NonInterruptingPointObservationArray(times=times, data=data):
-                    traj = simulate(sir, init_state, tspan)
+                    traj = simulate(sir, init_state, tspan, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -269,7 +274,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
     model = RandBetaUnifiedFixtureDynamics()
 
     if not use_event_loop:
-        result = simulate(model, init_state, tspan)
+        result = simulate(model, init_state, tspan, solver=TorchDiffEq())
     else:
         S_obs = torch.tensor(10.0)
         data1 = {"S_obs": S_obs}
@@ -277,7 +282,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
         with SimulatorEventLoop():
             with PointObservation(time=3.1, data=data2):
                 with PointObservation(time=2.9, data=data1):
-                    result = simulate(model, init_state, tspan)
+                    result = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5

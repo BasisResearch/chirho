@@ -12,19 +12,21 @@ import functools
 import pyro
 import torch
 
-from chirho.dynamical.ops import Dynamics, State, Trajectory
+from chirho.dynamical.ops import Dynamics, Solver, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-# noinspection PyUnusedLocal
-@functools.singledispatch
+# Separating out the effectful operation from the non-effectful dispatch on the default implementation
+@pyro.poutine.runtime.effectful(type="simulate_to_interruption")
+@pyro.poutine.block(hide_types=["simulate"])
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
     timespan,  # The first element of timespan is assumed to be the starting time.
     *,
+    solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
@@ -38,12 +40,37 @@ def simulate_to_interruption(
      the simulation ended, and the end state. The initial trajectory object does not include state measurements at
      the end-point.
     """
+    return _simulate_to_interruption(
+        dynamics,
+        start_state,
+        timespan,
+        solver=solver,
+        next_static_interruption=next_static_interruption,
+        dynamic_interruptions=dynamic_interruptions,
+        **kwargs,
+    )
+
+
+# noinspection PyUnusedLocal
+@functools.singledispatch
+def _simulate_to_interruption(
+    dynamics: Dynamics[S, T],
+    start_state: State[T],
+    timespan,  # The first element of timespan is assumed to be the starting time.
+    *,
+    solver: Optional[Solver] = None,
+    next_static_interruption: Optional["PointInterruption"] = None,
+    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    **kwargs,
+) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )
 
 
-@functools.singledispatch
+simulate_to_interruption.register = _simulate_to_interruption.register
+
+
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
 def apply_interruptions(
     dynamics: Dynamics[S, T], start_state: State[T]
