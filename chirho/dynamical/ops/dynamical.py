@@ -144,7 +144,7 @@ def simulate(
             "SimulatorEventLoop requires a solver. To specify a solver, use the keyword argument `solver` in"
             " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
             "`with SimulatorEventLoop():` \n"
-            "\t `with SimulatorBackend(TorchDiffEq()):` \n"
+            "\t `with ODESolver(TorchDiffEq()):` \n"
             "\t \t `simulate(dynamics, initial_state, timespan)`"
         )
     return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)

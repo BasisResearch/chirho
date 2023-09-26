@@ -8,7 +8,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class ODEBackend(Solver):
+class ODESolver(Solver):
     pass
 
 
