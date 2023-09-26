@@ -49,6 +49,9 @@ class HighDimLinearModel(pyro.nn.PyroModule):
     def sample_treatment_weight(self):
         return pyro.sample("treatment_weight", dist.Normal(0.0, 1.0))
 
+    def sample_treatment_null_weight(self):
+        return pyro.sample("treatment_null_weight", dist.Normal(0.0, 1.0))
+
     def sample_covariate_loc_scale(self):
         loc = pyro.sample(
             "covariate_loc", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1)
@@ -62,6 +65,7 @@ class HighDimLinearModel(pyro.nn.PyroModule):
         outcome_weights = self.sample_outcome_weights()
         propensity_weights = self.sample_propensity_weights()
         tau = self.sample_treatment_weight()
+        tau0 = self.sample_treatment_null_weight()
         x_loc, x_scale = self.sample_covariate_loc_scale()
         with pyro.plate("obs", N, dim=-1):
             X = pyro.sample("X", dist.Normal(x_loc, x_scale).to_event(1))
@@ -74,7 +78,9 @@ class HighDimLinearModel(pyro.nn.PyroModule):
             return pyro.sample(
                 "Y",
                 self.link_fn(
-                    torch.einsum("...np,...p->...n", X, outcome_weights) + A * tau
+                    torch.einsum("...np,...p->...n", X, outcome_weights)
+                    + A * tau
+                    + (1 - A) * tau0
                 ),
             )
 
@@ -110,6 +116,9 @@ class BenchmarkLinearModel(HighDimLinearModel):
 
     def sample_treatment_weight(self):
         return torch.tensor(self.treatment_weight)
+
+    def sample_treatment_null_weight(self):
+        return torch.tensor(0.0)
 
     def sample_covariate_loc_scale(self):
         return torch.zeros(self.p), torch.ones(self.p)
@@ -431,6 +440,20 @@ def ATE_3(model: Callable[[], torch.Tensor], num_samples: int = 100) -> torch.Te
     return pyro.deterministic("ATE", (Y1 - Y0).mean(dim=-1, keepdim=True).squeeze())
 
 
+# # You can't modify joint; all queries need to be some function of the joint without
+# # modifying it??
+# def ATE_4(model: Callable[[], torch.Tensor], num_samples: int = 100) -> torch.Tensor:
+#     """Compute the average treatment effect of a model."""
+#     with pyro.poutine.trace() as data_tr:
+#         model(N=num_samples)
+
+#     Y = data_tr.trace.nodes["Y"]["value"]
+#     A = data_tr.trace.nodes["A"]["value"]
+#     Y1_expectation = Y[A == 1].mean(dim=-1, keepdim=True).squeeze()
+#     Y0_expectation = Y[A == 0].mean(dim=-1, keepdim=True).squeeze()
+#     return pyro.deterministic("ATE", Y1_expectation - Y0_expectation)
+
+
 def closed_form_correction(X_test, theta):
     X = X_test["X"]
     A = X_test["A"]
@@ -447,11 +470,11 @@ unconditioned_model = KnownCovariateDistModel(p, gaussian_link)
 model_cond_theta = condition(data=theta_hat)(unconditioned_model)
 
 ATE_plugin = ATE_3(model_cond_theta, num_samples=10000)
+
 print("ATE plugin", ATE_plugin)
 kennedy_correction, kennedy_correction_vec = closed_form_correction(D_test, theta_hat)
 
 print("Kennedy closed-form correction", kennedy_correction)
-
 
 ATE_correction = one_step_correction(
     lambda m: ATE_3(m, num_samples=1000),
