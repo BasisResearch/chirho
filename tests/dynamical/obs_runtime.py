@@ -12,9 +12,9 @@ from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
     SimulatorEventLoop,
 )
+from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 
 class SimpleSIRDynamicsBayes(ODEDynamics):

@@ -8,8 +8,8 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop
+from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 

@@ -3,9 +3,10 @@ from __future__ import annotations
 import functools
 from typing import TypeVar
 
+from chirho.dynamical.handlers.ODE import ODESolver
 from chirho.dynamical.internals.interruption import simulate_to_interruption
-from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE import ODEDynamics, ODESolver
+from chirho.dynamical.ops.dynamical import State, simulate
+from chirho.dynamical.ops.ODE import ODEDynamics
 
 S = TypeVar("S")
 T = TypeVar("T")

@@ -1,3 +1,4 @@
+from . import ODE  # noqa: F401
 from .dynamical import SimulatorEventLoop  # noqa: F401
 from .interruption import (  # noqa: F401
     DynamicInterruption,
@@ -8,4 +9,4 @@ from .interruption import (  # noqa: F401
     PointIntervention,
     PointObservation,
 )
-from .solver import SolverHandler  # noqa: F401
+from .solver import Solver  # noqa: F401

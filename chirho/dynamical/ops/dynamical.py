@@ -12,6 +12,7 @@ from typing import (
 import pyro
 import torch
 
+from chirho.dynamical.handlers.solver import Solver
 from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
 
 S = TypeVar("S")
@@ -123,10 +124,6 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
-class Solver:
-    pass
-
-
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
     dynamics: Dynamics[S, T],
@@ -144,7 +141,7 @@ def simulate(
             "SimulatorEventLoop requires a solver. To specify a solver, use the keyword argument `solver` in"
             " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
             "`with SimulatorEventLoop():` \n"
-            "\t `with ODESolver(TorchDiffEq()):` \n"
+            "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, timespan)`"
         )
     return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)

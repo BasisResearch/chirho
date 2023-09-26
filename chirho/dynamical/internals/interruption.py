@@ -12,7 +12,8 @@ import functools
 import pyro
 import torch
 
-from chirho.dynamical.ops import Dynamics, Solver, State, Trajectory
+from chirho.dynamical.handlers.solver import Solver
+from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")

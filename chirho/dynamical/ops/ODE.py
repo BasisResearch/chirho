@@ -2,14 +2,10 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from chirho.dynamical.ops import Dynamics, Solver, State, simulate
+from chirho.dynamical.ops.dynamical import Dynamics, State, simulate
 
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-class ODESolver(Solver):
-    pass
 
 
 # noinspection PyPep8Naming

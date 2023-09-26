@@ -1,4 +1,4 @@
-from chirho.dynamical.ops.ODE import ODESolver
+from chirho.dynamical.handlers.ODE.ode import ODESolver
 
 
 class TorchDiffEq(ODESolver):
@@ -13,3 +13,4 @@ class TorchDiffEq(ODESolver):
             "method": method,
             "options": options,
         }
+        super().__init__()

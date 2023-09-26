@@ -2,7 +2,7 @@ import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
-from chirho.dynamical.ops import State, Trajectory
+from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
 
 

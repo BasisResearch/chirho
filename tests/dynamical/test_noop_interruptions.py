@@ -9,8 +9,8 @@ from chirho.dynamical.handlers import (
     PointIntervention,
     SimulatorEventLoop,
 )
+from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 from .dynamical_fixtures import UnifiedFixtureDynamics, check_trajectories_match
 
