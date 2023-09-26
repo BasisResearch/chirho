@@ -71,7 +71,7 @@ def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
         with ExitStack() as stack:
             for manager in managers:
                 stack.enter_context(manager)
-            traj = simulate(sir, init_state, tspan)
+            traj = simulate(sir, init_state, tspan, solver=TorchDiffEq())
     return traj
 
 
