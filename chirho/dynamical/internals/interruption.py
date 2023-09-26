@@ -12,7 +12,7 @@ import functools
 import pyro
 import torch
 
-from chirho.dynamical.ops import Backend, Dynamics, State, Trajectory
+from chirho.dynamical.ops import Dynamics, Solver, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -26,7 +26,7 @@ def simulate_to_interruption(
     start_state: State[T],
     timespan,  # The first element of timespan is assumed to be the starting time.
     *,
-    backend: Optional[Backend] = None,
+    solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
@@ -44,7 +44,7 @@ def simulate_to_interruption(
         dynamics,
         start_state,
         timespan,
-        backend=backend,
+        solver=solver,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
         **kwargs,
@@ -58,7 +58,7 @@ def _simulate_to_interruption(
     start_state: State[T],
     timespan,  # The first element of timespan is assumed to be the starting time.
     *,
-    backend: Optional[Backend] = None,
+    solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,

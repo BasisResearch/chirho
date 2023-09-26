@@ -123,7 +123,7 @@ class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
 
 
-class Backend:
+class Solver:
     pass
 
 
@@ -133,21 +133,21 @@ def simulate(
     initial_state: State[T],
     timespan,
     *,
-    backend: Optional[Backend] = None,
+    solver: Optional[Solver] = None,
     **kwargs,
 ) -> Trajectory[T]:
     """
     Simulate a dynamical system.
     """
-    if backend is None:
+    if solver is None:
         raise ValueError(
-            "SimulatorEventLoop requires a backend. To specify a backend, use the keyword argument `backend` in"
-            " the call to `simulate` or use with a backend effect handler as a context manager. For example, \n \n"
+            "SimulatorEventLoop requires a solver. To specify a solver, use the keyword argument `solver` in"
+            " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
             "`with SimulatorEventLoop():` \n"
             "\t `with SimulatorBackend(TorchDiffEq()):` \n"
             "\t \t `simulate(dynamics, initial_state, timespan)`"
         )
-    return _simulate(dynamics, initial_state, timespan, backend=backend, **kwargs)
+    return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)
 
 
 # This redirection distinguishes between the effectful operation, and the
@@ -158,7 +158,7 @@ def _simulate(
     initial_state: State[T],
     timespan,
     *,
-    backend: Optional[Backend] = None,
+    solver: Optional[Solver] = None,
     **kwargs,
 ) -> Trajectory[T]:
     """

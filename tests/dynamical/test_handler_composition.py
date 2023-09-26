@@ -12,7 +12,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
 )
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamics,
@@ -65,7 +65,7 @@ def counterf_model():
                 UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
                 init_state,
                 tspan,
-                backend=TorchDiffEq(),
+                solver=TorchDiffEq(),
             )
 
 

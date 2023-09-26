@@ -17,15 +17,15 @@ def ode_simulate(
     initial_state: State[T],
     timespan,
     *,
-    backend: ODEBackend,
+    solver: ODEBackend,
     **kwargs,
 ):
-    return _ode_simulate(backend, dynamics, initial_state, timespan, **kwargs)
+    return _ode_simulate(solver, dynamics, initial_state, timespan, **kwargs)
 
 
 @functools.singledispatch
 def _ode_simulate(
-    backend: ODEBackend,
+    solver: ODEBackend,
     dynamics: ODEDynamics,
     initial_state: State[T],
     timespan,
@@ -35,7 +35,7 @@ def _ode_simulate(
     Simulate an ODE dynamical system
     """
     raise NotImplementedError(
-        f"ode_simulate not implemented for backend of type {type(backend)}"
+        f"ode_simulate not implemented for solver of type {type(solver)}"
     )
 
 
@@ -48,17 +48,17 @@ def ode_simulate_to_interruption(
     initial_state: State[T],
     timespan,
     *,
-    backend: ODEBackend,
+    solver: ODEBackend,
     **kwargs,
 ):
     return _ode_simulate_to_interruption(
-        backend, dynamics, initial_state, timespan, **kwargs
+        solver, dynamics, initial_state, timespan, **kwargs
     )
 
 
 @functools.singledispatch
 def _ode_simulate_to_interruption(
-    backend: ODEBackend,
+    solver: ODEBackend,
     dynamics: ODEDynamics,
     initial_state: State[T],
     timespan,
@@ -68,7 +68,7 @@ def _ode_simulate_to_interruption(
     Simulate an ODE dynamical system
     """
     raise NotImplementedError(
-        f"ode_simulate_to_interruption not implemented for backend of type {type(backend)}"
+        f"ode_simulate_to_interruption not implemented for solver of type {type(solver)}"
     )
 
 
