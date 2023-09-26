@@ -22,12 +22,6 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class Solver(pyro.poutine.messenger.Messenger):
-    def _pyro_simulate(self, msg) -> None:
-        # Overwrite the solver in the message with the enclosing solver when used as a context manager.
-        msg["kwargs"]["solver"] = self
-
-
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
     # noinspection PyMethodMayBeStatic
