@@ -10,7 +10,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
 )
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 from .dynamical_fixtures import UnifiedFixtureDynamics, check_trajectories_match
 
@@ -38,13 +38,13 @@ intervene_states = [
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_noop_point_interruptions(model, init_state, tspan):
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     # Test with standard point interruptions within timespan.
     with SimulatorEventLoop():
         with PointInterruption(time=tspan[-1] / 2.0 + eps):
-            result_pint = simulate(model, init_state, tspan, backend=TorchDiffEq())
+            result_pint = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert check_trajectories_match(observational_execution_result, result_pint)
 
@@ -55,7 +55,7 @@ def test_noop_point_interruptions(model, init_state, tspan):
         ):  # roughly 1/4 of the way through the timespan
             with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
                 result_double_pint1 = simulate(
-                    model, init_state, tspan, backend=TorchDiffEq()
+                    model, init_state, tspan, solver=TorchDiffEq()
                 )
 
     assert check_trajectories_match(observational_execution_result, result_double_pint1)
@@ -65,7 +65,7 @@ def test_noop_point_interruptions(model, init_state, tspan):
         with PointInterruption(time=(tspan[-1] / 4.0) * 3 + eps):  # roughly 3/4
             with PointInterruption(time=tspan[-1] / 4.0 + eps):  # roughly 1/3
                 result_double_pint2 = simulate(
-                    model, init_state, tspan, backend=TorchDiffEq()
+                    model, init_state, tspan, solver=TorchDiffEq()
                 )
 
     assert check_trajectories_match(observational_execution_result, result_double_pint2)
@@ -86,7 +86,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
     post_measurement_intervention_time = tspan_values.max() + 1.0
 
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     # Test a single point intervention.
@@ -98,7 +98,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
                 time=post_measurement_intervention_time, intervention=intervene_state
             ):
                 result_single_pi = simulate(
-                    model, init_state, tspan, backend=TorchDiffEq()
+                    model, init_state, tspan, solver=TorchDiffEq()
                 )
 
     assert check_trajectories_match(observational_execution_result, result_single_pi)
@@ -116,7 +116,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
                     intervention=intervene_state,
                 ):
                     result_double_pi1 = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     assert check_trajectories_match(observational_execution_result, result_double_pi1)
@@ -135,7 +135,7 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
                     intervention=intervene_state,
                 ):
                     result_double_pi2 = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     assert check_trajectories_match(observational_execution_result, result_double_pi2)
@@ -146,12 +146,12 @@ def test_noop_point_interventions(model, init_state, tspan, intervene_state):
 @pytest.mark.parametrize("tspan", [tspan_values])
 def test_point_interruption_at_start(model, init_state, tspan):
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     with SimulatorEventLoop():
         with PointInterruption(time=1.0):
-            result_pint = simulate(model, init_state, tspan, backend=TorchDiffEq())
+            result_pint = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert check_trajectories_match(observational_execution_result, result_pint)
 
@@ -162,7 +162,7 @@ def test_point_interruption_at_start(model, init_state, tspan):
 @pytest.mark.parametrize("intervene_state", intervene_states)
 def test_noop_dynamic_interruption(model, init_state, tspan, intervene_state):
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     with SimulatorEventLoop():
@@ -172,6 +172,6 @@ def test_noop_dynamic_interruption(model, init_state, tspan, intervene_state):
             var_order=init_state.var_order,
             max_applications=1,
         ):
-            result_dint = simulate(model, init_state, tspan, backend=TorchDiffEq())
+            result_dint = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert check_trajectories_match(observational_execution_result, result_dint)

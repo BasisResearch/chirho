@@ -9,7 +9,7 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 
@@ -52,7 +52,7 @@ def test_point_intervention_causes_difference(
     model, init_state, tspan, intervene_state, intervene_time
 ):
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
@@ -62,11 +62,11 @@ def test_point_intervention_causes_difference(
                 with pytest.raises(
                     ValueError, match="occurred before the start of the timespan"
                 ):
-                    simulate(model, init_state, tspan, backend=TorchDiffEq())
+                    simulate(model, init_state, tspan, solver=TorchDiffEq())
                 return
             else:
                 result_single_pint = simulate(
-                    model, init_state, tspan, backend=TorchDiffEq()
+                    model, init_state, tspan, solver=TorchDiffEq()
                 )
 
     assert check_trajectories_match_in_all_but_values(
@@ -109,7 +109,7 @@ def test_nested_point_interventions_cause_difference(
     intervene_time2,
 ):
     observational_execution_result = simulate(
-        model, init_state, tspan, backend=TorchDiffEq()
+        model, init_state, tspan, solver=TorchDiffEq()
     )
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
@@ -120,7 +120,7 @@ def test_nested_point_interventions_cause_difference(
                     with pytest.raises(
                         ValueError, match="occurred before the start of the timespan"
                     ):
-                        simulate(model, init_state, tspan, backend=TorchDiffEq())
+                        simulate(model, init_state, tspan, solver=TorchDiffEq())
                     return
                 # AZ - We've decided to support this case and have interventions apply sequentially in the order
                 #  they are handled.
@@ -129,11 +129,11 @@ def test_nested_point_interventions_cause_difference(
                 #         ValueError,
                 #         match="Two point interruptions cannot occur at the same time.",
                 #     ):
-                #         simulate(model, init_state, tspan, backend=TorchDiffEq())
+                #         simulate(model, init_state, tspan, solver=TorchDiffEq())
                 #     return
                 else:
                     result_nested_pint = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     assert check_trajectories_match_in_all_but_values(
@@ -162,7 +162,7 @@ def test_twinworld_point_intervention(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -186,7 +186,7 @@ def test_multiworld_point_intervention(
             ):
                 with MultiWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -204,7 +204,7 @@ def test_split_odeint_broadcast(
 ):
     with TwinWorldCounterfactual() as cf:
         cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
-        trajectory = simulate(model, cf_init_state, tspan, backend=TorchDiffEq())
+        trajectory = simulate(model, cf_init_state, tspan, solver=TorchDiffEq())
 
     with cf:
         for k in trajectory.keys:
@@ -227,7 +227,7 @@ def test_twinworld_matches_output(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with SimulatorEventLoop():
@@ -235,10 +235,10 @@ def test_twinworld_matches_output(
             with PointIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
-                expected_cf = simulate(model, init_state, tspan, backend=TorchDiffEq())
+                expected_cf = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, tspan, backend=TorchDiffEq())
+        expected_factual = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     with cf:
         factual_indices = IndexSet(

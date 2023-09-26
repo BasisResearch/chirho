@@ -12,7 +12,7 @@ from chirho.dynamical.internals.ODE.ode_simulate import (
 )
 from chirho.dynamical.ops import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 if TYPE_CHECKING:
     from chirho.dynamical.internals.interruption import (
@@ -103,19 +103,19 @@ def _batched_odeint(
 
 @ode_simulate.register(TorchDiffEq)
 def torchdiffeq_ode_simulate(
-    backend: TorchDiffEq,
+    solver: TorchDiffEq,
     dynamics: ODEDynamics,
     initial_state: State[torch.Tensor],
     timespan,
 ):
     return _torchdiffeq_ode_simulate_inner(
-        dynamics, initial_state, timespan, **backend.odeint_kwargs
+        dynamics, initial_state, timespan, **solver.odeint_kwargs
     )
 
 
 @ode_simulate_to_interruption.register(TorchDiffEq)
 def torchdiffeq_ode_simulate_to_interruption(
-    backend: TorchDiffEq,
+    solver: TorchDiffEq,
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
     timespan,  # The first element of timespan is assumed to be the starting time.
@@ -133,7 +133,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = ode_simulate(dynamics, start_state, timespan, backend=backend)
+        trajectory = ode_simulate(dynamics, start_state, timespan, solver=solver)
         # TODO support event_dim > 0
         return trajectory, (), timespan[-1], trajectory[..., -1]
 
@@ -204,7 +204,7 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # Execute a standard, non-event based simulation on the new timespan.
-    trajectory = ode_simulate(dynamics, start_state, timespan_2nd_pass, backend=backend)
+    trajectory = ode_simulate(dynamics, start_state, timespan_2nd_pass, solver=solver)
 
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.

@@ -4,9 +4,9 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers import BackendHandler, SimulatorEventLoop
+from chirho.dynamical.handlers import SimulatorEventLoop, SolverHandler
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 from .dynamical_fixtures import bayes_sir_model, check_trajectories_match
 
@@ -35,16 +35,16 @@ def test_no_backend_SEL_error():
 def test_backend_arg():
     sir = bayes_sir_model()
     with SimulatorEventLoop():
-        result = simulate(sir, init_state, tspan, backend=TorchDiffEq())
+        result = simulate(sir, init_state, tspan, solver=TorchDiffEq())
     assert result is not None
 
 
 def test_backend_handler():
     sir = bayes_sir_model()
     with SimulatorEventLoop():
-        with BackendHandler(TorchDiffEq()):
+        with SolverHandler(TorchDiffEq()):
             result_handler = simulate(sir, init_state, tspan)
 
-        result_arg = simulate(sir, init_state, tspan, backend=TorchDiffEq())
+        result_arg = simulate(sir, init_state, tspan, solver=TorchDiffEq())
 
     assert check_trajectories_match(result_handler, result_arg)

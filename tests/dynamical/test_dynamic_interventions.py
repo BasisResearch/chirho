@@ -11,7 +11,7 @@ from chirho.counterfactual.handlers import (
 from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.dynamical.ops.ODE.backends import TorchDiffEq
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -82,7 +82,7 @@ def test_nested_dynamic_intervention_causes_change(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                res = simulate(model, init_state, tspan, backend=TorchDiffEq())
+                res = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -137,7 +137,7 @@ def test_dynamic_intervention_causes_change(
             var_order=init_state.var_order,
             max_applications=1,
         ):
-            res = simulate(model, init_state, tspan, backend=TorchDiffEq())
+            res = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -193,7 +193,7 @@ def test_split_twinworld_dynamic_intervention(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -234,7 +234,7 @@ def test_split_multiworld_dynamic_intervention(
             ):
                 with MultiWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -274,7 +274,7 @@ def test_split_twinworld_dynamic_matches_output(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, backend=TorchDiffEq()
+                        model, init_state, tspan, solver=TorchDiffEq()
                     )
 
     with SimulatorEventLoop():
@@ -290,10 +290,10 @@ def test_split_twinworld_dynamic_matches_output(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                expected_cf = simulate(model, init_state, tspan, backend=TorchDiffEq())
+                expected_cf = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, tspan, backend=TorchDiffEq())
+        expected_factual = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     with cf:
         factual_indices = IndexSet(
@@ -353,7 +353,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     # noinspection DuplicatedCode
     with SimulatorEventLoop():
         with dynamic_intervention:
-            traj = simulate(model, s0, torch.tensor([0.0, 10.0]), backend=TorchDiffEq())
+            traj = simulate(model, s0, torch.tensor([0.0, 10.0]), solver=TorchDiffEq())
 
     (dxdparam,) = torch.autograd.grad(
         outputs=(traj.x[-1],), inputs=(param,), create_graph=True
