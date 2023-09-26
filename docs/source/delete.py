@@ -141,6 +141,42 @@ def unflatten_dict(
     )
 
 
+def fisher_info_mat_slow(conditioned_model, flat_theta, D_model) -> torch.tensor:
+    N_monte_carlo = D_model[next(iter(D_model))].shape[0]
+    fisher_mat = torch.zeros((len(flat_theta), len(flat_theta)))
+    for n in range(int(N_monte_carlo)):
+        theta = unflatten_dict(flat_theta, theta_hat)
+        model_theta_hat_conditioned = condition(data=theta)(conditioned_model)
+        # Get nth datapoint
+        D_datapoint = {
+            "X": D_model["X"][[n]],
+            "A": D_model["A"][[n]],
+            "Y": D_model["Y"][[n]],
+        }
+
+        log_like_trace = pyro.poutine.trace(model_theta_hat_conditioned).get_trace(
+            D_datapoint
+        )
+        log_like_trace.log_prob_sum()
+        log_likelihood_fisher = (
+            log_like_trace.nodes["X"]["log_prob_sum"]
+            + log_like_trace.nodes["A"]["log_prob_sum"]
+            + log_like_trace.nodes["Y"]["log_prob_sum"]
+        )
+
+        scores_datapoint = collections.OrderedDict(
+            zip(
+                theta.keys(),
+                torch.autograd.grad(log_likelihood_fisher, theta.values()),
+            )
+        )
+        # print(pyro.poutine.trace(model_theta_hat_fisher).get_trace())
+        # return pyro.poutine.trace(model_theta_hat_fisher).get_trace()
+        scores_datapoint = flatten_dict(scores_datapoint)
+        fisher_mat += 1 / N_monte_carlo * scores_datapoint.outer(scores_datapoint)
+    return fisher_mat
+
+
 def monte_carlo_fisher_info_of_model(
     unconditioned_model: Callable[[], torch.tensor],  # simulates data
     conditioned_model: Callable[[], torch.tensor],  # computes log likelihood
@@ -231,10 +267,15 @@ def one_step_correction(
     )
 
     # compute the score function for the new data
-    log_likelihood_test = (
-        pyro.poutine.trace(model_theta_hat_conditioned).get_trace(X_test).log_prob_sum()
-        / X_test[next(iter(X_test))].shape[0]
+    log_likelihood_test = pyro.poutine.trace(model_theta_hat_conditioned).get_trace(
+        X_test
     )
+    log_likelihood_test.log_prob_sum()
+    log_likelihood_test = (
+        log_likelihood_test.nodes["X"]["log_prob_sum"]
+        + log_likelihood_test.nodes["A"]["log_prob_sum"]
+        + log_likelihood_test.nodes["Y"]["log_prob_sum"]
+    ) / X_test[next(iter(X_test))].shape[0]
 
     scores = flatten_dict(
         collections.OrderedDict(
@@ -244,6 +285,33 @@ def one_step_correction(
             )
         )
     )
+
+    # TODO: remove this
+    ####################
+    def _log_prob_at_datapoints(flat_theta: torch.tensor):
+        # Need to duplicate conditioning on theta for pytorch to register gradients (TODO: any fix?)
+        theta = unflatten_dict(flat_theta, theta_hat)
+        model_theta_hat_conditioned = condition(data=theta)(conditioned_model)
+        log_like_trace = pyro.poutine.trace(model_theta_hat_conditioned).get_trace(
+            X_test
+        )
+        log_like_trace.compute_log_prob()
+        log_prob_at_datapoints = torch.zeros(X_test[next(iter(X_test))].shape[0])
+        for name in obs_names:
+            log_prob_at_datapoints += log_like_trace.nodes[name]["log_prob"]
+
+        return log_prob_at_datapoints
+
+    log_prob_grads_at_test = torch.autograd.functional.jacobian(
+        _log_prob_at_datapoints, flat_theta
+    )
+
+    with pyro.poutine.trace() as model_tr:
+        model_theta_hat_unconditioned(N=N_monte_carlo)
+    D_model = {k: model_tr.trace.nodes[k]["value"] for k in obs_names}
+    fisher_slow = fisher_info_mat_slow(conditioned_model, flat_theta, D_model)
+    inverse_slow = torch.inverse(fisher_slow)
+    ###################
 
     # compute inverse fisher information matrix
     fisher_info_approx = monte_carlo_fisher_info_of_model(
@@ -256,7 +324,17 @@ def one_step_correction(
     # compute the correction
     import pdb
 
+    correction_scores = torch.einsum(
+        "i,ij,jk->k", plug_in_grads, inverse_fisher_info, log_prob_grads_at_test.T
+    )
+    (torch.abs(correction_scores - kennedy_correction_vec)).max()
+
+    correction_scores_slow = torch.einsum(
+        "i,ij,jk->k", plug_in_grads, inverse_slow, log_prob_grads_at_test.T
+    )
+
     pdb.set_trace()
+
     return torch.einsum("i,ij,j->", plug_in_grads, inverse_fisher_info, scores)
 
 
@@ -275,6 +353,12 @@ with pyro.poutine.trace() as test_tr:
 
 D_train = {k: train_tr.trace.nodes[k]["value"] for k in ["X", "A", "Y"]}
 D_test = {k: test_tr.trace.nodes[k]["value"] for k in ["X", "A", "Y"]}
+
+# X_ex = torch.tensor([[1.12345]])
+# A_ex = torch.tensor([1.0])
+# Y_ex = torch.tensor([2.213])
+# N_test = 1
+# D_test = {"X": X_ex, "A": A_ex, "Y": Y_ex}
 
 
 # Fit model to training data (uncorrected)
@@ -355,8 +439,8 @@ def closed_form_correction(X_test, theta):
     pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
     mu_X = X.mv(theta["outcome_weights"]) + A * theta["treatment_weight"]
 
-    kennedy_correction = (A / pi_X + (1 - A) / (1 - pi_X)) * (Y - mu_X)
-    return kennedy_correction.mean()
+    kennedy_correction = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
+    return kennedy_correction.mean(), kennedy_correction
 
 
 unconditioned_model = KnownCovariateDistModel(p, gaussian_link)
@@ -364,9 +448,9 @@ model_cond_theta = condition(data=theta_hat)(unconditioned_model)
 
 ATE_plugin = ATE_3(model_cond_theta, num_samples=10000)
 print("ATE plugin", ATE_plugin)
+kennedy_correction, kennedy_correction_vec = closed_form_correction(D_test, theta_hat)
 
-
-print("Kennedy closed-form correction", closed_form_correction(D_test, theta_hat))
+print("Kennedy closed-form correction", kennedy_correction)
 
 
 ATE_correction = one_step_correction(
@@ -377,7 +461,7 @@ ATE_correction = one_step_correction(
     theta_hat,
     D_test,
     eps_fisher=0.0,
-    N_monte_carlo=50000,
+    N_monte_carlo=int(1e5),
 )
 ATE_onestep = ATE_plugin + ATE_correction
 print(ATE_plugin, ATE_correction, ATE_onestep)

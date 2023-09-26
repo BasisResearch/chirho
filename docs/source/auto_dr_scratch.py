@@ -163,9 +163,9 @@ theta_hat = {
 #     ConditionModelTrain(N_train, p, gaussian_link)()
 
 # Compute EIF from Kennedy
-X_ex = torch.tensor([[0.12345]])
+X_ex = torch.tensor([[1.12345]])
 A_ex = torch.tensor([1.0])
-Y_ex = torch.tensor([0.213])
+Y_ex = torch.tensor([2.213])
 
 pi_X = torch.sigmoid(X_ex * theta_hat["propensity_weights"])
 mu_X = (
@@ -174,8 +174,10 @@ mu_X = (
 
 kennedy_correction = A_ex / pi_X * (Y_ex - mu_X)
 
+print(kennedy_correction.mean())
+
 # Compute EIF via fisher info formula
-N_monte_carlo = 1e4
+N_monte_carlo = 5e4
 model = KnownCovariateDistModel(N_monte_carlo, p, gaussian_link)
 theta_hat = collections.OrderedDict((k, theta_hat[k]) for k in sorted(theta_hat.keys()))
 model_theta_hat = condition(data=theta_hat)(model)
@@ -286,6 +288,19 @@ fisher_info_approx = fisher_info_mat(flatten_dict(theta_hat))
 inverse_fisher_info = torch.inverse(fisher_info_approx)
 
 # This should match the kennedy formula
-torch.einsum(
-    "i,ij,j->", torch.tensor([0.0, 0.0, 1.0]), inverse_fisher_info, flatten_dict(scores)
+print(
+    torch.einsum(
+        "i,ij,j->",
+        torch.tensor([0.0, 0.0, 1.0]),
+        inverse_fisher_info,
+        flatten_dict(scores),
+    )
 )
+
+
+# plug_in = ATE_4(model_theta_hat) + (
+#     0 * sum(theta_hat[k].sum() for k in theta_hat.keys())
+# )
+# plug_in_grads = collections.OrderedDict(
+#     zip(theta_hat.keys(), torch.autograd.grad(plug_in, theta_hat.values()))
+# )
