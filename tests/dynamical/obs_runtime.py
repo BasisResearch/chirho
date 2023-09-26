@@ -9,12 +9,12 @@ from pyro.distributions import Normal, Uniform
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    NonInterruptingPointObservation,
-    ODEDynamics,
+    NonInterruptingPointObservationArray,
     SimulatorEventLoop,
-    simulate,
 )
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops.ODE import ODEDynamics
+from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 
 class SimpleSIRDynamicsBayes(ODEDynamics):
@@ -55,7 +55,7 @@ def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
     for obs in data.values():
         obs_time = obs[0].item()
         obs_data = obs[1]
-        managers.append(NonInterruptingPointObservation(obs_time, obs_data))
+        managers.append(NonInterruptingPointObservationArray(obs_time, obs_data))
     if include_dynamic_intervention:
         event_f = make_event_fn(State(I=torch.tensor(30.0)))
         managers.append(
