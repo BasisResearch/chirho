@@ -460,7 +460,11 @@ def closed_form_correction(X_test, theta):
     Y = X_test["Y"]
     # Compute EIF from Kennedy
     pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
-    mu_X = X.mv(theta["outcome_weights"]) + A * theta["treatment_weight"]
+    mu_X = (
+        X.mv(theta["outcome_weights"])
+        + A * theta["treatment_weight"]
+        + (1 - A) * theta["treatment_null_weight"]
+    )
 
     kennedy_correction = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     return kennedy_correction.mean(), kennedy_correction
