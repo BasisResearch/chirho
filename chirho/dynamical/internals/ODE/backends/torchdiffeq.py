@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, TypeVar
 import torch
 import torchdiffeq
 
+from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.internals.ODE.ode_simulate import (
     ode_simulate,
     ode_simulate_to_interruption,
 )
-from chirho.dynamical.ops import State, Trajectory
+from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
-from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 if TYPE_CHECKING:
     from chirho.dynamical.internals.interruption import (

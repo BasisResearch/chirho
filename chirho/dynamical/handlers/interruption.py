@@ -7,7 +7,7 @@ import pyro
 import torch
 
 from chirho.dynamical.internals.interventional import intervene
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops.dynamical import State
 from chirho.observational.handlers import condition
 
 S = TypeVar("S")

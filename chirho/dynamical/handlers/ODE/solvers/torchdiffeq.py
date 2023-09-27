@@ -1,7 +1,7 @@
-from chirho.dynamical.ops.ODE import ODEBackend
+from chirho.dynamical.handlers.ODE.ode import ODESolver
 
 
-class TorchDiffEq(ODEBackend):
+class TorchDiffEq(ODESolver):
     def __init__(self, rtol=1e-7, atol=1e-9, method=None, options=None):
         self.rtol = rtol
         self.atol = atol
@@ -13,3 +13,4 @@ class TorchDiffEq(ODEBackend):
             "method": method,
             "options": options,
         }
+        super().__init__()

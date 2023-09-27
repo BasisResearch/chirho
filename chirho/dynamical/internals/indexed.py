@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from chirho.dynamical.ops import State, Trajectory
+from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 S = TypeVar("S")

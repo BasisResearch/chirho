@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TypeVar
 
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops.dynamical import State
 from chirho.interventional.handlers import intervene
 
 T = TypeVar("T")

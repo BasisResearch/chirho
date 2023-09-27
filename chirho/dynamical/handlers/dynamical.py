@@ -16,16 +16,13 @@ from chirho.dynamical.internals.interruption import (
     concatenate,
     simulate_to_interruption,
 )
-from chirho.dynamical.ops import Trajectory
+from chirho.dynamical.ops.dynamical import Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
-    def __enter__(self):
-        return super().__enter__()
-
     # noinspection PyMethodMayBeStatic
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
@@ -100,7 +97,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
             last = default_terminal_interruption in terminal_interruptions
 
-            # Update the full trajectory.
+            # Update the full trajectory
             if first:
                 full_trajs.append(span_traj)
             else:

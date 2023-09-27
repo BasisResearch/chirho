@@ -3,9 +3,10 @@ from __future__ import annotations
 import functools
 from typing import TypeVar
 
+from chirho.dynamical.handlers.ODE import ODESolver
 from chirho.dynamical.internals.interruption import simulate_to_interruption
-from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE import ODEBackend, ODEDynamics
+from chirho.dynamical.ops.dynamical import State, simulate
+from chirho.dynamical.ops.ODE import ODEDynamics
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -17,7 +18,7 @@ def ode_simulate(
     initial_state: State[T],
     timespan,
     *,
-    solver: ODEBackend,
+    solver: ODESolver,
     **kwargs,
 ):
     return _ode_simulate(solver, dynamics, initial_state, timespan, **kwargs)
@@ -25,7 +26,7 @@ def ode_simulate(
 
 @functools.singledispatch
 def _ode_simulate(
-    solver: ODEBackend,
+    solver: ODESolver,
     dynamics: ODEDynamics,
     initial_state: State[T],
     timespan,
@@ -48,7 +49,7 @@ def ode_simulate_to_interruption(
     initial_state: State[T],
     timespan,
     *,
-    solver: ODEBackend,
+    solver: ODESolver,
     **kwargs,
 ):
     return _ode_simulate_to_interruption(
@@ -58,7 +59,7 @@ def ode_simulate_to_interruption(
 
 @functools.singledispatch
 def _ode_simulate_to_interruption(
-    solver: ODEBackend,
+    solver: ODESolver,
     dynamics: ODEDynamics,
     initial_state: State[T],
     timespan,

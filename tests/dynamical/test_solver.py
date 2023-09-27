@@ -4,9 +4,9 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers import SimulatorEventLoop, SolverHandler
+from chirho.dynamical.handlers import SimulatorEventLoop
+from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE.solvers import TorchDiffEq
 
 from .dynamical_fixtures import bayes_sir_model, check_trajectories_match
 
@@ -42,7 +42,7 @@ def test_backend_arg():
 def test_backend_handler():
     sir = bayes_sir_model()
     with SimulatorEventLoop():
-        with SolverHandler(TorchDiffEq()):
+        with TorchDiffEq():
             result_handler = simulate(sir, init_state, tspan)
 
         result_arg = simulate(sir, init_state, tspan, solver=TorchDiffEq())
