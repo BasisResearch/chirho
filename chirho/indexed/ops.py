@@ -278,10 +278,10 @@ def cond(fst, snd, case: Optional[T] = None, **kwargs):
     Unlike a Python conditional expression, however, the case may be a tensor,
     and both branches are evaluated, as with :func:`torch.where` ::
 
-        >> fst, snd = torch.randn(2, 3), torch.randn(2, 3)
-        >> case = (fst < snd).all(-1)
-        >> x = cond(fst, snd, case, event_dim=1)
-        >> assert (x == torch.where(case[..., None], snd, fst)).all()
+        >>> fst, snd = torch.randn(2, 3), torch.randn(2, 3)
+        >>> case = (fst < snd).all(-1)
+        >>> x = cond(fst, snd, case, event_dim=1)
+        >>> assert (x == torch.where(case[..., None], snd, fst)).all()
 
     .. note::
 
