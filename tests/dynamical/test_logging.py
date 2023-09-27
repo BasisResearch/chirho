@@ -15,15 +15,17 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
+start_time = torch.tensor(0.0)
+end_time = torch.tensor(4.0)
+logging_times = torch.tensor([1.0, 2.0, 3.0])
 
 
 def test_logging():
     sir = bayes_sir_model()
     with TrajectoryLogging(
-        tspan=tspan
+        logging_times=logging_times,
     ):  # Not used yet. Will replace tspan in simulate() call.
         with SimulatorEventLoop():
-            result = simulate(sir, init_state, tspan, solver=TorchDiffEq())
+            result = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert result is not None

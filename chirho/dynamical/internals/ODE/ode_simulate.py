@@ -16,12 +16,13 @@ T = TypeVar("T")
 def ode_simulate(
     dynamics: ODEDynamics,
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     *,
     solver: ODESolver,
     **kwargs,
 ):
-    return _ode_simulate(solver, dynamics, initial_state, timespan, **kwargs)
+    return _ode_simulate(solver, dynamics, initial_state, start_time, end_time, **kwargs)
 
 
 @functools.singledispatch
@@ -29,7 +30,8 @@ def _ode_simulate(
     solver: ODESolver,
     dynamics: ODEDynamics,
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     **kwargs,
 ):
     """
@@ -47,13 +49,14 @@ ode_simulate.register = _ode_simulate.register
 def ode_simulate_to_interruption(
     dynamics: ODEDynamics,
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     *,
     solver: ODESolver,
     **kwargs,
 ):
     return _ode_simulate_to_interruption(
-        solver, dynamics, initial_state, timespan, **kwargs
+        solver, dynamics, initial_state, start_time, end_time, **kwargs
     )
 
 
@@ -62,7 +65,8 @@ def _ode_simulate_to_interruption(
     solver: ODESolver,
     dynamics: ODEDynamics,
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     **kwargs,
 ):
     """

@@ -128,7 +128,8 @@ class Dynamics(Protocol[S, T]):
 def simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     *,
     solver: Optional[Solver] = None,
     **kwargs,
@@ -142,9 +143,9 @@ def simulate(
             " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
             "`with SimulatorEventLoop():` \n"
             "\t `with TorchDiffEq():` \n"
-            "\t \t `simulate(dynamics, initial_state, timespan)`"
+            "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)
+    return _simulate(dynamics, initial_state, start_time, end_time, solver=solver, **kwargs)
 
 
 # This redirection distinguishes between the effectful operation, and the
@@ -153,7 +154,8 @@ def simulate(
 def _simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    timespan,
+    start_time,
+    end_time,
     *,
     solver: Optional[Solver] = None,
     **kwargs,

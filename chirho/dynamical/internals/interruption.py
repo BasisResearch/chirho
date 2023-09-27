@@ -25,7 +25,8 @@ T = TypeVar("T")
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    timespan,  # The first element of timespan is assumed to be the starting time.
+    start_time,
+    end_time,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
@@ -44,7 +45,8 @@ def simulate_to_interruption(
     return _simulate_to_interruption(
         dynamics,
         start_state,
-        timespan,
+        start_time,
+        end_time,
         solver=solver,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
@@ -57,7 +59,8 @@ def simulate_to_interruption(
 def _simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    timespan,  # The first element of timespan is assumed to be the starting time.
+    start_time,
+    end_time,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
