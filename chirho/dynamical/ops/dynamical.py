@@ -128,12 +128,12 @@ class Dynamics(Protocol[S, T]):
 def simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     **kwargs,
-) -> Trajectory[T]:
+) -> State[T]:
     """
     Simulate a dynamical system.
     """
@@ -145,7 +145,9 @@ def simulate(
             "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(dynamics, initial_state, start_time, end_time, solver=solver, **kwargs)
+    return _simulate(
+        dynamics, initial_state, start_time, end_time, solver=solver, **kwargs
+    )
 
 
 # This redirection distinguishes between the effectful operation, and the
@@ -154,12 +156,12 @@ def simulate(
 def _simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     **kwargs,
-) -> Trajectory[T]:
+) -> State[T]:
     """
     Simulate a dynamical system.
     """

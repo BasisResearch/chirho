@@ -106,11 +106,15 @@ def torchdiffeq_ode_simulate(
     solver: TorchDiffEq,
     dynamics: ODEDynamics,
     initial_state: State[torch.Tensor],
-    timespan,
-):
-    return _torchdiffeq_ode_simulate_inner(
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
+) -> State[torch.Tensor]:
+    timespan = torch.stack((start_time, end_time))
+    trajectory = _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )
+
+    return trajectory[..., -1]
 
 
 @ode_simulate_to_interruption.register(TorchDiffEq)
@@ -118,24 +122,26 @@ def torchdiffeq_ode_simulate_to_interruption(
     solver: TorchDiffEq,
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
-    timespan,  # The first element of timespan is assumed to be the starting time.
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
     *,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
 ) -> Tuple[
-    Trajectory[torch.Tensor],
+    State[torch.Tensor],
     Tuple["Interruption", ...],
     torch.Tensor,
-    State[torch.Tensor],
 ]:
     nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        trajectory = ode_simulate(dynamics, start_state, timespan, solver=solver)
+        end_state = ode_simulate(dynamics, start_state, start_time, end_time, solver=solver)
         # TODO support event_dim > 0
-        return trajectory, (), timespan[-1], trajectory[..., -1]
+        return end_state, (), end_time 
+    
+    # TODO: Pick up here.
 
     # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
     #  for the many possibilities, this can be optimized.

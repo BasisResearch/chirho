@@ -25,7 +25,10 @@ def test_logging():
     with TrajectoryLogging(
         logging_times=logging_times,
     ):  # Not used yet. Will replace tspan in simulate() call.
-        with SimulatorEventLoop():
-            result = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+        result1 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
-    assert result is not None
+        with SimulatorEventLoop():
+            result2 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+    assert type(result1) == State
+    assert result1 is not None
+    assert result2 is not None

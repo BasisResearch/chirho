@@ -25,22 +25,19 @@ T = TypeVar("T")
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
+) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     """
-    Simulate a dynamical system until the next interruption. Return the state at the requested time points, and
-     a collection of interruptions that ended the simulation (this will usually just be a single interruption).
-    This will be either one of the passed dynamic interruptions or the next static interruption, whichever comes
-     first.
-    :returns: the state at the requested time points, the interruption that ended the simulation, the time at which
-     the simulation ended, and the end state. The initial trajectory object does not include state measurements at
-     the end-point.
+    Simulate a dynamical system until the next interruption. This will be either one of the passed 
+    dynamic interruptions or the next static interruption, whichever comes first.
+    :returns: the final state, a collection of interruptions that ended the simulation 
+    (this will usually just be a single interruption), and the time the interruption occurred.
     """
     return _simulate_to_interruption(
         dynamics,
@@ -59,14 +56,14 @@ def simulate_to_interruption(
 def _simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
+) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     raise NotImplementedError(
         f"simulate_to_interruption not implemented for type {type(dynamics)}"
     )

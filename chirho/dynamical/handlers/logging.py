@@ -9,7 +9,7 @@ T = TypeVar("T")
 
 class TrajectoryLogging(Generic[T], pyro.poutine.messenger.Messenger):
     def __init__(self, logging_times: T):
-        self.tspan = logging_times
+        self.logging_times = logging_times
         super().__init__()
 
     def _pyro_simulate(self, msg) -> None:

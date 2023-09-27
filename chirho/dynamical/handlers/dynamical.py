@@ -25,7 +25,7 @@ T = TypeVar("T")
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     # noinspection PyMethodMayBeStatic
     def _pyro_simulate(self, msg) -> None:
-        dynamics, initial_state, full_timespan = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
         if "solver" in msg["kwargs"]:
             solver = msg["kwargs"]["solver"]
         else:
@@ -34,17 +34,18 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
         # Initial values. These will be updated in the loop below.
         span_start_state = initial_state
-        span_timespan = full_timespan
+        span_start_time = start_time
+        # span_timespan = full_timespan
 
         # We use interruption mechanics to stop the timespan at the right point.
         default_terminal_interruption = PointInterruption(
-            time=span_timespan[-1],
+            time=end_time,
         )
 
-        full_trajs: List[Trajectory[T]] = []
+        # full_trajs: List[Trajectory[T]] = []
         first = True
 
-        last_terminal_interruptions: Tuple[Interruption, ...] = tuple()
+        previous_terminal_interruptions: Tuple[Interruption, ...] = tuple()
         interruption_counts: Dict[Interruption, int] = dict()
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
@@ -54,7 +55,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             #  simulation.
             with pyro.poutine.messenger.block_messengers(
                 lambda m: isinstance(m, Interruption)
-                and m not in last_terminal_interruptions
+                and m not in previous_terminal_interruptions
             ):
                 dynamics, span_start_state = apply_interruptions(
                     dynamics, span_start_state
@@ -67,14 +68,14 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 and m.max_applications <= interruption_counts.get(m, 0)
             ):
                 (
-                    span_traj,
+                    end_state,
                     terminal_interruptions,
                     end_time,
-                    end_state,
                 ) = simulate_to_interruption(  # This call gets handled by interruption handlers.
                     dynamics,
                     span_start_state,
-                    span_timespan,
+                    span_start_time,
+                    end_time,
                     solver=solver,
                     # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
                     #  interruption handlers may replace this with themselves if they happen before the end.
@@ -126,7 +127,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             span_start_state = end_state
 
             # Use these to block interruption handlers that weren't responsible for the last interruption.
-            last_terminal_interruptions = terminal_interruptions
+            previous_terminal_interruptions = terminal_interruptions
 
             first = False
 

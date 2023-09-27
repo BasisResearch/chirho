@@ -16,13 +16,15 @@ T = TypeVar("T")
 def ode_simulate(
     dynamics: ODEDynamics,
     initial_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     *,
     solver: ODESolver,
     **kwargs,
-):
-    return _ode_simulate(solver, dynamics, initial_state, start_time, end_time, **kwargs)
+) -> State[T]:
+    return _ode_simulate(
+        solver, dynamics, initial_state, start_time, end_time, **kwargs
+    )
 
 
 @functools.singledispatch
@@ -30,10 +32,10 @@ def _ode_simulate(
     solver: ODESolver,
     dynamics: ODEDynamics,
     initial_state: State[T],
-    start_time,
-    end_time,
+    start_time: T,
+    end_time: T,
     **kwargs,
-):
+) -> State[T]:
     """
     Simulate an ODE dynamical system
     """
