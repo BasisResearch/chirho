@@ -23,7 +23,6 @@ T = TypeVar("T")
 
 
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
-
     # noinspection PyMethodMayBeStatic
     def _pyro_simulate(self, msg) -> None:
         dynamics, initial_state, full_timespan = msg["args"]
