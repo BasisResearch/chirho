@@ -9,4 +9,5 @@ from .interruption import (  # noqa: F401
     PointIntervention,
     PointObservation,
 )
+from .logging import TrajectoryLogging  # noqa: F401
 from .solver import Solver  # noqa: F401
