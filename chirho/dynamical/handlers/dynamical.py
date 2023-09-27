@@ -98,7 +98,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
             last = default_terminal_interruption in terminal_interruptions
 
-            # Update the full trajectory.
+            # Update the full trajectory
             if first:
                 full_trajs.append(span_traj)
             else:
