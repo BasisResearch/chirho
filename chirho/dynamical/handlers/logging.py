@@ -4,7 +4,6 @@ from typing import Generic, TypeVar
 
 import pyro
 
-S = TypeVar("S")
 T = TypeVar("T")
 
 
