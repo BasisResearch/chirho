@@ -34,9 +34,9 @@ def simulate_to_interruption(
     **kwargs,
 ) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     """
-    Simulate a dynamical system until the next interruption. This will be either one of the passed 
+    Simulate a dynamical system until the next interruption. This will be either one of the passed
     dynamic interruptions or the next static interruption, whichever comes first.
-    :returns: the final state, a collection of interruptions that ended the simulation 
+    :returns: the final state, a collection of interruptions that ended the simulation
     (this will usually just be a single interruption), and the time the interruption occurred.
     """
     return _simulate_to_interruption(

@@ -128,22 +128,18 @@ def torchdiffeq_ode_simulate_to_interruption(
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[
-    State[torch.Tensor],
-    Tuple["Interruption", ...],
-    torch.Tensor,
-]:
+) -> Tuple[State[torch.Tensor], Tuple["Interruption", ...], torch.Tensor]:
     nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        end_state = ode_simulate(dynamics, start_state, start_time, end_time, solver=solver)
+        end_state = ode_simulate(
+            dynamics, start_state, start_time, end_time, solver=solver
+        )
         # TODO support event_dim > 0
-        return end_state, (), end_time 
-    
-    # Note: We can probably add an additional early return when there is only a static interruption.
+        return end_state, (), end_time
 
-    # TODO: Pick up here.
+    # Note: We can probably add an additional early return when there is only a static interruption.
 
     # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
     #  for the many possibilities, this can be optimized.
@@ -167,22 +163,28 @@ def torchdiffeq_ode_simulate_to_interruption(
     )
 
     # Simulate to the event execution.
-    event_time, event_states = _batched_odeint(  # torchdiffeq.odeint_event(
+    event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
         functools.partial(_deriv, dynamics, start_state.var_order),
         tuple(getattr(start_state, v) for v in start_state.var_order),
-        timespan[0],
+        start_time,
         event_fn=combined_event_f,
     )
 
     # event_state has both the first and final state of the interrupted simulation. We just want the last.
-    event_state: Tuple[torch.Tensor, ...] = tuple(
-        s[..., -1] for s in event_states
+    event_solution: Tuple[torch.Tensor, ...] = tuple(
+        s[..., -1] for s in event_solutions
     )  # TODO support event_dim > 0
+
+    event_state: State[torch.Tensor] = State()
+    for var, solution in zip(start_state.var_order, event_solution):
+        setattr(event_state, var, solution)
+
+    assert isinstance(event_state, State)
 
     # Check which event(s) fired, and put the triggered events in a list.
     # TODO support batched outputs of event functions
     fired_mask = torch.isclose(
-        combined_event_f(event_time, event_state),
+        combined_event_f(event_time, event_solution),
         torch.tensor(0.0),
         rtol=1e-02,
         atol=1e-03,
@@ -206,22 +208,13 @@ def torchdiffeq_ode_simulate_to_interruption(
     if fired_mask[-1]:
         triggered_events.append(next_static_interruption)
 
-    # Construct a new timespan that cuts off measurements after the event fires, but that includes the event time.
-    timespan_2nd_pass = torch.cat(
-        (timespan[timespan < event_time], event_time.unsqueeze(0))
-    )
-
-    # Execute a standard, non-event based simulation on the new timespan.
-    trajectory = ode_simulate(dynamics, start_state, timespan_2nd_pass, solver=solver)
-
     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
     #  events, the time of the triggered event, and the state at the time of the triggered event.
     # TODO support event_dim > 0
     return (
-        trajectory[..., :-1],
+        event_state,
         tuple(triggered_events),
         event_time,
-        trajectory[..., -1],
     )
 
 

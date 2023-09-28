@@ -7,7 +7,7 @@ from chirho.dynamical.handlers import SimulatorEventLoop, TrajectoryLogging
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import bayes_sir_model
+from .dynamical_fixtures import bayes_sir_model, check_states_match
 
 pyro.settings.set(module_local_params=True)
 
@@ -28,7 +28,8 @@ def test_logging():
         result1 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
         with SimulatorEventLoop():
-            result2 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
-    assert type(result1) == State
-    assert result1 is not None
-    assert result2 is not None
+            result2 = simulate(
+                sir, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
+    assert isinstance(result1, State)
+    assert check_states_match(result1, result2)

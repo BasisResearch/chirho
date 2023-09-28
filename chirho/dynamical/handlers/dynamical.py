@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import warnings
-from typing import Dict, Generic, List, Tuple, TypeVar
+from typing import Dict, Generic, Tuple, TypeVar
 
 import pyro
-import torch
 
 from chirho.dynamical.handlers.interruption import (
     DynamicInterruption,
@@ -13,10 +12,8 @@ from chirho.dynamical.handlers.interruption import (
 )
 from chirho.dynamical.internals.interruption import (
     apply_interruptions,
-    concatenate,
     simulate_to_interruption,
 )
-from chirho.dynamical.ops.dynamical import Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -35,15 +32,11 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         # Initial values. These will be updated in the loop below.
         span_start_state = initial_state
         span_start_time = start_time
-        # span_timespan = full_timespan
 
         # We use interruption mechanics to stop the timespan at the right point.
         default_terminal_interruption = PointInterruption(
             time=end_time,
         )
-
-        # full_trajs: List[Trajectory[T]] = []
-        first = True
 
         previous_terminal_interruptions: Tuple[Interruption, ...] = tuple()
         interruption_counts: Dict[Interruption, int] = dict()
@@ -70,7 +63,7 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 (
                     end_state,
                     terminal_interruptions,
-                    end_time,
+                    interruption_time,
                 ) = simulate_to_interruption(  # This call gets handled by interruption handlers.
                     dynamics,
                     span_start_state,
@@ -96,32 +89,14 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     interruption_counts.get(interruption, 0) + 1
                 )
 
-            last = default_terminal_interruption in terminal_interruptions
-
-            # Update the full trajectory
-            if first:
-                full_trajs.append(span_traj)
-            else:
-                # Hack off the end time of the previous simulate_to_interruption, as the user didn't request this.
-                # if any(s == 0 for k in span_traj.keys for s in getattr(span_traj[..., 1:], k).shape):
-                #     full_trajs.append(span_traj[..., 1:])
-                # TODO support event_dim > 0
-                span_traj_: Trajectory[T] = span_traj[..., 1:]
-                full_trajs.append(span_traj_)
-
             # If we've reached the end of the timespan, break.
-            if last:
-                # The end state in this case will be the final tspan requested by the user, so we need to include.
-                # TODO support event_dim > 0
-                full_trajs.append(end_state.trajectorify())
+            if default_terminal_interruption in terminal_interruptions:
                 break
 
-            # Construct the next timespan so that we simulate from the prevous interruption time.
+            # Set the span_start_time for the next iteration to be the interruption time from the previous.
             # TODO AZ — we should be able to detect when this eps is too small, as it will repeatedly trigger
             #  the same event at the same time.
-            span_timespan = torch.cat(
-                (end_time.unsqueeze(0), full_timespan[full_timespan > end_time])
-            )
+            span_start_time = interruption_time
 
             # Update the starting state.
             span_start_state = end_state
@@ -129,7 +104,5 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             # Use these to block interruption handlers that weren't responsible for the last interruption.
             previous_terminal_interruptions = terminal_interruptions
 
-            first = False
-
-        msg["value"] = concatenate(*full_trajs)
+        msg["value"] = end_state
         msg["done"] = True
