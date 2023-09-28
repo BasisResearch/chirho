@@ -141,6 +141,8 @@ def torchdiffeq_ode_simulate_to_interruption(
         # TODO support event_dim > 0
         return end_state, (), end_time 
     
+    # Note: We can probably add an additional early return when there is only a static interruption.
+
     # TODO: Pick up here.
 
     # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
