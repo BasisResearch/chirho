@@ -8,11 +8,10 @@ import torchdiffeq
 
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.internals.ODE.ode_simulate import (
-    ode_get_next_interruptions,
+    ode_get_next_interruptions_dynamic,
     ode_simulate,
-    # ode_simulate_to_interruption,
 )
-from chirho.dynamical.ops.dynamical import State, Trajectory, simulate
+from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
 
 if TYPE_CHECKING:
@@ -118,17 +117,17 @@ def torchdiffeq_ode_simulate(
     return trajectory[..., -1]
 
 
-@ode_get_next_interruptions.register(TorchDiffEq)
-def torchdiffeq_get_next_interruptions(
+@ode_get_next_interruptions_dynamic.register(TorchDiffEq)
+def torchdiffeq_get_next_interruptions_dynamic(
     solver: TorchDiffEq,
-    dynamics: ODEDynamics,
+    dynamics: ODEDynamics[torch.Tensor, torch.Tensor],
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
     *,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[torch.Tensor, Tuple["Interruption", ...]]:
+) -> Tuple[Tuple["Interruption", ...], torch.Tensor]:
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
         next_static_interruption, dynamic_interruptions

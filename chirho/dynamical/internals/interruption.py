@@ -1,17 +1,14 @@
-from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar
-
-if TYPE_CHECKING:
-    from chirho.dynamical.handlers import (
-        DynamicInterruption,
-        PointInterruption,
-        Interruption,
-    )
-
 import functools
+from typing import List, Optional, Tuple, TypeVar
 
 import pyro
 import torch
 
+from chirho.dynamical.handlers.interruption import (
+    DynamicInterruption,
+    Interruption,
+    PointInterruption,
+)
 from chirho.dynamical.handlers.solver import Solver
 from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
 
@@ -30,7 +27,7 @@ def simulate_to_interruption(
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
-    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
 ) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     """
@@ -39,60 +36,74 @@ def simulate_to_interruption(
     :returns: the final state, a collection of interruptions that ended the simulation
     (this will usually just be a single interruption), and the time the interruption occurred.
     """
-    nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
-    nostat = next_static_interruption is None
-
-    if nostat and nodyn:
-        end_state = simulate(dynamics, start_state, start_time, end_time, solver=solver)
-        return end_state, (), end_time
-
-    if nodyn:
-        next_static_interruption: PointInterruption  # Linter needs some help here.
-
-        event_state = simulate(
-            dynamics,
-            start_state,
-            start_time,
-            next_static_interruption.time,
-            solver=solver,
-        )
-        return event_state, (next_static_interruption,), next_static_interruption.time
-
-    if dynamic_interruptions is None:
-        dynamic_interruptions = []
-
-    if next_static_interruption is None:
-        next_static_interruption = PointInterruption(time=end_time)
-
-    interruption_time, interruptions = get_next_interruptions(
+    interruptions, interruption_time = get_next_interruptions(
         dynamics,
         start_state,
         start_time,
+        end_time,
         solver=solver,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
         **kwargs,
     )
+
     event_state = simulate(
         dynamics, start_state, start_time, interruption_time, solver=solver
     )
     return event_state, interruptions, interruption_time
 
 
-# noinspection PyUnusedLocal
-@functools.singledispatch
 def get_next_interruptions(
     dynamics: Dynamics[S, T],
     start_state: State[T],
     start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
-    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
-) -> Tuple[T, Tuple["Interruption", ...]]:
+) -> Tuple[Tuple["Interruption", ...], T]:
+
+    nodyn = len(dynamic_interruptions) == 0
+    nostat = next_static_interruption is None
+
+    if nostat:
+        next_static_interruption = PointInterruption(time=end_time)
+
+    assert type(next_static_interruption) is PointInterruption  # Linter needs a hint
+
+    if nodyn:
+        interruptions = (next_static_interruption,)
+        interruption_time = next_static_interruption.time
+    else:
+        if nostat:
+            interruptions, interruption_time = get_next_interruptions_dynamic(
+                dynamics,
+                start_state,
+                start_time,
+                solver=solver,
+                next_static_interruption=next_static_interruption,
+                dynamic_interruptions=dynamic_interruptions,
+                **kwargs,
+            )
+    return interruptions, interruption_time
+
+
+# noinspection PyUnusedLocal
+@functools.singledispatch
+def get_next_interruptions_dynamic(
+    dynamics: Dynamics[S, T],
+    start_state: State[T],
+    start_time: T,
+    next_static_interruption: "PointInterruption",
+    dynamic_interruptions: List["DynamicInterruption"],
+    *,
+    solver: Optional[Solver] = None,
+    **kwargs,
+) -> Tuple[Tuple["Interruption", ...], T]:
     raise NotImplementedError(
-        f"get_next_interruptions not implemented for type {type(dynamics)}"
+        f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
     )
 
 

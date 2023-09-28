@@ -23,7 +23,7 @@ class Interruption(pyro.poutine.messenger.Messenger):
 
 # TODO AZ - rename to static interruption?
 class PointInterruption(Interruption):
-    def __init__(self, time: Union[float, torch.Tensor], **kwargs):
+    def __init__(self, time: Union[float, torch.Tensor, T], **kwargs):
         self.time = torch.as_tensor(time)
         super().__init__(**kwargs)
 
