@@ -22,7 +22,7 @@ class Interruption(pyro.poutine.messenger.Messenger):
 
 
 # TODO AZ - rename to static interruption?
-class PointInterruption(Interruption):
+class StaticInterruption(Interruption):
     def __init__(self, time: Union[float, torch.Tensor, T], **kwargs):
         self.time = torch.as_tensor(time)
         super().__init__(**kwargs)
@@ -34,7 +34,7 @@ class PointInterruption(Interruption):
         # See note tagged AZiusld10 below.
         if self.time < start_time:
             raise ValueError(
-                f"{PointInterruption.__name__} time {self.time} occurred before the start of the "
+                f"{StaticInterruption.__name__} time {self.time} occurred before the start of the "
                 f"timespan {start_time}. This interruption will have no effect."
             )
 
@@ -55,7 +55,7 @@ class PointInterruption(Interruption):
                 msg["kwargs"]["next_static_interruption"] = self
         elif self.time >= end_time:
             warnings.warn(
-                f"{PointInterruption.__name__} time {self.time} occurred after the end of the timespan "
+                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
                 f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
@@ -68,11 +68,11 @@ class PointInterruption(Interruption):
 
 class _InterventionMixin(Interruption):
     """
-    We use this to provide the same functionality to both PointIntervention and the DynamicIntervention,
-     while allowing DynamicIntervention to not inherit PointInterruption functionality.
+    We use this to provide the same functionality to both StaticIntervention and the DynamicIntervention,
+     while allowing DynamicIntervention to not inherit StaticInterruption functionality.
     """
 
-    def __init__(self, intervention: State[torch.Tensor], **kwargs):
+    def __init__(self, intervention: State[T], **kwargs):
         super().__init__(**kwargs)
         self.intervention = intervention
 
@@ -81,7 +81,7 @@ class _InterventionMixin(Interruption):
         msg["args"] = (dynamics, intervene(initial_state, self.intervention))
 
 
-class PointIntervention(PointInterruption, _InterventionMixin):
+class StaticIntervention(StaticInterruption, _InterventionMixin):
     """
     This effect handler interrupts a simulation at a given time, and
     applies an intervention to the state at that time.
@@ -178,11 +178,11 @@ class NonInterruptingPointObservationArray(
         msg["value"] = full_traj[~insert_mask]
 
 
-class PointObservation(PointInterruption, _PointObservationMixin):
+class StaticObservation(StaticInterruption, _PointObservationMixin):
     def __init__(
         self,
         time: float,
-        data: Dict[str, torch.Tensor],
+        data: Dict[str, T],
         eps: float = 1e-6,
     ):
         self.data = data
@@ -198,7 +198,7 @@ class PointObservation(PointInterruption, _PointObservationMixin):
 
         if torch.isclose(self.time, timespan[0], atol=1e-3, rtol=1e-3):
             raise ValueError(
-                f"{PointObservation.__name__} time {self.time} occurred at the start of the timespan {timespan[0]}. "
+                f"{StaticObservation.__name__} time {self.time} occurred at the start of the timespan {timespan[0]}. "
                 f"This is not currently supported."
             )
 

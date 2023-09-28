@@ -5,11 +5,7 @@ from typing import Dict, Generic, Tuple, TypeVar
 
 import pyro
 
-from chirho.dynamical.handlers.interruption import (
-    DynamicInterruption,
-    Interruption,
-    PointInterruption,
-)
+from chirho.dynamical.handlers.interruption import DynamicInterruption, Interruption
 from chirho.dynamical.internals.interruption import (
     apply_interruptions,
     simulate_to_interruption,

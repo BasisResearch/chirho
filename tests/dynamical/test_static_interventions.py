@@ -7,7 +7,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import PointIntervention, SimulatorEventLoop
+from chirho.dynamical.handlers import SimulatorEventLoop, StaticIntervention
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
@@ -57,7 +57,7 @@ def test_point_intervention_causes_difference(
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
+        with StaticIntervention(time=intervene_time, intervention=intervene_state):
             if intervene_time < tspan[0]:
                 with pytest.raises(
                     ValueError, match="occurred before the start of the timespan"
@@ -114,8 +114,10 @@ def test_nested_point_interventions_cause_difference(
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time1, intervention=intervene_state1):
-            with PointIntervention(time=intervene_time2, intervention=intervene_state2):
+        with StaticIntervention(time=intervene_time1, intervention=intervene_state1):
+            with StaticIntervention(
+                time=intervene_time2, intervention=intervene_state2
+            ):
                 if intervene_time1 < tspan[0] or intervene_time2 < tspan[0]:
                     with pytest.raises(
                         ValueError, match="occurred before the start of the timespan"
@@ -156,8 +158,8 @@ def test_twinworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
-            with PointIntervention(
+        with StaticIntervention(time=intervene_time, intervention=intervene_state):
+            with StaticIntervention(
                 time=intervene_time + 0.5, intervention=intervene_state
             ):
                 with TwinWorldCounterfactual() as cf:
@@ -180,8 +182,8 @@ def test_multiworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
-            with PointIntervention(
+        with StaticIntervention(time=intervene_time, intervention=intervene_state):
+            with StaticIntervention(
                 time=intervene_time + 0.5, intervention=intervene_state
             ):
                 with MultiWorldCounterfactual() as cf:
@@ -221,8 +223,8 @@ def test_twinworld_matches_output(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
-            with PointIntervention(
+        with StaticIntervention(time=intervene_time, intervention=intervene_state):
+            with StaticIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
                 with TwinWorldCounterfactual() as cf:
@@ -231,8 +233,8 @@ def test_twinworld_matches_output(
                     )
 
     with SimulatorEventLoop():
-        with PointIntervention(time=intervene_time, intervention=intervene_state):
-            with PointIntervention(
+        with StaticIntervention(time=intervene_time, intervention=intervene_state):
+            with StaticIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
                 expected_cf = simulate(model, init_state, tspan, solver=TorchDiffEq())

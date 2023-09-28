@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import functools
-from typing import Tuple, TypeVar
+from typing import List, Optional, Tuple, TypeVar
 
-from chirho.dynamical.handlers.interruption import Interruption
+from chirho.dynamical.handlers.interruption import (
+    DynamicInterruption,
+    Interruption,
+    StaticInterruption,
+)
 from chirho.dynamical.handlers.ODE import ODESolver
 from chirho.dynamical.internals.interruption import get_next_interruptions_dynamic
 from chirho.dynamical.ops.dynamical import State, simulate
@@ -51,37 +55,40 @@ ode_simulate.register = _ode_simulate.register
 
 @get_next_interruptions_dynamic.register(ODEDynamics)
 def ode_get_next_interruptions_dynamic(
-    dynamics: ODEDynamics,
-    initial_state: State[T],
+    dynamics: ODEDynamics[S, T],
+    start_state: State[T],
     start_time: T,
-    end_time: T,
+    next_static_interruption: "StaticInterruption",
+    dynamic_interruptions: List["DynamicInterruption"],
     *,
-    solver: ODESolver,
+    solver: Optional[ODESolver] = None,
     **kwargs,
 ) -> Tuple[Tuple["Interruption", ...], T]:
     return _ode_get_next_interruptions_dynamic(
-        solver, dynamics, initial_state, start_time, end_time, **kwargs
+        solver,
+        dynamics,
+        start_state,
+        start_time,
+        next_static_interruption,
+        dynamic_interruptions,
+        **kwargs,
     )
 
 
 # noinspection PyUnusedLocal
 @functools.singledispatch
 def _ode_get_next_interruptions_dynamic(
-    solver: ODESolver,
-    dynamics: ODEDynamics,
-    initial_state: State[T],
+    solver: Optional[ODESolver],
+    dynamics: ODEDynamics[S, T],
+    start_state: State[T],
     start_time: T,
-    end_time: T,
+    next_static_interruption: StaticInterruption,
+    dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
-) -> Tuple[Tuple["Interruption", ...], T]:
+) -> Tuple[Tuple[Interruption, ...], T]:
     """
     Simulate an ODE dynamical system
     """
     raise NotImplementedError(
         f"ode_get_next_interruptions_dynamic not implemented for solver of type {type(solver)}"
     )
-
-
-ode_get_next_interruptions_dynamic.register = (
-    _ode_get_next_interruptions_dynamic.register
-)

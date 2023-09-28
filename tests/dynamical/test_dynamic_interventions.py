@@ -373,7 +373,7 @@ def test_grad_of_point_intervention_params():
     #  presumably because its treated as two completely separate simulations.
     # Note: implementing this would require the boilerplate from the dynamic test above.
 
-    # point_intervention = PointIntervention(
+    # point_intervention = StaticIntervention(
     #     intervention=State(dz=tt(1.0)),
     #     time=param
     # )

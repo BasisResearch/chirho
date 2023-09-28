@@ -8,8 +8,8 @@ from pyro.distributions import Normal
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
-    PointIntervention,
     SimulatorEventLoop,
+    StaticIntervention,
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -51,7 +51,7 @@ flight_landing_data = {k: torch.tensor([v] * 3) for (k, v) in landing_data.items
 reparam_config = AutoSoftConditioning(scale=0.01, alpha=0.5)
 
 twin_world = TwinWorldCounterfactual()
-intervention = PointIntervention(time=superspreader_time, intervention=counterfactual)
+intervention = StaticIntervention(time=superspreader_time, intervention=counterfactual)
 reparam = pyro.poutine.reparam(config=reparam_config)
 vec_obs3 = NonInterruptingPointObservationArray(
     times=flight_landing_times, data=flight_landing_data

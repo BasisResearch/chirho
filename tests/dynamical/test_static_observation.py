@@ -8,8 +8,8 @@ from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
-    PointObservation,
     SimulatorEventLoop,
+    StaticObservation,
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -49,14 +49,14 @@ def run_svi_inference(model, n_steps=10, verbose=False, lr=0.03, **model_kwargs)
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 def test_multiple_point_observations(model):
     """
-    Tests if multiple PointObservation handlers can be composed.
+    Tests if multiple StaticObservation handlers can be composed.
     """
     S_obs = torch.tensor(10.0)
     data1 = {"S_obs": S_obs}
     data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
     with SimulatorEventLoop():
-        with PointObservation(time=3.1, data=data2):
-            with PointObservation(time=2.9, data=data1):
+        with StaticObservation(time=3.1, data=data2):
+            with StaticObservation(time=2.9, data=data1):
                 result = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert result.S.shape[0] == 5
@@ -69,8 +69,8 @@ def _get_compatible_observations(obs_handler, time, data):
     Returns a list of compatible observations for the given observation handler.
     """
     # AZ - Not using dispatcher here b/c obs_handler is a class not an instance of a class.
-    if obs_handler is PointObservation:
-        return PointObservation(time=time, data=data)
+    if obs_handler is StaticObservation:
+        return StaticObservation(time=time, data=data)
     elif obs_handler is NonInterruptingPointObservationArray:
         # Just make make a two element observation array.
         return NonInterruptingPointObservationArray(
@@ -81,7 +81,7 @@ def _get_compatible_observations(obs_handler, time, data):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
-    "obs_handler", [PointObservation, NonInterruptingPointObservationArray]
+    "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
 )
 def test_log_prob_exists(model, obs_handler):
     """
@@ -99,7 +99,7 @@ def test_log_prob_exists(model, obs_handler):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
-    "obs_handler", [PointObservation, NonInterruptingPointObservationArray]
+    "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
 )
 def test_tspan_collision(model, obs_handler):
     """
@@ -119,7 +119,7 @@ def test_tspan_collision(model, obs_handler):
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
 @pytest.mark.parametrize(
-    "obs_handler", [PointObservation, NonInterruptingPointObservationArray]
+    "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
 )
 def test_svi_composition_test_one(model, obs_handler):
     data1 = {
@@ -157,13 +157,13 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     with pyro.poutine.trace() as tr1:
         with SimulatorEventLoop():
-            with PointObservation(
+            with StaticObservation(
                 time=times[1].item(), data={k: v[1] for k, v in data.items()}
             ):
-                with PointObservation(
+                with StaticObservation(
                     time=times[0].item(), data={k: v[0] for k, v in data.items()}
                 ):
-                    with PointObservation(
+                    with StaticObservation(
                         time=times[2].item(), data={k: v[2] for k, v in data.items()}
                     ):
                         interrupting_ret = simulate(
@@ -187,13 +187,13 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 @pytest.mark.parametrize("tspan", [tspan])
 def test_point_observation_at_tspan_start_excepts(model, init_state, tspan):
     """
-    This test requires that we raise an explicit exception when a PointObservation occurs at the beginning of the tspan.
+    This test requires that we raise an explicit exception when a StaticObservation occurs at the beginning of the tspan.
     This occurs right now due to an undiagnosed error, so this test is a stand-in until that can be fixed.
     """
 
     with SimulatorEventLoop():
         with pytest.raises(ValueError, match="occurred at the start of the timespan"):
-            with PointObservation(time=tspan[0], data={"S_obs": torch.tensor(10.0)}):
+            with StaticObservation(time=tspan[0], data={"S_obs": torch.tensor(10.0)}):
                 simulate(model, init_state, tspan, solver=TorchDiffEq())
 
 
@@ -221,7 +221,7 @@ def test_svi_composition_test_multi_point_obs(model):
             for obs in data.values():
                 obs_time = obs[0].item()
                 obs_data = obs[1]
-                observation_managers.append(PointObservation(obs_time, obs_data))
+                observation_managers.append(StaticObservation(obs_time, obs_data))
             with SimulatorEventLoop():
                 with ExitStack() as stack:
                     for manager in observation_managers:
@@ -280,8 +280,8 @@ def test_simulate_persistent_pyrosample(use_event_loop):
         data1 = {"S_obs": S_obs}
         data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
         with SimulatorEventLoop():
-            with PointObservation(time=3.1, data=data2):
-                with PointObservation(time=2.9, data=data1):
+            with StaticObservation(time=3.1, data=data2):
+                with StaticObservation(time=2.9, data=data1):
                     result = simulate(model, init_state, tspan, solver=TorchDiffEq())
 
     assert result.S.shape[0] == 5
