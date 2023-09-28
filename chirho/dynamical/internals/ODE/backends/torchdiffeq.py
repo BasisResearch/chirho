@@ -129,27 +129,6 @@ def torchdiffeq_ode_simulate_to_interruption(
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
 ) -> Tuple[State[torch.Tensor], Tuple["Interruption", ...], torch.Tensor]:
-    nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
-    nostat = next_static_interruption is None
-
-    if nostat and nodyn:
-        end_state = simulate(
-            dynamics, start_state, start_time, end_time, solver=solver
-        )
-        # TODO support event_dim > 0
-        return end_state, (), end_time
-    
-    if nodyn:
-        end_state = simulate(
-            dynamics, start_state, start_time, next_static_interruption.time, solver=solver
-        )
-        return end_state, (next_static_interruption,), next_static_interruption.time
-
-    if dynamic_interruptions is None:
-        dynamic_interruptions = []
-
-    if next_static_interruption is None:
-        next_static_interruption = PointInterruption(time=end_time)
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(

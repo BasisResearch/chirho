@@ -13,7 +13,7 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.solver import Solver
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
+from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -21,7 +21,7 @@ T = TypeVar("T")
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-@pyro.poutine.block(hide_types=["simulate"])
+@pyro.poutine.block(hide_types=["simulate"]) # TODO: Unblock this simulate call
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
@@ -39,6 +39,27 @@ def simulate_to_interruption(
     :returns: the final state, a collection of interruptions that ended the simulation
     (this will usually just be a single interruption), and the time the interruption occurred.
     """
+    nodyn = dynamic_interruptions is None or len(dynamic_interruptions) == 0
+    nostat = next_static_interruption is None
+
+    if nostat and nodyn:
+        end_state = simulate(
+            dynamics, start_state, start_time, end_time, solver=solver
+        )
+        return end_state, (), end_time
+    
+    if nodyn:
+        end_state = simulate(
+            dynamics, start_state, start_time, next_static_interruption.time, solver=solver
+        )
+        return end_state, (next_static_interruption,), next_static_interruption.time
+
+    if dynamic_interruptions is None:
+        dynamic_interruptions = []
+
+    if next_static_interruption is None:
+        next_static_interruption = PointInterruption(time=end_time)
+
     return _simulate_to_interruption(
         dynamics,
         start_state,
