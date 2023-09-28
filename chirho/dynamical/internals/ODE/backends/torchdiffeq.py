@@ -11,7 +11,7 @@ from chirho.dynamical.internals.ODE.ode_simulate import (
     ode_simulate,
     ode_simulate_to_interruption,
 )
-from chirho.dynamical.ops.dynamical import State, Trajectory
+from chirho.dynamical.ops.dynamical import State, Trajectory, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
 
 if TYPE_CHECKING:
@@ -133,29 +133,23 @@ def torchdiffeq_ode_simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        end_state = ode_simulate(
+        end_state = simulate(
             dynamics, start_state, start_time, end_time, solver=solver
         )
         # TODO support event_dim > 0
         return end_state, (), end_time
-
-    # Note: We can probably add an additional early return when there is only a static interruption.
-
-    # Leaving these undone for now, just so we don't have to split test coverage. Once we get a better test suite
-    #  for the many possibilities, this can be optimized.
-    # TODO AZ if no dynamic events, just skip the event function pass.
+    
+    if nodyn:
+        end_state = simulate(
+            dynamics, start_state, start_time, next_static_interruption.time, solver=solver
+        )
+        return end_state, (next_static_interruption,), next_static_interruption.time
 
     if dynamic_interruptions is None:
         dynamic_interruptions = []
 
-    if nostat:
-        # This is required because torchdiffeq.odeint_event appears to just go on and on forever without a terminal
-        #  event.
-        raise ValueError(
-            "No static terminal interruption provided, but about to perform an event sim."
-        )
-    # for linter, because it's not deducing this from the if statement above.
-    assert next_static_interruption is not None
+    if next_static_interruption is None:
+        next_static_interruption = PointInterruption(time=end_time)
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
@@ -178,8 +172,6 @@ def torchdiffeq_ode_simulate_to_interruption(
     event_state: State[torch.Tensor] = State()
     for var, solution in zip(start_state.var_order, event_solution):
         setattr(event_state, var, solution)
-
-    assert isinstance(event_state, State)
 
     # Check which event(s) fired, and put the triggered events in a list.
     # TODO support batched outputs of event functions

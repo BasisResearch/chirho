@@ -33,17 +33,12 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         span_start_state = initial_state
         span_start_time = start_time
 
-        # We use interruption mechanics to stop the timespan at the right point.
-        default_terminal_interruption = PointInterruption(
-            time=end_time,
-        )
-
         previous_terminal_interruptions: Tuple[Interruption, ...] = tuple()
         interruption_counts: Dict[Interruption, int] = dict()
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
-        while True:
+        while span_start_time < end_time:
             # Block any interruption's application that wouldn't be the result of an interruption that ended the last
             #  simulation.
             with pyro.poutine.messenger.block_messengers(
@@ -70,12 +65,6 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     span_start_time,
                     end_time,
                     solver=solver,
-                    # Here, we pass the default terminal interruption — the end of the timespan. Other point/static
-                    #  interruption handlers may replace this with themselves if they happen before the end.
-                    next_static_interruption=default_terminal_interruption,
-                    # We just pass nothing here, as any interruption handlers will be responsible for
-                    #  accruing themselves to the message. Leaving explicit for documentation.
-                    dynamic_interruptions=None,
                 )
 
             if len(terminal_interruptions) > 1:
@@ -88,10 +77,6 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 interruption_counts[interruption] = (
                     interruption_counts.get(interruption, 0) + 1
                 )
-
-            # If we've reached the end of the timespan, break.
-            if default_terminal_interruption in terminal_interruptions:
-                break
 
             # Set the span_start_time for the next iteration to be the interruption time from the previous.
             # TODO AZ — we should be able to detect when this eps is too small, as it will repeatedly trigger
