@@ -8,8 +8,9 @@ import torchdiffeq
 
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.internals.ODE.ode_simulate import (
+    ode_get_next_interruptions,
     ode_simulate,
-    ode_simulate_to_interruption,
+    # ode_simulate_to_interruption,
 )
 from chirho.dynamical.ops.dynamical import State, Trajectory, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
@@ -117,19 +118,17 @@ def torchdiffeq_ode_simulate(
     return trajectory[..., -1]
 
 
-@ode_simulate_to_interruption.register(TorchDiffEq)
-def torchdiffeq_ode_simulate_to_interruption(
+@ode_get_next_interruptions.register(TorchDiffEq)
+def torchdiffeq_get_next_interruptions(
     solver: TorchDiffEq,
     dynamics: ODEDynamics,
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
-    end_time: torch.Tensor,
     *,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[State[torch.Tensor], Tuple["Interruption", ...], torch.Tensor]:
-
+) -> Tuple[torch.Tensor, Tuple["Interruption", ...]]:
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
         next_static_interruption, dynamic_interruptions
@@ -147,10 +146,6 @@ def torchdiffeq_ode_simulate_to_interruption(
     event_solution: Tuple[torch.Tensor, ...] = tuple(
         s[..., -1] for s in event_solutions
     )  # TODO support event_dim > 0
-
-    event_state: State[torch.Tensor] = State()
-    for var, solution in zip(start_state.var_order, event_solution):
-        setattr(event_state, var, solution)
 
     # Check which event(s) fired, and put the triggered events in a list.
     # TODO support batched outputs of event functions
@@ -179,14 +174,84 @@ def torchdiffeq_ode_simulate_to_interruption(
     if fired_mask[-1]:
         triggered_events.append(next_static_interruption)
 
-    # Return that trajectory (with interruption time separated out into the end state), the list of triggered
-    #  events, the time of the triggered event, and the state at the time of the triggered event.
-    # TODO support event_dim > 0
     return (
-        event_state,
         tuple(triggered_events),
         event_time,
     )
+
+
+# @ode_simulate_to_interruption.register(TorchDiffEq)
+# def torchdiffeq_ode_simulate_to_interruption(
+#     solver: TorchDiffEq,
+#     dynamics: ODEDynamics,
+#     start_state: State[torch.Tensor],
+#     start_time: torch.Tensor,
+#     end_time: torch.Tensor,
+#     *,
+#     next_static_interruption: Optional["PointInterruption"] = None,
+#     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+#     **kwargs,
+# ) -> Tuple[State[torch.Tensor], Tuple["Interruption", ...], torch.Tensor]:
+
+#     # Create the event function combining all dynamic events and the terminal (next) static interruption.
+#     combined_event_f = torchdiffeq_combined_event_f(
+#         next_static_interruption, dynamic_interruptions
+#     )
+
+#     # Simulate to the event execution.
+#     event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
+#         functools.partial(_deriv, dynamics, start_state.var_order),
+#         tuple(getattr(start_state, v) for v in start_state.var_order),
+#         start_time,
+#         event_fn=combined_event_f,
+#     )
+
+#     # event_state has both the first and final state of the interrupted simulation. We just want the last.
+#     event_solution: Tuple[torch.Tensor, ...] = tuple(
+#         s[..., -1] for s in event_solutions
+#     )  # TODO support event_dim > 0
+
+#     # event_state: State[torch.Tensor] = State()
+#     # for var, solution in zip(start_state.var_order, event_solution):
+#     #     setattr(event_state, var, solution)
+
+#     # Check which event(s) fired, and put the triggered events in a list.
+#     # TODO support batched outputs of event functions
+#     fired_mask = torch.isclose(
+#         combined_event_f(event_time, event_solution),
+#         torch.tensor(0.0),
+#         rtol=1e-02,
+#         atol=1e-03,
+#     ).reshape(-1)
+
+#     if not torch.any(fired_mask):
+#         # TODO AZ figure out the tolerance of the odeint_event function and use that above.
+#         raise RuntimeError(
+#             "The solve terminated but no element of the event function output was within "
+#             "tolerance of zero."
+#         )
+
+#     if len(fired_mask) != len(dynamic_interruptions) + 1:
+#         raise RuntimeError(
+#             "The event function returned an unexpected number of events."
+#         )
+
+#     triggered_events = [
+#         de for de, fm in zip(dynamic_interruptions, fired_mask[:-1]) if fm
+#     ]
+#     if fired_mask[-1]:
+#         triggered_events.append(next_static_interruption)
+
+#     event_state = simulate(dynamics, start_state, start_time, event_time)
+
+#     # Return that trajectory (with interruption time separated out into the end state), the list of triggered
+#     #  events, the time of the triggered event, and the state at the time of the triggered event.
+#     # TODO support event_dim > 0
+#     return (
+#         event_state,
+#         tuple(triggered_events),
+#         event_time,
+#     )
 
 
 # TODO AZ — maybe to multiple dispatch on the interruption type and state type?

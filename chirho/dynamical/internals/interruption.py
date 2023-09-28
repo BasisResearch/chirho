@@ -21,7 +21,7 @@ T = TypeVar("T")
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-@pyro.poutine.block(hide_types=["simulate"]) # TODO: Unblock this simulate call
+@pyro.poutine.block(hide_types=["simulate"])  # TODO: Unblock this simulate call
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
@@ -35,7 +35,7 @@ def simulate_to_interruption(
 ) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     """
     Simulate a dynamical system until the next interruption. This will be either one of the passed
-    dynamic interruptions or the next static interruption, whichever comes first.
+    dynamic interruptions, the next static interruption, or the end time, whichever comes first.
     :returns: the final state, a collection of interruptions that ended the simulation
     (this will usually just be a single interruption), and the time the interruption occurred.
     """
@@ -43,16 +43,20 @@ def simulate_to_interruption(
     nostat = next_static_interruption is None
 
     if nostat and nodyn:
-        end_state = simulate(
-            dynamics, start_state, start_time, end_time, solver=solver
-        )
+        end_state = simulate(dynamics, start_state, start_time, end_time, solver=solver)
         return end_state, (), end_time
-    
+
     if nodyn:
-        end_state = simulate(
-            dynamics, start_state, start_time, next_static_interruption.time, solver=solver
+        next_static_interruption: PointInterruption  # Linter needs some help here.
+
+        event_state = simulate(
+            dynamics,
+            start_state,
+            start_time,
+            next_static_interruption.time,
+            solver=solver,
         )
-        return end_state, (next_static_interruption,), next_static_interruption.time
+        return event_state, (next_static_interruption,), next_static_interruption.time
 
     if dynamic_interruptions is None:
         dynamic_interruptions = []
@@ -60,37 +64,36 @@ def simulate_to_interruption(
     if next_static_interruption is None:
         next_static_interruption = PointInterruption(time=end_time)
 
-    return _simulate_to_interruption(
+    interruption_time, interruptions = get_next_interruptions(
         dynamics,
         start_state,
         start_time,
-        end_time,
         solver=solver,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
         **kwargs,
     )
+    event_state = simulate(
+        dynamics, start_state, start_time, interruption_time, solver=solver
+    )
+    return event_state, interruptions, interruption_time
 
 
 # noinspection PyUnusedLocal
 @functools.singledispatch
-def _simulate_to_interruption(
+def get_next_interruptions(
     dynamics: Dynamics[S, T],
     start_state: State[T],
     start_time: T,
-    end_time: T,
     *,
     solver: Optional[Solver] = None,
     next_static_interruption: Optional["PointInterruption"] = None,
     dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[State[T], Tuple["Interruption", ...], T]:
+) -> Tuple[T, Tuple["Interruption", ...]]:
     raise NotImplementedError(
-        f"simulate_to_interruption not implemented for type {type(dynamics)}"
+        f"get_next_interruptions not implemented for type {type(dynamics)}"
     )
-
-
-simulate_to_interruption.register = _simulate_to_interruption.register
 
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
