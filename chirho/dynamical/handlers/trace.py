@@ -17,13 +17,21 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
         self.logging_times = logging_times + epsilon
         self._reset()
+
+        # Require that the times are sorted. This is required by the index masking we do below.
+        # TODO AZ sort this here (and the data too) accordingly?
+        if not torch.all(self.logging_times[1:] > self.logging_times[:-1]):
+            raise ValueError("The passed times must be sorted.")
+        
         super().__init__()
 
     def _reset(self):
         self.trace = Trajectory()
 
-    # TODO: Pick up here.
     def _pyro_simulate(self, msg) -> None:
+        msg["done"] = True
+
+    def _pyro_post_simulate(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
         dynamics, initial_state, start_time, end_time = msg["args"]
         if "solver" in msg["kwargs"]:
@@ -45,4 +53,3 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         self.trace.append(trajectory[1:-1])
         # TODO: check to make sure we don't need leading ... dimension. E.g. `trajectory[..., -1]`
         msg["value"] = trajectory[-1]
-        msg["done"] = True

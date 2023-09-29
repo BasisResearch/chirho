@@ -77,7 +77,9 @@ def get_next_interruptions(
         # we'll just simulate until the end time.
         next_static_interruption = StaticInterruption(time=end_time)
 
-    assert type(next_static_interruption) is StaticInterruption  # Linter needs a hint
+    assert isinstance(
+        next_static_interruption, StaticInterruption
+    )  # Linter needs a hint
 
     if nodyn:
         # If there's no dynamic intervention, we'll simulate until either the end_time,

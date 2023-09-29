@@ -17,6 +17,7 @@ from chirho.dynamical.ops import State, simulate
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
     bayes_sir_model,
+    check_states_match,
     check_trajectories_match,
 )
 
@@ -26,7 +27,9 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
+# tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
+start_time = torch.tensor(0.0)
+end_time = torch.tensor(4.0)
 
 
 def run_svi_inference(model, n_steps=10, verbose=False, lr=0.03, **model_kwargs):
@@ -55,15 +58,16 @@ def test_multiple_point_observations(model):
     data1 = {"S_obs": S_obs}
     data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
     with SimulatorEventLoop():
+        result1 = simulate(
+            model, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
         with StaticObservation(time=3.1, data=data2):
             with StaticObservation(time=2.9, data=data1):
-                result = simulate(
+                result2 = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
 
-    assert result.S.shape[0] == 5
-    assert result.I.shape[0] == 5
-    assert result.R.shape[0] == 5
+    check_states_match(result1, result2)
 
 
 def _get_compatible_observations(obs_handler, time, data):
@@ -194,7 +198,8 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 def test_point_observation_at_tspan_start_excepts(
     model, init_state, start_time, end_time
 ):
@@ -206,7 +211,7 @@ def test_point_observation_at_tspan_start_excepts(
 
     with SimulatorEventLoop():
         with pytest.raises(ValueError, match="occurred at the start of the timespan"):
-            with StaticObservation(time=tspan[0], data={"S_obs": torch.tensor(10.0)}):
+            with StaticObservation(time=start_time, data={"S_obs": torch.tensor(10.0)}):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
 

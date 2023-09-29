@@ -82,6 +82,9 @@ class State(StateOrTrajectory[T]):
 
 
 class Trajectory(StateOrTrajectory[T]):
+    def __len__(self) -> int:
+        return len(getattr(self, next(iter(self.keys))))
+
     def _getitem(self, key):
         if isinstance(key, str):
             raise ValueError(
