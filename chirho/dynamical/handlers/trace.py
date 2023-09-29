@@ -41,6 +41,6 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
 
         trajectory = simulate_trajectory(dynamics, initial_state, timespan, solver=solver)
         self.trace.append(trajectory[1:-1])
+        # TODO: check to make sure we don't need leading ... dimension. E.g. `trajectory[..., -1]`
         msg["value"] = trajectory[-1]
-        assert isinstance(msg["value"], State)
         msg["done"] = True

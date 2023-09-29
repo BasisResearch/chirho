@@ -35,5 +35,7 @@ def test_logging():
     
     assert isinstance(result1, State)
     assert isinstance(dt.trace, Trajectory)
+    assert len(dt.trace.keys) == 3
+    assert (dt.trace.keys == result1.keys)
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
