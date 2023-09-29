@@ -81,7 +81,6 @@ def check_trajectories_match(
 
 
 def check_states_match(state1: State[torch.tensor], state2: State[torch.tensor]):
-
     assert check_keys_match(state1, state2)
 
     for k in state1.keys:

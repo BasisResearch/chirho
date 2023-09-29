@@ -17,7 +17,6 @@ T = TypeVar("T")
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-# @pyro.poutine.block(hide_types=["simulate"])  # TODO: Unblock this simulate call
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
@@ -35,6 +34,7 @@ def simulate_to_interruption(
     :returns: the final state, a collection of interruptions that ended the simulation
     (this will usually just be a single interruption), and the time the interruption occurred.
     """
+
     interruptions, interruption_time = get_next_interruptions(
         dynamics,
         start_state,
@@ -65,7 +65,6 @@ def get_next_interruptions(
     dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
 ) -> Tuple[Tuple["Interruption", ...], T]:
-
     # This is necessary to get the linter to understand the type of various variables.
     interruptions: Tuple[Interruption, ...]
     interruption_time: T
