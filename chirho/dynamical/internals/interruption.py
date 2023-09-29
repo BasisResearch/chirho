@@ -46,7 +46,9 @@ def simulate_to_interruption(
         dynamic_interruptions=dynamic_interruptions,
         **kwargs,
     )
-
+    # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
+    #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
+    #  a DynamicTrace context.
     event_state = simulate(
         dynamics, start_state, start_time, interruption_time, solver=solver
     )
@@ -82,10 +84,9 @@ def get_next_interruptions(
     if nodyn:
         # If there's no dynamic intervention, we'll simulate until either the end_time,
         # or the `next_static_interruption` whichever comes first.
-        interruptions = (next_static_interruption,)
-        interruption_time = next_static_interruption.time  # type: ignore
+        return (next_static_interruption,), next_static_interruption.time  # type: ignore
     else:
-        interruptions, interruption_time = get_next_interruptions_dynamic(  # type: ignore
+        return get_next_interruptions_dynamic(  # type: ignore
             dynamics,  # type: ignore
             start_state,  # type: ignore
             start_time,  # type: ignore
@@ -95,7 +96,7 @@ def get_next_interruptions(
             **kwargs,
         )
 
-    return interruptions, interruption_time
+    raise ValueError("Unreachable code reached.")
 
 
 # noinspection PyUnusedLocal
@@ -124,38 +125,3 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
-
-
-@functools.singledispatch
-def concatenate(*inputs, **kwargs):
-    """
-    Concatenate multiple inputs of type T into a single output of type T.
-    """
-    raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
-
-
-@concatenate.register(Trajectory)
-def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
-    """
-    Concatenate multiple trajectories into a single trajectory.
-    """
-    full_trajectory: Trajectory[T] = Trajectory()
-    for trajectory in trajectories:
-        for k in trajectory.keys:
-            if k not in full_trajectory.keys:
-                setattr(full_trajectory, k, getattr(trajectory, k))
-            else:
-                prev_v = getattr(full_trajectory, k)
-                curr_v = getattr(trajectory, k)
-                time_dim = -1  # TODO generalize to nontrivial event_shape
-                batch_shape = torch.broadcast_shapes(
-                    prev_v.shape[:-1], curr_v.shape[:-1]
-                )
-                prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
-                curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
-                setattr(
-                    full_trajectory,
-                    k,
-                    torch.cat([prev_v, curr_v], dim=time_dim),
-                )
-    return full_trajectory

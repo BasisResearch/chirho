@@ -9,5 +9,5 @@ from .interruption import (  # noqa: F401
     StaticIntervention,
     StaticObservation,
 )
-from .trace import DynamicTrace  # noqa: F401
 from .solver import Solver  # noqa: F401
+from .trace import DynamicTrace  # noqa: F401

@@ -9,6 +9,7 @@ import torchdiffeq
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.internals.ODE.ode_simulate import (
     _ode_get_next_interruptions_dynamic,
+    _ode_simulate_trajectory,
     ode_simulate,
 )
 from chirho.dynamical.ops.dynamical import State, Trajectory
@@ -115,6 +116,18 @@ def torchdiffeq_ode_simulate(
     )
 
     return trajectory[..., -1]
+
+
+@_ode_simulate_trajectory.register(TorchDiffEq)
+def torchdiffeq_ode_simulate_trajectory(
+    solver: TorchDiffEq,
+    dynamics: ODEDynamics,
+    initial_state: State[torch.Tensor],
+    timespan: torch.Tensor,
+) -> State[torch.Tensor]:
+    return _torchdiffeq_ode_simulate_inner(
+        dynamics, initial_state, timespan, **solver.odeint_kwargs
+    )
 
 
 @_ode_get_next_interruptions_dynamic.register(TorchDiffEq)
