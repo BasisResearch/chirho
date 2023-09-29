@@ -18,7 +18,7 @@ T = TypeVar("T")
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-@pyro.poutine.block(hide_types=["simulate"])  # TODO: Unblock this simulate call
+# @pyro.poutine.block(hide_types=["simulate"])  # TODO: Unblock this simulate call
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],

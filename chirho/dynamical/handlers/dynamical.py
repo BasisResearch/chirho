@@ -48,8 +48,11 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             # Block dynamic interventions that have triggered and applied more than the specified number of times.
             # This will prevent them from percolating up to the simulate_to_interruption execution.
             with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, DynamicInterruption)
-                and m.max_applications <= interruption_counts.get(m, 0)
+                lambda m: (
+                    isinstance(m, DynamicInterruption)
+                    and m.max_applications <= interruption_counts.get(m, 0)
+                )
+                or isinstance(m, SimulatorEventLoop)
             ):
                 (
                     end_state,
@@ -86,4 +89,4 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             previous_terminal_interruptions = terminal_interruptions
 
         msg["value"] = end_state
-        msg["done"] = True
+        msg["stop"] = True
