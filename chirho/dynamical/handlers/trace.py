@@ -22,7 +22,7 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         # TODO AZ sort this here (and the data too) accordingly?
         if not torch.all(self.logging_times[1:] > self.logging_times[:-1]):
             raise ValueError("The passed times must be sorted.")
-        
+
         super().__init__()
 
     def _reset(self):

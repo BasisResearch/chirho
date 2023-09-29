@@ -117,11 +117,8 @@ class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin)
         # This condition checks whether all of the simulate calls have been executed.
         if len(self.trace) == len(self.times):
             with condition(data=self.data):
-                # # This blocks the handler from being called again, as it is already in the stack.
-                # with pyro.poutine.messenger.block_messengers(
-                #     lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
-                # ):
                 dynamics.observation(self.trace)
+
 
 # class NonInterruptingPointObservationArray(
 #     pyro.poutine.messenger.Messenger, _PointObservationMixin
