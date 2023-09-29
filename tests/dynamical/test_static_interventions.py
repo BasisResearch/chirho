@@ -63,7 +63,9 @@ def test_point_intervention_causes_difference(
                 with pytest.raises(
                     ValueError, match="occurred before the start of the timespan"
                 ):
-                    simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                    simulate(
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
                 return
             else:
                 result_single_pint = simulate(
@@ -124,7 +126,13 @@ def test_nested_point_interventions_cause_difference(
                     with pytest.raises(
                         ValueError, match="occurred before the start of the timespan"
                     ):
-                        simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                        simulate(
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
+                        )
                     return
                 # AZ - We've decided to support this case and have interventions apply sequentially in the order
                 #  they are handled.
@@ -211,7 +219,9 @@ def test_split_odeint_broadcast(
 ):
     with TwinWorldCounterfactual() as cf:
         cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
-        trajectory = simulate(model, cf_init_state, start_time, end_time, solver=TorchDiffEq())
+        trajectory = simulate(
+            model, cf_init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     with cf:
         for k in trajectory.keys:
@@ -243,10 +253,14 @@ def test_twinworld_matches_output(
             with StaticIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
-                expected_cf = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                expected_cf = simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+        expected_factual = simulate(
+            model, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     with cf:
         factual_indices = IndexSet(

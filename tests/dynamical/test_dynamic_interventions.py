@@ -83,7 +83,9 @@ def test_nested_dynamic_intervention_causes_change(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                res = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                res = simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -139,7 +141,9 @@ def test_dynamic_intervention_causes_change(
             var_order=init_state.var_order,
             max_applications=1,
         ):
-            res = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+            res = simulate(
+                model, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -295,10 +299,14 @@ def test_split_twinworld_dynamic_matches_output(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                expected_cf = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                expected_cf = simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+        expected_factual = simulate(
+            model, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     with cf:
         factual_indices = IndexSet(

@@ -241,7 +241,6 @@ class DynamicInterruption(Generic[T], Interruption):
         self.max_applications = max_applications
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-
         if "dynamic_interruptions" not in msg["kwargs"]:
             msg["kwargs"]["dynamic_interruptions"] = []
 

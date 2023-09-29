@@ -45,6 +45,8 @@ def test_backend_handler():
         with TorchDiffEq():
             result_handler = simulate(sir, init_state, start_time, end_time)
 
-        result_arg = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+        result_arg = simulate(
+            sir, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     assert check_trajectories_match(result_handler, result_arg)

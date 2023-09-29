@@ -57,7 +57,9 @@ def test_multiple_point_observations(model):
     with SimulatorEventLoop():
         with StaticObservation(time=3.1, data=data2):
             with StaticObservation(time=2.9, data=data1):
-                result = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                result = simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5
@@ -110,7 +112,9 @@ def test_tspan_collision(model, obs_handler):
     data = {"S_obs": S_obs}
     with SimulatorEventLoop():
         with _get_compatible_observations(obs_handler, time=tspan[1], data=data):
-            result = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+            result = simulate(
+                model, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5
@@ -133,7 +137,9 @@ def test_svi_composition_test_one(model, obs_handler):
             sir = model()
             with SimulatorEventLoop():
                 with _get_compatible_observations(obs_handler, time=2.9, data=data1):
-                    traj = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+                    traj = simulate(
+                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -167,7 +173,11 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
                         time=times[2].item(), data={k: v[2] for k, v in data.items()}
                     ):
                         interrupting_ret = simulate(
-                            model, init_state, start_time, end_time, solver=TorchDiffEq()
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
                         )
 
     with pyro.poutine.trace() as tr2:
@@ -185,7 +195,9 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("tspan", [tspan])
-def test_point_observation_at_tspan_start_excepts(model, init_state, start_time, end_time):
+def test_point_observation_at_tspan_start_excepts(
+    model, init_state, start_time, end_time
+):
     """
     This test requires that we raise an explicit exception when a StaticObservation
     occurs at the beginning of the tspan.
@@ -227,7 +239,9 @@ def test_svi_composition_test_multi_point_obs(model):
                 with ExitStack() as stack:
                     for manager in observation_managers:
                         stack.enter_context(manager)
-                    traj = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+                    traj = simulate(
+                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -251,7 +265,9 @@ def test_svi_composition_vectorized_obs(model):
             sir = model()
             with SimulatorEventLoop():
                 with NonInterruptingPointObservationArray(times=times, data=data):
-                    traj = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+                    traj = simulate(
+                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -283,7 +299,9 @@ def test_simulate_persistent_pyrosample(use_event_loop):
         with SimulatorEventLoop():
             with StaticObservation(time=3.1, data=data2):
                 with StaticObservation(time=2.9, data=data1):
-                    result = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                    result = simulate(
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
 
     assert result.S.shape[0] == 5
     assert result.I.shape[0] == 5

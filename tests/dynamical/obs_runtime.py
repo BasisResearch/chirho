@@ -49,7 +49,9 @@ def make_event_fn(target_state: State[torch.tensor]):
     return event_f
 
 
-def conditioned_sir(data, init_state, start_time, end_time, include_dynamic_intervention):
+def conditioned_sir(
+    data, init_state, start_time, end_time, include_dynamic_intervention
+):
     sir = bayes_sir_model()
     managers = []
     for obs in data.values():
