@@ -123,7 +123,7 @@ class Trajectory(StateOrTrajectory[T]):
 
 # TODO: figure out parameteric types of Trajectory.
 # This used torch methods in supposedly generic class.
-@Trajectory.append.register(Trajectory)
+@Trajectory.append.register(Trajectory)  # type: ignore
 def _append_trajectory(self, other: Trajectory):
     # If self is empty, just copy other.
     if len(self.keys) == 0:

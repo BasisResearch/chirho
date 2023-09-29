@@ -187,7 +187,8 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 @pytest.mark.parametrize("tspan", [tspan])
 def test_point_observation_at_tspan_start_excepts(model, init_state, tspan):
     """
-    This test requires that we raise an explicit exception when a StaticObservation occurs at the beginning of the tspan.
+    This test requires that we raise an explicit exception when a StaticObservation
+    occurs at the beginning of the tspan.
     This occurs right now due to an undiagnosed error, so this test is a stand-in until that can be fixed.
     """
 

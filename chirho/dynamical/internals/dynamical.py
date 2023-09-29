@@ -25,8 +25,9 @@ def simulate_trajectory(
     if solver is None:
         raise ValueError(
             "`simulate_trajectory` requires a solver. To specify a solver, use the keyword argument `solver` in"
-            " the call to `simulate_trajectory` or use with a solver effect handler as a context manager. For example, \n \n"
-            "`with TorchDiffEq():` \n"
+            " the call to `simulate_trajectory` or use with a solver effect handler as a context manager. "
+            "For example,"
+            "\n \n `with TorchDiffEq():` \n"
             "\t `simulate_trajectory(dynamics, initial_state, start_time, end_time)`"
         )
     raise NotImplementedError(

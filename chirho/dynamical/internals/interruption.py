@@ -2,7 +2,6 @@ import functools
 from typing import List, Optional, Tuple, TypeVar
 
 import pyro
-import torch
 
 from chirho.dynamical.handlers.interruption import (
     DynamicInterruption,
@@ -10,7 +9,7 @@ from chirho.dynamical.handlers.interruption import (
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import Solver
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
+from chirho.dynamical.ops.dynamical import Dynamics, State, simulate
 
 S = TypeVar("S")
 T = TypeVar("T")

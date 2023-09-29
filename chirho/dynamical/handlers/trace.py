@@ -6,13 +6,13 @@ import pyro
 import torch
 
 from chirho.dynamical.internals.dynamical import simulate_trajectory
-from chirho.dynamical.ops import Trajectory, State
+from chirho.dynamical.ops import Trajectory
 
 T = TypeVar("T")
 
 
 class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
-    def __init__(self, logging_times: T, epsilon: float = 1e-6):
+    def __init__(self, logging_times: torch.Tensor, epsilon: float = 1e-6):
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
         #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
         self.logging_times = logging_times + epsilon
@@ -39,7 +39,9 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
             (start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1))
         )
 
-        trajectory = simulate_trajectory(dynamics, initial_state, timespan, solver=solver)
+        trajectory = simulate_trajectory(
+            dynamics, initial_state, timespan, solver=solver
+        )
         self.trace.append(trajectory[1:-1])
         # TODO: check to make sure we don't need leading ... dimension. E.g. `trajectory[..., -1]`
         msg["value"] = trajectory[-1]

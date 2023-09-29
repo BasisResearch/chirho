@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, TypeVar
+from typing import TYPE_CHECKING, Callable, List, Tuple, TypeVar
 
 import torch
 import torchdiffeq
