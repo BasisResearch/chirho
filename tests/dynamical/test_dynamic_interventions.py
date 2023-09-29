@@ -54,7 +54,8 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -64,7 +65,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_nested_dynamic_intervention_causes_change(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -82,7 +83,7 @@ def test_nested_dynamic_intervention_causes_change(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                res = simulate(model, init_state, tspan, solver=TorchDiffEq())
+                res = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -124,11 +125,12 @@ def test_nested_dynamic_intervention_causes_change(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("trigger_state", [trigger_state1])
 @pytest.mark.parametrize("intervene_state", [intervene_state1])
 def test_dynamic_intervention_causes_change(
-    model, init_state, tspan, trigger_state, intervene_state
+    model, init_state, start_time, end_time, trigger_state, intervene_state
 ):
     with SimulatorEventLoop():
         with DynamicIntervention(
@@ -137,7 +139,7 @@ def test_dynamic_intervention_causes_change(
             var_order=init_state.var_order,
             max_applications=1,
         ):
-            res = simulate(model, init_state, tspan, solver=TorchDiffEq())
+            res = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -162,7 +164,8 @@ def test_dynamic_intervention_causes_change(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -172,7 +175,7 @@ def test_dynamic_intervention_causes_change(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_twinworld_dynamic_intervention(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -193,7 +196,7 @@ def test_split_twinworld_dynamic_intervention(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -203,7 +206,8 @@ def test_split_twinworld_dynamic_intervention(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -213,7 +217,7 @@ def test_split_twinworld_dynamic_intervention(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_multiworld_dynamic_intervention(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -234,7 +238,7 @@ def test_split_multiworld_dynamic_intervention(
             ):
                 with MultiWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
     with cf:
@@ -244,7 +248,8 @@ def test_split_multiworld_dynamic_intervention(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -254,7 +259,7 @@ def test_split_multiworld_dynamic_intervention(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_twinworld_dynamic_matches_output(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -274,7 +279,7 @@ def test_split_twinworld_dynamic_matches_output(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
     with SimulatorEventLoop():
@@ -290,10 +295,10 @@ def test_split_twinworld_dynamic_matches_output(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                expected_cf = simulate(model, init_state, tspan, solver=TorchDiffEq())
+                expected_cf = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, tspan, solver=TorchDiffEq())
+        expected_factual = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     with cf:
         factual_indices = IndexSet(

@@ -27,23 +27,13 @@ class StaticInterruption(Interruption):
         self.time = torch.as_tensor(time)
         super().__init__(**kwargs)
 
-    def _pyro_simulate(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
-        start_time = timespan[0]
-
-        # See note tagged AZiusld10 below.
-        if self.time < start_time:
-            raise ValueError(
-                f"{StaticInterruption.__name__} time {self.time} occurred before the start of the "
-                f"timespan {start_time}. This interruption will have no effect."
-            )
-
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
-        next_static_interruption = msg["kwargs"]["next_static_interruption"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
-        start_time = timespan[0]
-        end_time = timespan[-1]
+        if "next_static_interruption" in msg["kwargs"]:
+            next_static_interruption = msg["kwargs"]["next_static_interruption"]
+        else:
+            next_static_interruption = None
 
         # If this interruption occurs within the timespan...
         if start_time < self.time < end_time:
@@ -137,7 +127,7 @@ class NonInterruptingPointObservationArray(
                 f"Cannot use {self.__class__.__name__} within another {self.__class__.__name__}."
             )
 
-        dynamics, initial_state, timespan = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
         # Concatenate the timespan and the observation times, then sort. TODO find a way to use the searchsorted
         #  result to avoid sorting again?
@@ -156,7 +146,7 @@ class NonInterruptingPointObservationArray(
         msg[self._insert_mask_key] = insert_mask
 
     def _pyro_post_simulate(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
         full_traj = msg["value"]
         insert_mask = msg[self._insert_mask_key]
 
@@ -194,9 +184,9 @@ class StaticObservation(StaticInterruption, _PointObservationMixin):
         # Raise an error if the observation time is close to the start of the timespan. This is a temporary measure
         #  until issues arising from this case are understood and adressed.
 
-        dynamics, initial_state, timespan = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
-        if torch.isclose(self.time, timespan[0], atol=1e-3, rtol=1e-3):
+        if torch.isclose(self.time, start_time, atol=1e-3, rtol=1e-3):
             raise ValueError(
                 f"{StaticObservation.__name__} time {self.time} occurred at the start of the timespan {timespan[0]}. "
                 f"This is not currently supported."
@@ -251,16 +241,14 @@ class DynamicInterruption(Generic[T], Interruption):
         self.max_applications = max_applications
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        dynamic_interruptions = msg["kwargs"]["dynamic_interruptions"]
 
-        if dynamic_interruptions is None:
-            dynamic_interruptions = []
-
-        msg["kwargs"]["dynamic_interruptions"] = dynamic_interruptions
+        if "dynamic_interruptions" not in msg["kwargs"]:
+            msg["kwargs"]["dynamic_interruptions"] = []
 
         # Add self to the collection of dynamic interruptions.
+        # TODO: This doesn't appear to be used anywhere. Is it needed?
         if self not in msg.get("ignored_dynamic_interruptions", []):
-            dynamic_interruptions.append(self)
+            msg["kwargs"]["dynamic_interruptions"].append(self)
 
         super()._pyro_simulate_to_interruption(msg)
 
