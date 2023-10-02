@@ -3,7 +3,7 @@ import functools
 import typing
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.continuation import bind_and_push_prompts, push_prompts
+from chirho.effectful.ops.continuation import bind_and_push_prompts, shallow_interpreter
 from chirho.effectful.ops.handler import fwd
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
@@ -46,14 +46,14 @@ def product(
 
     block_outer = define(Interpretation)(
         {
-            op: push_prompts({fwd: lambda _, v: reflect(v)})(intp[op])
+            op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp[op])
             for op in intp.keys()
         }
     )
 
     block_inner = define(Interpretation)(
         {
-            op: push_prompts({fwd: lambda _, v: reflect(v)})(intp2[op])
+            op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
             for op in intp2.keys()
             if op in intp
         }

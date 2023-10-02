@@ -6,6 +6,7 @@ from chirho.effectful.internals.base_continuation import _BaseAffineContinuation
 from chirho.effectful.ops._utils import weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter, register
 from chirho.effectful.ops.operation import Operation, define
+from chirho.effectful.ops.runtime import get_interpretation
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -24,29 +25,16 @@ class AffineContinuationError(Exception):
     pass
 
 
-@define(Operation)
 @contextlib.contextmanager
-def push_prompts(conts: Interpretation):
-    from chirho.effectful.ops.runtime import get_interpretation
+def shallow_interpreter(intp: Interpretation):
+    # destructive update: calling any op in intp should remove intp from active
+    active_intp = get_interpretation()
+    prev_intp = define(Interpretation)({
+        op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
+    })
 
-    resets = define(Interpretation)(
-        {
-            p: define(Continuation)(
-                interpreter(
-                    define(Interpretation)(
-                        {
-                            p: get_interpretation()[p]
-                            if p in get_interpretation()
-                            else p.default
-                        }
-                    )
-                )(conts[p])
-            )
-            for p in conts.keys()
-        }
-    )
-    with interpreter(resets):
-        yield
+    with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
+        yield intp
 
 
 @weak_memoize
@@ -91,9 +79,8 @@ def bind_and_push_prompts(
     op: Operation[P, S],
     op_intp: Callable[Concatenate[Optional[T], P], T],
 ) -> Callable[Concatenate[Optional[T], P], T]:
-    return push_prompts(bind_cont_args(op, unbound_conts))(
-        capture_cont_args(op, op_intp)
-    )
+    bound_arg_conts = bind_cont_args(op, unbound_conts)
+    return shallow_interpreter(bound_arg_conts)(capture_cont_args(op, op_intp))
 
 
 # bootstrap

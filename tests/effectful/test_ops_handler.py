@@ -58,27 +58,25 @@ N_CASES = [1, 2, 3]
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-def test_affine_continuation_error_fwd(op, args):
+def test_affine_continuation_compose(op, args):
     def f():
         return op(*args)
 
-    h_fail = define(Interpretation)({op: lambda v, *args, **kwargs: fwd(fwd(v))})
+    h_twice = define(Interpretation)({op: lambda v, *a, **k: fwd(fwd(v))})
 
-    with pytest.raises(AffineContinuationError):
-        interpreter(compose(defaults(op), h_fail))(f)()
+    assert interpreter(defaults(op))(f)() == \
+        interpreter(compose(defaults(op), h_twice))(f)()
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
-def test_affine_continuation_error_reflect(op, args):
+def test_affine_continuation_product(op, args):
     def f():
         return op(*args)
 
-    h_fail = define(Interpretation)(
-        {op: lambda v, *args, **kwargs: reflect(reflect(v))}
-    )
+    h_twice = define(Interpretation)({op: lambda v, *a, **k: reflect(reflect(v))})
 
-    with pytest.raises(AffineContinuationError):
-        interpreter(product(defaults(op), h_fail))(f)()
+    assert interpreter(defaults(op))(f)() == \
+        interpreter(product(defaults(op), h_twice))(f)()
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)

@@ -80,7 +80,7 @@ def register(__op, intp=None, interpret_op=None):
 
 @define(Operation)
 @contextlib.contextmanager
-def interpreter(intp: Interpretation):
+def interpreter(intp: Interpretation, *, unset: bool = True):
     from .runtime import get_interpretation, swap_interpretation
 
     old_intp = get_interpretation()
@@ -94,7 +94,8 @@ def interpreter(intp: Interpretation):
         old_intp = swap_interpretation(new_intp)
         yield intp
     finally:
-        swap_interpretation(old_intp)
+        if unset:
+            swap_interpretation(old_intp)
 
 
 # bootstrap
