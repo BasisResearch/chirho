@@ -96,6 +96,9 @@ def interpreter(intp: Interpretation, *, unset: bool = True):
     finally:
         if unset:
             swap_interpretation(old_intp)
+        else:
+            if len(list(old_intp.keys())) == 0 and len(list(intp.keys())) > 0:
+                raise RuntimeError(f"Dangling interpretation on stack: {intp}")
 
 
 # bootstrap
