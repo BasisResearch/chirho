@@ -10,6 +10,7 @@ from chirho.dynamical.handlers import (
     NonInterruptingPointObservationArray,
     SimulatorEventLoop,
     StaticObservation,
+    DynamicTrace
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -18,7 +19,6 @@ from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
     bayes_sir_model,
     check_states_match,
-    check_trajectories_match,
 )
 
 pyro.settings.set(module_local_params=True)
@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-# tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(4.0)
+logging_times = torch.tensor([1.0, 2.0, 3.0])
 
 
 def run_svi_inference(model, n_steps=10, verbose=False, lr=0.03, **model_kwargs):
@@ -114,15 +114,16 @@ def test_tspan_collision(model, obs_handler):
     """
     S_obs = torch.tensor(10.0)
     data = {"S_obs": S_obs}
-    with SimulatorEventLoop():
-        with _get_compatible_observations(obs_handler, time=tspan[1], data=data):
-            result = simulate(
-                model, init_state, start_time, end_time, solver=TorchDiffEq()
-            )
-
-    assert result.S.shape[0] == 5
-    assert result.I.shape[0] == 5
-    assert result.R.shape[0] == 5
+    with DynamicTrace(logging_times) as dt:
+        with SimulatorEventLoop():
+            with _get_compatible_observations(obs_handler, time=start_time, data=data):
+                simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
+    result = dt.trace
+    assert result.S.shape[0] == len(logging_times)
+    assert result.I.shape[0] == len(logging_times)
+    assert result.R.shape[0] == len(logging_times)
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
@@ -191,15 +192,15 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
 
-    assert check_trajectories_match(interrupting_ret, non_interrupting_ret)
+    assert check_states_match(interrupting_ret, non_interrupting_ret)
 
     assert torch.isclose(tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum())
-
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
+@pytest.mark.skip("The error that this test was written for has been fixed. Leaving for posterity.")
 def test_point_observation_at_tspan_start_excepts(
     model, init_state, start_time, end_time
 ):
@@ -295,19 +296,21 @@ def test_simulate_persistent_pyrosample(use_event_loop):
 
     model = RandBetaUnifiedFixtureDynamics()
 
-    if not use_event_loop:
-        result = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
-    else:
-        S_obs = torch.tensor(10.0)
-        data1 = {"S_obs": S_obs}
-        data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
-        with SimulatorEventLoop():
-            with StaticObservation(time=3.1, data=data2):
-                with StaticObservation(time=2.9, data=data1):
-                    result = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+    with DynamicTrace(logging_times) as dt:
+        if not use_event_loop:
+            simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+        else:
+            S_obs = torch.tensor(10.0)
+            data1 = {"S_obs": S_obs}
+            data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
+            with SimulatorEventLoop():
+                with StaticObservation(time=3.1, data=data2):
+                    with StaticObservation(time=2.9, data=data1):
+                        simulate(
+                            model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        )
+    result = dt.trace
 
-    assert result.S.shape[0] == 5
-    assert result.I.shape[0] == 5
-    assert result.R.shape[0] == 5
+    assert result.S.shape[0] == len(logging_times)
+    assert result.I.shape[0] == len(logging_times)
+    assert result.R.shape[0] == len(logging_times)
