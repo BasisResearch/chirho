@@ -5,7 +5,6 @@ from typing import ParamSpec, TypeVar
 
 import pytest
 
-from chirho.effectful.ops.continuation import AffineContinuationError
 from chirho.effectful.ops.handler import compose, fwd, handler
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define

@@ -5,6 +5,10 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+class AffineContinuationError(Exception):
+    pass
+
+
 class _BaseAffineContinuation(Generic[S, T]):
     cont: Callable[[Optional[T], Optional[S]], T]
     used: bool
@@ -16,7 +20,6 @@ class _BaseAffineContinuation(Generic[S, T]):
     def __call__(self, __res: Optional[T], __value: Optional[S]) -> T:
         try:
             if self.used:
-                from chirho.effectful.ops.continuation import AffineContinuationError
                 raise AffineContinuationError(f"can use {self.cont} at most once")
             return self.cont(__res, __value)
         finally:

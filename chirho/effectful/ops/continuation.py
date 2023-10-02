@@ -21,10 +21,6 @@ class Continuation(Protocol[S_, T]):
         ...
 
 
-class AffineContinuationError(Exception):
-    pass
-
-
 @contextlib.contextmanager
 def shallow_interpreter(intp: Interpretation):
     # destructive update: calling any op in intp should remove intp from active
