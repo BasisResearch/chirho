@@ -51,4 +51,9 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
             dynamics, initial_state, timespan, solver=solver
         )
         self.trace.append(trajectory[..., 1:-1])
+        if len(self.trace) > len(self.logging_times):
+            raise ValueError(
+                "Multiple simulates were used with a single DynamicTrace handler."
+                "This is currently not supported."
+            )
         msg["value"] = trajectory[..., -1].to_state()

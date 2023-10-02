@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 init_state = State(S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(1.2)
-logging_times = torch.tensor([0.1, 0.4, 0.8])
+logging_times = torch.tensor([0.3, 0.6, 0.9])
 
 #
 # 15 passengers tested positive for a disease after landing
@@ -62,15 +62,16 @@ vec_obs3 = NonInterruptingPointObservationArray(
 
 
 def counterf_model():
-    with SimulatorEventLoop():
-        with vec_obs3, reparam, twin_world, intervention:
-            return simulate(
-                UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
-                init_state,
-                start_time,
-                end_time,
-                solver=TorchDiffEq(),
-            )
+    with vec_obs3:
+        with SimulatorEventLoop():
+            with reparam, twin_world, intervention:
+                return simulate(
+                    UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
+                    init_state,
+                    start_time,
+                    end_time,
+                    solver=TorchDiffEq(),
+                )
 
 
 def conditioned_model():
@@ -117,15 +118,12 @@ def test_shape_twincounterfactual_observation_intervention_commutes():
     assert nodes["infected_passengers"]["value"].squeeze().shape == obs_shape
 
 
-# TODO: This test is failing because the autoguide doesn't recognize any latents in the model.
-@pytest.mark.skip
 def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
     # Run inference on factual model.
     guide = run_svi_inference_torch_direct(conditioned_model, n_steps=2, verbose=False)
 
     num_samples = 100
     pred = pyro.infer.Predictive(counterf_model, guide=guide, num_samples=num_samples)()
-
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
     assert pred["infected_passengers"].squeeze().shape == (

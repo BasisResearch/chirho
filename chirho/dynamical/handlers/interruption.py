@@ -111,13 +111,17 @@ class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin)
 
     def _pyro_post_simulate(self, msg) -> None:
         dynamics, _, _, _ = msg["args"]
-
+        # import pdb
+        # pdb.set_trace()
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
         super()._pyro_post_simulate(msg)
         # This condition checks whether all of the simulate calls have been executed.
         if len(self.trace) == len(self.times):
             with condition(data=self.data):
                 dynamics.observation(self.trace)
+
+            # Reset the trace for the next simulate call.
+            super()._reset()
 
 
 # class NonInterruptingPointObservationArray(

@@ -81,7 +81,8 @@ class State(StateOrTrajectory[T]):
 
 class Trajectory(StateOrTrajectory[T]):
     def __len__(self) -> int:
-        return len(getattr(self, next(iter(self.keys))))
+        # TODO this implementation is just for tensors, but we should support other types.
+        return getattr(self, next(iter(self.keys))).shape[-1]
 
     def _getitem(self, key):
         if isinstance(key, str):
