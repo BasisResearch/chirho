@@ -90,3 +90,4 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
         msg["value"] = end_state
         msg["stop"] = True
+        msg["in_SEL"] = True
