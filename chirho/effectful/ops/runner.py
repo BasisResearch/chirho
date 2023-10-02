@@ -33,11 +33,6 @@ def product(
             intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd
         )
 
-    def _op_or_result(
-        op: Operation[P, S], result: Optional[T], *args: Q.args, **kwargs: Q.kwargs
-    ) -> T:
-        return result if result is not None else typing.cast(T, op(*args, **kwargs))
-
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
     # 2. op in intp but not intp2: don't expose in user code
@@ -51,13 +46,13 @@ def product(
 
     block_inner = define(Interpretation)({
         op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
-        for op in intp2.keys() if op in intp
+        for op in set(intp2.keys()) & set(intp.keys())
     })
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)({
         op: bind_and_push_prompts(
-            {reflect: interpreter(block_outer)(functools.partial(_op_or_result, op))},
+            {reflect: interpreter(block_outer)(define(Operation)(op).default)},
             op,
             interpreter(block_inner)(intp2[op]),
         ) for op in intp2.keys()
