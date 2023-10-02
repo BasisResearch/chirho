@@ -7,10 +7,10 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
+    DynamicTrace,
     NonInterruptingPointObservationArray,
     SimulatorEventLoop,
     StaticObservation,
-    DynamicTrace
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -117,9 +117,7 @@ def test_tspan_collision(model, obs_handler):
     with DynamicTrace(logging_times) as dt:
         with SimulatorEventLoop():
             with _get_compatible_observations(obs_handler, time=start_time, data=data):
-                simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
     result = dt.trace
     assert result.S.shape[0] == len(logging_times)
     assert result.I.shape[0] == len(logging_times)
@@ -196,11 +194,14 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     assert torch.isclose(tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum())
 
+
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
-@pytest.mark.skip("The error that this test was written for has been fixed. Leaving for posterity.")
+@pytest.mark.skip(
+    "The error that this test was written for has been fixed. Leaving for posterity."
+)
 def test_point_observation_at_tspan_start_excepts(
     model, init_state, start_time, end_time
 ):
@@ -307,7 +308,11 @@ def test_simulate_persistent_pyrosample(use_event_loop):
                 with StaticObservation(time=3.1, data=data2):
                     with StaticObservation(time=2.9, data=data1):
                         simulate(
-                            model, init_state, start_time, end_time, solver=TorchDiffEq()
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
                         )
     result = dt.trace
 

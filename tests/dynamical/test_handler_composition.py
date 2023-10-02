@@ -7,10 +7,10 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
+    DynamicTrace,
     NonInterruptingPointObservationArray,
     SimulatorEventLoop,
     StaticIntervention,
-    DynamicTrace
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -115,6 +115,7 @@ def test_shape_twincounterfactual_observation_intervention_commutes():
 
     obs_shape = (num_worlds, len(flight_landing_times))
     assert nodes["infected_passengers"]["value"].squeeze().shape == obs_shape
+
 
 # TODO: This test is failing because the autoguide doesn't recognize any latents in the model.
 @pytest.mark.skip
