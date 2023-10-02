@@ -5,7 +5,11 @@ import pytest
 import torch
 
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
-from chirho.counterfactual.handlers.explanation import consequent_differs, undo_split
+from chirho.counterfactual.handlers.explanation import (
+    consequent_differs,
+    undo_split,
+    uniform_proposal,
+)
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.observational.handlers.condition import Factors
@@ -208,3 +212,61 @@ def test_consequent_differs(plate_size, event_shape):
     assert torch.all(int_con_dif[0::2] == -1e8)
 
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
+
+
+def test_uniform_proposal():
+    support_real = pyro.distributions.constraints.real
+    support_boolean = pyro.distributions.constraints.boolean
+    support_positive = pyro.distributions.constraints.positive
+    support_interval = pyro.distributions.constraints.interval(0, 10)
+
+    uniform_real = uniform_proposal(support_real)
+    uniform_real_shifted = uniform_proposal(
+        support_real, normal_mean=5.0, normal_sd=0.5
+    )
+    uniform_boolean = uniform_proposal(support_boolean)
+    uniform_interval_centered = uniform_proposal(support_interval)
+    uniform_interval_even = uniform_proposal(
+        support_interval, uniform_over_interval=True
+    )
+    uniform_positive = uniform_proposal(support_positive)
+
+    with pyro.plate("samples", 500):
+        samples_real = pyro.sample("real", uniform_real)
+        samples_real_shifted = pyro.sample("real_shifted", uniform_real_shifted)
+        samples_boolean = pyro.sample("boolean", uniform_boolean)
+        samples_interval_centered = pyro.sample(
+            "interval_centered", uniform_interval_centered
+        )
+        samples_interval_even = pyro.sample("interval_even", uniform_interval_even)
+        samples_positive = pyro.sample("positive", uniform_positive)
+
+    # some leeway added to avoid
+    # stochastic test failures
+    within_range = ((samples_real >= -3) & (samples_real <= 3)).float().mean()
+    assert abs(samples_real.mean() - 0.0) < 0.1
+    assert within_range >= 0.9
+
+    within_range_shifted = (
+        ((samples_real_shifted >= 3) & (samples_real <= 7)).float().mean()
+    )
+    assert abs(samples_real_shifted.mean() - 5) < 0.1
+    assert within_range_shifted >= 0.9
+
+    proportion_of_ones = (samples_boolean == 1).float().mean()
+    assert abs(proportion_of_ones - 0.5) < 0.1
+
+    assert (samples_interval_centered >= 0.0).all() and (
+        samples_interval_centered <= 10.0
+    ).all()
+    assert (samples_interval_even >= 0.0).all() and (
+        samples_interval_even <= 10.0
+    ).all()
+
+    mean_interval_centered = samples_interval_centered.mean()
+    assert abs(mean_interval_centered - 5) < 0.8
+
+    prop_low = (samples_interval_even <= 2.5).float().mean()
+    assert abs(prop_low - 0.25) < 0.2
+
+    assert (samples_positive > 0).all()
