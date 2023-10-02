@@ -44,36 +44,24 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    block_outer = define(Interpretation)(
-        {
-            op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp[op])
-            for op in intp.keys()
-        }
-    )
+    block_outer = define(Interpretation)({
+        op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp[op])
+        for op in intp.keys()
+    })
 
-    block_inner = define(Interpretation)(
-        {
-            op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
-            for op in intp2.keys()
-            if op in intp
-        }
-    )
+    block_inner = define(Interpretation)({
+        op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
+        for op in intp2.keys() if op in intp
+    })
 
     # on reflect, jump to the outer interpretation and interpret it using itself
-    return define(Interpretation)(
-        {
-            op: bind_and_push_prompts(
-                {
-                    reflect: interpreter(block_outer)(
-                        functools.partial(_op_or_result, op)
-                    )
-                },
-                op,
-                interpreter(block_inner)(intp2[op]),
-            )
-            for op in intp2.keys()
-        }
-    )
+    return define(Interpretation)({
+        op: bind_and_push_prompts(
+            {reflect: interpreter(block_outer)(functools.partial(_op_or_result, op))},
+            op,
+            interpreter(block_inner)(intp2[op]),
+        ) for op in intp2.keys()
+    })
 
 
 @define(Operation)

@@ -2,7 +2,6 @@ import contextlib
 import functools
 from typing import Callable, Concatenate, Optional, ParamSpec, Protocol, TypeVar
 
-from chirho.effectful.ops._utils import weak_memoize
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
 from chirho.effectful.ops.runtime import get_interpretation
@@ -32,41 +31,30 @@ def shallow_interpreter(intp: Interpretation):
         yield intp
 
 
-@weak_memoize
-def get_cont_args(op: Operation) -> Operation[[], tuple[tuple, dict]]:
-    def _null_op():
-        raise ValueError(f"No args stored for {op}")
-
-    return define(Operation)(_null_op)
-
-
 def capture_cont_args(
-    op: Operation[P, S], op_intp: Callable[Concatenate[Optional[T], Q], T]
+    get_args: Operation[[], tuple[tuple, dict]],
+    op_intp: Callable[Concatenate[Optional[T], Q], T]
 ) -> Callable[Concatenate[Optional[T], Q], T]:
+
     @functools.wraps(op_intp)
     def _wrapper(__result: Optional[T], *args: Q.args, **kwargs: Q.kwargs) -> T:
         return interpreter(
-            define(Interpretation)({get_cont_args(op): lambda _: (args, kwargs)})
+            define(Interpretation)({get_args: lambda _: (args, kwargs)})
         )(op_intp)(__result, *args, **kwargs)
 
     return _wrapper
 
 
 def bind_cont_args(
-    op: Operation[P, S],
+    get_args: Operation[[], tuple[tuple, dict]],
     unbound_conts: Interpretation[S, T],
 ) -> Interpretation[S, T]:
-    return define(Interpretation)(
-        {
-            p: functools.partial(
-                lambda k, _, res: k(
-                    res, *get_cont_args(op)()[0], **get_cont_args(op)()[1]
-                ),
-                unbound_conts[p],
-            )
-            for p in unbound_conts.keys()
-        }
-    )
+    return define(Interpretation)({
+        p: functools.partial(
+            lambda k, _, res: k(res, *get_args()[0], **get_args()[1]),
+            unbound_conts[p],
+        ) for p in unbound_conts.keys()
+    })
 
 
 def bind_and_push_prompts(
@@ -74,5 +62,10 @@ def bind_and_push_prompts(
     op: Operation[P, S],
     op_intp: Callable[Concatenate[Optional[T], P], T],
 ) -> Callable[Concatenate[Optional[T], P], T]:
-    bound_arg_conts = bind_cont_args(op, unbound_conts)
-    return shallow_interpreter(bound_arg_conts)(capture_cont_args(op, op_intp))
+
+    @define(Operation)
+    def get_args() -> tuple[tuple, dict]:
+        raise ValueError(f"No args stored for {op}")
+
+    bound_arg_conts = bind_cont_args(get_args, unbound_conts)
+    return shallow_interpreter(bound_arg_conts)(capture_cont_args(get_args, op_intp))
