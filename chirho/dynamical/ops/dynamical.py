@@ -7,7 +7,6 @@ from typing import (
     Protocol,
     TypeVar,
     runtime_checkable,
-    Union,
 )
 
 import pyro
@@ -121,8 +120,8 @@ class Trajectory(StateOrTrajectory[T]):
     @functools.singledispatchmethod
     def append(self, other: T):
         raise NotImplementedError(f"append not implemented for type {type(other)}")
-    
-    def to_state(self) -> "Trajectory[T]":
+
+    def to_state(self) -> State[T]:
         ret: State[T] = State(
             # TODO support event_dim > 0
             **{k: getattr(self, k) for k in self.keys}

@@ -98,7 +98,7 @@ def test_nested_dynamic_intervention_causes_change(
                     var_order=init_state.var_order,
                     max_applications=1,
                 ):
-                    res = simulate(
+                    simulate(
                         model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
@@ -207,7 +207,13 @@ def test_dynamic_intervention_causes_change(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_twinworld_dynamic_intervention(
-    model, init_state, start_time, end_time, logging_times, trigger_states, intervene_states
+    model,
+    init_state,
+    start_time,
+    end_time,
+    logging_times,
+    trigger_states,
+    intervene_states,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -230,13 +236,19 @@ def test_split_twinworld_dynamic_intervention(
                     max_applications=1,
                 ):
                     with TwinWorldCounterfactual() as cf:
-                        simulate(
-                            model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        cf_state = simulate(
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
                         )
 
     with cf:
         cf_trajectory = dt.trace
         for k in cf_trajectory.keys:
+            # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
+            assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
@@ -276,13 +288,19 @@ def test_split_multiworld_dynamic_intervention(
                     max_applications=1,
                 ):
                     with MultiWorldCounterfactual() as cf:
-                        simulate(
-                            model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        cf_state = simulate(
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
                         )
 
     with cf:
         cf_trajectory = dt.trace
         for k in cf_trajectory.keys:
+            # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
+            assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
@@ -360,11 +378,7 @@ def test_split_twinworld_dynamic_matches_output(
         assert not set(indices_of(factual_actual, event_dim=0))
 
     assert set(cf_result.keys) == set(cf_actual.keys) == set(cf_expected.keys)
-    assert (
-        set(cf_result.keys)
-        == set(factual_actual.keys)
-        == set(factual_expected.keys)
-    )
+    assert set(cf_result.keys) == set(factual_actual.keys) == set(factual_expected.keys)
 
     for k in cf_result.keys:
         assert torch.allclose(
