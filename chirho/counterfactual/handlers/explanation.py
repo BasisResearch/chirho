@@ -1,6 +1,8 @@
+import functools
 import itertools
 from typing import Callable, Iterable, TypeVar
 
+import pyro
 import torch  # noqa: F401
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
@@ -80,3 +82,48 @@ def consequent_differs(
         return cond(eps, 0.0, not_eq, event_dim=event_dim)
 
     return _consequent_differs
+
+
+@functools.singledispatch
+def uniform_proposal(
+    support: pyro.distributions.constraints.Constraint,
+    uniform_over_interval: bool = False,
+    normal_mean: float = 0.0,
+    normal_sd: float = 1.0,
+    **kwargs,
+) -> pyro.distributions.Distribution:
+    """
+    This function heuristically constructs a probability distribution over a specified
+    support. The choice of distribution depends on the type of support provided.
+
+    - If the support is `real`, it creates a Normal distribution with the specified mean
+      and standard deviation, defaulting to (0,1).
+    - If the support is `boolean`, it creates a Bernoulli distribution with a fixed logit of 0, corresponding
+      to success probability .5.
+    - If the support is an `interval` and `uniform_over_interval` is set to True, it creates
+      a Uniform distribution over the specified interval. Otherwise, the distribution is centered around the
+      midpoint of the interval.
+
+    :param support: The support used to create the probability distribution.
+    :param uniform_over_interval: If True and the support is an interval, create a Uniform
+                                 distribution over the interval  (defaults to False).
+    :param normal_mean: The mean for the Normal distribution (defaults to 0.0).
+    :param normal_sd: The standard deviationfor the Normal distribution (defaults to 1.0).
+    :param kwargs: Additional keyword arguments.
+    :return: A uniform probability distribution over the specified support.
+    """
+    if support is pyro.distributions.constraints.real:
+        return pyro.distributions.Normal(normal_mean, normal_sd).mask(False)
+    elif support is pyro.distributions.constraints.boolean:
+        return pyro.distributions.Bernoulli(logits=torch.zeros(()))
+    elif (
+        isinstance(support, pyro.distributions.constraints.interval)
+        and uniform_over_interval
+    ):
+        return pyro.distributions.Uniform(
+            support.lower_bound, support.upper_bound
+        ).mask(False)
+    else:
+        tfm = pyro.distributions.transforms.biject_to(support)
+        base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
+        return pyro.distributions.TransformedDistribution(base, tfm)
