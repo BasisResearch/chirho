@@ -88,7 +88,8 @@ def _get_compatible_observations(obs_handler, time, data):
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
     # "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
-    "obs_handler", [NonInterruptingPointObservationArray]
+    "obs_handler",
+    [NonInterruptingPointObservationArray],
 )
 def test_log_prob_exists(model, obs_handler):
     """
@@ -98,7 +99,7 @@ def test_log_prob_exists(model, obs_handler):
     data = {"S_obs": S_obs}
     with pyro.poutine.trace() as tr:
         with SimulatorEventLoop():
-            with _get_compatible_observations(obs_handler, time=2.9, data=data) as obs:
+            with _get_compatible_observations(obs_handler, time=2.9, data=data):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert isinstance(tr.trace.log_prob_sum(), torch.Tensor), "No log_prob found!"

@@ -111,10 +111,10 @@ class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin)
 
     def _pyro_post_simulate(self, msg) -> None:
         dynamics, _, _, _ = msg["args"]
-        
+
         if "in_SEL" not in msg.keys():
             msg["in_SEL"] = False
-        
+
         # This checks whether the simulate has already redirected in a SimulatorEventLoop.
         # If so, we don't want to run the observation again.
         if msg["in_SEL"]:
