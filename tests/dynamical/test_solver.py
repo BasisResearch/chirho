@@ -8,7 +8,7 @@ from chirho.dynamical.handlers import SimulatorEventLoop
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import bayes_sir_model, check_trajectories_match
+from .dynamical_fixtures import bayes_sir_model, check_states_match
 
 pyro.settings.set(module_local_params=True)
 
@@ -16,7 +16,8 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-tspan = torch.tensor([0.0, 1.0, 2.0, 3.0, 4.0])
+start_time = torch.tensor(0.0)
+end_time = torch.tensor(4.0)
 
 
 def test_no_backend_error():
@@ -49,4 +50,4 @@ def test_backend_handler():
             sir, init_state, start_time, end_time, solver=TorchDiffEq()
         )
 
-    assert check_trajectories_match(result_handler, result_arg)
+    assert check_states_match(result_handler, result_arg)
