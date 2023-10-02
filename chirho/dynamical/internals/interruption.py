@@ -51,6 +51,7 @@ def simulate_to_interruption(
     event_state = simulate(
         dynamics, start_state, start_time, interruption_time, solver=solver
     )
+
     return event_state, interruptions, interruption_time
 
 

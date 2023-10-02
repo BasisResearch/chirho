@@ -7,14 +7,13 @@ from typing import (
     Protocol,
     TypeVar,
     runtime_checkable,
+    Union,
 )
 
 import pyro
 import torch
 
 from chirho.dynamical.handlers.solver import Solver
-
-# from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -73,7 +72,7 @@ class State(StateOrTrajectory[T]):
             )
         )
 
-    def trajectorify(self) -> "Trajectory[T]":
+    def to_trajectory(self) -> "Trajectory[T]":
         ret: Trajectory[T] = Trajectory(
             # TODO support event_dim > 0
             **{k: getattr(self, k)[..., None] for k in self.keys}
@@ -122,6 +121,13 @@ class Trajectory(StateOrTrajectory[T]):
     @functools.singledispatchmethod
     def append(self, other: T):
         raise NotImplementedError(f"append not implemented for type {type(other)}")
+    
+    def to_state(self) -> "Trajectory[T]":
+        ret: State[T] = State(
+            # TODO support event_dim > 0
+            **{k: getattr(self, k) for k in self.keys}
+        )
+        return ret
 
 
 # TODO: figure out parameteric types of Trajectory.
