@@ -26,7 +26,9 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
     """
 
     def _undo_split(value: T) -> T:
-        antecedents_ = [a for a in antecedents if a in indices_of(value, event_dim=event_dim)]
+        antecedents_ = [
+            a for a in antecedents if a in indices_of(value, event_dim=event_dim)
+        ]
 
         factual_value = gather(
             value,
@@ -37,7 +39,9 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
         return scatter(
             {
-                IndexSet(**{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}): factual_value
+                IndexSet(
+                    **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}
+                ): factual_value
                 for inds in itertools.product(*[[0, 1]] * len(antecedents_))
             },
             event_dim=event_dim,
@@ -63,8 +67,16 @@ def consequent_differs(
     """
 
     def _consequent_differs(consequent: T) -> torch.Tensor:
-        indices = IndexSet(**{name: ind for name, ind in get_factual_indices().items() if name in antecedents})
-        not_eq: torch.Tensor = consequent != gather(consequent, indices, event_dim=event_dim)
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+        not_eq: torch.Tensor = consequent != gather(
+            consequent, indices, event_dim=event_dim
+        )
         for _ in range(event_dim):
             not_eq = torch.all(not_eq, dim=-1, keepdim=False)
         return cond(eps, 0.0, not_eq, event_dim=event_dim)
@@ -104,8 +116,13 @@ def uniform_proposal(
         return pyro.distributions.Normal(normal_mean, normal_sd).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
-    elif isinstance(support, pyro.distributions.constraints.interval) and uniform_over_interval:
-        return pyro.distributions.Uniform(support.lower_bound, support.upper_bound).mask(False)
+    elif (
+        isinstance(support, pyro.distributions.constraints.interval)
+        and uniform_over_interval
+    ):
+        return pyro.distributions.Uniform(
+            support.lower_bound, support.upper_bound
+        ).mask(False)
     else:
         tfm = pyro.distributions.transforms.biject_to(support)
         base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)

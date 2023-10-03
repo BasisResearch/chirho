@@ -3,9 +3,11 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
+from scipy.stats import spearmanr
 
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
-from chirho.counterfactual.handlers.explanation import (
+from chirho.counterfactual.handlers.explanation import (  # noqa: F401 - Ignore import warning for a registered function
+    _uniform_proposal_indep,
     consequent_differs,
     undo_split,
     uniform_proposal,
@@ -270,3 +272,19 @@ def test_uniform_proposal():
     assert abs(prop_low - 0.25) < 0.2
 
     assert (samples_positive > 0).all()
+
+
+def test_uniform_proposal_indep():
+    indep_constraint = pyro.distributions.constraints.independent(
+        pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
+    )
+
+    dist_indep = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 1000]))
+
+    with pyro.plate("data", 2):
+        samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
+
+    batch_1 = samples_indep[0].squeeze().tolist()
+    batch_2 = samples_indep[1].squeeze().tolist()
+
+    assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
