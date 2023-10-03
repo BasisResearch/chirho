@@ -148,18 +148,42 @@ def _uniform_proposal_indep(
 
     Example:
     ```
-    # Define an independent constraint with real support and an event shape of (2, 3)
     indep_constraint = pyro.distributions.constraints.independent(
     pyro.distributions.constraints.real, reinterpreted_batch_ndims=2)
-
-    #Create a distribution with the independent constraint and event shape
     dist = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 3]))
-
-    #Sample from the distribution within pyro.plate
     with pyro.plate("data", 3):
-        samples_indep2 = pyro.sample("samples_indep", dist.expand([4, 2, 3]))
+        samples_indep = pyro.sample("samples_indep", dist.expand([4, 2, 3]))
     ```
     """
 
     d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
+
+
+@uniform_proposal.register
+def _uniform_proposal_integer(
+    support: pyro.distributions.constraints.integer_interval,
+    **kwargs,
+) -> pyro.distributions.Distribution:
+    """
+    This constructs a uniform categorical distribution over an integer_interval support
+    where the lower bound is 0 and the upper bound is specified by the support.
+
+    :param support: The integer_interval support with a lower bound of 0 and a specified upper bound.
+    :param kwargs: Additional keyword arguments.
+    :return: A categorical probability distribution over the specified integer_interval support.
+
+    Example:
+    ```
+    constraint = pyro.distributions.constraints.integer_interval(0, 2)
+    dist = _uniform_proposal_integer(constraint)
+    samples = dist.sample(torch.Size([100]))
+    print(dist.probs.tolist())
+    ```
+    """
+    if support.lower_bound != 0:
+        raise NotImplementedError(
+            "integer_interval with lower_bound > 0 not yet supported"
+        )
+    n = support.upper_bound - support.lower_bound + 1
+    return pyro.distributions.Categorical(probs=torch.ones((n,)))

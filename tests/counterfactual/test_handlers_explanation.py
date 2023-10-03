@@ -6,8 +6,9 @@ import torch
 from scipy.stats import spearmanr
 
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
-from chirho.counterfactual.handlers.explanation import (  # noqa: F401 - Ignore import warning for a registered function
+from chirho.counterfactual.handlers.explanation import (  # noqa: F401  ignore import warning for registered functions
     _uniform_proposal_indep,
+    _uniform_proposal_integer,
     consequent_differs,
     undo_split,
     uniform_proposal,
@@ -288,3 +289,20 @@ def test_uniform_proposal_indep():
     batch_2 = samples_indep[1].squeeze().tolist()
 
     assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
+
+
+def test_uniform_proposal_integer():
+    constraint = pyro.distributions.constraints.integer_interval(0, 2)
+
+    dist_int_iterval = uniform_proposal(constraint)
+
+    assert isinstance(dist_int_iterval, pyro.distributions.Categorical)
+    assert dist_int_iterval.probs.shape == (3,)
+    assert torch.allclose(dist_int_iterval.probs.sum(), torch.tensor(1.0))
+
+    with pyro.plate("data", 1000):
+        samples_int_interval = pyro.sample("samples_int_interval", dist_int_iterval)
+
+    freqs = torch.bincount(samples_int_interval, minlength=3) / 1000
+
+    assert torch.allclose(freqs, torch.tensor([0.33, 0.33, 0.33]), atol=0.1)
