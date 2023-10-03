@@ -66,7 +66,6 @@ def get_next_interruptions(
     dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
 ) -> Tuple[Tuple["Interruption", ...], T]:
-
     nodyn = len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
 
