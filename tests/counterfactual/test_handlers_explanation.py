@@ -10,6 +10,7 @@ from chirho.counterfactual.handlers.explanation import (  # noqa: F401  ignore i
     _uniform_proposal_indep,
     _uniform_proposal_integer,
     consequent_differs,
+    random_intervention,
     undo_split,
     uniform_proposal,
 )
@@ -306,3 +307,69 @@ def test_uniform_proposal_integer():
     freqs = torch.bincount(samples_int_interval, minlength=3) / 1000
 
     assert torch.allclose(freqs, torch.tensor([0.33, 0.33, 0.33]), atol=0.1)
+
+
+def test_random_intervention():
+    support_real = pyro.distributions.constraints.real
+    support_boolean = pyro.distributions.constraints.boolean
+    support_positive = pyro.distributions.constraints.positive
+    support_interval = pyro.distributions.constraints.interval(0, 10)
+    support_int_interval = pyro.distributions.constraints.integer_interval(0, 2)
+
+    intervention_real = random_intervention(support_real, "sample_real")
+    intervention_boolean = random_intervention(support_boolean, "sample_boolean")
+    intervention_positive = random_intervention(support_positive, "sample_positive")
+    intervention_interval = random_intervention(
+        support_interval, "sample_interval_centered"
+    )
+    intervention_interval_even = random_intervention(
+        support_interval, "sample_interval_even", uniform_over_interval=True
+    )
+    intervention_int_interval = random_intervention(
+        support_int_interval, "sample_int_interval"
+    )
+
+    def create_interventions():
+        with pyro.plate("random_samples", 1000):
+            sample_real = intervention_real(torch.ones(10))
+            sample_boolean = intervention_boolean(torch.ones(10))
+            sample_positive = intervention_positive(torch.ones(10))
+            sample_interval_centered = intervention_interval(torch.ones(10))
+            samples_interval_even = intervention_interval_even(torch.ones(10))
+            sample_int_interval = intervention_int_interval(torch.ones(10))
+        return (
+            sample_real,
+            sample_boolean,
+            sample_positive,
+            sample_interval_centered,
+            samples_interval_even,
+            sample_int_interval,
+        )
+
+    with pyro.poutine.trace() as tr:
+        create_interventions()
+
+    traced_sample_real = tr.trace.nodes["sample_real"]["value"]
+    traced_within_range = (
+        ((traced_sample_real >= -3) & (traced_sample_real <= 3)).float().mean()
+    )
+    assert abs(traced_sample_real.mean() - 0.0) < 0.15
+    assert traced_within_range >= 0.9
+
+    traced_sample_boolean = tr.trace.nodes["sample_boolean"]["value"]
+    traced_proportion_of_ones = (traced_sample_boolean == 1).float().mean()
+    assert abs(traced_proportion_of_ones - 0.5) < 0.1
+
+    assert (tr.trace.nodes["sample_positive"]["value"] > 0).all()
+
+    traced_sample_interval_centered = tr.trace.nodes["sample_interval_centered"][
+        "value"
+    ]
+    assert abs(traced_sample_interval_centered.mean() - 5.0) < 0.5
+
+    traced_sample_interval_even = tr.trace.nodes["sample_interval_even"]["value"]
+    assert (traced_sample_interval_even <= 2.5).float().mean() - 0.25 < 0.1
+
+    traced_sample_int_interval = tr.trace.nodes["sample_int_interval"]["value"]
+    traced_freqs = torch.bincount(traced_sample_int_interval, minlength=3) / 1000
+    assert torch.allclose(traced_freqs, torch.tensor([0.33, 0.33, 0.33]), atol=0.1)
