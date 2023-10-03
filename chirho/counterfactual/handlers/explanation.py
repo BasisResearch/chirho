@@ -187,3 +187,47 @@ def _uniform_proposal_integer(
         )
     n = support.upper_bound - support.lower_bound + 1
     return pyro.distributions.Categorical(probs=torch.ones((n,)))
+
+
+def random_intervention(
+    support: pyro.distributions.constraints.Constraint,
+    name: str,
+    uniform_over_interval: bool = False,
+    normal_mean: float = 0.0,
+    normal_sd: float = 1.0,
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """
+    Creates a random `pyro`sample` function for a single sample site, determined by
+    by the distribution support, and site name.
+
+    :param support: The support constraint for the sample site..can take.
+    :param name: The name of the sample site.
+    :param uniform_over_interval: (Optional) As in the documentation for `uniform_proposal`.
+    :param normal_mean: (Optional) As in the documentation for `uniform_proposal`.
+    :param normal_sd: (Optional) As in the documentation for `uniform_proposal`.
+
+    :return: A `pyro.sample` function that takes a torch.Tensor as input
+        and returns a random sample over the pre-specified support of the same
+        event shape as the input tensor.
+
+    Example:
+    ```
+    support = pyro.distributions.constraints.real
+    name = "real_sample"
+    intervention_fn = random_intervention(support, name)
+    random_sample = intervention_fn(torch.tensor(2.0))
+    ```
+    """
+
+    def _random_intervention(value: torch.Tensor) -> torch.Tensor:
+        event_shape = value.shape[len(value.shape) - support.event_dim :]
+        proposal_dist = uniform_proposal(
+            support,
+            uniform_over_interval=uniform_over_interval,
+            normal_mean=normal_mean,
+            normal_sd=normal_sd,
+            event_shape=event_shape,
+        )
+        return pyro.sample(name, proposal_dist)
+
+    return _random_intervention
