@@ -5,8 +5,9 @@ from .interruption import (  # noqa: F401
     DynamicIntervention,
     Interruption,
     NonInterruptingPointObservationArray,
-    PointInterruption,
-    PointIntervention,
-    PointObservation,
+    StaticInterruption,
+    StaticIntervention,
+    StaticObservation,
 )
 from .solver import Solver  # noqa: F401
+from .trace import DynamicTrace  # noqa: F401

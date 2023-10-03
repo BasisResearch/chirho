@@ -49,7 +49,9 @@ def make_event_fn(target_state: State[torch.tensor]):
     return event_f
 
 
-def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
+def conditioned_sir(
+    data, init_state, start_time, end_time, include_dynamic_intervention
+):
     sir = bayes_sir_model()
     managers = []
     for obs in data.values():
@@ -71,7 +73,7 @@ def conditioned_sir(data, init_state, tspan, include_dynamic_intervention):
         with ExitStack() as stack:
             for manager in managers:
                 stack.enter_context(manager)
-            traj = simulate(sir, init_state, tspan, solver=TorchDiffEq())
+            traj = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
     return traj
 
 

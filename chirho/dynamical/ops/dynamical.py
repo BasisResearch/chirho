@@ -13,14 +13,14 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.solver import Solver
-from chirho.dynamical.internals.dynamical import _index_last_dim_with_mask
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-class State(Generic[T]):
+class StateOrTrajectory(Generic[T]):
     def __init__(self, **values: T):
+        # self.class_name =
         self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
@@ -34,10 +34,10 @@ class State(Generic[T]):
         return frozenset(self.__dict__["_values"].keys())
 
     def __repr__(self) -> str:
-        return f"State({self.__dict__['_values']})"
+        return f"{self.__class__.__name__}({self.__dict__['_values']})"
 
     def __str__(self) -> str:
-        return f"State({self.__dict__['_values']})"
+        return f"{self.__class__.__name__}({self.__dict__['_values']})"
 
     def __setattr__(self, __name: str, __value: T) -> None:
         self.__dict__["_values"][__name] = __value
@@ -48,6 +48,8 @@ class State(Generic[T]):
         else:
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
+
+class State(StateOrTrajectory[T]):
     # TODO doesn't allow for explicitly handling mismatched keys.
     # def __sub__(self, other: 'State[T]') -> 'State[T]':
     #     # TODO throw errors if keys don't match, or if shapes don't match...but that should be the job of traj?
@@ -69,7 +71,7 @@ class State(Generic[T]):
             )
         )
 
-    def trajectorify(self) -> "Trajectory[T]":
+    def to_trajectory(self) -> "Trajectory[T]":
         ret: Trajectory[T] = Trajectory(
             # TODO support event_dim > 0
             **{k: getattr(self, k)[..., None] for k in self.keys}
@@ -77,12 +79,10 @@ class State(Generic[T]):
         return ret
 
 
-# TODO AZ - this differentiation needs to go away probably...this is useful for us during dev to be clear about when
-#  we expect multiple vs. a single state in the vectors, but it's likely confusing/not useful for the user? Maybe,
-#  maybe not. If we do keep it we need more explicit guarantees that the State won't have more than a single entry?
-class Trajectory(State[T]):
-    def __init__(self, **values: T):
-        super().__init__(**values)
+class Trajectory(StateOrTrajectory[T]):
+    def __len__(self) -> int:
+        # TODO this implementation is just for tensors, but we should support other types.
+        return getattr(self, next(iter(self.keys))).shape[-1]
 
     def _getitem(self, key):
         if isinstance(key, str):
@@ -118,6 +118,45 @@ class Trajectory(State[T]):
 
         return self._getitem(key)
 
+    @functools.singledispatchmethod
+    def append(self, other: T):
+        raise NotImplementedError(f"append not implemented for type {type(other)}")
+
+    def to_state(self) -> State[T]:
+        ret: State[T] = State(
+            # TODO support event_dim > 0
+            **{k: getattr(self, k) for k in self.keys}
+        )
+        return ret
+
+
+# TODO: figure out parameteric types of Trajectory.
+# This used torch methods in supposedly generic class.
+@Trajectory.append.register(Trajectory)  # type: ignore
+def _append_trajectory(self, other: Trajectory):
+    # If self is empty, just copy other.
+    if len(self.keys) == 0:
+        for k in other.keys:
+            setattr(self, k, getattr(other, k))
+        return
+
+    if self.keys != other.keys:
+        raise ValueError(
+            f"Trajectories must have the same keys to be appended, but got {self.keys} and {other.keys}."
+        )
+    for k in self.keys:
+        prev_v = getattr(self, k)
+        curr_v = getattr(other, k)
+        time_dim = -1  # TODO generalize to nontrivial event_shape
+        batch_shape = torch.broadcast_shapes(prev_v.shape[:-1], curr_v.shape[:-1])
+        prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
+        curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
+        setattr(
+            self,
+            k,
+            torch.cat([prev_v, curr_v], dim=time_dim),
+        )
+
 
 @runtime_checkable
 class Dynamics(Protocol[S, T]):
@@ -128,23 +167,26 @@ class Dynamics(Protocol[S, T]):
 def simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    timespan,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     **kwargs,
-) -> Trajectory[T]:
+) -> State[T]:
     """
     Simulate a dynamical system.
     """
     if solver is None:
         raise ValueError(
-            "SimulatorEventLoop requires a solver. To specify a solver, use the keyword argument `solver` in"
+            "`simulate`` requires a solver. To specify a solver, use the keyword argument `solver` in"
             " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
             "`with SimulatorEventLoop():` \n"
             "\t `with TorchDiffEq():` \n"
-            "\t \t `simulate(dynamics, initial_state, timespan)`"
+            "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(dynamics, initial_state, timespan, solver=solver, **kwargs)
+    return _simulate(
+        dynamics, initial_state, start_time, end_time, solver=solver, **kwargs
+    )
 
 
 # This redirection distinguishes between the effectful operation, and the
@@ -153,11 +195,12 @@ def simulate(
 def _simulate(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
-    timespan,
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
     **kwargs,
-) -> Trajectory[T]:
+) -> State[T]:
     """
     Simulate a dynamical system.
     """
@@ -165,3 +208,28 @@ def _simulate(
 
 
 simulate.register = _simulate.register
+
+
+def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+    # Index into the last dimension of x with a boolean mask.
+    # TODO AZ — There must be an easier way to do this?
+    # NOTE AZ — this could be easily modified to support the last n dimensions, adapt if needed.
+
+    if mask.dtype != torch.bool:
+        raise ValueError(
+            f"_index_last_dim_with_mask only supports boolean mask indexing, but got dtype {mask.dtype}."
+        )
+
+    # Require that the mask is 1d and aligns with the last dimension of x.
+    if mask.ndim != 1 or mask.shape[0] != x.shape[-1]:
+        raise ValueError(
+            "_index_last_dim_with_mask only supports 1d boolean mask indexing, and must align with the last "
+            f"dimension of x, but got mask shape {mask.shape} and x shape {x.shape}."
+        )
+
+    return torch.masked_select(
+        x,
+        # Get a shape that will broadcast to the shape of x. This will be [1, ..., len(mask)].
+        mask.reshape((1,) * (x.ndim - 1) + mask.shape)
+        # masked_select flattens tensors, so we need to reshape back to the original shape w/ the mask applied.
+    ).reshape(x.shape[:-1] + (int(mask.sum()),))

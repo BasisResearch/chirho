@@ -16,5 +16,5 @@ class ODEDynamics(Dynamics[S, T]):
     def observation(self, X: State[S]):
         raise NotImplementedError
 
-    def forward(self, initial_state: State[S], timespan, **kwargs):
-        return simulate(self, initial_state, timespan, **kwargs)
+    def forward(self, initial_state: State[S], start_time, end_time, **kwargs):
+        return simulate(self, initial_state, start_time, end_time, **kwargs)

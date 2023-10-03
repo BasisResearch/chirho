@@ -1,19 +1,15 @@
-from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar
-
-if TYPE_CHECKING:
-    from chirho.dynamical.handlers import (
-        DynamicInterruption,
-        PointInterruption,
-        Interruption,
-    )
-
 import functools
+from typing import List, Optional, Tuple, TypeVar
 
 import pyro
-import torch
 
+from chirho.dynamical.handlers.interruption import (
+    DynamicInterruption,
+    Interruption,
+    StaticInterruption,
+)
 from chirho.dynamical.handlers.solver import Solver
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
+from chirho.dynamical.ops.dynamical import Dynamics, State, simulate
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -21,55 +17,100 @@ T = TypeVar("T")
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
-@pyro.poutine.block(hide_types=["simulate"])
 def simulate_to_interruption(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    timespan,  # The first element of timespan is assumed to be the starting time.
+    start_time: T,
+    end_time: T,
     *,
     solver: Optional[Solver] = None,
-    next_static_interruption: Optional["PointInterruption"] = None,
-    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
+    next_static_interruption: Optional["StaticInterruption"] = None,
+    dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
-) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
+) -> Tuple[State[T], Tuple["Interruption", ...], T]:
     """
-    Simulate a dynamical system until the next interruption. Return the state at the requested time points, and
-     a collection of interruptions that ended the simulation (this will usually just be a single interruption).
-    This will be either one of the passed dynamic interruptions or the next static interruption, whichever comes
-     first.
-    :returns: the state at the requested time points, the interruption that ended the simulation, the time at which
-     the simulation ended, and the end state. The initial trajectory object does not include state measurements at
-     the end-point.
+    Simulate a dynamical system until the next interruption. This will be either one of the passed
+    dynamic interruptions, the next static interruption, or the end time, whichever comes first.
+    :returns: the final state, a collection of interruptions that ended the simulation
+    (this will usually just be a single interruption), and the time the interruption occurred.
     """
-    return _simulate_to_interruption(
+
+    interruptions, interruption_time = get_next_interruptions(
         dynamics,
         start_state,
-        timespan,
+        start_time,
+        end_time,
         solver=solver,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
         **kwargs,
     )
+    # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
+    #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
+    #  a DynamicTrace context.
+    event_state = simulate(
+        dynamics, start_state, start_time, interruption_time, solver=solver
+    )
+
+    return event_state, interruptions, interruption_time
+
+
+def get_next_interruptions(
+    dynamics: Dynamics[S, T],
+    start_state: State[T],
+    start_time: T,
+    end_time: T,
+    *,
+    solver: Optional[Solver] = None,
+    next_static_interruption: Optional["StaticInterruption"] = None,
+    dynamic_interruptions: List["DynamicInterruption"] = [],
+    **kwargs,
+) -> Tuple[Tuple["Interruption", ...], T]:
+    nodyn = len(dynamic_interruptions) == 0
+    nostat = next_static_interruption is None
+
+    if nostat or next_static_interruption.time > end_time:  # type: ignore
+        # If there's no static interruption or the next static interruption is after the end time,
+        # we'll just simulate until the end time.
+        next_static_interruption = StaticInterruption(time=end_time)
+
+    assert isinstance(
+        next_static_interruption, StaticInterruption
+    )  # Linter needs a hint
+
+    if nodyn:
+        # If there's no dynamic intervention, we'll simulate until either the end_time,
+        # or the `next_static_interruption` whichever comes first.
+        return (next_static_interruption,), next_static_interruption.time  # type: ignore
+    else:
+        return get_next_interruptions_dynamic(  # type: ignore
+            dynamics,  # type: ignore
+            start_state,  # type: ignore
+            start_time,  # type: ignore
+            solver=solver,
+            next_static_interruption=next_static_interruption,
+            dynamic_interruptions=dynamic_interruptions,
+            **kwargs,
+        )
+
+    raise ValueError("Unreachable code reached.")
 
 
 # noinspection PyUnusedLocal
 @functools.singledispatch
-def _simulate_to_interruption(
+def get_next_interruptions_dynamic(
     dynamics: Dynamics[S, T],
     start_state: State[T],
-    timespan,  # The first element of timespan is assumed to be the starting time.
+    start_time: T,
+    next_static_interruption: StaticInterruption,
+    dynamic_interruptions: List[DynamicInterruption],
     *,
     solver: Optional[Solver] = None,
-    next_static_interruption: Optional["PointInterruption"] = None,
-    dynamic_interruptions: Optional[List["DynamicInterruption"]] = None,
     **kwargs,
-) -> Tuple[Trajectory[T], Tuple["Interruption", ...], T, State[T]]:
+) -> Tuple[Tuple[Interruption, ...], T]:
     raise NotImplementedError(
-        f"simulate_to_interruption not implemented for type {type(dynamics)}"
+        f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
     )
-
-
-simulate_to_interruption.register = _simulate_to_interruption.register
 
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
@@ -81,38 +122,3 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
-
-
-@functools.singledispatch
-def concatenate(*inputs, **kwargs):
-    """
-    Concatenate multiple inputs of type T into a single output of type T.
-    """
-    raise NotImplementedError(f"concatenate not implemented for type {type(inputs[0])}")
-
-
-@concatenate.register(Trajectory)
-def trajectory_concatenate(*trajectories: Trajectory[T], **kwargs) -> Trajectory[T]:
-    """
-    Concatenate multiple trajectories into a single trajectory.
-    """
-    full_trajectory: Trajectory[T] = Trajectory()
-    for trajectory in trajectories:
-        for k in trajectory.keys:
-            if k not in full_trajectory.keys:
-                setattr(full_trajectory, k, getattr(trajectory, k))
-            else:
-                prev_v = getattr(full_trajectory, k)
-                curr_v = getattr(trajectory, k)
-                time_dim = -1  # TODO generalize to nontrivial event_shape
-                batch_shape = torch.broadcast_shapes(
-                    prev_v.shape[:-1], curr_v.shape[:-1]
-                )
-                prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
-                curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
-                setattr(
-                    full_trajectory,
-                    k,
-                    torch.cat([prev_v, curr_v], dim=time_dim),
-                )
-    return full_trajectory

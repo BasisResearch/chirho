@@ -7,9 +7,10 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
+    DynamicTrace,
     NonInterruptingPointObservationArray,
-    PointIntervention,
     SimulatorEventLoop,
+    StaticIntervention,
 )
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
@@ -23,7 +24,9 @@ logger = logging.getLogger(__name__)
 
 # Global variables for tests
 init_state = State(S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
-tspan = torch.tensor([0.0, 0.3, 0.6, 0.9, 1.2])
+start_time = torch.tensor(0.0)
+end_time = torch.tensor(1.2)
+logging_times = torch.tensor([0.3, 0.6, 0.9])
 
 #
 # 15 passengers tested positive for a disease after landing
@@ -51,7 +54,7 @@ flight_landing_data = {k: torch.tensor([v] * 3) for (k, v) in landing_data.items
 reparam_config = AutoSoftConditioning(scale=0.01, alpha=0.5)
 
 twin_world = TwinWorldCounterfactual()
-intervention = PointIntervention(time=superspreader_time, intervention=counterfactual)
+intervention = StaticIntervention(time=superspreader_time, intervention=counterfactual)
 reparam = pyro.poutine.reparam(config=reparam_config)
 vec_obs3 = NonInterruptingPointObservationArray(
     times=flight_landing_times, data=flight_landing_data
@@ -59,14 +62,16 @@ vec_obs3 = NonInterruptingPointObservationArray(
 
 
 def counterf_model():
-    with SimulatorEventLoop():
-        with vec_obs3, reparam, twin_world, intervention:
-            return simulate(
-                UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
-                init_state,
-                tspan,
-                solver=TorchDiffEq(),
-            )
+    with vec_obs3:
+        with SimulatorEventLoop():
+            with reparam, twin_world, intervention:
+                return simulate(
+                    UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
+                    init_state,
+                    start_time,
+                    end_time,
+                    solver=TorchDiffEq(),
+                )
 
 
 def conditioned_model():
@@ -94,12 +99,15 @@ class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
 
 
 def test_shape_twincounterfactual_observation_intervention_commutes():
-    with pyro.poutine.trace() as tr:
-        ret = conditioned_model()
+    with DynamicTrace(logging_times) as dt:
+        with pyro.poutine.trace() as tr:
+            conditioned_model()
+
+    ret = dt.trace
 
     num_worlds = 2
 
-    state_shape = (num_worlds, len(tspan))
+    state_shape = (num_worlds, len(logging_times))
     assert ret.S.squeeze().squeeze().shape == state_shape
     assert ret.I.squeeze().squeeze().shape == state_shape
     assert ret.R.squeeze().squeeze().shape == state_shape
@@ -116,7 +124,6 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
 
     num_samples = 100
     pred = pyro.infer.Predictive(counterf_model, guide=guide, num_samples=num_samples)()
-
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
     assert pred["infected_passengers"].squeeze().shape == (

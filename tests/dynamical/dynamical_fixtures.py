@@ -1,9 +1,13 @@
+from typing import TypeVar, Union
+
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
 from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.dynamical.ops.ODE import ODEDynamics
+
+T = TypeVar("T")
 
 
 class UnifiedFixtureDynamics(ODEDynamics):
@@ -44,10 +48,10 @@ def bayes_sir_model():
     return sir
 
 
-def check_trajectory_keys_match(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
+def check_keys_match(
+    obj1: Union[Trajectory[T], State[T]], obj2: Union[Trajectory[T], State[T]]
 ):
-    assert traj2.keys == traj1.keys, "Trajectories have different state variables."
+    assert obj1.keys == obj2.keys, "Objects have different variables."
     return True
 
 
@@ -64,7 +68,7 @@ def check_trajectory_length_match(
 def check_trajectories_match(
     traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
 ):
-    assert check_trajectory_keys_match(traj1, traj2)
+    assert check_keys_match(traj1, traj2)
 
     assert check_trajectory_length_match(traj1, traj2)
 
@@ -76,10 +80,21 @@ def check_trajectories_match(
     return True
 
 
+def check_states_match(state1: State[torch.tensor], state2: State[torch.tensor]):
+    assert check_keys_match(state1, state2)
+
+    for k in state1.keys:
+        assert torch.allclose(
+            getattr(state1, k), getattr(state2, k)
+        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+
+    return True
+
+
 def check_trajectories_match_in_all_but_values(
     traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
 ):
-    assert check_trajectory_keys_match(traj1, traj2)
+    assert check_keys_match(traj1, traj2)
 
     assert check_trajectory_length_match(traj1, traj2)
 

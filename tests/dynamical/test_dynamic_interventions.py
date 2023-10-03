@@ -8,7 +8,11 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import DynamicIntervention, SimulatorEventLoop
+from chirho.dynamical.handlers import (
+    DynamicIntervention,
+    DynamicTrace,
+    SimulatorEventLoop,
+)
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
@@ -19,7 +23,9 @@ from .dynamical_fixtures import UnifiedFixtureDynamics
 logger = logging.getLogger(__name__)
 
 # Points at which to measure the state of the system.
-tspan_values = torch.arange(0.0, 3.0, 0.03)
+start_time = torch.tensor(0.0)
+end_time = torch.tensor(10.0)
+logging_times = torch.linspace(start_time + 1, end_time - 2, 5)
 
 # Initial state of the system.
 init_state = State(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
@@ -54,7 +60,9 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
+@pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -64,36 +72,48 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_nested_dynamic_intervention_causes_change(
-    model, init_state, tspan, trigger_states, intervene_states
+    model,
+    init_state,
+    start_time,
+    end_time,
+    logging_times,
+    trigger_states,
+    intervene_states,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
-
-    with SimulatorEventLoop():
-        with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
-            intervention=is1,
-            var_order=init_state.var_order,
-            max_applications=1,
-        ):
+    with DynamicTrace(
+        logging_times=logging_times,
+    ) as dt:
+        with SimulatorEventLoop():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
-                intervention=is2,
+                event_f=get_state_reached_event_f(ts1),
+                intervention=is1,
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                res = simulate(model, init_state, tspan, solver=TorchDiffEq())
+                with DynamicIntervention(
+                    event_f=get_state_reached_event_f(ts2),
+                    intervention=is2,
+                    var_order=init_state.var_order,
+                    max_applications=1,
+                ):
+                    simulate(
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    )
 
     preint_total = init_state.S + init_state.I + init_state.R
 
     # Each intervention just adds a certain amount of susceptible people after the recovered count exceeds some amount
 
-    postint_mask1 = res.R > ts1.R
-    postint_mask2 = res.R > ts2.R
+    trajectory = dt.trace
+
+    postint_mask1 = trajectory.R > ts1.R
+    postint_mask2 = trajectory.R > ts2.R
     preint_mask = ~(postint_mask1 | postint_mask2)
 
     # Make sure all points before the intervention maintain the same total population.
-    preint_traj = res[preint_mask]
+    preint_traj = trajectory[preint_mask]
     assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
 
     # Make sure all points after the first intervention, but before the second, include the added population of that
@@ -105,7 +125,7 @@ def test_nested_dynamic_intervention_causes_change(
     )
     firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
 
-    postfirst_int_presec_int_traj = res[postfirst_int_mask & ~postsec_int_mask]
+    postfirst_int_presec_int_traj = trajectory[postfirst_int_mask & ~postsec_int_mask]
     # noinspection PyTypeChecker
     assert torch.all(
         postfirst_int_presec_int_traj.S
@@ -114,7 +134,7 @@ def test_nested_dynamic_intervention_causes_change(
         > (preint_total + firstis.S) * 0.95
     )
 
-    postsec_int_traj = res[postsec_int_mask]
+    postsec_int_traj = trajectory[postsec_int_mask]
     # noinspection PyTypeChecker
     assert torch.all(
         postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
@@ -124,30 +144,43 @@ def test_nested_dynamic_intervention_causes_change(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
+@pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize("trigger_state", [trigger_state1])
 @pytest.mark.parametrize("intervene_state", [intervene_state1])
 def test_dynamic_intervention_causes_change(
-    model, init_state, tspan, trigger_state, intervene_state
+    model,
+    init_state,
+    start_time,
+    end_time,
+    logging_times,
+    trigger_state,
+    intervene_state,
 ):
-    with SimulatorEventLoop():
-        with DynamicIntervention(
-            event_f=get_state_reached_event_f(trigger_state),
-            intervention=intervene_state,
-            var_order=init_state.var_order,
-            max_applications=1,
-        ):
-            res = simulate(model, init_state, tspan, solver=TorchDiffEq())
+    with DynamicTrace(
+        logging_times=logging_times,
+    ) as dt:
+        with SimulatorEventLoop():
+            with DynamicIntervention(
+                event_f=get_state_reached_event_f(trigger_state),
+                intervention=intervene_state,
+                var_order=init_state.var_order,
+                max_applications=1,
+            ):
+                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
+
+    trajectory = dt.trace
 
     # The intervention just "adds" (sets) 50 "people" to the susceptible population.
     #  It happens that the susceptible population is roughly 0 at the intervention point,
     #  so this serves to make sure the intervention actually causes that population influx.
 
-    postint_mask = res.R > trigger_state.R
-    postint_traj = res[postint_mask]
-    preint_traj = res[~postint_mask]
+    postint_mask = trajectory.R > trigger_state.R
+    postint_traj = trajectory[postint_mask]
+    preint_traj = trajectory[~postint_mask]
 
     # Make sure all points before the intervention maintain the same total population.
     assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
@@ -162,7 +195,9 @@ def test_dynamic_intervention_causes_change(
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
+@pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -172,38 +207,55 @@ def test_dynamic_intervention_causes_change(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_twinworld_dynamic_intervention(
-    model, init_state, tspan, trigger_states, intervene_states
+    model,
+    init_state,
+    start_time,
+    end_time,
+    logging_times,
+    trigger_states,
+    intervene_states,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
-        with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
-            intervention=is1,
-            var_order=init_state.var_order,
-            max_applications=1,
-        ):
+    with DynamicTrace(
+        logging_times=logging_times,
+    ) as dt:
+        with SimulatorEventLoop():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
-                intervention=is2,
+                event_f=get_state_reached_event_f(ts1),
+                intervention=is1,
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                with TwinWorldCounterfactual() as cf:
-                    cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
-                    )
+                with DynamicIntervention(
+                    event_f=get_state_reached_event_f(ts2),
+                    intervention=is2,
+                    var_order=init_state.var_order,
+                    max_applications=1,
+                ):
+                    with TwinWorldCounterfactual() as cf:
+                        cf_state = simulate(
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
+                        )
 
     with cf:
+        cf_trajectory = dt.trace
         for k in cf_trajectory.keys:
+            # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
+            assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -213,38 +265,49 @@ def test_split_twinworld_dynamic_intervention(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_multiworld_dynamic_intervention(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with SimulatorEventLoop():
-        with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
-            intervention=is1,
-            var_order=init_state.var_order,
-            max_applications=1,
-        ):
+    with DynamicTrace(
+        logging_times=logging_times,
+    ) as dt:
+        with SimulatorEventLoop():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
-                intervention=is2,
+                event_f=get_state_reached_event_f(ts1),
+                intervention=is1,
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                with MultiWorldCounterfactual() as cf:
-                    cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
-                    )
+                with DynamicIntervention(
+                    event_f=get_state_reached_event_f(ts2),
+                    intervention=is2,
+                    var_order=init_state.var_order,
+                    max_applications=1,
+                ):
+                    with MultiWorldCounterfactual() as cf:
+                        cf_state = simulate(
+                            model,
+                            init_state,
+                            start_time,
+                            end_time,
+                            solver=TorchDiffEq(),
+                        )
 
     with cf:
+        cf_trajectory = dt.trace
         for k in cf_trajectory.keys:
+            # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
+            assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("tspan", [tspan_values])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
@@ -254,7 +317,7 @@ def test_split_multiworld_dynamic_intervention(
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
 def test_split_twinworld_dynamic_matches_output(
-    model, init_state, tspan, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -273,8 +336,8 @@ def test_split_twinworld_dynamic_matches_output(
                 max_applications=1,
             ):
                 with TwinWorldCounterfactual() as cf:
-                    cf_trajectory = simulate(
-                        model, init_state, tspan, solver=TorchDiffEq()
+                    cf_result = simulate(
+                        model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
     with SimulatorEventLoop():
@@ -290,42 +353,42 @@ def test_split_twinworld_dynamic_matches_output(
                 var_order=init_state.var_order,
                 max_applications=1,
             ):
-                expected_cf = simulate(model, init_state, tspan, solver=TorchDiffEq())
+                cf_expected = simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     with SimulatorEventLoop():
-        expected_factual = simulate(model, init_state, tspan, solver=TorchDiffEq())
+        factual_expected = simulate(
+            model, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     with cf:
         factual_indices = IndexSet(
-            **{k: {0} for k in indices_of(cf_trajectory, event_dim=0).keys()}
+            **{k: {0} for k in indices_of(cf_result, event_dim=0).keys()}
         )
 
         cf_indices = IndexSet(
-            **{k: {1} for k in indices_of(cf_trajectory, event_dim=0).keys()}
+            **{k: {1} for k in indices_of(cf_result, event_dim=0).keys()}
         )
 
-        actual_cf = gather(cf_trajectory, cf_indices, event_dim=0)
-        actual_factual = gather(cf_trajectory, factual_indices, event_dim=0)
+        cf_actual = gather(cf_result, cf_indices, event_dim=0)
+        factual_actual = gather(cf_result, factual_indices, event_dim=0)
 
-        assert not set(indices_of(actual_cf, event_dim=0))
-        assert not set(indices_of(actual_factual, event_dim=0))
+        assert not set(indices_of(cf_actual, event_dim=0))
+        assert not set(indices_of(factual_actual, event_dim=0))
 
-    assert set(cf_trajectory.keys) == set(actual_cf.keys) == set(expected_cf.keys)
-    assert (
-        set(cf_trajectory.keys)
-        == set(actual_factual.keys)
-        == set(expected_factual.keys)
-    )
+    assert set(cf_result.keys) == set(cf_actual.keys) == set(cf_expected.keys)
+    assert set(cf_result.keys) == set(factual_actual.keys) == set(factual_expected.keys)
 
-    for k in cf_trajectory.keys:
+    for k in cf_result.keys:
         assert torch.allclose(
-            getattr(actual_cf, k), getattr(expected_cf, k), atol=1e-3, rtol=0
-        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+            getattr(cf_actual, k), getattr(cf_expected, k), atol=1e-3, rtol=0
+        ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
-    for k in cf_trajectory.keys:
+    for k in cf_result.keys:
         assert torch.allclose(
-            getattr(actual_factual, k), getattr(expected_factual, k), atol=1e-3, rtol=0
-        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
+            getattr(factual_actual, k), getattr(factual_expected, k), atol=1e-3, rtol=0
+        ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
 
 def test_grad_of_dynamic_intervention_event_f_params():
@@ -353,16 +416,16 @@ def test_grad_of_dynamic_intervention_event_f_params():
     # noinspection DuplicatedCode
     with SimulatorEventLoop():
         with dynamic_intervention:
-            traj = simulate(model, s0, torch.tensor([0.0, 10.0]), solver=TorchDiffEq())
+            result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
 
     (dxdparam,) = torch.autograd.grad(
-        outputs=(traj.x[-1],), inputs=(param,), create_graph=True
+        outputs=(result.x,), inputs=(param,), create_graph=True
     )
     assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
 
     # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
     (dzdparam,) = torch.autograd.grad(
-        outputs=(traj.z[-1],), inputs=(param,), create_graph=True
+        outputs=(result.z,), inputs=(param,), create_graph=True
     )
     assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
 
@@ -373,7 +436,7 @@ def test_grad_of_point_intervention_params():
     #  presumably because its treated as two completely separate simulations.
     # Note: implementing this would require the boilerplate from the dynamic test above.
 
-    # point_intervention = PointIntervention(
+    # point_intervention = StaticIntervention(
     #     intervention=State(dz=tt(1.0)),
     #     time=param
     # )

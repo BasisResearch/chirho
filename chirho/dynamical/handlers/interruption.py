@@ -6,6 +6,7 @@ from typing import Callable, Dict, Generic, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
+from chirho.dynamical.handlers.trace import DynamicTrace
 from chirho.dynamical.internals.interventional import intervene
 from chirho.dynamical.ops.dynamical import State
 from chirho.observational.handlers import condition
@@ -22,28 +23,18 @@ class Interruption(pyro.poutine.messenger.Messenger):
 
 
 # TODO AZ - rename to static interruption?
-class PointInterruption(Interruption):
-    def __init__(self, time: Union[float, torch.Tensor], **kwargs):
+class StaticInterruption(Interruption):
+    def __init__(self, time: Union[float, torch.Tensor, T], **kwargs):
         self.time = torch.as_tensor(time)
         super().__init__(**kwargs)
 
-    def _pyro_simulate(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
-        start_time = timespan[0]
-
-        # See note tagged AZiusld10 below.
-        if self.time < start_time:
-            raise ValueError(
-                f"{PointInterruption.__name__} time {self.time} occurred before the start of the "
-                f"timespan {start_time}. This interruption will have no effect."
-            )
-
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
-        next_static_interruption = msg["kwargs"]["next_static_interruption"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
-        start_time = timespan[0]
-        end_time = timespan[-1]
+        if "next_static_interruption" in msg["kwargs"]:
+            next_static_interruption = msg["kwargs"]["next_static_interruption"]
+        else:
+            next_static_interruption = None
 
         # If this interruption occurs within the timespan...
         if start_time < self.time < end_time:
@@ -55,7 +46,7 @@ class PointInterruption(Interruption):
                 msg["kwargs"]["next_static_interruption"] = self
         elif self.time >= end_time:
             warnings.warn(
-                f"{PointInterruption.__name__} time {self.time} occurred after the end of the timespan "
+                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
                 f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
@@ -68,11 +59,11 @@ class PointInterruption(Interruption):
 
 class _InterventionMixin(Interruption):
     """
-    We use this to provide the same functionality to both PointIntervention and the DynamicIntervention,
-     while allowing DynamicIntervention to not inherit PointInterruption functionality.
+    We use this to provide the same functionality to both StaticIntervention and the DynamicIntervention,
+     while allowing DynamicIntervention to not inherit StaticInterruption functionality.
     """
 
-    def __init__(self, intervention: State[torch.Tensor], **kwargs):
+    def __init__(self, intervention: State[T], **kwargs):
         super().__init__(**kwargs)
         self.intervention = intervention
 
@@ -81,7 +72,7 @@ class _InterventionMixin(Interruption):
         msg["args"] = (dynamics, intervene(initial_state, self.intervention))
 
 
-class PointIntervention(PointInterruption, _InterventionMixin):
+class StaticIntervention(StaticInterruption, _InterventionMixin):
     """
     This effect handler interrupts a simulation at a given time, and
     applies an intervention to the state at that time.
@@ -96,9 +87,7 @@ class _PointObservationMixin:
     pass
 
 
-class NonInterruptingPointObservationArray(
-    pyro.poutine.messenger.Messenger, _PointObservationMixin
-):
+class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin):
     def __init__(
         self,
         times: torch.Tensor,
@@ -106,17 +95,9 @@ class NonInterruptingPointObservationArray(
         eps: float = 1e-6,
     ):
         self.data = data
-
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
         self.times = times + eps
-
-        # Require that the times are sorted. This is required by the index masking we do below.
-        # TODO AZ sort this here (and the data too) accordingly?
-        if not torch.all(self.times[1:] > self.times[:-1]):
-            raise ValueError("The passed times must be sorted.")
-
-        self._insert_mask_key = f"{self.__class__.__name__}.insert_mask"
 
         # Require that each data element maps 1:1 with the times.
         if not all(len(v) == len(times) for v in data.values()):
@@ -126,83 +107,41 @@ class NonInterruptingPointObservationArray(
                 f"expected length {len(times)}."
             )
 
-        super().__init__()
-
-    def _pyro_simulate(self, msg) -> None:
-        if self._insert_mask_key in msg:
-            # Just to avoid having to splice in multiple handlers. Also, this suggests the user is using this handler
-            #  in a suboptimal way, as they could just put their data into a single handler and avoid the overhead
-            #  of extra handlers in the stack.
-            raise ValueError(  # TODO AZ - this shouldn't be a value error probably. Is there a pyro handler error?
-                f"Cannot use {self.__class__.__name__} within another {self.__class__.__name__}."
-            )
-
-        dynamics, initial_state, timespan = msg["args"]
-
-        # Concatenate the timespan and the observation times, then sort. TODO find a way to use the searchsorted
-        #  result to avoid sorting again?
-        new_timespan, sort_indices = torch.sort(torch.cat((timespan, self.times)))
-
-        # Get the mask covering where the times were spliced in.
-        insert_mask = sort_indices >= len(timespan)
-
-        # Do a sanity check that the times were inserted in the right places.
-        assert torch.allclose(new_timespan[insert_mask], self.times), (
-            "Sanity check failed! Observation times not "
-            "spliced into user provided timespan as expected."
-        )
-
-        msg["args"] = (dynamics, initial_state, new_timespan)
-        msg[self._insert_mask_key] = insert_mask
+        super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        dynamics, initial_state, timespan = msg["args"]
-        full_traj = msg["value"]
-        insert_mask = msg[self._insert_mask_key]
+        dynamics, _, _, _ = msg["args"]
 
-        # Do a sanity check that the times were inserted in the right places.
-        assert torch.allclose(timespan[insert_mask], self.times), (
-            "Sanity check failed! Observation times not "
-            "spliced into user provided timespan as expected."
-        )
+        if "in_SEL" not in msg.keys():
+            msg["in_SEL"] = False
 
-        with condition(data=self.data):
-            # This blocks the handler from being called again, as it is already in the stack.
-            with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, _PointObservationMixin) and (m is not self)
-            ):
-                # with pyro.plate("__time_plate", size=int(insert_mask.sum()), dim=-1):
-                dynamics.observation(full_traj[insert_mask])
+        # This checks whether the simulate has already redirected in a SimulatorEventLoop.
+        # If so, we don't want to run the observation again.
+        if msg["in_SEL"]:
+            return
 
-        # Remove the elements of the trajectory at the inserted points.
-        msg["value"] = full_traj[~insert_mask]
+        # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
+        super()._pyro_post_simulate(msg)
+        # This condition checks whether all of the simulate calls have been executed.
+        if len(self.trace) == len(self.times):
+            with condition(data=self.data):
+                dynamics.observation(self.trace)
+
+            # Reset the trace for the next simulate call.
+            super()._reset()
 
 
-class PointObservation(PointInterruption, _PointObservationMixin):
+class StaticObservation(StaticInterruption, _PointObservationMixin):
     def __init__(
         self,
         time: float,
-        data: Dict[str, torch.Tensor],
+        data: Dict[str, T],
         eps: float = 1e-6,
     ):
         self.data = data
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
         super().__init__(time + eps)
-
-    def _pyro_simulate(self, msg) -> None:
-        # Raise an error if the observation time is close to the start of the timespan. This is a temporary measure
-        #  until issues arising from this case are understood and adressed.
-
-        dynamics, initial_state, timespan = msg["args"]
-
-        if torch.isclose(self.time, timespan[0], atol=1e-3, rtol=1e-3):
-            raise ValueError(
-                f"{PointObservation.__name__} time {self.time} occurred at the start of the timespan {timespan[0]}. "
-                f"This is not currently supported."
-            )
-
-        super()._pyro_simulate(msg)
 
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics, current_state = msg["args"]
@@ -251,16 +190,13 @@ class DynamicInterruption(Generic[T], Interruption):
         self.max_applications = max_applications
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        dynamic_interruptions = msg["kwargs"]["dynamic_interruptions"]
-
-        if dynamic_interruptions is None:
-            dynamic_interruptions = []
-
-        msg["kwargs"]["dynamic_interruptions"] = dynamic_interruptions
+        if "dynamic_interruptions" not in msg["kwargs"]:
+            msg["kwargs"]["dynamic_interruptions"] = []
 
         # Add self to the collection of dynamic interruptions.
+        # TODO: This doesn't appear to be used anywhere. Is it needed?
         if self not in msg.get("ignored_dynamic_interruptions", []):
-            dynamic_interruptions.append(self)
+            msg["kwargs"]["dynamic_interruptions"].append(self)
 
         super()._pyro_simulate_to_interruption(msg)
 
