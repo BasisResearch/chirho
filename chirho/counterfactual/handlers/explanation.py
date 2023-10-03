@@ -127,3 +127,39 @@ def uniform_proposal(
         tfm = pyro.distributions.transforms.biject_to(support)
         base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
         return pyro.distributions.TransformedDistribution(base, tfm)
+
+
+@uniform_proposal.register
+def _uniform_proposal_indep(
+    support: pyro.distributions.constraints.independent,
+    *,
+    event_shape: torch.Size = torch.Size([]),
+    **kwargs,
+) -> pyro.distributions.Distribution:
+    """
+    This constructs a probability distribution with independent dimensions
+    over a specified support. The choice of distribution depends on the type of support provided
+    (see the documentation for `uniform_proposal`).
+
+    :param support: The support used to create the probability distribution.
+    :param event_shape: The event shape specifying the dimensions of the distribution.
+    :param kwargs: Additional keyword arguments.
+    :return: A probability distribution with independent dimensions over the specified support.
+
+    Example:
+    ```
+    # Define an independent constraint with real support and an event shape of (2, 3)
+    indep_constraint = pyro.distributions.constraints.independent(
+    pyro.distributions.constraints.real, reinterpreted_batch_ndims=2)
+
+    #Create a distribution with the independent constraint and event shape
+    dist = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 3]))
+
+    #Sample from the distribution within pyro.plate
+    with pyro.plate("data", 3):
+        samples_indep2 = pyro.sample("samples_indep", dist.expand([4, 2, 3]))
+    ```
+    """
+
+    d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
+    return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
