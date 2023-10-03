@@ -66,9 +66,6 @@ def get_next_interruptions(
     dynamic_interruptions: List["DynamicInterruption"] = [],
     **kwargs,
 ) -> Tuple[Tuple["Interruption", ...], T]:
-    # This is necessary to get the linter to understand the type of various variables.
-    interruptions: Tuple[Interruption, ...]
-    interruption_time: T
 
     nodyn = len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
