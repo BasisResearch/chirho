@@ -1,6 +1,4 @@
 import contextlib
-import functools
-import typing
 from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.continuation import bind_and_push_prompts, shallow_interpreter
