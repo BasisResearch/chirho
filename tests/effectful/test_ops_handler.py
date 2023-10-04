@@ -33,19 +33,15 @@ def times_plus_1(x: int, y: int) -> int:
 
 
 def block(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return define(Interpretation)(
-        {op: lambda v, *args, **kwargs: reflect(v) for op in ops}
-    )
+    return {op: lambda v, *args, **kwargs: reflect(v) for op in ops}
 
 
 def defaults(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return define(Interpretation)({op: op.default for op in ops})
+    return {op: op.default for op in ops}
 
 
 def times_n_handler(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
-    return define(Interpretation)(
-        {op: lambda v, *args, **kwargs: fwd(v) * n for op in ops}
-    )
+    return {op: lambda v, *args, **kwargs: fwd(v) * n for op in ops}
 
 
 OPERATION_CASES = (
