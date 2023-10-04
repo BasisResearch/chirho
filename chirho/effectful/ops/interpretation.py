@@ -32,6 +32,29 @@ class Interpretation(Protocol[T, V]):
         ...
 
 
+@define(Operation)
+@contextlib.contextmanager
+def interpreter(intp: Interpretation, *, unset: bool = True):
+    from .runtime import get_interpretation, swap_interpretation
+
+    old_intp = get_interpretation()
+    try:
+        new_intp = define(Interpretation)(
+            {
+                op: intp[op] if op in intp else old_intp[op]
+                for op in set(intp.keys()) | set(old_intp.keys())
+            }
+        )
+        old_intp = swap_interpretation(new_intp)
+        yield intp
+    finally:
+        if unset:
+            _ = swap_interpretation(old_intp)
+        else:
+            if len(list(old_intp.keys())) == 0 and len(list(intp.keys())) > 0:
+                raise RuntimeError(f"Dangling interpretation on stack: {intp}")
+
+
 @typing.overload
 def register(
     __op: Operation[P, T],
@@ -76,29 +99,6 @@ def register(__op, intp=None, interpret_op=None):
         intp.__setitem__(__op, interpret_op)
         return interpret_op
     raise NotImplementedError(f"Cannot register {__op} in {intp}")
-
-
-@define(Operation)
-@contextlib.contextmanager
-def interpreter(intp: Interpretation, *, unset: bool = True):
-    from .runtime import get_interpretation, swap_interpretation
-
-    old_intp = get_interpretation()
-    try:
-        new_intp = define(Interpretation)(
-            {
-                op: intp[op] if op in intp else old_intp[op]
-                for op in set(intp.keys()) | set(old_intp.keys())
-            }
-        )
-        old_intp = swap_interpretation(new_intp)
-        yield intp
-    finally:
-        if unset:
-            _ = swap_interpretation(old_intp)
-        else:
-            if len(list(old_intp.keys())) == 0 and len(list(intp.keys())) > 0:
-                raise RuntimeError(f"Dangling interpretation on stack: {intp}")
 
 
 # bootstrap
