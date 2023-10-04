@@ -1,9 +1,8 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.continuation import bind_and_push_prompts, shallow_interpreter
-from chirho.effectful.ops.handler import fwd
-from chirho.effectful.ops.interpretation import Interpretation, interpreter
+from chirho.effectful.ops.handler import bind_and_push_prompts, fwd
+from chirho.effectful.ops.interpretation import Interpretation, interpreter, shallow_interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")

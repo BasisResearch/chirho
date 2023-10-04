@@ -53,6 +53,20 @@ def interpreter(intp: Interpretation, *, unset: bool = True):
                 raise RuntimeError(f"Dangling interpretation on stack: {intp}")
 
 
+@contextlib.contextmanager
+def shallow_interpreter(intp: Interpretation):
+    from .runtime import get_interpretation
+
+    # destructive update: calling any op in intp should remove intp from active
+    active_intp = get_interpretation()
+    prev_intp = {
+        op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
+    }
+
+    with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
+        yield intp
+
+
 @typing.overload
 def register(
     __op: Operation[P, T],
