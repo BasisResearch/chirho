@@ -62,7 +62,7 @@ def compose(
         return compose(intp, compose(*intps, fwd=fwd), fwd=fwd)  # associativity
 
     (intp2,) = intps
-    return define(Interpretation)(
+    return dict(
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [

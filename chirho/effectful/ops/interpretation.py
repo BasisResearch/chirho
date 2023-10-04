@@ -1,7 +1,8 @@
+import collections.abc
 import contextlib
 import functools
 import typing
-from typing import Callable, Concatenate, Iterable, Optional, ParamSpec, Protocol, TypeVar
+from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.operation import Operation, define
 
@@ -12,24 +13,7 @@ Q = ParamSpec("Q")
 T = TypeVar("T")
 V = TypeVar("V")
 
-
-@typing.runtime_checkable
-class Interpretation(Protocol[T, V]):
-    def __setitem__(
-        self, __op: Operation[P, T], __interpret: Callable[Concatenate[Optional[V], Q], V]
-    ) -> None:
-        ...
-
-    def __getitem__(
-        self, __op: Operation[P, T]
-    ) -> Callable[Concatenate[Optional[V], Q], V]:
-        ...
-
-    def __contains__(self, __op: Operation[..., T]) -> bool:
-        ...
-
-    def keys(self) -> Iterable[Operation[..., T]]:
-        ...
+Interpretation = collections.abc.Mapping[Operation[..., T], Callable[..., V]]
 
 
 @define(Operation)
@@ -107,7 +91,7 @@ def register(__op, intp=None, interpret_op=None):
             ),
         )
         return interpret_op
-    elif isinstance(intp, Interpretation):
+    elif isinstance(intp, collections.abc.MutableMapping):
         intp.__setitem__(__op, interpret_op)
         return interpret_op
     raise NotImplementedError(f"Cannot register {__op} in {intp}")
