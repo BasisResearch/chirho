@@ -48,12 +48,12 @@ def product(
     }
 
     # on reflect, jump to the outer interpretation and interpret it using itself
-    return define(Interpretation)({
+    return {
         op: bind_and_push_prompts(
             {reflect: interpreter(block_outer)(define(Operation)(op).default)},
         )(interpreter(block_inner)(intp2[op]))
         for op in intp2.keys()
-    })
+    }
 
 
 @define(Operation)
