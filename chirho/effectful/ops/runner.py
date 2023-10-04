@@ -37,15 +37,15 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    block_outer = define(Interpretation)({
+    block_outer = {
         op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp[op])
         for op in intp.keys()
-    })
+    }
 
-    block_inner = define(Interpretation)({
+    block_inner = {
         op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
         for op in set(intp2.keys()) & set(intp.keys())
-    })
+    }
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return define(Interpretation)({

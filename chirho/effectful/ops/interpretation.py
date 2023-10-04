@@ -39,10 +39,10 @@ def interpreter(intp: Interpretation, *, unset: bool = True):
 
     old_intp = get_interpretation()
     try:
-        new_intp = define(Interpretation)({
+        new_intp = {
             op: intp[op] if op in intp else old_intp[op]
             for op in set(intp.keys()) | set(old_intp.keys())
-        })
+        }
         old_intp = swap_interpretation(new_intp)
         yield intp
     finally:

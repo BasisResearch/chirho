@@ -1,5 +1,6 @@
 from typing import Iterable, Mapping, ParamSpec, Protocol, TypeVar
 
+import functools
 import typing
 
 from chirho.effectful.ops.interpretation import Interpretation, register
@@ -28,10 +29,10 @@ def evaluate(term: Term[T]) -> T:
 
 
 def LazyInterpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
-    return define(Interpretation)({
-        op: lambda _, *args, **kwargs: define(Term)(op, args, kwargs)
+    return {
+        op: functools.partial(lambda op, _, *args, **kwargs: define(Term)(op, args, kwargs), op)
         for op in ops
-    })
+    }
 
 
 register(define(Term), None, _BaseTerm)

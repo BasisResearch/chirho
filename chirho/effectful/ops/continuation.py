@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Callable, Concatenate, Optional, ParamSpec, Protocol, TypeVar
+from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Protocol, TypeVar
 
 from chirho.effectful.ops.interpretation import Interpretation, interpreter
 from chirho.effectful.ops.operation import Operation, define
@@ -23,9 +23,9 @@ class Continuation(Protocol[S_, T]):
 def shallow_interpreter(intp: Interpretation):
     # destructive update: calling any op in intp should remove intp from active
     active_intp = get_interpretation()
-    prev_intp = define(Interpretation)({
+    prev_intp = {
         op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
-    })
+    }
 
     with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
         yield intp
@@ -38,23 +38,21 @@ def capture_cont_args(
 
     @functools.wraps(fn)
     def _wrapper(__result: Optional[T], *args: Q.args, **kwargs: Q.kwargs) -> T:
-        return interpreter(
-            define(Interpretation)({get_args: lambda _: (args, kwargs)})
-        )(fn)(__result, *args, **kwargs)
+        return interpreter({get_args: lambda _: (args, kwargs)})(fn)(__result, *args, **kwargs)
 
     return _wrapper
 
 
 def bind_cont_args(
     get_args: Operation[[], tuple[tuple, dict]],
-    unbound_conts: Interpretation[S, T],
+    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[Concatenate[Optional[T], P], T]],
 ) -> Interpretation[S, T]:
-    return define(Interpretation)({
+    return {
         p: functools.partial(
             lambda k, _, res: k(res, *get_args()[0], **get_args()[1]),
             unbound_conts[p],
         ) for p in unbound_conts.keys()
-    })
+    }
 
 
 def bind_and_push_prompts(
