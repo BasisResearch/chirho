@@ -53,9 +53,8 @@ def product(
     return define(Interpretation)({
         op: bind_and_push_prompts(
             {reflect: interpreter(block_outer)(define(Operation)(op).default)},
-            op,
-            interpreter(block_inner)(intp2[op]),
-        ) for op in intp2.keys()
+        )(interpreter(block_inner)(intp2[op]))
+        for op in intp2.keys()
     })
 
 

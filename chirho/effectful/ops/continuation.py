@@ -33,14 +33,14 @@ def shallow_interpreter(intp: Interpretation):
 
 def capture_cont_args(
     get_args: Operation[[], tuple[tuple, dict]],
-    op_intp: Callable[Concatenate[Optional[T], Q], T]
+    fn: Callable[Concatenate[Optional[T], Q], T]
 ) -> Callable[Concatenate[Optional[T], Q], T]:
 
-    @functools.wraps(op_intp)
+    @functools.wraps(fn)
     def _wrapper(__result: Optional[T], *args: Q.args, **kwargs: Q.kwargs) -> T:
         return interpreter(
             define(Interpretation)({get_args: lambda _: (args, kwargs)})
-        )(op_intp)(__result, *args, **kwargs)
+        )(fn)(__result, *args, **kwargs)
 
     return _wrapper
 
@@ -59,13 +59,15 @@ def bind_cont_args(
 
 def bind_and_push_prompts(
     unbound_conts: Interpretation[S, T],
-    op: Operation[P, S],
-    op_intp: Callable[Concatenate[Optional[T], P], T],
-) -> Callable[Concatenate[Optional[T], P], T]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
 
-    @define(Operation)
-    def get_args() -> tuple[tuple, dict]:
-        raise ValueError(f"No args stored for {op}")
+    def _decorator(fn: Callable[P, T]) -> Callable[P, T]:
 
-    bound_arg_conts = bind_cont_args(get_args, unbound_conts)
-    return shallow_interpreter(bound_arg_conts)(capture_cont_args(get_args, op_intp))
+        @define(Operation)
+        def get_args() -> tuple[tuple, dict]:
+            raise ValueError(f"No args stored for {fn}")
+
+        bound_arg_conts = bind_cont_args(get_args, unbound_conts)
+        return shallow_interpreter(bound_arg_conts)(capture_cont_args(get_args, fn))
+
+    return _decorator

@@ -31,7 +31,7 @@ def compose(
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [
-            (op, bind_and_push_prompts({fwd: intp[op]}, op, intp2[op]))
+            (op, bind_and_push_prompts({fwd: intp[op]})(intp2[op]))
             for op in set(intp.keys()) & set(intp2.keys())
         ]
     )
