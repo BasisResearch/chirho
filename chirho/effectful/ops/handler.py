@@ -72,7 +72,6 @@ def compose(
     )
 
 
-@define(Operation)
 @contextlib.contextmanager
 def handler(intp: Interpretation[S, T], *, fwd: Operation[[Optional[T]], T] = fwd):
     from .runtime import get_interpretation

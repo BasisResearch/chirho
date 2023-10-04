@@ -16,7 +16,6 @@ V = TypeVar("V")
 Interpretation = collections.abc.Mapping[Operation[..., T], Callable[..., V]]
 
 
-@define(Operation)
 @contextlib.contextmanager
 def interpreter(intp: Interpretation, *, unset: bool = True):
     from .runtime import get_interpretation, swap_interpretation

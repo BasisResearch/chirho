@@ -55,7 +55,6 @@ def product(
     }
 
 
-@define(Operation)
 @contextlib.contextmanager
 def runner(
     intp: Interpretation[S, T],
