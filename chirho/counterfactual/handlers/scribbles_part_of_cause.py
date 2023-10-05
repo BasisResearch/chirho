@@ -15,7 +15,7 @@ from chirho.counterfactual.handlers.counterfactual import (
 from chirho.counterfactual.handlers.explanation import undo_split
 
 # from chirho.counterfactual.handlers.selection import get_factual_indices
-from chirho.indexed.ops import IndexSet, gather
+from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import condition
@@ -157,7 +157,7 @@ def test_single_layer_stones():
 #@pytest.mark.parametrize("antecedents", [None, ("sally_throws",), ("bill_hits",)])
 #def test_two_layer_stones(antecedents):
 
-antecedents = ("bill_hits",)
+antecedents = ("sally_throws",)
 
 observations = {
     "prob_sally_throws": 1.0,
@@ -184,33 +184,59 @@ preemption_conditioning = condition(data=pinned_preemption_variables)
 
 observations_conditioning = condition(data={k: torch.as_tensor(v) for k, v in observations.items()})
 
-with MultiWorldCounterfactual() as mwc, part_of_cause_handler as tr, preemptions_handler, preemption_conditioning, observations_conditioning:        
-    stones_bayesian_model()
+#part_of_cause_handler as tr, preemptions_handler, preemption_conditioning, observations_conditioning:
 
+
+with MultiWorldCounterfactual() as mwc: 
+    with do(actions=evaluated_node_counterfactual):
+        with preemption_conditioning, preemptions_handler:
+            with observations_conditioning:
+                with pyro.poutine.trace() as tr: 
+                    stones_bayesian_model()
+
+tr = tr.trace.nodes
+
+print(
+"st",     tr["sally_throws"]["value"],
+"sh",     tr["sally_hits"]["value"],
+
+"bt",     tr["bill_throws"]["value"],
+"bh",     tr["bill_hits"]["value"],
+
+"bs",     tr["bottle_shatters"]["value"],
+#    tr["preempt_sally_throws"]["value"],
+)
 
 with mwc:
-    preempt_sally_throws = tr["preempt_sally_throws"]["value"]
+    print (indices_of(tr["bill_hits"]["value"], event_dim=0))
+
+
+
+
+
+# with mwc:
+#     preempt_sally_throws = tr["preempt_sally_throws"]["value"]
     
-    int_sally_hits = gather(tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0,)
+#     int_sally_hits = gather(tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0,)
 
-    preempt_bill_hits = tr["witness_preempt_bill_hits"]["value"]
+#     preempt_bill_hits = tr["witness_preempt_bill_hits"]["value"]
 
-    obs_bill_hits = gather( tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {0}}), event_dim=0, )
+#     obs_bill_hits = gather( tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {0}}), event_dim=0, )
 
-    int_bill_hits = gather(tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0,)
+#     int_bill_hits = gather(tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0,)
 
-    int_bottle_shatters = gather(tr["bottle_shatters"]["value"],IndexSet(**{"sally_throws": {1}}),event_dim=0,)
+#     int_bottle_shatters = gather(tr["bottle_shatters"]["value"],IndexSet(**{"sally_throws": {1}}),event_dim=0,)
 
-outcome2 = {
-    "preempt_sally_throws": preempt_sally_throws.item(),
-    "int_sally_hits": int_sally_hits.item(),
-    "witness_preempt_bill_hits": preempt_bill_hits.item(),
-    "obs_bill_hits": obs_bill_hits.item(),
-    "int_bill_hits": int_bill_hits.item(),
-    "intervened_bottle_shatters": int_bottle_shatters.item(),
-}
+# outcome2 = {
+#     "preempt_sally_throws": preempt_sally_throws.item(),
+#     "int_sally_hits": int_sally_hits.item(),
+#     "witness_preempt_bill_hits": preempt_bill_hits.item(),
+#     "obs_bill_hits": obs_bill_hits.item(),
+#     "int_bill_hits": int_bill_hits.item(),
+#     "intervened_bottle_shatters": int_bottle_shatters.item(),
+# }
 
-print(outcome2)
+# print(outcome2)
 
     # if antecedents == ("bill_hits",):
     #     with pytest.raises(AssertionError):
