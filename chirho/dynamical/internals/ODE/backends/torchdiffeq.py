@@ -150,6 +150,7 @@ def torchdiffeq_get_next_interruptions_dynamic(
         tuple(getattr(start_state, v) for v in start_state.var_order),
         start_time,
         event_fn=combined_event_f,
+        **solver.odeint_kwargs,
     )
 
     # event_state has both the first and final state of the interrupted simulation. We just want the last.
