@@ -1,10 +1,15 @@
+import contextlib
 import itertools
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Mapping, TypeVar
 
+import pyro
 import torch  # noqa: F401
 
+from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
+from chirho.interventional.handlers import do
+from chirho.interventional.ops import Intervention
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -80,3 +85,36 @@ def consequent_differs(
         return cond(eps, 0.0, not_eq, event_dim=event_dim)
 
     return _consequent_differs
+
+
+@contextlib.contextmanager
+def SearchOfCause(
+    actions: Mapping[str, Intervention[T]],
+    *,
+    bias: float = 0.0,
+    prefix: str = "__cause_split_",
+):
+    """
+    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
+    On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
+    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
+    intervention is executed. For ease of inspecion, yields a trace object. See tests in
+    `tests/counterfactual/test_handlers_explanation.py` for examples.
+
+    :param actions: A mapping of sites to interventions.
+    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
+
+    :yield: A trace object.
+    """
+    # TODO support event_dim != 0 propagation in factual_preemption
+    preemptions = {
+        antecedent: undo_split(antecedents=[antecedent])
+        for antecedent in actions.keys()
+    }
+
+    with do(actions=actions):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+            with pyro.poutine.trace() as logging_tr:
+                yield logging_tr.trace.nodes

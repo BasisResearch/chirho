@@ -151,11 +151,11 @@ def test_single_layer_stones():
     ) == [1, 1.0, 0.0, 0.0, 1.0]
 
 
-#_______________________________________________________________________________
+# _______________________________________________________________________________
 # second test___________________________________________________________________
 
-#@pytest.mark.parametrize("antecedents", [None, ("sally_throws",), ("bill_hits",)])
-#def test_two_layer_stones(antecedents):
+# @pytest.mark.parametrize("antecedents", [None, ("sally_throws",), ("bill_hits",)])
+# def test_two_layer_stones(antecedents):
 
 antecedents = ("sally_throws",)
 
@@ -169,7 +169,14 @@ observations = {
 }
 
 evaluated_node_counterfactual = {"sally_throws": 0.0}
-witness_preemptions = {"bill_hits": undo_split(antecedents=antecedents)}
+# witness_preemptions = {"bill_hits": undo_split(antecedents=antecedents)}
+witness_candidates = [
+    "bill_hits",
+]
+witness_preemptions = {
+    witness: undo_split(antecedents=evaluated_node_counterfactual.keys())
+    for witness in witness_candidates
+}
 
 pinned_preemption_variables = {
     "preempt_sally_throws": torch.tensor(0),
@@ -178,45 +185,64 @@ pinned_preemption_variables = {
 
 part_of_cause_handler = PartOfCause(evaluated_node_counterfactual, prefix="preempt_")
 
-preemptions_handler = Preemptions(actions=witness_preemptions, prefix="witness_preempt_")
+preemptions_handler: Preemptions = Preemptions(
+    actions=witness_preemptions, prefix="witness_preempt_"
+)
 
 preemption_conditioning = condition(data=pinned_preemption_variables)
 
-observations_conditioning = condition(data={k: torch.as_tensor(v) for k, v in observations.items()})
+observations_conditioning = condition(
+    data={k: torch.as_tensor(v) for k, v in observations.items()}
+)
 
-#part_of_cause_handler as tr, preemptions_handler, preemption_conditioning, observations_conditioning:
+# part_of_cause_handler as tr, preemptions_handler, preemption_conditioning, observations_conditioning:
 
 
-with MultiWorldCounterfactual() as mwc: 
-    with do(actions=evaluated_node_counterfactual):
+# # this works if sally_throws is the antencedent in preemptions_handler
+# with MultiWorldCounterfactual() as mwc:
+#     with do(actions=evaluated_node_counterfactual):
+#         with preemption_conditioning, preemptions_handler:
+#             with observations_conditioning:
+#                 with pyro.poutine.trace() as tr:
+#                     stones_bayesian_model()
+
+
+# this also works; the witness preemption
+# seems to have to have the keys of the counterfactual intervention as antecedents
+with MultiWorldCounterfactual() as mwc:
+    with part_of_cause_handler:
         with preemption_conditioning, preemptions_handler:
             with observations_conditioning:
-                with pyro.poutine.trace() as tr: 
+                with pyro.poutine.trace() as tr:
                     stones_bayesian_model()
+
 
 tr = tr.trace.nodes
 
+print(tr.keys())
+
 print(
-"st",     tr["sally_throws"]["value"],
-"sh",     tr["sally_hits"]["value"],
-
-"bt",     tr["bill_throws"]["value"],
-"bh",     tr["bill_hits"]["value"],
-
-"bs",     tr["bottle_shatters"]["value"],
-#    tr["preempt_sally_throws"]["value"],
+    "p_st",
+    tr["preempt_sally_throws"]["value"],
+    "st",
+    tr["sally_throws"]["value"],
+    "sh",
+    tr["sally_hits"]["value"],
+    "bt",
+    tr["bill_throws"]["value"],
+    "bh",
+    tr["bill_hits"]["value"],
+    "bs",
+    tr["bottle_shatters"]["value"],
 )
 
 with mwc:
-    print (indices_of(tr["bill_hits"]["value"], event_dim=0))
-
-
-
+    print(indices_of(tr["bill_hits"]["value"], event_dim=0))
 
 
 # with mwc:
 #     preempt_sally_throws = tr["preempt_sally_throws"]["value"]
-    
+
 #     int_sally_hits = gather(tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0,)
 
 #     preempt_bill_hits = tr["witness_preempt_bill_hits"]["value"]
@@ -238,10 +264,10 @@ with mwc:
 
 # print(outcome2)
 
-    # if antecedents == ("bill_hits",):
-    #     with pytest.raises(AssertionError):
-    #         assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
-    # else:
-    #     assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
+# if antecedents == ("bill_hits",):
+#     with pytest.raises(AssertionError):
+#         assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
+# else:
+#     assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
 
-#_______________________________________________________________________________
+# _______________________________________________________________________________
