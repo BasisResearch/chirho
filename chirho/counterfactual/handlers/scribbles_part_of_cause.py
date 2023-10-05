@@ -12,7 +12,7 @@ from chirho.counterfactual.handlers.counterfactual import (
     MultiWorldCounterfactual,
     Preemptions,
 )
-from chirho.counterfactual.handlers.explanation import undo_split, SearchOfCause
+from chirho.counterfactual.handlers.explanation import SearchOfCause, undo_split
 
 # from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, gather, indices_of
@@ -217,8 +217,8 @@ tr = tr.trace.nodes
 
 
 print(
-#    "p_st",
-#    tr["preempt_sally_throws"]["value"],
+    #    "p_st",
+    #    tr["preempt_sally_throws"]["value"],
     "st",
     tr["sally_throws"]["value"],
     "sh",
@@ -266,21 +266,6 @@ with mwc:
 #     assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
 
 # _______________________________________________________________________________
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # def test_SearchOfCause_with_witness_preemption():

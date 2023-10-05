@@ -4,12 +4,10 @@ import pyro.infer
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import (
+from chirho.counterfactual.handlers.counterfactual import (  # Preemptions,
     MultiWorldCounterfactual,
-    Preemptions,
 )
-from chirho.counterfactual.handlers.explanation import (
-    SearchOfCause,
+from chirho.counterfactual.handlers.explanation import (  # SearchOfCause,
     consequent_differs,
     undo_split,
 )
@@ -326,4 +324,3 @@ def test_SearchOfCause_single_layer():
     assert list(outcome.values()) == [0, 0.0, 0.0, 1.0, 1.0] or list(
         outcome.values()
     ) == [1, 1.0, 0.0, 0.0, 1.0]
-
