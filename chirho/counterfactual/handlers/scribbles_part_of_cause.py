@@ -12,7 +12,7 @@ from chirho.counterfactual.handlers.counterfactual import (
     MultiWorldCounterfactual,
     Preemptions,
 )
-from chirho.counterfactual.handlers.explanation import undo_split
+from chirho.counterfactual.handlers.explanation import undo_split, SearchOfCause
 
 # from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, gather, indices_of
@@ -169,14 +169,14 @@ observations = {
 }
 
 evaluated_node_counterfactual = {"sally_throws": 0.0}
-# witness_preemptions = {"bill_hits": undo_split(antecedents=antecedents)}
-witness_candidates = [
-    "bill_hits",
-]
-witness_preemptions = {
-    witness: undo_split(antecedents=evaluated_node_counterfactual.keys())
-    for witness in witness_candidates
-}
+witness_preemptions = {"bill_hits": undo_split(antecedents=antecedents)}
+# witness_candidates = [
+#     "bill_hits",
+# ]
+# witness_preemptions = {
+#     witness: undo_split(antecedents=evaluated_node_counterfactual.keys())
+#     for witness in witness_candidates
+# }
 
 pinned_preemption_variables = {
     "preempt_sally_throws": torch.tensor(0),
@@ -198,32 +198,27 @@ observations_conditioning = condition(
 # part_of_cause_handler as tr, preemptions_handler, preemption_conditioning, observations_conditioning:
 
 
-# # this works if sally_throws is the antencedent in preemptions_handler
-# with MultiWorldCounterfactual() as mwc:
-#     with do(actions=evaluated_node_counterfactual):
-#         with preemption_conditioning, preemptions_handler:
-#             with observations_conditioning:
-#                 with pyro.poutine.trace() as tr:
-#                     stones_bayesian_model()
-
-
-# this also works; the witness preemption
-# seems to have to have the keys of the counterfactual intervention as antecedents
+# this works if sally_throws is the antencedent in preemptions_handler
 with MultiWorldCounterfactual() as mwc:
-    with part_of_cause_handler:
+    with do(actions=evaluated_node_counterfactual):
         with preemption_conditioning, preemptions_handler:
             with observations_conditioning:
                 with pyro.poutine.trace() as tr:
                     stones_bayesian_model()
 
-
 tr = tr.trace.nodes
 
-print(tr.keys())
+
+# with MultiWorldCounterfactual() as mwc:
+#     with part_of_cause_handler as tr:
+#         with preemption_conditioning, preemptions_handler:
+#             with observations_conditioning:
+#                     stones_bayesian_model()
+
 
 print(
-    "p_st",
-    tr["preempt_sally_throws"]["value"],
+#    "p_st",
+#    tr["preempt_sally_throws"]["value"],
     "st",
     tr["sally_throws"]["value"],
     "sh",
@@ -271,3 +266,93 @@ with mwc:
 #     assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
 
 # _______________________________________________________________________________
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# def test_SearchOfCause_with_witness_preemption():
+
+#     evaluated_node_counterfactual = {"sally_throws": 0.0}
+#     witness_candidates = [
+#         "bill_hits",
+#     ]
+
+#     witness_preemptions = {
+#         witness: undo_split(antecedents=evaluated_node_counterfactual.keys())
+#         for witness in witness_candidates
+#     }
+
+#     pinned_preemption_variables = {
+#         "preempt_sally_throws": torch.tensor(0),
+#         "witness_preempt_bill_hits": torch.tensor(1),
+#     }
+
+#     part_of_cause_handler = SearchOfCause(
+#         evaluated_node_counterfactual, prefix="preempt_"
+#     )
+
+#     preemptions_handler = Preemptions(
+#         actions=witness_preemptions, prefix="witness_preempt_"
+#     )
+
+#     preemption_conditioning = condition(data=pinned_preemption_variables)
+
+#     observations_conditioning = condition(
+#         data={k: torch.as_tensor(v) for k, v in observations.items()}
+#     )
+
+#     with MultiWorldCounterfactual() as mwc:
+#         with part_of_cause_handler as tr:
+#             with preemption_conditioning, preemptions_handler, observations_conditioning:
+#                 stones_bayesian_model()
+
+#     with mwc:
+#         preempt_sally_throws = tr["preempt_sally_throws"]["value"]
+#         int_sally_hits = gather(
+#             tr["sally_hits"]["value"],
+#             IndexSet(**{"sally_throws": {1}}),
+#             event_dim=0,
+#         )
+#         preempt_bill_hits = tr["witness_preempt_bill_hits"]["value"]
+#         obs_bill_hits = gather(
+#             tr["bill_hits"]["value"],
+#             IndexSet(**{"sally_throws": {0}}),
+#             event_dim=0,
+#         )
+#         int_bill_hits = gather(
+#             tr["bill_hits"]["value"],
+#             IndexSet(**{"sally_throws": {1}}),
+#             event_dim=0,
+#         )
+#         int_bottle_shatters = gather(
+#             tr["bottle_shatters"]["value"],
+#             IndexSet(**{"sally_throws": {1}}),
+#             event_dim=0,
+#         )
+
+#     outcome = {
+#         "preempt_sally_throws": preempt_sally_throws.item(),
+#         "int_sally_hits": int_sally_hits.item(),
+#         "witness_preempt_bill_hits": preempt_bill_hits.item(),
+#         "obs_bill_hits": obs_bill_hits.item(),
+#         "int_bill_hits": int_bill_hits.item(),
+#         "intervened_bottle_shatters": int_bottle_shatters.item(),
+#     }
+
+#     assert outcome["int_bill_hits"] == outcome["obs_bill_hits"]
+
+
+# # _ed of tests of SearchOfCause__________________________________________________________________________________
