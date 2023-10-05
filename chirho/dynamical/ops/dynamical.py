@@ -201,9 +201,6 @@ def _simulate(
     )
 
 
-# simulate.register = _simulate.register
-
-
 def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
     # Index into the last dimension of x with a boolean mask.
     # TODO AZ — There must be an easier way to do this?
