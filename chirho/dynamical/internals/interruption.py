@@ -1,7 +1,7 @@
-import functools
 from typing import List, Optional, Tuple, TypeVar
 
 import pyro
+from multimethod import multimethod
 
 from chirho.dynamical.handlers.interruption import (
     DynamicInterruption,
@@ -97,7 +97,6 @@ def get_next_interruptions(
 
 
 # noinspection PyUnusedLocal
-@functools.singledispatch
 def get_next_interruptions_dynamic(
     dynamics: Dynamics[S, T],
     start_state: State[T],
@@ -106,6 +105,35 @@ def get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     *,
     solver: Optional[Solver] = None,
+    **kwargs,
+) -> Tuple[Tuple[Interruption, ...], T]:
+    if solver is None:
+        raise ValueError(
+            "`get_next_interruptions_dynamic` requires a solver. To specify a solver, use the keyword argument "
+            "`solver` in the call to `simulate` or use with a solver effect handler as a context manager. "
+            "For example,"
+            "\n \n `with TorchDiffEq():` \n"
+            "\t `simulate(dynamics, initial_state, start_time, end_time)`"
+        )
+    return _get_next_interruptions_dynamic(
+        dynamics,
+        solver,
+        start_state,
+        start_time,
+        next_static_interruption,
+        dynamic_interruptions,
+        **kwargs,
+    )
+
+
+@multimethod
+def _get_next_interruptions_dynamic(
+    dynamics: Dynamics[S, T],
+    solver: Solver,
+    start_state: State[T],
+    start_time: T,
+    next_static_interruption: StaticInterruption,
+    dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], T]:
     raise NotImplementedError(

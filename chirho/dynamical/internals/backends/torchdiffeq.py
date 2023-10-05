@@ -7,12 +7,9 @@ import torch
 import torchdiffeq
 
 from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
-from chirho.dynamical.internals.ODE.ode_simulate import (
-    _ode_get_next_interruptions_dynamic,
-    _ode_simulate_trajectory,
-    ode_simulate,
-)
-from chirho.dynamical.ops.dynamical import State, Trajectory
+from chirho.dynamical.internals.dynamical import _simulate_trajectory
+from chirho.dynamical.internals.interruption import _get_next_interruptions_dynamic
+from chirho.dynamical.ops.dynamical import State, Trajectory, _simulate
 from chirho.dynamical.ops.ODE import ODEDynamics
 
 if TYPE_CHECKING:
@@ -102,10 +99,10 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-@ode_simulate.register(TorchDiffEq)
+@_simulate.register(ODEDynamics, TorchDiffEq)
 def torchdiffeq_ode_simulate(
-    solver: TorchDiffEq,
     dynamics: ODEDynamics,
+    solver: TorchDiffEq,
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
@@ -117,10 +114,10 @@ def torchdiffeq_ode_simulate(
     return trajectory[..., -1].to_state()
 
 
-@_ode_simulate_trajectory.register(TorchDiffEq)
+@_simulate_trajectory.register(ODEDynamics, TorchDiffEq)
 def torchdiffeq_ode_simulate_trajectory(
-    solver: TorchDiffEq,
     dynamics: ODEDynamics,
+    solver: TorchDiffEq,
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
 ) -> State[torch.Tensor]:
@@ -129,10 +126,10 @@ def torchdiffeq_ode_simulate_trajectory(
     )
 
 
-@_ode_get_next_interruptions_dynamic.register(TorchDiffEq)
+@_get_next_interruptions_dynamic.register(ODEDynamics, TorchDiffEq)
 def torchdiffeq_get_next_interruptions_dynamic(
-    solver: TorchDiffEq,
     dynamics: ODEDynamics[torch.Tensor, torch.Tensor],
+    solver: TorchDiffEq,
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
     next_static_interruption: StaticInterruption,

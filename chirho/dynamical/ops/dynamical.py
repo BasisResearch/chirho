@@ -1,16 +1,9 @@
 import functools
-from typing import (
-    Callable,
-    FrozenSet,
-    Generic,
-    Optional,
-    Protocol,
-    TypeVar,
-    runtime_checkable,
-)
+from typing import FrozenSet, Generic, Optional, TypeVar
 
 import pyro
 import torch
+from multimethod import multimethod
 
 from chirho.dynamical.handlers.solver import Solver
 
@@ -20,7 +13,6 @@ T = TypeVar("T")
 
 class StateOrTrajectory(Generic[T]):
     def __init__(self, **values: T):
-        # self.class_name =
         self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
@@ -158,9 +150,12 @@ def _append_trajectory(self, other: Trajectory):
         )
 
 
-@runtime_checkable
-class Dynamics(Protocol[S, T]):
-    diff: Callable[[State[S], State[S]], T]
+class Dynamics(Generic[S, T]):
+    def diff(self, dX: State[S], X: State[S]) -> T:
+        raise NotImplementedError
+
+    def observation(self, X: State[S]):
+        raise NotImplementedError
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
@@ -184,30 +179,29 @@ def simulate(
             "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(
-        dynamics, initial_state, start_time, end_time, solver=solver, **kwargs
-    )
+    return _simulate(dynamics, solver, initial_state, start_time, end_time, **kwargs)
 
 
 # This redirection distinguishes between the effectful operation, and the
-# type-directed dispatch on Dynamics
-@functools.singledispatch
+# type-directed dispatch on Dynamics and Solver
+@multimethod
 def _simulate(
     dynamics: Dynamics[S, T],
+    solver: Solver,
     initial_state: State[T],
     start_time: T,
     end_time: T,
-    *,
-    solver: Optional[Solver] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+    raise NotImplementedError(
+        f"simulate not implemented for dynamics of type {type(dynamics)} and solver of type {type(solver)}"
+    )
 
 
-simulate.register = _simulate.register
+# simulate.register = _simulate.register
 
 
 def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:

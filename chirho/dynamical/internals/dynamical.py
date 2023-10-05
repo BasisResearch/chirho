@@ -2,6 +2,7 @@ import functools
 from typing import Optional, TypeVar
 
 import torch
+from multimethod import multimethod
 
 from chirho.dynamical.handlers.solver import Solver
 from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
@@ -10,7 +11,6 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@functools.singledispatch
 def simulate_trajectory(
     dynamics: Dynamics[S, T],
     initial_state: State[T],
@@ -30,8 +30,24 @@ def simulate_trajectory(
             "\n \n `with TorchDiffEq():` \n"
             "\t `simulate_trajectory(dynamics, initial_state, start_time, end_time)`"
         )
+
+    return _simulate_trajectory(dynamics, solver, initial_state, timespan, **kwargs)
+
+
+@multimethod
+def _simulate_trajectory(
+    dynamics: Dynamics[S, T],
+    solver: Solver,
+    initial_state: State[T],
+    timespan: T,
+    **kwargs,
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
+
     raise NotImplementedError(
-        f"simulate_trajectory not implemented for type {type(dynamics)}"
+        f"simulate_trajectory not implemented for dynamics of type {type(dynamics)} and solver of type {type(solver)}"
     )
 
 
