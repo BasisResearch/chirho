@@ -5,7 +5,10 @@ from typing import Dict, Generic, Tuple, TypeVar
 
 import pyro
 
-from chirho.dynamical.handlers.interruption import DynamicInterruption, Interruption
+from chirho.dynamical.handlers.interruption.interruption import (
+    DynamicInterruption,
+    Interruption,
+)
 from chirho.dynamical.internals.interruption import (
     apply_interruptions,
     simulate_to_interruption,
@@ -59,11 +62,11 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     terminal_interruptions,
                     interruption_time,
                 ) = simulate_to_interruption(  # This call gets handled by interruption handlers.
+                    solver,
                     dynamics,
                     span_start_state,
                     span_start_time,
                     end_time,
-                    solver=solver,
                 )
 
             if len(terminal_interruptions) > 1:

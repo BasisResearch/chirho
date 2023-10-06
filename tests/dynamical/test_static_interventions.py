@@ -12,7 +12,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
     StaticIntervention,
 )
-from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
+from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene

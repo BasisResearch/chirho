@@ -1,5 +1,6 @@
 import functools
 from typing import (
+    TYPE_CHECKING,
     Callable,
     FrozenSet,
     Generic,
@@ -12,7 +13,8 @@ from typing import (
 import pyro
 import torch
 
-from chirho.dynamical.handlers.solver import Solver
+if TYPE_CHECKING:
+    from chirho.dynamical.handlers.solver import Solver
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -161,6 +163,7 @@ def _append_trajectory(self, other: Trajectory):
 @runtime_checkable
 class Dynamics(Protocol[S, T]):
     diff: Callable[[State[S], State[S]], T]
+    observation: Callable[[State[S]], None]
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
@@ -170,7 +173,9 @@ def simulate(
     start_time: T,
     end_time: T,
     *,
-    solver: Optional[Solver] = None,
+    solver: Optional[
+        "Solver"
+    ] = None,  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
     **kwargs,
 ) -> State[T]:
     """
@@ -184,27 +189,26 @@ def simulate(
             "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(
-        dynamics, initial_state, start_time, end_time, solver=solver, **kwargs
-    )
+    return _simulate(solver, dynamics, initial_state, start_time, end_time, **kwargs)
 
 
 # This redirection distinguishes between the effectful operation, and the
 # type-directed dispatch on Dynamics
 @functools.singledispatch
 def _simulate(
+    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
     dynamics: Dynamics[S, T],
     initial_state: State[T],
     start_time: T,
     end_time: T,
-    *,
-    solver: Optional[Solver] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError(f"simulate not implemented for type {type(dynamics)}")
+    raise NotImplementedError(
+        f"simulate not implemented for solver of type {type(solver)}"
+    )
 
 
 simulate.register = _simulate.register

@@ -1,10 +1,11 @@
-from . import ODE  # noqa: F401
 from .dynamical import SimulatorEventLoop  # noqa: F401
-from .interruption import (  # noqa: F401
+from .interruption.array_observation import (  # noqa: F401
+    NonInterruptingPointObservationArray,
+)
+from .interruption.interruption import (  # noqa: F401
     DynamicInterruption,
     DynamicIntervention,
     Interruption,
-    NonInterruptingPointObservationArray,
     StaticInterruption,
     StaticIntervention,
     StaticObservation,
