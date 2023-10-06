@@ -1,10 +1,13 @@
 import functools
+import typing
 from typing import Generic, Protocol, TypeVar
 
 import torch
 
-from chirho.dynamical.handlers.solver import Solver
 from chirho.dynamical.ops.dynamical import Dynamics, State
+
+if typing.TYPE_CHECKING:
+    from chirho.dynamical.handlers.solver import Solver
 
 S = TypeVar("S")
 T = TypeVar("T")
