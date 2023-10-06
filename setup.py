@@ -21,7 +21,6 @@ EXTRAS_REQUIRE = [
     "pytorch-lightning",
     "scikit-image",
     "tensorboard",
-    "torchdiffeq",
 ]
 
 setup(
@@ -38,8 +37,9 @@ setup(
     },
     install_requires=[
         # if you add any additional libraries, please also
-        # add them to `docs/requirements.txt`
+        # add them to `docs/source/requirements.txt`
         "pyro-ppl>=1.8.5",
+        "torchdiffeq"
     ],
     extras_require={
         "extras": EXTRAS_REQUIRE,
