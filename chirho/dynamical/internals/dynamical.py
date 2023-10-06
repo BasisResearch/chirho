@@ -3,8 +3,6 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, TypeVar
 
-import torch
-
 from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
 
 if TYPE_CHECKING:
@@ -29,13 +27,3 @@ def simulate_trajectory(
     raise NotImplementedError(
         f"simulate_trajectory not implemented for solver of type {type(solver)}"
     )
-
-
-@functools.singledispatch
-def unsqueeze(x, axis: int):
-    raise NotImplementedError(f"unsqueeze not implemented for type {type(x)}")
-
-
-@unsqueeze.register
-def _unsqueeze_torch(x: torch.Tensor, axis: int) -> torch.Tensor:
-    return torch.unsqueeze(x, axis)
