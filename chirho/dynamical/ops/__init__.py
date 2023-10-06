@@ -1,1 +1,1 @@
-from .dynamical import Dynamics, State, Trajectory, simulate  # noqa: F401
+from .dynamical import Dynamics, State, simulate  # noqa: F401

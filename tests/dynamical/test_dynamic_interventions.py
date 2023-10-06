@@ -40,7 +40,6 @@ intervene_state2 = State(S=torch.tensor(30.0))
 
 def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int = 0):
     def event_f(t: torch.tensor, state: State[torch.tensor]):
-        # ret = target_state.subtract_shared_variables(state).l2()
         actual, target = state.R, target_state.R
         cf_indices = IndexSet(
             **{
