@@ -12,7 +12,6 @@ from typing import (
 
 import pyro
 
-
 if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
 

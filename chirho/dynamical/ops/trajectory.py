@@ -1,10 +1,10 @@
 import functools
 from typing import Generic, Protocol, TypeVar
-from chirho.dynamical.handlers.solver import Solver
-
-from chirho.dynamical.ops.dynamical import Dynamics, State
 
 import torch
+
+from chirho.dynamical.handlers.solver import Solver
+from chirho.dynamical.ops.dynamical import Dynamics, State
 
 S = TypeVar("S")
 T = TypeVar("T")
