@@ -286,7 +286,6 @@ observations_conditioning = condition(
 
 
 def test_SearchOfCause_single_layer():
-
     with MultiWorldCounterfactual() as mwc:
         with SearchOfCause({"sally_throws": 0.0}, bias=0.0):
             with observations_conditioning:
@@ -334,7 +333,6 @@ def test_SearchOfCause_single_layer():
 
 
 def test_SearchOfCause_two_layers():
-
     actions = {"sally_throws": 0.0}
 
     pinned_preemption_variables = {
