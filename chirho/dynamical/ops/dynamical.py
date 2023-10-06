@@ -21,7 +21,6 @@ T = TypeVar("T")
 
 class State(Generic[T]):
     def __init__(self, **values: T):
-        # self.class_name =
         self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
