@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-from chirho.dynamical.ops.trajectory import Trajectory
+from chirho.dynamical.ops import Trajectory
 
 logger = logging.getLogger(__name__)
 
