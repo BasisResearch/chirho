@@ -9,6 +9,7 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
+V = TypeVar("V")
 
 
 def bind_and_push_prompts(
@@ -20,18 +21,18 @@ def bind_and_push_prompts(
         raise ValueError("No args stored")
 
     def _capture_args(
-        fn: Callable[Concatenate[Optional[T], Q], T]
-    ) -> Callable[Concatenate[Optional[T], Q], T]:
+        fn: Callable[Concatenate[Optional[V], Q], V]
+    ) -> Callable[Concatenate[Optional[V], Q], V]:
 
         @functools.wraps(fn)
-        def _wrapper(__res: Optional[T], *a: Q.args, **ks: Q.kwargs) -> T:
+        def _wrapper(__res: Optional[V], *a: Q.args, **ks: Q.kwargs) -> V:
             return interpreter({get_args: lambda _: (a, ks)})(fn)(__res, *a, **ks)
 
         return _wrapper
 
     def _bind_args(
-        unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[Concatenate[Optional[T], Q], T]],
-    ) -> Interpretation[S, T]:
+        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Concatenate[Optional[T], Q], T]],
+    ) -> Interpretation[V, T]:
         return {
             p: functools.partial(
                 lambda k, _, res: k(res, *get_args()[0], **get_args()[1]),
@@ -39,7 +40,7 @@ def bind_and_push_prompts(
             ) for p in unbound_conts.keys()
         }
 
-    def _decorator(fn: Callable[Concatenate[Optional[T], P], T]):
+    def _decorator(fn: Callable[Concatenate[Optional[V], Q], V]):
         return shallow_interpreter(_bind_args(unbound_conts))(_capture_args(fn))
 
     return _decorator
