@@ -3,7 +3,8 @@ from typing import Generic, TypeVar
 import pyro
 import torch
 
-from chirho.dynamical.ops.dynamical import Trajectory, simulate_trajectory
+from chirho.dynamical.ops.trajectory import simulate_trajectory
+from chirho.dynamical.ops.trajectory import Trajectory
 
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)

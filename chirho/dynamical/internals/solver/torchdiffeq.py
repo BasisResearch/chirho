@@ -14,10 +14,9 @@ from chirho.dynamical.internals.interruption import (
 from chirho.dynamical.ops import Dynamics
 from chirho.dynamical.ops.dynamical import (
     State,
-    Trajectory,
     simulate,
-    simulate_trajectory,
 )
+from chirho.dynamical.ops.trajectory import Trajectory, simulate_trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")

@@ -6,7 +6,7 @@ import torch
 from chirho.dynamical.handlers import DynamicTrace, SimulatorEventLoop
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.dynamical import Trajectory
+from chirho.dynamical.ops.trajectory import Trajectory
 
 from .dynamical_fixtures import bayes_sir_model, check_states_match
 
