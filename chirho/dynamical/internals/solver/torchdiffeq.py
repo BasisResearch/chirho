@@ -5,8 +5,6 @@ import torch
 import torchdiffeq
 
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.handlers.trace import Trajectory
-from chirho.dynamical.internals.dynamical import simulate_trajectory
 from chirho.dynamical.internals.interruption import (
     DynamicInterruption,
     Interruption,
@@ -14,7 +12,12 @@ from chirho.dynamical.internals.interruption import (
     get_next_interruptions_dynamic,
 )
 from chirho.dynamical.ops import Dynamics
-from chirho.dynamical.ops.dynamical import State, simulate
+from chirho.dynamical.ops.dynamical import (
+    State,
+    Trajectory,
+    simulate,
+    simulate_trajectory,
+)
 
 S = TypeVar("S")
 T = TypeVar("T")

@@ -4,8 +4,7 @@ import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
-from chirho.dynamical.handlers.trace import Trajectory
-from chirho.dynamical.ops.dynamical import Dynamics, State
+from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
 
 T = TypeVar("T")
 

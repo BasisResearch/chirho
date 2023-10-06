@@ -2,8 +2,7 @@ from typing import TypeVar
 
 import torch
 
-from chirho.dynamical.handlers.trace import Trajectory
-from chirho.dynamical.ops.dynamical import State
+from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 S = TypeVar("S")
