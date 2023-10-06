@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import TypeVar
 
 from chirho.dynamical.ops.dynamical import State, Trajectory
@@ -9,7 +7,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@indices_of.register
+@indices_of.register(State)
 def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet:
     return union(
         *(
@@ -19,7 +17,7 @@ def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet
     )
 
 
-@indices_of.register
+@indices_of.register(Trajectory)
 def _indices_of_trajectory(
     trj: Trajectory, *, event_dim: int = 0, **kwargs
 ) -> IndexSet:

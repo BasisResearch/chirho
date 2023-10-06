@@ -12,7 +12,7 @@ from chirho.dynamical.handlers import (
     SimulatorEventLoop,
     StaticObservation,
 )
-from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
+from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
 from .dynamical_fixtures import (

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Generic, TypeVar
 
 import pyro
@@ -48,7 +46,10 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
         trajectory = simulate_trajectory(
-            dynamics, initial_state, timespan, solver=solver
+            solver,
+            dynamics,
+            initial_state,
+            timespan,
         )
         self.trace.append(trajectory[..., 1:-1])
         if len(self.trace) > len(self.logging_times):
