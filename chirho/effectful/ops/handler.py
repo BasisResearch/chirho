@@ -13,7 +13,7 @@ T = TypeVar("T")
 
 def bind_and_push_prompts(
     unbound_conts: Interpretation[S, T],
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
+) -> Callable[[Callable[Concatenate[Optional[T], P], T]], Callable[Concatenate[Optional[T], P], T]]:
 
     @define(Operation)
     def get_args() -> tuple[tuple, dict]:
@@ -30,7 +30,7 @@ def bind_and_push_prompts(
         return _wrapper
 
     def _bind_args(
-        unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[Concatenate[Optional[T], P], T]],
+        unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[Concatenate[Optional[T], Q], T]],
     ) -> Interpretation[S, T]:
         return {
             p: functools.partial(
@@ -39,7 +39,7 @@ def bind_and_push_prompts(
             ) for p in unbound_conts.keys()
         }
 
-    def _decorator(fn: Callable[P, T]) -> Callable[P, T]:
+    def _decorator(fn: Callable[Concatenate[Optional[T], P], T]):
         return shallow_interpreter(_bind_args(unbound_conts))(_capture_args(fn))
 
     return _decorator
