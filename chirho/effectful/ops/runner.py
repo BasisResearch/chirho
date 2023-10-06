@@ -43,7 +43,9 @@ def product(
 
     block_inner = {
         op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
-        for op in set(intp2.keys()) & set(intp.keys())
+        if op in intp2
+        else lambda res, *args, **kwargs: reflect(res)
+        for op in set(intp2.keys()) | set(intp.keys())
     }
 
     # on reflect, jump to the outer interpretation and interpret it using itself
