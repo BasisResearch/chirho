@@ -7,6 +7,7 @@ from typing import (
     Optional,
     Protocol,
     TypeVar,
+    Union,
     runtime_checkable,
 )
 
@@ -18,9 +19,10 @@ if TYPE_CHECKING:
 
 S = TypeVar("S")
 T = TypeVar("T")
+T_co = TypeVar("T_co", covariant=True)
 
 
-class StateOrTrajectory(Generic[T]):
+class State(Generic[T]):
     def __init__(self, **values: T):
         # self.class_name =
         self.__dict__["_values"] = {}
@@ -51,42 +53,19 @@ class StateOrTrajectory(Generic[T]):
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
-class State(StateOrTrajectory[T]):
-    # TODO doesn't allow for explicitly handling mismatched keys.
-    # def __sub__(self, other: 'State[T]') -> 'State[T]':
-    #     # TODO throw errors if keys don't match, or if shapes don't match...but that should be the job of traj?
-    #     return State(**{k: getattr(self, k) - getattr(other, k) for k in self.keys})
-
-    def subtract_shared_variables(self, other: "State[T]"):
-        shared_keys = self.keys.intersection(other.keys)
-        return State(**{k: getattr(self, k) - getattr(other, k) for k in shared_keys})
-
-    # FIXME AZ - non-generic method in generic class.
-    def l2(self) -> torch.Tensor:
-        """
-        Compute the L2 norm of the state. This is useful e.g. after taking the difference between two states.
-        :return: The L2 norm of the vectorized state.
-        """
-        return torch.sqrt(
-            torch.sum(
-                torch.square(torch.tensor(*[getattr(self, k) for k in self.keys]))
-            )
-        )
-
-    def to_trajectory(self) -> "Trajectory[T]":
-        ret: Trajectory[T] = Trajectory(
-            # TODO support event_dim > 0
-            **{k: getattr(self, k)[..., None] for k in self.keys}
-        )
-        return ret
+class _Sliceable(Protocol[T_co]):
+    def __getitem__(self, key) -> Union[T_co, "_Sliceable[T_co]"]:
+        ...
 
 
-class Trajectory(StateOrTrajectory[T]):
+class Trajectory(Generic[T], State[_Sliceable[T]]):
     def __len__(self) -> int:
         # TODO this implementation is just for tensors, but we should support other types.
         return getattr(self, next(iter(self.keys))).shape[-1]
 
     def _getitem(self, key):
+        from chirho.dynamical.internals.indexed import _index_last_dim_with_mask
+
         if isinstance(key, str):
             raise ValueError(
                 "Trajectory does not support string indexing, use getattr instead if you want to access a specific "
@@ -212,28 +191,3 @@ def _simulate(
 
 
 simulate.register = _simulate.register
-
-
-def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-    # Index into the last dimension of x with a boolean mask.
-    # TODO AZ — There must be an easier way to do this?
-    # NOTE AZ — this could be easily modified to support the last n dimensions, adapt if needed.
-
-    if mask.dtype != torch.bool:
-        raise ValueError(
-            f"_index_last_dim_with_mask only supports boolean mask indexing, but got dtype {mask.dtype}."
-        )
-
-    # Require that the mask is 1d and aligns with the last dimension of x.
-    if mask.ndim != 1 or mask.shape[0] != x.shape[-1]:
-        raise ValueError(
-            "_index_last_dim_with_mask only supports 1d boolean mask indexing, and must align with the last "
-            f"dimension of x, but got mask shape {mask.shape} and x shape {x.shape}."
-        )
-
-    return torch.masked_select(
-        x,
-        # Get a shape that will broadcast to the shape of x. This will be [1, ..., len(mask)].
-        mask.reshape((1,) * (x.ndim - 1) + mask.shape)
-        # masked_select flattens tensors, so we need to reshape back to the original shape w/ the mask applied.
-    ).reshape(x.shape[:-1] + (int(mask.sum()),))
