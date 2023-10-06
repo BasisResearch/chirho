@@ -45,11 +45,14 @@ def append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
 
 
 class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
+    trace: Trajectory[T]
+
     def __init__(self, logging_times: torch.Tensor, epsilon: float = 1e-6):
+        self.trace: Trajectory[T] = Trajectory()
+
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
         #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
         self.logging_times = logging_times + epsilon
-        self._reset()
 
         # Require that the times are sorted. This is required by the index masking we do below.
         # TODO AZ sort this here (and the data too) accordingly?
@@ -58,8 +61,9 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
 
         super().__init__()
 
-    def _reset(self):
-        self.trace = Trajectory()
+    def __enter__(self):
+        self.trace: Trajectory[T] = Trajectory()
+        return super().__enter__()
 
     def _pyro_simulate(self, msg) -> None:
         msg["done"] = True
@@ -86,7 +90,7 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
             initial_state,
             timespan,
         )
-        self.trace = append(self.trace, trajectory[..., 1:-1])
+        self.trace: Trajectory[T] = append(self.trace, trajectory[..., 1:-1])
         if len(self.trace) > len(self.logging_times):
             raise ValueError(
                 "Multiple simulates were used with a single DynamicTrace handler."
