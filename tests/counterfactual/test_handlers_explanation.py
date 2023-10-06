@@ -4,10 +4,12 @@ import pyro.infer
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import (  # Preemptions,
+from chirho.counterfactual.handlers.counterfactual import (
     MultiWorldCounterfactual,
+    Preemptions,
 )
-from chirho.counterfactual.handlers.explanation import (  # SearchOfCause,
+from chirho.counterfactual.handlers.explanation import (
+    SearchOfCause,
     consequent_differs,
     undo_split,
 )
@@ -276,17 +278,22 @@ observations = {
     "prob_bottle_shatters_if_bill": 1.0,
 }
 
+observations_conditioning = condition(
+    data={k: torch.as_tensor(v) for k, v in observations.items()}
+)
+
 # setup ends___________________________________________________________________
 
 
 def test_SearchOfCause_single_layer():
 
     with MultiWorldCounterfactual() as mwc:
-        with SearchOfCause({"sally_throws": 0.0}, bias=0.0) as tr:
-            with condition(
-                data={k: torch.as_tensor(v) for k, v in observations.items()}
-            ):
-                stones_bayesian_model()
+        with SearchOfCause({"sally_throws": 0.0}, bias=0.0):
+            with observations_conditioning:
+                with pyro.poutine.trace() as tr:
+                    stones_bayesian_model()
+
+    tr = tr.trace.nodes
 
     with mwc:
         preempt_sally_throws = gather(
@@ -324,3 +331,47 @@ def test_SearchOfCause_single_layer():
     assert list(outcome.values()) == [0, 0.0, 0.0, 1.0, 1.0] or list(
         outcome.values()
     ) == [1, 1.0, 0.0, 0.0, 1.0]
+
+
+def test_SearchOfCause_two_layers():
+
+    actions = {"sally_throws": 0.0}
+
+    pinned_preemption_variables = {
+        "preempt_sally_throws": torch.tensor(0),
+        "witness_preempt_bill_hits": torch.tensor(1),
+    }
+    preemption_conditioning = condition(data=pinned_preemption_variables)
+
+    witness_preemptions = {"bill_hits": undo_split(antecedents=actions.keys())}
+    witness_preemptions_handler: Preemptions = Preemptions(
+        actions=witness_preemptions, prefix="witness_preempt_"
+    )
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchOfCause(actions=actions, bias=0.1, prefix="preempt_"):
+            with preemption_conditioning, witness_preemptions_handler:
+                with observations_conditioning:
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
+
+    tr = tr.trace.nodes
+
+    with mwc:
+        obs_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {0}}),
+            event_dim=0,
+        ).item()
+        int_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        ).item()
+        int_bottle_shatters = gather(
+            tr["bottle_shatters"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        ).item()
+
+    assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0

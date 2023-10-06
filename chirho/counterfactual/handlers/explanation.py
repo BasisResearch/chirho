@@ -2,7 +2,6 @@ import contextlib
 import itertools
 from typing import Callable, Iterable, Mapping, TypeVar
 
-import pyro
 import torch  # noqa: F401
 
 from chirho.counterfactual.handlers.counterfactual import Preemptions
@@ -99,14 +98,11 @@ def SearchOfCause(
     On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
     (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
     nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
-    intervention is executed. For ease of inspecion, yields a trace object. See tests in
-    `tests/counterfactual/test_handlers_explanation.py` for examples.
+    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
 
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
-
-    :yield: A trace object.
     """
     # TODO support event_dim != 0 propagation in factual_preemption
     preemptions = {
@@ -116,5 +112,4 @@ def SearchOfCause(
 
     with do(actions=actions):
         with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
-            with pyro.poutine.trace() as logging_tr:
-                yield logging_tr.trace.nodes
+            yield
