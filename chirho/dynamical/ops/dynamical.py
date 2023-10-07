@@ -99,44 +99,12 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
 
         return self._getitem(key)
 
-    @functools.singledispatchmethod
-    def append(self, other: T):
-        raise NotImplementedError(f"append not implemented for type {type(other)}")
-
     def to_state(self) -> State[T]:
         ret: State[T] = State(
             # TODO support event_dim > 0
             **{k: getattr(self, k) for k in self.keys}
         )
         return ret
-
-
-# TODO: figure out parameteric types of Trajectory.
-# This used torch methods in supposedly generic class.
-@Trajectory.append.register(Trajectory)  # type: ignore
-def _append_trajectory(self, other: Trajectory):
-    # If self is empty, just copy other.
-    if len(self.keys) == 0:
-        for k in other.keys:
-            setattr(self, k, getattr(other, k))
-        return
-
-    if self.keys != other.keys:
-        raise ValueError(
-            f"Trajectories must have the same keys to be appended, but got {self.keys} and {other.keys}."
-        )
-    for k in self.keys:
-        prev_v = getattr(self, k)
-        curr_v = getattr(other, k)
-        time_dim = -1  # TODO generalize to nontrivial event_shape
-        batch_shape = torch.broadcast_shapes(prev_v.shape[:-1], curr_v.shape[:-1])
-        prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
-        curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
-        setattr(
-            self,
-            k,
-            torch.cat([prev_v, curr_v], dim=time_dim),
-        )
 
 
 @runtime_checkable

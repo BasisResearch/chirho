@@ -1,3 +1,4 @@
+import functools
 from typing import Generic, TypeVar
 
 import pyro
@@ -9,7 +10,43 @@ from chirho.dynamical.ops import Trajectory
 T = TypeVar("T")
 
 
+@functools.singledispatch
+def append(fst, rest: T) -> T:
+    raise NotImplementedError(f"append not implemented for type {type(fst)}.")
+
+
+@append.register(Trajectory)
+def append_trajectory(traj1: Trajectory[T], traj2: Trajectory[T]) -> Trajectory[T]:
+    if len(traj1.keys) == 0:
+        return traj2
+
+    if len(traj2.keys) == 0:
+        return traj1
+
+    if traj1.keys != traj2.keys:
+        raise ValueError(
+            f"Trajectories must have the same keys to be appended, but got {traj1.keys} and {traj2.keys}."
+        )
+
+    result: Trajectory[T] = Trajectory()
+    for k in traj1.keys:
+        setattr(result, k, append(getattr(traj1, k), getattr(traj2, k)))
+
+    return result
+
+
+@append.register(torch.Tensor)
+def append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
+    time_dim = -1  # TODO generalize to nontrivial event_shape
+    batch_shape = torch.broadcast_shapes(prev_v.shape[:-1], curr_v.shape[:-1])
+    prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
+    curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
+    return torch.cat([prev_v, curr_v], dim=time_dim)
+
+
 class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
+    trace: Trajectory[T]
+
     def __init__(self, logging_times: torch.Tensor, epsilon: float = 1e-6):
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
         #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
@@ -23,8 +60,8 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
 
         super().__init__()
 
-    def _reset(self):
-        self.trace = Trajectory()
+    def _reset(self) -> None:
+        self.trace: Trajectory[T] = Trajectory()
 
     def __enter__(self):
         self._reset()
@@ -55,7 +92,7 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
             initial_state,
             timespan,
         )
-        self.trace.append(trajectory[..., 1:-1])
+        self.trace: Trajectory[T] = append(self.trace, trajectory[..., 1:-1])
         if len(self.trace) > len(self.logging_times):
             raise ValueError(
                 "Multiple simulates were used with a single DynamicTrace handler."
