@@ -26,6 +26,10 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
     def _reset(self):
         self.trace = Trajectory()
 
+    def __enter__(self):
+        self._reset()
+        return super().__enter__()
+
     def _pyro_simulate(self, msg) -> None:
         msg["done"] = True
 
