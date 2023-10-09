@@ -4,7 +4,7 @@ import pyro.infer
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.counterfactual.handlers import MultiWorldCounterfactual
 from chirho.counterfactual.handlers.explanation import (
     consequent_differs,
     random_intervention,
