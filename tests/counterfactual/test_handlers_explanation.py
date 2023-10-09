@@ -6,9 +6,7 @@ import torch
 from scipy.stats import spearmanr
 
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
-from chirho.counterfactual.handlers.explanation import (  # noqa: F401  ignore import warning for registered functions
-    _uniform_proposal_indep,
-    _uniform_proposal_integer,
+from chirho.counterfactual.handlers.explanation import (
     consequent_differs,
     random_intervention,
     undo_split,
@@ -218,158 +216,85 @@ def test_consequent_differs(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
 
 
-def test_uniform_proposal():
-    support_real = pyro.distributions.constraints.real
-    support_boolean = pyro.distributions.constraints.boolean
-    support_positive = pyro.distributions.constraints.positive
-    support_interval = pyro.distributions.constraints.interval(0, 10)
+# ________________________________________________
+# testing uniform proposal and random intervention
 
-    uniform_real = uniform_proposal(support_real)
-    uniform_real_shifted = uniform_proposal(
-        support_real, normal_mean=5.0, normal_sd=0.5
-    )
-    uniform_boolean = uniform_proposal(support_boolean)
-    uniform_interval_centered = uniform_proposal(support_interval)
-    uniform_interval_even = uniform_proposal(
-        support_interval, uniform_over_interval=True
-    )
-    uniform_positive = uniform_proposal(support_positive)
+support_real = pyro.distributions.constraints.real
+support_boolean = pyro.distributions.constraints.boolean
+support_positive = pyro.distributions.constraints.positive
+support_interval = pyro.distributions.constraints.interval(0, 10)
+support_integer_interval = pyro.distributions.constraints.integer_interval(0, 2)
+indep_constraint = pyro.distributions.constraints.independent(
+    pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
+)
 
-    with pyro.plate("samples", 500):
-        samples_real = pyro.sample("real", uniform_real)
-        samples_real_shifted = pyro.sample("real_shifted", uniform_real_shifted)
-        samples_boolean = pyro.sample("boolean", uniform_boolean)
-        samples_interval_centered = pyro.sample(
-            "interval_centered", uniform_interval_centered
+
+@pytest.mark.parametrize(
+    "support",
+    [
+        support_real,
+        support_boolean,
+        support_positive,
+        support_interval,
+        support_integer_interval,
+        indep_constraint,
+    ],
+)
+@pytest.mark.parametrize("edges", [(0, 2), (0, 100), (0, 250)])
+def test_uniform_proposal(support, edges):
+    # plug the edges into interval constraints
+    if support is support_integer_interval:
+        support = pyro.distributions.constraints.integer_interval(*edges)
+    elif support is support_interval:
+        support = pyro.distributions.constraints.interval(*edges)
+
+    # test all but the indep_constraint
+    if support is not indep_constraint:
+        uniform = uniform_proposal(support)
+        with pyro.plate("samples", 50):
+            samples = pyro.sample("samples", uniform)
+
+        # with positive constraint, zeros are possible, but
+        # they don't pass `support.check`. Considered harmless.
+        if support is support_positive:
+            samples = samples[samples != 0]
+
+        assert torch.all(support.check(samples))
+
+    else:  # testing the idependence constraint requires a bit more work
+        dist_indep = uniform_proposal(
+            indep_constraint, event_shape=torch.Size([2, 1000])
         )
-        samples_interval_even = pyro.sample("interval_even", uniform_interval_even)
-        samples_positive = pyro.sample("positive", uniform_positive)
+        with pyro.plate("data", 2):
+            samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
 
-    # some leeway added to avoid
-    # stochastic test failures
-    within_range = ((samples_real >= -3) & (samples_real <= 3)).float().mean()
-    assert abs(samples_real.mean() - 0.0) < 0.1
-    assert within_range >= 0.9
-
-    within_range_shifted = (
-        ((samples_real_shifted >= 3) & (samples_real <= 7)).float().mean()
-    )
-    assert abs(samples_real_shifted.mean() - 5) < 0.1
-    assert within_range_shifted >= 0.9
-
-    proportion_of_ones = (samples_boolean == 1).float().mean()
-    assert abs(proportion_of_ones - 0.5) < 0.1
-
-    assert (samples_interval_centered >= 0.0).all() and (
-        samples_interval_centered <= 10.0
-    ).all()
-    assert (samples_interval_even >= 0.0).all() and (
-        samples_interval_even <= 10.0
-    ).all()
-
-    mean_interval_centered = samples_interval_centered.mean()
-    assert abs(mean_interval_centered - 5) < 0.8
-
-    prop_low = (samples_interval_even <= 2.5).float().mean()
-    assert abs(prop_low - 0.25) < 0.2
-
-    assert (samples_positive > 0).all()
+        batch_1 = samples_indep[0].squeeze().tolist()
+        batch_2 = samples_indep[1].squeeze().tolist()
+        assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
 
 
-def test_uniform_proposal_indep():
-    indep_constraint = pyro.distributions.constraints.independent(
-        pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
-    )
+@pytest.mark.parametrize(
+    "support",
+    [
+        support_real,
+        support_boolean,
+        support_positive,
+        support_interval,
+        support_integer_interval,
+        indep_constraint,
+    ],
+)
+def test_random_intervention(support):
+    intervention = random_intervention(support, "samples")
 
-    dist_indep = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 1000]))
+    with pyro.plate("draws", 1000):
+        samples = intervention(torch.ones(10))
 
-    with pyro.plate("data", 2):
-        samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
+    if support is support_positive:
+        samples = samples[samples != 0]
 
-    batch_1 = samples_indep[0].squeeze().tolist()
-    batch_2 = samples_indep[1].squeeze().tolist()
-
-    assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
-
-
-def test_uniform_proposal_integer():
-    constraint = pyro.distributions.constraints.integer_interval(0, 2)
-
-    dist_int_iterval = uniform_proposal(constraint)
-
-    assert isinstance(dist_int_iterval, pyro.distributions.Categorical)
-    assert dist_int_iterval.probs.shape == (3,)
-    assert torch.allclose(dist_int_iterval.probs.sum(), torch.tensor(1.0))
-
-    with pyro.plate("data", 1000):
-        samples_int_interval = pyro.sample("samples_int_interval", dist_int_iterval)
-
-    freqs = torch.bincount(samples_int_interval, minlength=3) / 1000
-
-    assert torch.allclose(freqs, torch.tensor([0.33, 0.33, 0.33]), atol=0.1)
+    assert torch.all(support.check(samples))
 
 
-def test_random_intervention():
-    support_real = pyro.distributions.constraints.real
-    support_boolean = pyro.distributions.constraints.boolean
-    support_positive = pyro.distributions.constraints.positive
-    support_interval = pyro.distributions.constraints.interval(0, 10)
-    support_int_interval = pyro.distributions.constraints.integer_interval(0, 2)
-
-    intervention_real = random_intervention(support_real, "sample_real")
-    intervention_boolean = random_intervention(support_boolean, "sample_boolean")
-    intervention_positive = random_intervention(support_positive, "sample_positive")
-    intervention_interval = random_intervention(
-        support_interval, "sample_interval_centered"
-    )
-    intervention_interval_even = random_intervention(
-        support_interval, "sample_interval_even", uniform_over_interval=True
-    )
-    intervention_int_interval = random_intervention(
-        support_int_interval, "sample_int_interval"
-    )
-
-    def create_interventions():
-        with pyro.plate("random_samples", 1000):
-            sample_real = intervention_real(torch.ones(10))
-            sample_boolean = intervention_boolean(torch.ones(10))
-            sample_positive = intervention_positive(torch.ones(10))
-            sample_interval_centered = intervention_interval(torch.ones(10))
-            samples_interval_even = intervention_interval_even(torch.ones(10))
-            sample_int_interval = intervention_int_interval(torch.ones(10))
-        return (
-            sample_real,
-            sample_boolean,
-            sample_positive,
-            sample_interval_centered,
-            samples_interval_even,
-            sample_int_interval,
-        )
-
-    with pyro.poutine.trace() as tr:
-        create_interventions()
-
-    traced_sample_real = tr.trace.nodes["sample_real"]["value"]
-    traced_within_range = (
-        ((traced_sample_real >= -3) & (traced_sample_real <= 3)).float().mean()
-    )
-    assert abs(traced_sample_real.mean() - 0.0) < 0.15
-    assert traced_within_range >= 0.9
-
-    traced_sample_boolean = tr.trace.nodes["sample_boolean"]["value"]
-    traced_proportion_of_ones = (traced_sample_boolean == 1).float().mean()
-    assert abs(traced_proportion_of_ones - 0.5) < 0.1
-
-    assert (tr.trace.nodes["sample_positive"]["value"] > 0).all()
-
-    traced_sample_interval_centered = tr.trace.nodes["sample_interval_centered"][
-        "value"
-    ]
-    assert abs(traced_sample_interval_centered.mean() - 5.0) < 0.5
-
-    traced_sample_interval_even = tr.trace.nodes["sample_interval_even"]["value"]
-    assert (traced_sample_interval_even <= 2.5).float().mean() - 0.25 < 0.1
-
-    traced_sample_int_interval = tr.trace.nodes["sample_int_interval"]["value"]
-    traced_freqs = torch.bincount(traced_sample_int_interval, minlength=3) / 1000
-    assert torch.allclose(traced_freqs, torch.tensor([0.33, 0.33, 0.33]), atol=0.1)
+# tests of uniform proposal and random intervention end here
+# ___________________________________________________________

@@ -87,42 +87,27 @@ def consequent_differs(
 @functools.singledispatch
 def uniform_proposal(
     support: pyro.distributions.constraints.Constraint,
-    uniform_over_interval: bool = False,
-    normal_mean: float = 0.0,
-    normal_sd: float = 1.0,
     **kwargs,
 ) -> pyro.distributions.Distribution:
     """
     This function heuristically constructs a probability distribution over a specified
     support. The choice of distribution depends on the type of support provided.
 
-    - If the support is `real`, it creates a Normal distribution with the specified mean
-      and standard deviation, defaulting to (0,1).
-    - If the support is `boolean`, it creates a Bernoulli distribution with a fixed logit of 0, corresponding
-      to success probability .5.
-    - If the support is an `interval` and `uniform_over_interval` is set to True, it creates
-      a Uniform distribution over the specified interval. Otherwise, the distribution is centered around the
+    - If the support is `real`, it creates a wide Normal distribution
+      and standard deviation, defaulting to (0,100).
+    - If the support is `boolean`, it creates a Bernoulli distribution with a fixed logit of 0,
+      corresponding to success probability .5.
+    - If the support is an `interval`, the transformed distribution is centered around the
       midpoint of the interval.
 
     :param support: The support used to create the probability distribution.
-    :param uniform_over_interval: If True and the support is an interval, create a Uniform
-                                 distribution over the interval  (defaults to False).
-    :param normal_mean: The mean for the Normal distribution (defaults to 0.0).
-    :param normal_sd: The standard deviationfor the Normal distribution (defaults to 1.0).
     :param kwargs: Additional keyword arguments.
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(normal_mean, normal_sd).mask(False)
+        return pyro.distributions.Normal(0, 100).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
-    elif (
-        isinstance(support, pyro.distributions.constraints.interval)
-        and uniform_over_interval
-    ):
-        return pyro.distributions.Uniform(
-            support.lower_bound, support.upper_bound
-        ).mask(False)
     else:
         tfm = pyro.distributions.transforms.biject_to(support)
         base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
@@ -192,9 +177,6 @@ def _uniform_proposal_integer(
 def random_intervention(
     support: pyro.distributions.constraints.Constraint,
     name: str,
-    uniform_over_interval: bool = False,
-    normal_mean: float = 0.0,
-    normal_sd: float = 1.0,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Creates a random `pyro`sample` function for a single sample site, determined by
@@ -202,9 +184,6 @@ def random_intervention(
 
     :param support: The support constraint for the sample site..can take.
     :param name: The name of the sample site.
-    :param uniform_over_interval: (Optional) As in the documentation for `uniform_proposal`.
-    :param normal_mean: (Optional) As in the documentation for `uniform_proposal`.
-    :param normal_sd: (Optional) As in the documentation for `uniform_proposal`.
 
     :return: A `pyro.sample` function that takes a torch.Tensor as input
         and returns a random sample over the pre-specified support of the same
@@ -223,9 +202,6 @@ def random_intervention(
         event_shape = value.shape[len(value.shape) - support.event_dim :]
         proposal_dist = uniform_proposal(
             support,
-            uniform_over_interval=uniform_over_interval,
-            normal_mean=normal_mean,
-            normal_sd=normal_sd,
             event_shape=event_shape,
         )
         return pyro.sample(name, proposal_dist)
