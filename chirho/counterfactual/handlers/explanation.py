@@ -1,6 +1,7 @@
+import contextlib
 import functools
 import itertools
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Mapping, TypeVar
 
 import pyro
 import torch  # noqa: F401
@@ -15,8 +16,8 @@ T = TypeVar("T")
 def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[[T], T]:
     """
     A helper function that undoes an upstream :func:`~chirho.counterfactual.ops.split` operation,
-    meant to meant to be used to create arguments to pass to :func:`~chirho.interventional.ops.intervene` ,
-    :func:`~chirho.counterfactual.ops.split`  or :func:`~chirho.counterfactual.ops.preempt` .
+    meant to be used to create arguments to pass to :func:`~chirho.interventional.ops.intervene` ,
+    :func:`~chirho.counterfactual.ops.split`  or :func:`~chirho.counterfactual.ops.preempt`.
     Works by gathering the factual value and scattering it back into two alternative cases.
 
     :param antecedents: A list of upstream intervened sites which induced the :func:`split` to be reversed.
@@ -105,7 +106,7 @@ def uniform_proposal(
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0, 100).mask(False)
+        return pyro.distributions.Normal(0, 10).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
@@ -121,26 +122,6 @@ def _uniform_proposal_indep(
     event_shape: torch.Size = torch.Size([]),
     **kwargs,
 ) -> pyro.distributions.Distribution:
-    """
-    This constructs a probability distribution with independent dimensions
-    over a specified support. The choice of distribution depends on the type of support provided
-    (see the documentation for `uniform_proposal`).
-
-    :param support: The support used to create the probability distribution.
-    :param event_shape: The event shape specifying the dimensions of the distribution.
-    :param kwargs: Additional keyword arguments.
-    :return: A probability distribution with independent dimensions over the specified support.
-
-    Example:
-    ```
-    indep_constraint = pyro.distributions.constraints.independent(
-    pyro.distributions.constraints.real, reinterpreted_batch_ndims=2)
-    dist = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 3]))
-    with pyro.plate("data", 3):
-        samples_indep = pyro.sample("samples_indep", dist.expand([4, 2, 3]))
-    ```
-    """
-
     d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
 
@@ -150,22 +131,6 @@ def _uniform_proposal_integer(
     support: pyro.distributions.constraints.integer_interval,
     **kwargs,
 ) -> pyro.distributions.Distribution:
-    """
-    This constructs a uniform categorical distribution over an integer_interval support
-    where the lower bound is 0 and the upper bound is specified by the support.
-
-    :param support: The integer_interval support with a lower bound of 0 and a specified upper bound.
-    :param kwargs: Additional keyword arguments.
-    :return: A categorical probability distribution over the specified integer_interval support.
-
-    Example:
-    ```
-    constraint = pyro.distributions.constraints.integer_interval(0, 2)
-    dist = _uniform_proposal_integer(constraint)
-    samples = dist.sample(torch.Size([100]))
-    print(dist.probs.tolist())
-    ```
-    """
     if support.lower_bound != 0:
         raise NotImplementedError(
             "integer_interval with lower_bound > 0 not yet supported"
