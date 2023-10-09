@@ -217,7 +217,7 @@ def test_consequent_differs(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
 
 
-# _testing SearchOfCause_________________________________________________________________________________________
+# _testing SearchForCause_________________________________________________________________________________________
 
 
 # Setup: Bayesian stones throwing model__________________________________
@@ -285,7 +285,7 @@ observations_conditioning = condition(
 # setup ends___________________________________________________________________
 
 
-def test_SearchOfCause_single_layer():
+def test_SearchForCause_single_layer():
     with MultiWorldCounterfactual() as mwc:
         with SearchOfCause({"sally_throws": 0.0}, bias=0.0):
             with observations_conditioning:
@@ -332,7 +332,7 @@ def test_SearchOfCause_single_layer():
     ) == [1, 1.0, 0.0, 0.0, 1.0]
 
 
-def test_SearchOfCause_two_layers():
+def test_SearchForCause_two_layers():
     actions = {"sally_throws": 0.0}
 
     pinned_preemption_variables = {
@@ -375,4 +375,4 @@ def test_SearchOfCause_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 
-# _testing SearchOfCause ends_________________________________________________________________________________________
+# _testing SearchForCause ends_________________________________________________________________________________________

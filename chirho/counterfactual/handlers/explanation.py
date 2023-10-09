@@ -87,7 +87,7 @@ def consequent_differs(
 
 
 @contextlib.contextmanager
-def SearchOfCause(
+def SearchForCause(
     actions: Mapping[str, Intervention[T]],
     *,
     bias: float = 0.0,
