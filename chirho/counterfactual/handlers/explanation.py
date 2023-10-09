@@ -138,7 +138,7 @@ def uniform_proposal(
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0, 100).mask(False)
+        return pyro.distributions.Normal(0, 10).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
