@@ -385,37 +385,30 @@ def test_SearchForCause_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 
-support_real = pyro.distributions.constraints.real
-support_boolean = pyro.distributions.constraints.boolean
-support_positive = pyro.distributions.constraints.positive
-support_interval = pyro.distributions.constraints.interval(0, 10)
-support_integer_interval = pyro.distributions.constraints.integer_interval(0, 2)
-indep_constraint = pyro.distributions.constraints.independent(
-    pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
-)
+SUPPORT_CASES = [
+    pyro.distributions.constraints.real,
+    pyro.distributions.constraints.boolean,
+    pyro.distributions.constraints.positive,
+    pyro.distributions.constraints.interval(0, 10),
+    pyro.distributions.constraints.integer_interval(0, 2),
+    pyro.distributions.constraints.independent(
+        pyro.distributions.constraints.real,
+        reinterpreted_batch_ndims=1,
+    )
+]
 
 
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
+@pytest.mark.parametrize("support", SUPPORT_CASES)
 @pytest.mark.parametrize("edges", [(0, 2), (0, 100), (0, 250)])
 def test_uniform_proposal(support, edges):
     # plug the edges into interval constraints
-    if support is support_integer_interval:
+    if isinstance(support, pyro.distributions.constraints.integer_interval):
         support = pyro.distributions.constraints.integer_interval(*edges)
-    elif support is support_interval:
+    elif isinstance(support, pyro.distributions.constraint.interval):
         support = pyro.distributions.constraints.interval(*edges)
 
     # test all but the indep_constraint
-    if support is not indep_constraint:
+    if not isinstance(support, pyro.distributions.constraints.independent):
         uniform = uniform_proposal(support)
         with pyro.plate("samples", 50):
             samples = pyro.sample("samples", uniform)
@@ -429,7 +422,7 @@ def test_uniform_proposal(support, edges):
 
     else:  # testing the idependence constraint requires a bit more work
         dist_indep = uniform_proposal(
-            indep_constraint, event_shape=torch.Size([2, 1000])
+            support, event_shape=torch.Size([2, 1000])
         )
         with pyro.plate("data", 2):
             samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
@@ -439,24 +432,14 @@ def test_uniform_proposal(support, edges):
         assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
 
 
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
+@pytest.mark.parametrize("support", SUPPORT_CASES)
 def test_random_intervention(support):
     intervention = random_intervention(support, "samples")
 
     with pyro.plate("draws", 1000):
         samples = intervention(torch.ones(10))
 
-    if support is support_positive:
+    if isinstance(support, type(pyro.distributions.constraints.positive)):
         samples = samples[samples != 0]
 
     assert torch.all(support.check(samples))
