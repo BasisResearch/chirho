@@ -9,7 +9,7 @@ from chirho.counterfactual.handlers.counterfactual import (
     Preemptions,
 )
 from chirho.counterfactual.handlers.explanation import (
-    SearchOfCause,
+    SearchForCause,
     consequent_differs,
     undo_split,
 )
@@ -287,7 +287,7 @@ observations_conditioning = condition(
 
 def test_SearchForCause_single_layer():
     with MultiWorldCounterfactual() as mwc:
-        with SearchOfCause({"sally_throws": 0.0}, bias=0.0):
+        with SearchForCause({"sally_throws": 0.0}, bias=0.0):
             with observations_conditioning:
                 with pyro.poutine.trace() as tr:
                     stones_bayesian_model()
@@ -347,7 +347,7 @@ def test_SearchForCause_two_layers():
     )
 
     with MultiWorldCounterfactual() as mwc:
-        with SearchOfCause(actions=actions, bias=0.1, prefix="preempt_"):
+        with SearchForCause(actions=actions, bias=0.1, prefix="preempt_"):
             with preemption_conditioning, witness_preemptions_handler:
                 with observations_conditioning:
                     with pyro.poutine.trace() as tr:
