@@ -88,35 +88,6 @@ def consequent_differs(
     return _consequent_differs
 
 
-@contextlib.contextmanager
-def SearchForCause(
-    actions: Mapping[str, Intervention[T]],
-    *,
-    bias: float = 0.0,
-    prefix: str = "__cause_split_",
-):
-    """
-    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
-    On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
-    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
-    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
-    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
-
-    :param actions: A mapping of sites to interventions.
-    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
-    """
-    # TODO support event_dim != 0 propagation in factual_preemption
-    preemptions = {
-        antecedent: undo_split(antecedents=[antecedent])
-        for antecedent in actions.keys()
-    }
-
-    with do(actions=actions):
-        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
-            yield
-
-
 @functools.singledispatch
 def uniform_proposal(
     support: pyro.distributions.constraints.Constraint,
@@ -204,3 +175,32 @@ def random_intervention(
         return pyro.sample(name, proposal_dist)
 
     return _random_intervention
+
+
+@contextlib.contextmanager
+def SearchForCause(
+    actions: Mapping[str, Intervention[T]],
+    *,
+    bias: float = 0.0,
+    prefix: str = "__cause_split_",
+):
+    """
+    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
+    On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
+    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
+    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
+
+    :param actions: A mapping of sites to interventions.
+    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
+    """
+    # TODO support event_dim != 0 propagation in factual_preemption
+    preemptions = {
+        antecedent: undo_split(antecedents=[antecedent])
+        for antecedent in actions.keys()
+    }
+
+    with do(actions=actions):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+            yield

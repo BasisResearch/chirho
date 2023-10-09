@@ -220,6 +220,43 @@ def test_consequent_differs(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
 
 
+SUPPORT_CASES = [
+    pyro.distributions.constraints.real,
+    pyro.distributions.constraints.boolean,
+    pyro.distributions.constraints.positive,
+    pyro.distributions.constraints.interval(0, 10),
+    pyro.distributions.constraints.interval(-5, 5),
+    pyro.distributions.constraints.integer_interval(0, 2),
+    pyro.distributions.constraints.integer_interval(0, 100),
+]
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_uniform_proposal(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    uniform = uniform_proposal(support, event_shape=event_shape)
+    samples = uniform.sample((10,))
+    assert torch.all(support.check(samples))
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_random_intervention(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    obs_value = torch.randn(event_shape)
+    intervention = random_intervention(support, "samples")
+
+    with pyro.plate("draws", 10):
+        samples = intervene(obs_value, intervention)
+
+    assert torch.all(support.check(samples))
+
+
 def stones_bayesian_model():
     prob_sally_throws = pyro.sample("prob_sally_throws", dist.Beta(1, 1))
     prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
@@ -382,40 +419,3 @@ def test_SearchForCause_two_layers():
         ).item()
 
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
-
-
-SUPPORT_CASES = [
-    pyro.distributions.constraints.real,
-    pyro.distributions.constraints.boolean,
-    pyro.distributions.constraints.positive,
-    pyro.distributions.constraints.interval(0, 10),
-    pyro.distributions.constraints.interval(-5, 5),
-    pyro.distributions.constraints.integer_interval(0, 2),
-    pyro.distributions.constraints.integer_interval(0, 100),
-]
-
-
-@pytest.mark.parametrize("support", SUPPORT_CASES)
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_uniform_proposal(support, event_shape):
-    if event_shape:
-        support = pyro.distributions.constraints.independent(support, len(event_shape))
-
-    uniform = uniform_proposal(support, event_shape=event_shape)
-    samples = uniform.sample((10,))
-    assert torch.all(support.check(samples))
-
-
-@pytest.mark.parametrize("support", SUPPORT_CASES)
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_random_intervention(support, event_shape):
-    if event_shape:
-        support = pyro.distributions.constraints.independent(support, len(event_shape))
-
-    obs_value = torch.randn(event_shape)
-    intervention = random_intervention(support, "samples")
-
-    with pyro.plate("draws", 10):
-        samples = intervene(obs_value, intervention)
-
-    assert torch.all(support.check(samples))
