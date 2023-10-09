@@ -1,10 +1,9 @@
-import contextlib
 import functools
 import itertools
-from typing import Callable, Iterable, Mapping, TypeVar
+from typing import Callable, Iterable, TypeVar
 
 import pyro
-import torch  # noqa: F401
+import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
