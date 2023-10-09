@@ -143,23 +143,23 @@ def random_intervention(
     name: str,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     """
-    Creates a random `pyro`sample` function for a single sample site, determined by
+    Creates a random-valued intervention for a single sample site, determined by
     by the distribution support, and site name.
 
-    :param support: The support constraint for the sample site..can take.
-    :param name: The name of the sample site.
+    :param support: The support constraint for the sample site.
+    :param name: The name of the auxiliary sample site.
 
-    :return: A `pyro.sample` function that takes a torch.Tensor as input
+    :return: A function that takes a ``torch.Tensor`` as input
         and returns a random sample over the pre-specified support of the same
         event shape as the input tensor.
 
-    Example:
-    ```
-    support = pyro.distributions.constraints.real
-    name = "real_sample"
-    intervention_fn = random_intervention(support, name)
-    random_sample = intervention_fn(torch.tensor(2.0))
-    ```
+    Example::
+
+        >>> support = pyro.distributions.constraints.real
+        >>> intervention_fn = random_intervention(support, name="random_value")
+        >>> with chirho.interventional.handlers.do(actions={"x": intervention_fn}):
+        ...   x = pyro.deterministic("x", torch.tensor(2.))
+        >>> assert x != 2
     """
 
     def _random_intervention(value: torch.Tensor) -> torch.Tensor:
