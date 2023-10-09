@@ -1,7 +1,8 @@
 import contextlib
-from typing import Optional, ParamSpec, TypeVar
+import functools
+from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, interpreter
+from chirho.effectful.ops.interpretation import Interpretation, interpreter, shallow_interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -9,6 +10,40 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
+
+
+def bind_and_push_prompts(
+    unbound_conts: Interpretation[S, T],
+) -> Callable[[Callable[Concatenate[Optional[T], P], T]], Callable[Concatenate[Optional[T], P], T]]:
+
+    @define(Operation)
+    def get_args() -> tuple[tuple, dict]:
+        raise ValueError("No args stored")
+
+    def _capture_args(
+        fn: Callable[Concatenate[Optional[V], Q], V]
+    ) -> Callable[Concatenate[Optional[V], Q], V]:
+
+        @functools.wraps(fn)
+        def _wrapper(__res: Optional[V], *a: Q.args, **ks: Q.kwargs) -> V:
+            return interpreter({get_args: lambda _: (a, ks)})(fn)(__res, *a, **ks)
+
+        return _wrapper
+
+    def _bind_args(
+        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Concatenate[Optional[T], Q], T]],
+    ) -> Interpretation[V, T]:
+        return {
+            p: functools.partial(
+                lambda k, _, res: k(res, *get_args()[0], **get_args()[1]),
+                unbound_conts[p],
+            ) for p in unbound_conts.keys()
+        }
+
+    def _decorator(fn: Callable[Concatenate[Optional[V], Q], V]):
+        return shallow_interpreter(_bind_args(unbound_conts))(_capture_args(fn))
+
+    return _decorator
 
 
 @define(Operation)
