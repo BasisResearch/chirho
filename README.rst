@@ -19,7 +19,7 @@ answer the following kinds of causal questions that appear frequently in
 practice.
 
 -  **Interventional**: *How many COVID-19 hospitalizations will occur if
-   the the USA imposes a national mask mandate?*
+   the USA imposes a national mask mandate?*
 
 -  **Counterfactual**: *Given that 100,000 people were infected with
    COVID-19 in the past month, how many would have been infected if a
