@@ -186,7 +186,7 @@ def SearchForCause(
 ):
     """
     A context manager used for a stochastic search of minimal but-for causes among potential interventions.
-    On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
+    On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
     (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
     nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
     intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
