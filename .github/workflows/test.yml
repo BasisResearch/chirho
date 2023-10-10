@@ -4,7 +4,7 @@ on:
   push:
     branches: [ master, staging-dynamic ]
   pull_request:
-    branches: [ master, staging-dynamic]
+    branches: [ master, staging-dynamic ]
 
 jobs:
   build:
@@ -46,7 +46,7 @@ jobs:
         run: |
           sudo apt install -y pandoc
           python -m pip install --upgrade pip
-          pip install .[test]
+          pip install .[test,dynamical]
 
       - name: Test
         shell: bash

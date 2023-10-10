@@ -13,9 +13,8 @@ from chirho.dynamical.handlers import (
     DynamicTrace,
     SimulatorEventLoop,
 )
-from chirho.dynamical.handlers.ODE.solvers import TorchDiffEq
-from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.ops.ODE import ODEDynamics
+from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.ops import Dynamics, State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -41,7 +40,6 @@ intervene_state2 = State(S=torch.tensor(30.0))
 
 def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int = 0):
     def event_f(t: torch.tensor, state: State[torch.tensor]):
-        # ret = target_state.subtract_shared_variables(state).l2()
         actual, target = state.R, target_state.R
         cf_indices = IndexSet(
             **{
@@ -392,7 +390,7 @@ def test_split_twinworld_dynamic_matches_output(
 
 
 def test_grad_of_dynamic_intervention_event_f_params():
-    class Model(ODEDynamics):
+    class Model(Dynamics):
         def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
             dX.x = tt(1.0)
             dX.z = X.dz

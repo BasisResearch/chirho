@@ -2,6 +2,7 @@ import logging
 
 import torch
 
+from chirho.dynamical.handlers.trace import append
 from chirho.dynamical.ops import Trajectory
 
 logger = logging.getLogger(__name__)
@@ -16,7 +17,7 @@ def test_trajectory_methods():
 def test_append():
     trajectory1 = Trajectory(S=torch.tensor([1.0, 2.0, 3.0]))
     trajectory2 = Trajectory(S=torch.tensor([4.0, 5.0, 6.0]))
-    trajectory1.append(trajectory2)
+    trajectory = append(trajectory1, trajectory2)
     assert torch.allclose(
-        trajectory1.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    ), "Trajectory.append() failed to append a trajectory"
+        trajectory.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    ), "append() failed to append a trajectory"
