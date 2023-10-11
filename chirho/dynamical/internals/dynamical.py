@@ -16,7 +16,7 @@ T = TypeVar("T")
 @functools.singledispatch
 def simulate_trajectory(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     timespan: T,
     **kwargs,

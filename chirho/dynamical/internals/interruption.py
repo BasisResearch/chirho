@@ -24,7 +24,7 @@ T = TypeVar("T")
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: T,
     end_time: T,
@@ -62,7 +62,7 @@ def simulate_to_interruption(
 
 def get_next_interruptions(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: T,
     end_time: T,
@@ -105,7 +105,7 @@ def get_next_interruptions(
 @functools.singledispatch
 def get_next_interruptions_dynamic(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: T,
     next_static_interruption: StaticInterruption,
@@ -118,8 +118,8 @@ def get_next_interruptions_dynamic(
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
 def apply_interruptions(
-    dynamics: InPlaceDynamics[S, T], start_state: State[T]
-) -> Tuple[InPlaceDynamics[S, T], State[T]]:
+    dynamics: InPlaceDynamics[T], start_state: State[T]
+) -> Tuple[InPlaceDynamics[T], State[T]]:
     """
     Apply the effects of an interruption to a dynamical system.
     """

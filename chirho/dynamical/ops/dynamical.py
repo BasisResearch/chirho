@@ -113,14 +113,14 @@ Dynamics = Callable[[State[S]], State[S]]
 
 
 @runtime_checkable
-class InPlaceDynamics(Protocol[S, T_co]):
-    def diff(self, __state: State[S], __dstate: State[S]) -> T_co:
+class InPlaceDynamics(Protocol[S]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> None:
         ...
 
 
 @runtime_checkable
-class ObservableInPlaceDynamics(InPlaceDynamics[S, T_co], Protocol[S, T_co]):
-    def diff(self, __state: State[S], __dstate: State[S]) -> T_co:
+class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> None:
         ...
 
     def observation(self, __state: State[S] | Trajectory[S]) -> None:
@@ -129,7 +129,7 @@ class ObservableInPlaceDynamics(InPlaceDynamics[S, T_co], Protocol[S, T_co]):
 
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     start_time: R,
     end_time: R,
@@ -158,7 +158,7 @@ def simulate(
 @functools.singledispatch
 def _simulate(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     start_time: R,
     end_time: R,

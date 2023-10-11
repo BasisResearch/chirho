@@ -31,7 +31,7 @@ class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin)
         super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        dynamics: ObservableInPlaceDynamics[torch.Tensor, torch.Tensor] = msg["args"][0]
+        dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
 
         if "in_SEL" not in msg.keys():
             msg["in_SEL"] = False

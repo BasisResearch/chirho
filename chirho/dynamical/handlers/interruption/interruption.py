@@ -97,7 +97,7 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin):
         super().__init__(time + eps)
 
     def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics: ObservableInPlaceDynamics[T, None] = msg["args"][0]
+        dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
         current_state: State[T] = msg["args"][1]
 
         with condition(data=self.data):
