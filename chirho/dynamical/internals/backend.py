@@ -158,8 +158,6 @@ def get_next_interruptions(
             **kwargs,
         )
 
-    raise ValueError("Unreachable code reached.")
-
 
 @functools.singledispatch
 def get_next_interruptions_dynamic(
