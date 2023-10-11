@@ -87,9 +87,7 @@ def _get_compatible_observations(obs_handler, time, data):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
-    # "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
-    "obs_handler",
-    [StaticBatchObservation],
+    "obs_handler", [StaticObservation, StaticBatchObservation]
 )
 def test_log_prob_exists(model, obs_handler):
     """
