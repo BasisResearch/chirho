@@ -109,19 +109,6 @@ class _PointObservationMixin(Generic[T]):
         msg["name"] = msg["name"] + "_" + str(self.time)
 
 
-class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
-    """
-    This effect handler interrupts a simulation at a given time, and
-    applies an intervention to the state at that time.
-
-    :param time: The time at which the intervention is applied.
-    :param intervention: The instantaneous intervention applied to the state when the event is triggered.
-    """
-    def __init__(self, time: R, intervention: Intervention[State[T]], **kwargs):
-        self.intervention = intervention
-        super().__init__(time, **kwargs)
-
-
 class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T]):
     def __init__(
         self,
@@ -133,6 +120,19 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
         super().__init__(time + eps)
+
+
+class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
+    """
+    This effect handler interrupts a simulation at a given time, and
+    applies an intervention to the state at that time.
+
+    :param time: The time at which the intervention is applied.
+    :param intervention: The instantaneous intervention applied to the state when the event is triggered.
+    """
+    def __init__(self, time: R, intervention: Intervention[State[T]], **kwargs):
+        self.intervention = intervention
+        super().__init__(time, **kwargs)
 
 
 class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]):
