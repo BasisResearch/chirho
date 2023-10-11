@@ -1,7 +1,7 @@
 import functools
+import numbers
 from typing import (
     TYPE_CHECKING,
-    Callable,
     FrozenSet,
     Generic,
     Optional,
@@ -17,6 +17,7 @@ import torch
 if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
 
+R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 T_co = TypeVar("T_co", covariant=True)
@@ -108,17 +109,26 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
 
 
 @runtime_checkable
-class Dynamics(Protocol[S, T]):
-    diff: Callable[[State[S], State[S]], T]
-    observation: Callable[[State[S]], None]
+class InPlaceDynamics(Protocol[S]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> None:
+        ...
+
+
+@runtime_checkable
+class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> None:
+        ...
+
+    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
+        ...
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    start_time: T,
-    end_time: T,
+    start_time: R,
+    end_time: R,
     *,
     solver: Optional[
         "Solver"
@@ -144,10 +154,10 @@ def simulate(
 @functools.singledispatch
 def _simulate(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    start_time: T,
-    end_time: T,
+    start_time: R,
+    end_time: R,
     **kwargs,
 ) -> State[T]:
     """

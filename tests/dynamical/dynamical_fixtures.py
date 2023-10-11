@@ -4,12 +4,12 @@ import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
+from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory
 
 T = TypeVar("T")
 
 
-class UnifiedFixtureDynamics(Dynamics):
+class UnifiedFixtureDynamics(InPlaceDynamics):
     def __init__(self, beta=None, gamma=None):
         super().__init__()
 

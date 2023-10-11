@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 from typing import TYPE_CHECKING, TypeVar
 
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory
+from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory
 
 if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
@@ -16,7 +16,7 @@ T = TypeVar("T")
 @functools.singledispatch
 def simulate_trajectory(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     timespan: T,
     **kwargs,

@@ -6,7 +6,7 @@ import pyro
 import torch
 
 import chirho.dynamical.internals.interventional  # noqa: F401
-from chirho.dynamical.ops.dynamical import State
+from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
 from chirho.observational.ops import Observation
@@ -94,7 +94,8 @@ class _PointObservationMixin(Generic[T]):
     time: R
 
     def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics, current_state = msg["args"]
+        dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
+        current_state: State[T] = msg["args"][1]
 
         with condition(data=self.data):
             dynamics.observation(current_state)
