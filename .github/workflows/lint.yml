@@ -2,9 +2,9 @@ name: Lint
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, staging-dynamic ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, staging-dynamic ]
 
 jobs:
   build:
