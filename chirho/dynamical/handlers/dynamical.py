@@ -15,7 +15,6 @@ T = TypeVar("T")
 
 
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
-
     def _pyro_simulate(self, msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
         if "solver" in msg["kwargs"]:
@@ -26,7 +25,6 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
         while start_time < end_time:
-
             with pyro.poutine.messenger.block_messengers(
                 lambda m: m is self or (isinstance(m, Interruption) and m.used)
             ):
@@ -41,7 +39,8 @@ class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     h.used = True
 
             with pyro.poutine.messenger.block_messengers(
-                lambda m: isinstance(m, Interruption) and m not in terminal_interruptions
+                lambda m: isinstance(m, Interruption)
+                and m not in terminal_interruptions
             ):
                 dynamics, state = apply_interruptions(dynamics, state)
 

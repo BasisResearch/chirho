@@ -1,15 +1,15 @@
 import numbers
 import warnings
-from typing import Callable, Dict, Generic, Optional, Tuple, TypeVar, Union
+from typing import Callable, Dict, Generic, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
-from chirho.interventional.ops import Intervention, intervene
-from chirho.dynamical.ops.dynamical import State
-from chirho.observational.handlers import condition
-
 import chirho.dynamical.internals.interventional  # noqa: F401
+from chirho.dynamical.ops.dynamical import State
+from chirho.interventional.ops import Intervention, intervene
+from chirho.observational.handlers import condition
+from chirho.observational.ops import Observation
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -18,7 +18,7 @@ T = TypeVar("T")
 
 class Interruption(pyro.poutine.messenger.Messenger):
     used: bool
-    
+
     def __enter__(self):
         self.used = False
         return super().__enter__()
@@ -68,11 +68,9 @@ class DynamicInterruption(Generic[T], Interruption):
     :param var_order: The full State.var_order. This could be intervention.var_order if the intervention applies
         to the full state.
     """
+
     def __init__(
-        self,
-        event_f: Callable[[R, State[T]], R],
-        var_order: Tuple[str, ...],
-        **kwargs
+        self, event_f: Callable[[R, State[T]], R], var_order: Tuple[str, ...], **kwargs
     ):
         self.event_f = event_f
         self.var_order = var_order
@@ -87,6 +85,7 @@ class _InterventionMixin(Generic[T]):
     We use this to provide the same functionality to both StaticIntervention and the DynamicIntervention,
      while allowing DynamicIntervention to not inherit StaticInterruption functionality.
     """
+
     intervention: Intervention[State[T]]
 
     def _pyro_apply_interruptions(self, msg) -> None:
@@ -95,7 +94,7 @@ class _InterventionMixin(Generic[T]):
 
 
 class _PointObservationMixin(Generic[T]):
-    data: Dict[str, T]
+    data: Dict[str, Observation[T]]
     time: R
 
     def _pyro_apply_interruptions(self, msg) -> None:
@@ -113,7 +112,7 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
     def __init__(
         self,
         time: R,
-        data: Dict[str, T],
+        data: Dict[str, Observation[T]],
         eps: float = 1e-6,
     ):
         self.data = data
@@ -130,6 +129,7 @@ class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
     :param time: The time at which the intervention is applied.
     :param intervention: The instantaneous intervention applied to the state when the event is triggered.
     """
+
     def __init__(self, time: R, intervention: Intervention[State[T]], **kwargs):
         self.intervention = intervention
         super().__init__(time, **kwargs)
