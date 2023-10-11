@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar
+import numbers
+from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar, Union
 
 import pyro
+import torch
 
 from chirho.dynamical.handlers.interruption.interruption import (
     DynamicInterruption,
@@ -16,6 +18,7 @@ if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
 
 
+R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -26,13 +29,13 @@ def simulate_to_interruption(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: T,
-    end_time: T,
+    start_time: R,
+    end_time: R,
     *,
     next_static_interruption: Optional[StaticInterruption] = None,
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
-) -> Tuple[State[T], Tuple[Interruption, ...], T]:
+) -> Tuple[State[T], Tuple[Interruption, ...], R]:
     """
     Simulate a dynamical system until the next interruption. This will be either one of the passed
     dynamic interruptions, the next static interruption, or the end time, whichever comes first.
@@ -64,13 +67,13 @@ def get_next_interruptions(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: T,
-    end_time: T,
+    start_time: R,
+    end_time: R,
     *,
     next_static_interruption: Optional[StaticInterruption] = None,
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
-) -> Tuple[Tuple[Interruption, ...], T]:
+) -> Tuple[Tuple[Interruption, ...], R]:
     nodyn = len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
 
@@ -107,10 +110,10 @@ def get_next_interruptions_dynamic(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: T,
+    start_time: R,
     next_static_interruption: StaticInterruption,
     dynamic_interruptions: List[DynamicInterruption],
-) -> Tuple[Tuple[Interruption, ...], T]:
+) -> Tuple[Tuple[Interruption, ...], R]:
     raise NotImplementedError(
         f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
     )
