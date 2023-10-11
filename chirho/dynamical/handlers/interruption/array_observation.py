@@ -2,12 +2,11 @@ from typing import Dict
 
 import torch
 
-from chirho.dynamical.handlers.interruption.interruption import _PointObservationMixin
 from chirho.dynamical.handlers.trace import DynamicTrace
 from chirho.observational.handlers import condition
 
 
-class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin):
+class NonInterruptingPointObservationArray(DynamicTrace):
     def __init__(
         self,
         times: torch.Tensor,

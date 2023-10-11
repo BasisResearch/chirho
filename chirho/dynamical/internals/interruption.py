@@ -125,3 +125,31 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
+
+
+class ShallowHandler(pyro.poutine.messenger.Messenger):
+    _used: bool
+
+    def __enter__(self):
+        self._used = False
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self._used:
+            assert self not in pyro.poutine.runtime._PYRO_STACK
+        else:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+
+    def _uninstall(self):
+        index = pyro.poutine.runtime._PYRO_STACK.index(self)
+        pyro.poutine.runtime._PYRO_STACK.pop(index)
+
+    def _process_message(self, msg):
+        if hasattr(self, f"_pyro_{msg['type']}") or hasattr(self, f"_pyro_post_{msg['type']}"):
+            self._used = True
+            return super()._process_message(msg)
+
+    def _postprocess_message(self, msg):
+        super()._postprocess_message(msg)
+        if self._used:
+            msg["continuation"] = lambda _: self._uninstall()
