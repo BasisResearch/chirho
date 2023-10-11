@@ -65,7 +65,7 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
         return getattr(self, next(iter(self.keys))).shape[-1]
 
     def _getitem(self, key):
-        from chirho.dynamical.internals._patterns import _index_last_dim_with_mask
+        from chirho.dynamical.internals._utils import _index_last_dim_with_mask
 
         if isinstance(key, str):
             raise ValueError(

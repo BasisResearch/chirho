@@ -8,7 +8,6 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-import chirho.dynamical.internals._patterns  # noqa: F401
 from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
 
 if typing.TYPE_CHECKING:
