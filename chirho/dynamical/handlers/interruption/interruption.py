@@ -37,20 +37,23 @@ class StaticInterruption(Interruption):
     def _pyro_simulate_to_interruption(self, msg) -> None:
         _, _, _, start_time, end_time = msg["args"]
 
-        if self.time >= end_time:
+        if start_time < self.time < end_time:
+            next_static_interruption: Optional[StaticInterruption] = msg["kwargs"].get(
+                "next_static_interruption", None
+            )
+
+            # Usurp the next static interruption if this one occurs earlier.
+            if (
+                next_static_interruption is None
+                or self.time < next_static_interruption.time
+            ):
+                msg["kwargs"]["next_static_interruption"] = self
+        elif self.time >= end_time:
             warnings.warn(
                 f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
                 f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
-
-        next_static_interrupt: Optional[StaticInterruption] = msg["kwargs"].get(
-            "next_static_interruption", None
-        )
-
-        # Usurp the next static interruption if this one occurs earlier.
-        if next_static_interrupt is None or self.time < next_static_interrupt.time:
-            msg["kwargs"]["next_static_interruption"] = self
 
 
 class DynamicInterruption(Generic[T], Interruption):
