@@ -23,17 +23,15 @@ class Interruption(pyro.poutine.messenger.Messenger):
         self.used = False
         return super().__enter__()
 
-    # This is required so that the multiple inheritance works properly and super calls to this method execute the
-    #  next implementation in the method resolution order.
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        pass
+        raise NotImplementedError("shouldn't be here!")
 
 
 class StaticInterruption(Interruption):
     time: R
 
     def __init__(self, time: R, **kwargs):
-        self.time = torch.as_tensor(time)
+        self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
