@@ -4,16 +4,19 @@ from typing import Callable, List, Tuple, TypeVar
 import torch
 import torchdiffeq
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.internals.dynamical import simulate_trajectory
-from chirho.dynamical.internals.interruption import (
+from chirho.dynamical.handlers.interruption.interruption import (
     DynamicInterruption,
     Interruption,
     StaticInterruption,
+)
+from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals.backend import (
     get_next_interruptions_dynamic,
+    simulate_point,
+    simulate_trajectory,
 )
 from chirho.dynamical.ops import InPlaceDynamics
-from chirho.dynamical.ops.dynamical import State, Trajectory, simulate
+from chirho.dynamical.ops.dynamical import State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -102,7 +105,7 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-@simulate.register(TorchDiffEq)
+@simulate_point.register(TorchDiffEq)
 def torchdiffeq_ode_simulate(
     solver: TorchDiffEq,
     dynamics: InPlaceDynamics[torch.Tensor],

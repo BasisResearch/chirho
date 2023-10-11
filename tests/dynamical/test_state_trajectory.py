@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-from chirho.dynamical.handlers.trace import append
+from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import Trajectory
 
 logger = logging.getLogger(__name__)

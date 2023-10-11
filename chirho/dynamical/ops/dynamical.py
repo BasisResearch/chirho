@@ -15,7 +15,7 @@ import pyro
 import torch
 
 if TYPE_CHECKING:
-    from chirho.dynamical.handlers.solver import Solver
+    from chirho.dynamical.internals.backend import Solver
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -65,7 +65,7 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
         return getattr(self, next(iter(self.keys))).shape[-1]
 
     def _getitem(self, key):
-        from chirho.dynamical.internals.indexed import _index_last_dim_with_mask
+        from chirho.dynamical.internals._utils import _index_last_dim_with_mask
 
         if isinstance(key, str):
             raise ValueError(
@@ -138,34 +138,9 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    if solver is None:
-        raise ValueError(
-            "`simulate`` requires a solver. To specify a solver, use the keyword argument `solver` in"
-            " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
-            "`with SimulatorEventLoop():` \n"
-            "\t `with TorchDiffEq():` \n"
-            "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
-        )
-    return _simulate(solver, dynamics, initial_state, start_time, end_time, **kwargs)
+    from chirho.dynamical.internals.backend import get_solver, simulate_point
 
-
-# This redirection distinguishes between the effectful operation, and the
-# type-directed dispatch on Dynamics
-@functools.singledispatch
-def _simulate(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: InPlaceDynamics[T],
-    initial_state: State[T],
-    start_time: R,
-    end_time: R,
-    **kwargs,
-) -> State[T]:
-    """
-    Simulate a dynamical system.
-    """
-    raise NotImplementedError(
-        f"simulate not implemented for solver of type {type(solver)}"
+    solver = solver if solver is not None else get_solver()
+    return simulate_point(
+        solver, dynamics, initial_state, start_time, end_time, **kwargs
     )
-
-
-simulate.register = _simulate.register

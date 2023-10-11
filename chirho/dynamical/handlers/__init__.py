@@ -1,3 +1,4 @@
+from ..internals.backend import Solver  # noqa: F401
 from .dynamical import SimulatorEventLoop  # noqa: F401
 from .interruption.array_observation import StaticBatchObservation  # noqa: F401
 from .interruption.interruption import (  # noqa: F401
@@ -8,5 +9,4 @@ from .interruption.interruption import (  # noqa: F401
     StaticIntervention,
     StaticObservation,
 )
-from .solver import Solver  # noqa: F401
 from .trace import DynamicTrace  # noqa: F401
