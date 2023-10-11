@@ -137,28 +137,22 @@ def get_next_interruptions(
 ) -> Tuple[Tuple[Interruption, ...], R]:
     from chirho.dynamical.handlers.interruption.interruption import StaticInterruption
 
-    nodyn = len(dynamic_interruptions) == 0
-    nostat = next_static_interruption is None
-
-    if nostat or next_static_interruption.time > end_time:  # type: ignore
+    if isinstance(next_static_interruption, type(None)):
         # If there's no static interruption or the next static interruption is after the end time,
         # we'll just simulate until the end time.
         next_static_interruption = StaticInterruption(time=end_time)
 
-    assert isinstance(
-        next_static_interruption, StaticInterruption
-    )  # Linter needs a hint
-
-    if nodyn:
+    assert isinstance(next_static_interruption, StaticInterruption)
+    if len(dynamic_interruptions) == 0:
         # If there's no dynamic intervention, we'll simulate until either the end_time,
         # or the `next_static_interruption` whichever comes first.
-        return (next_static_interruption,), next_static_interruption.time  # type: ignore
+        return (next_static_interruption,), next_static_interruption.time
     else:
-        return get_next_interruptions_dynamic(  # type: ignore
-            solver,  # type: ignore
-            dynamics,  # type: ignore
-            start_state,  # type: ignore
-            start_time,  # type: ignore
+        return get_next_interruptions_dynamic(
+            solver,
+            dynamics,
+            start_state,
+            start_time,
             next_static_interruption=next_static_interruption,
             dynamic_interruptions=dynamic_interruptions,
             **kwargs,
@@ -167,7 +161,6 @@ def get_next_interruptions(
     raise ValueError("Unreachable code reached.")
 
 
-# noinspection PyUnusedLocal
 @functools.singledispatch
 def get_next_interruptions_dynamic(
     solver: Solver,
