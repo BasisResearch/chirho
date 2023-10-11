@@ -82,7 +82,7 @@ def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tens
 
 
 @intervene.register(State)
-def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
+def _state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
     new_state: State[T] = State()
     for k in obs.keys:
         setattr(
