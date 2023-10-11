@@ -27,10 +27,10 @@ T = TypeVar("T")
 @functools.singledispatch
 def simulate_point(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    start_time: T,
-    end_time: T,
+    start_time: R,
+    end_time: R,
     **kwargs,
 ) -> State[T]:
     """
@@ -44,9 +44,9 @@ def simulate_point(
 @functools.singledispatch
 def simulate_trajectory(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    timespan: T,
+    timespan: R,
     **kwargs,
 ) -> Trajectory[T]:
     """
