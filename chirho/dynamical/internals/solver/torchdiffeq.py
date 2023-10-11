@@ -5,12 +5,12 @@ import torch
 import torchdiffeq
 
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.internals.backend import simulate_point
 from chirho.dynamical.internals.backend import (
     DynamicInterruption,
     Interruption,
     StaticInterruption,
     get_next_interruptions_dynamic,
+    simulate_point,
     simulate_trajectory,
 )
 from chirho.dynamical.ops import Dynamics

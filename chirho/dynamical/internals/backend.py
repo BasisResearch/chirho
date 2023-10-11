@@ -12,7 +12,6 @@ from chirho.dynamical.handlers.interruption.interruption import (
     Interruption,
     StaticInterruption,
 )
-from chirho.dynamical.handlers.solver import Solver
 from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
 
 if TYPE_CHECKING:
