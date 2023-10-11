@@ -1,6 +1,6 @@
 import numbers
 import warnings
-from typing import Callable, Dict, Generic, Tuple, TypeVar, Union
+from typing import Callable, Dict, Generic, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -39,25 +39,20 @@ class StaticInterruption(Interruption):
     def _pyro_simulate_to_interruption(self, msg) -> None:
         _, _, _, start_time, end_time = msg["args"]
 
-        if "next_static_interruption" in msg["kwargs"]:
-            next_static_interruption = msg["kwargs"]["next_static_interruption"]
-        else:
-            next_static_interruption = None
-
-        # If this interruption occurs within the timespan...
-        if start_time < self.time < end_time:
-            # Usurp the next static interruption if this one occurs earlier.
-            if (
-                next_static_interruption is None
-                or self.time < next_static_interruption.time
-            ):
-                msg["kwargs"]["next_static_interruption"] = self
-        elif self.time >= end_time:
+        if self.time >= end_time:
             warnings.warn(
                 f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
                 f"{end_time}. This interruption will have no effect.",
                 UserWarning,
             )
+
+        next_static_interrupt: Optional[StaticInterruption] = msg["kwargs"].get(
+            "next_static_interruption", None
+        )
+
+        # Usurp the next static interruption if this one occurs earlier.
+        if next_static_interrupt is None or self.time < next_static_interrupt.time:
+            msg["kwargs"]["next_static_interruption"] = self
 
 
 class DynamicInterruption(Generic[T], Interruption):
@@ -105,7 +100,7 @@ class _PointObservationMixin(Generic[T]):
 
     def _pyro_sample(self, msg):
         # modify observed site names to handle multiple time points
-        msg["name"] = msg["name"] + "_" + str(self.time)
+        msg["name"] = msg["name"] + "_" + str(torch.as_tensor(self.time).item())
 
 
 class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T]):
