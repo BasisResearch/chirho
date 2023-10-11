@@ -1,6 +1,6 @@
 import numbers
 import warnings
-from typing import Callable, Dict, Generic, Optional, Tuple, TypeVar, Union
+from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -30,7 +30,7 @@ class Interruption(pyro.poutine.messenger.Messenger):
 class StaticInterruption(Interruption):
     time: R
 
-    def __init__(self, time: R, **kwargs):
+    def __init__(self, time: R):
         self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
@@ -65,11 +65,8 @@ class DynamicInterruption(Generic[T], Interruption):
         to the full state.
     """
 
-    def __init__(
-        self, event_f: Callable[[R, State[T]], R], var_order: Tuple[str, ...], **kwargs
-    ):
+    def __init__(self, event_f: Callable[[R, State[T]], R]):
         self.event_f = event_f
-        self.var_order = var_order
         super().__init__()
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
@@ -110,6 +107,7 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
         self,
         time: R,
         data: Dict[str, Observation[T]],
+        *,
         eps: float = 1e-6,
     ):
         self.data = data
@@ -127,9 +125,9 @@ class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
     :param intervention: The instantaneous intervention applied to the state when the event is triggered.
     """
 
-    def __init__(self, time: R, intervention: Intervention[State[T]], **kwargs):
+    def __init__(self, time: R, intervention: Intervention[State[T]]):
         self.intervention = intervention
-        super().__init__(time, **kwargs)
+        super().__init__(time)
 
 
 class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]):
@@ -143,9 +141,7 @@ class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]
     def __init__(
         self,
         event_f: Callable[[R, State[T]], R],
-        var_order: Tuple[str, ...],
         intervention: Intervention[State[T]],
-        **kwargs,
     ):
         self.intervention = intervention
-        super().__init__(event_f, var_order, **kwargs)
+        super().__init__(event_f)

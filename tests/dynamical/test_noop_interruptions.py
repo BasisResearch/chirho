@@ -182,8 +182,6 @@ def test_noop_dynamic_interruption(
         tt = (end_time - start_time) / 2.0
         with DynamicInterruption(
             event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
-            var_order=init_state.var_order,
-            max_applications=1,
         ):
             result_dint = simulate(
                 model, init_state, start_time, end_time, solver=TorchDiffEq()
