@@ -136,7 +136,7 @@ def simulate(
             "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    from chirho.dynamical.internals.interruption import simulate_point
+    from chirho.dynamical.internals.backend import simulate_point
 
     return simulate_point(
         solver, dynamics, initial_state, start_time, end_time, **kwargs
