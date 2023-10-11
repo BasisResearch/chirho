@@ -6,7 +6,7 @@ from chirho.dynamical.handlers.trace import DynamicTrace
 from chirho.observational.handlers import condition
 
 
-class NonInterruptingPointObservationArray(DynamicTrace):
+class StaticBatchObservation(DynamicTrace):
     def __init__(
         self,
         times: torch.Tensor,
