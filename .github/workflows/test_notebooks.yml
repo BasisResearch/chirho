@@ -35,6 +35,7 @@ jobs:
 
         - name: Install Python packages from requirements.txt
           run: |
+            pip install --upgrade pip
             python -m pip install -r requirements.txt 
     
         - name: Run Notebook Test
