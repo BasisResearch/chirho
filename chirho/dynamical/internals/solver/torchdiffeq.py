@@ -141,7 +141,7 @@ def torchdiffeq_get_next_interruptions_dynamic(
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
-        next_static_interruption, dynamic_interruptions
+        next_static_interruption, dynamic_interruptions, start_state.var_order
     )
 
     # Simulate to the event execution.
@@ -209,7 +209,7 @@ def torchdiffeq_point_interruption_flattened_event_f(
 
 # TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_dynamic_interruption_flattened_event_f(
-    di: "DynamicInterruption",
+    di: "DynamicInterruption", var_order: Tuple[str, ...]
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a flattened event function for a dynamic interruption.
@@ -221,7 +221,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
         state: State[torch.Tensor] = State(
-            **{k: v for k, v in zip(di.var_order, flat_state)}
+            **{k: v for k, v in zip(var_order, flat_state)}
         )
         return di.event_f(t, state)
 
@@ -232,6 +232,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
 def torchdiffeq_combined_event_f(
     next_static_interruption: StaticInterruption,
     dynamic_interruptions: List[DynamicInterruption],
+    var_order: Tuple[str, ...],
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a combined event function from a list of dynamic interruptions and a single terminal static interruption.
@@ -244,7 +245,7 @@ def torchdiffeq_combined_event_f(
         next_static_interruption
     )
     dynamic_event_fs = [
-        torchdiffeq_dynamic_interruption_flattened_event_f(di)
+        torchdiffeq_dynamic_interruption_flattened_event_f(di, var_order)
         for di in dynamic_interruptions
     ]
 

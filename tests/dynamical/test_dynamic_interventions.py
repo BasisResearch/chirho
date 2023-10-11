@@ -87,14 +87,10 @@ def test_nested_dynamic_intervention_causes_change(
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 with DynamicIntervention(
                     event_f=get_state_reached_event_f(ts2),
                     intervention=is2,
-                    var_order=init_state.var_order,
-                    max_applications=1,
                 ):
                     simulate(
                         model, init_state, start_time, end_time, solver=TorchDiffEq()
@@ -163,8 +159,6 @@ def test_dynamic_intervention_causes_change(
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(trigger_state),
                 intervention=intervene_state,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
@@ -224,14 +218,10 @@ def test_split_twinworld_dynamic_intervention(
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 with DynamicIntervention(
                     event_f=get_state_reached_event_f(ts2),
                     intervention=is2,
-                    var_order=init_state.var_order,
-                    max_applications=1,
                 ):
                     with TwinWorldCounterfactual() as cf:
                         cf_state = simulate(
@@ -276,14 +266,10 @@ def test_split_multiworld_dynamic_intervention(
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 with DynamicIntervention(
                     event_f=get_state_reached_event_f(ts2),
                     intervention=is2,
-                    var_order=init_state.var_order,
-                    max_applications=1,
                 ):
                     with MultiWorldCounterfactual() as cf:
                         cf_state = simulate(
@@ -324,14 +310,10 @@ def test_split_twinworld_dynamic_matches_output(
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
-            var_order=init_state.var_order,
-            max_applications=1,
         ):
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts2),
                 intervention=is2,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_result = simulate(
@@ -342,14 +324,10 @@ def test_split_twinworld_dynamic_matches_output(
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
-            var_order=init_state.var_order,
-            max_applications=1,
         ):
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts2),
                 intervention=is2,
-                var_order=init_state.var_order,
-                max_applications=1,
             ):
                 cf_expected = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
@@ -407,8 +385,6 @@ def test_grad_of_dynamic_intervention_event_f_params():
     dynamic_intervention = DynamicIntervention(
         event_f=lambda t, s: t - s.param,
         intervention=State(dz=tt(1.0)),
-        var_order=s0.var_order,
-        max_applications=1,
     )
 
     # noinspection DuplicatedCode
