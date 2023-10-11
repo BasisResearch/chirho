@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
+import chirho.dynamical.internals._patterns  # noqa: F401
+
 from chirho.dynamical.handlers.interruption.interruption import (
     DynamicInterruption,
     Interruption,
