@@ -123,7 +123,7 @@ class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
     def diff(self, __state: State[S], __dstate: State[S]) -> None:
         ...
 
-    def observation(self, __state: State[S] | Trajectory[S]) -> None:
+    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
         ...
 
 
