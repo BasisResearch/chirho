@@ -4,6 +4,7 @@ import torch
 
 from chirho.dynamical.ops.dynamical import State, Trajectory
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
+from chirho.interventional.handlers import intervene
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -78,3 +79,13 @@ def _index_last_dim_with_mask(x: torch.Tensor, mask: torch.Tensor) -> torch.Tens
         mask.reshape((1,) * (x.ndim - 1) + mask.shape)
         # masked_select flattens tensors, so we need to reshape back to the original shape w/ the mask applied.
     ).reshape(x.shape[:-1] + (int(mask.sum()),))
+
+
+@intervene.register(State)
+def state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
+    new_state: State[T] = State()
+    for k in obs.keys:
+        setattr(
+            new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
+        )
+    return new_state
