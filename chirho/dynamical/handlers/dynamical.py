@@ -7,6 +7,7 @@ import pyro
 from chirho.dynamical.handlers.interruption.interruption import Interruption
 from chirho.dynamical.internals.backend import (
     apply_interruptions,
+    get_solver,
     simulate_to_interruption,
 )
 
@@ -17,10 +18,7 @@ T = TypeVar("T")
 class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def _pyro_simulate(self, msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
-        if "solver" in msg["kwargs"]:
-            solver = msg["kwargs"]["solver"]
-        else:  # Early return to trigger `simulate` ValueError for not having a solver.
-            return
+        solver = msg["kwargs"].setdefault("solver", get_solver())
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
