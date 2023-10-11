@@ -136,26 +136,8 @@ def simulate(
             "\t `with TorchDiffEq():` \n"
             "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
         )
-    return _simulate(solver, dynamics, initial_state, start_time, end_time, **kwargs)
+    from chirho.dynamical.internals.interruption import simulate_point
 
-
-# This redirection distinguishes between the effectful operation, and the
-# type-directed dispatch on Dynamics
-@functools.singledispatch
-def _simulate(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
-    initial_state: State[T],
-    start_time: T,
-    end_time: T,
-    **kwargs,
-) -> State[T]:
-    """
-    Simulate a dynamical system.
-    """
-    raise NotImplementedError(
-        f"simulate not implemented for solver of type {type(solver)}"
+    return simulate_point(
+        solver, dynamics, initial_state, start_time, end_time, **kwargs
     )
-
-
-simulate.register = _simulate.register

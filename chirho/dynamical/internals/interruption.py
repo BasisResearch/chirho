@@ -12,7 +12,8 @@ from chirho.dynamical.handlers.interruption.interruption import (
     Interruption,
     StaticInterruption,
 )
-from chirho.dynamical.ops.dynamical import Dynamics, State, simulate
+from chirho.dynamical.handlers.solver import Solver
+from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
 
 if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
@@ -128,3 +129,36 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
+
+
+@functools.singledispatch
+def simulate_trajectory(
+    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan: T,
+    **kwargs,
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
+    raise NotImplementedError(
+        f"simulate_trajectory not implemented for solver of type {type(solver)}"
+    )
+
+
+@functools.singledispatch
+def simulate_point(
+    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    start_time: T,
+    end_time: T,
+    **kwargs,
+) -> State[T]:
+    """
+    Simulate a dynamical system.
+    """
+    raise NotImplementedError(
+        f"simulate not implemented for solver of type {type(solver)}"
+    )

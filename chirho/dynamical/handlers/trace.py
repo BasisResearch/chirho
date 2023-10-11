@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 import pyro
 import torch
 
-from chirho.dynamical.internals.dynamical import simulate_trajectory
+from chirho.dynamical.internals.interruption import simulate_trajectory
 from chirho.dynamical.ops import Trajectory
 
 T = TypeVar("T")
