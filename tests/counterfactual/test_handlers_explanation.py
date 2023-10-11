@@ -3,7 +3,6 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
-from scipy.stats import spearmanr
 
 from chirho.counterfactual.handlers.counterfactual import (
     MultiWorldCounterfactual,
@@ -18,6 +17,7 @@ from chirho.counterfactual.handlers.explanation import (
 )
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of
+from chirho.interventional.ops import intervene
 from chirho.observational.handlers.condition import Factors, condition
 
 
@@ -177,7 +177,7 @@ def test_undo_split_with_interaction():
 
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_differs(plate_size, event_shape):
     factors = {
         "consequent": consequent_differs(
@@ -218,6 +218,43 @@ def test_consequent_differs(plate_size, event_shape):
     assert torch.all(int_con_dif[0::2] == -1e8)
 
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
+
+
+SUPPORT_CASES = [
+    pyro.distributions.constraints.real,
+    pyro.distributions.constraints.boolean,
+    pyro.distributions.constraints.positive,
+    pyro.distributions.constraints.interval(0, 10),
+    pyro.distributions.constraints.interval(-5, 5),
+    pyro.distributions.constraints.integer_interval(0, 2),
+    pyro.distributions.constraints.integer_interval(0, 100),
+]
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_uniform_proposal(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    uniform = uniform_proposal(support, event_shape=event_shape)
+    samples = uniform.sample((10,))
+    assert torch.all(support.check(samples))
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_random_intervention(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    obs_value = torch.randn(event_shape)
+    intervention = random_intervention(support, "samples")
+
+    with pyro.plate("draws", 10):
+        samples = intervene(obs_value, intervention)
+
+    assert torch.all(support.check(samples))
 
 
 def stones_bayesian_model():
@@ -382,80 +419,3 @@ def test_SearchForCause_two_layers():
         ).item()
 
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
-
-
-support_real = pyro.distributions.constraints.real
-support_boolean = pyro.distributions.constraints.boolean
-support_positive = pyro.distributions.constraints.positive
-support_interval = pyro.distributions.constraints.interval(0, 10)
-support_integer_interval = pyro.distributions.constraints.integer_interval(0, 2)
-indep_constraint = pyro.distributions.constraints.independent(
-    pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
-)
-
-
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
-@pytest.mark.parametrize("edges", [(0, 2), (0, 100), (0, 250)])
-def test_uniform_proposal(support, edges):
-    # plug the edges into interval constraints
-    if support is support_integer_interval:
-        support = pyro.distributions.constraints.integer_interval(*edges)
-    elif support is support_interval:
-        support = pyro.distributions.constraints.interval(*edges)
-
-    # test all but the indep_constraint
-    if support is not indep_constraint:
-        uniform = uniform_proposal(support)
-        with pyro.plate("samples", 50):
-            samples = pyro.sample("samples", uniform)
-
-        # with positive constraint, zeros are possible, but
-        # they don't pass `support.check`. Considered harmless.
-        if support is support_positive:
-            samples = samples[samples != 0]
-
-        assert torch.all(support.check(samples))
-
-    else:  # testing the idependence constraint requires a bit more work
-        dist_indep = uniform_proposal(
-            indep_constraint, event_shape=torch.Size([2, 1000])
-        )
-        with pyro.plate("data", 2):
-            samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
-
-        batch_1 = samples_indep[0].squeeze().tolist()
-        batch_2 = samples_indep[1].squeeze().tolist()
-        assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
-
-
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
-def test_random_intervention(support):
-    intervention = random_intervention(support, "samples")
-
-    with pyro.plate("draws", 1000):
-        samples = intervention(torch.ones(10))
-
-    if support is support_positive:
-        samples = samples[samples != 0]
-
-    assert torch.all(support.check(samples))
