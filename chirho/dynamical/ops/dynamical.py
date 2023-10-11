@@ -109,10 +109,22 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
         return ret
 
 
+Dynamics = Callable[[State[S]], State[S]]
+
+
 @runtime_checkable
-class InPlaceDynamics(Protocol[S, T]):
-    diff: Callable[[State[S], State[S]], T]
-    observation: Callable[[State[S]], None]
+class InPlaceDynamics(Protocol[S, T_co]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> T_co:
+        ...
+
+
+@runtime_checkable
+class ObservableInPlaceDynamics(InPlaceDynamics[S, T_co], Protocol[S, T_co]):
+    def diff(self, __state: State[S], __dstate: State[S]) -> T_co:
+        ...
+
+    def observation(self, __state: State[S] | Trajectory[S]) -> None:
+        ...
 
 
 @pyro.poutine.runtime.effectful(type="simulate")

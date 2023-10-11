@@ -4,6 +4,7 @@ import torch
 
 from chirho.dynamical.handlers.interruption.interruption import _PointObservationMixin
 from chirho.dynamical.handlers.trace import DynamicTrace
+from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics
 from chirho.observational.handlers import condition
 
 
@@ -30,7 +31,7 @@ class NonInterruptingPointObservationArray(DynamicTrace, _PointObservationMixin)
         super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        dynamics, _, _, _ = msg["args"]
+        dynamics: ObservableInPlaceDynamics[torch.Tensor, torch.Tensor] = msg["args"][0]
 
         if "in_SEL" not in msg.keys():
             msg["in_SEL"] = False

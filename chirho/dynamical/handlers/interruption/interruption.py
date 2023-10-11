@@ -5,7 +5,7 @@ import pyro
 import torch
 
 from chirho.dynamical.internals.interventional import intervene
-from chirho.dynamical.ops.dynamical import State
+from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
 from chirho.observational.handlers import condition
 
 S = TypeVar("S")
@@ -84,7 +84,7 @@ class _PointObservationMixin:
     pass
 
 
-class StaticObservation(StaticInterruption, _PointObservationMixin):
+class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin):
     def __init__(
         self,
         time: float,
@@ -97,7 +97,8 @@ class StaticObservation(StaticInterruption, _PointObservationMixin):
         super().__init__(time + eps)
 
     def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics, current_state = msg["args"]
+        dynamics: ObservableInPlaceDynamics[T, None] = msg["args"][0]
+        current_state: State[T] = msg["args"][1]
 
         with condition(data=self.data):
             with pyro.poutine.messenger.block_messengers(
