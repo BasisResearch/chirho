@@ -8,7 +8,7 @@ from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
     DynamicTrace,
-    NonInterruptingPointObservationArray,
+    StaticBatchObservation,
     SimulatorEventLoop,
     StaticObservation,
 )
@@ -77,9 +77,9 @@ def _get_compatible_observations(obs_handler, time, data):
     # AZ - Not using dispatcher here b/c obs_handler is a class not an instance of a class.
     if obs_handler is StaticObservation:
         return StaticObservation(time=time, data=data)
-    elif obs_handler is NonInterruptingPointObservationArray:
+    elif obs_handler is StaticBatchObservation:
         # Just make make a two element observation array.
-        return NonInterruptingPointObservationArray(
+        return StaticBatchObservation(
             times=torch.tensor([time, time + 0.1]),
             data={k: torch.tensor([v, v]) for k, v in data.items()},
         )
@@ -89,7 +89,7 @@ def _get_compatible_observations(obs_handler, time, data):
 @pytest.mark.parametrize(
     # "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
     "obs_handler",
-    [NonInterruptingPointObservationArray],
+    [StaticBatchObservation],
 )
 def test_log_prob_exists(model, obs_handler):
     """
@@ -107,7 +107,7 @@ def test_log_prob_exists(model, obs_handler):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize(
-    "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
+    "obs_handler", [StaticObservation, StaticBatchObservation]
 )
 def test_tspan_collision(model, obs_handler):
     """
@@ -128,7 +128,7 @@ def test_tspan_collision(model, obs_handler):
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
 @pytest.mark.parametrize(
-    "obs_handler", [StaticObservation, NonInterruptingPointObservationArray]
+    "obs_handler", [StaticObservation, StaticBatchObservation]
 )
 def test_svi_composition_test_one(model, obs_handler):
     data1 = {
@@ -187,7 +187,7 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     with pyro.poutine.trace() as tr2:
         with SimulatorEventLoop():
-            with NonInterruptingPointObservationArray(times=times, data=data):
+            with StaticBatchObservation(times=times, data=data):
                 non_interrupting_ret = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
@@ -273,7 +273,7 @@ def test_svi_composition_vectorized_obs(model):
         def forward(self):
             sir = model()
             with SimulatorEventLoop():
-                with NonInterruptingPointObservationArray(times=times, data=data):
+                with StaticBatchObservation(times=times, data=data):
                     traj = simulate(
                         sir, init_state, start_time, end_time, solver=TorchDiffEq()
                     )

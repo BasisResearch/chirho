@@ -9,7 +9,7 @@ from pyro.distributions import Normal, Uniform
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    NonInterruptingPointObservationArray,
+    StaticBatchObservation,
     SimulatorEventLoop,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
@@ -57,7 +57,7 @@ def conditioned_sir(
     for obs in data.values():
         obs_time = obs[0].item()
         obs_data = obs[1]
-        managers.append(NonInterruptingPointObservationArray(obs_time, obs_data))
+        managers.append(StaticBatchObservation(obs_time, obs_data))
     if include_dynamic_intervention:
         event_f = make_event_fn(State(I=torch.tensor(30.0)))
         managers.append(

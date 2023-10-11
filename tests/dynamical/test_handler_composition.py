@@ -8,7 +8,7 @@ from pyro.distributions import Normal
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
     DynamicTrace,
-    NonInterruptingPointObservationArray,
+    StaticBatchObservation,
     SimulatorEventLoop,
     StaticIntervention,
 )
@@ -56,7 +56,7 @@ reparam_config = AutoSoftConditioning(scale=0.01, alpha=0.5)
 twin_world = TwinWorldCounterfactual()
 intervention = StaticIntervention(time=superspreader_time, intervention=counterfactual)
 reparam = pyro.poutine.reparam(config=reparam_config)
-vec_obs3 = NonInterruptingPointObservationArray(
+vec_obs3 = StaticBatchObservation(
     times=flight_landing_times, data=flight_landing_data
 )
 
