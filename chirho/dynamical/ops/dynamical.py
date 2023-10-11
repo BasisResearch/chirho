@@ -15,7 +15,7 @@ import pyro
 import torch
 
 if TYPE_CHECKING:
-    from chirho.dynamical.handlers.solver import Solver
+    from chirho.dynamical.internals.backend import Solver
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -138,16 +138,9 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    if solver is None:
-        raise ValueError(
-            "`simulate`` requires a solver. To specify a solver, use the keyword argument `solver` in"
-            " the call to `simulate` or use with a solver effect handler as a context manager. For example, \n \n"
-            "`with SimulatorEventLoop():` \n"
-            "\t `with TorchDiffEq():` \n"
-            "\t \t `simulate(dynamics, initial_state, start_time, end_time)`"
-        )
-    from chirho.dynamical.internals.backend import simulate_point
+    from chirho.dynamical.internals.backend import get_solver, simulate_point
 
+    solver = solver if solver is not None else get_solver()
     return simulate_point(
         solver, dynamics, initial_state, start_time, end_time, **kwargs
     )

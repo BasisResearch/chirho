@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import functools
 import numbers
-from typing import TYPE_CHECKING, List, Optional, Tuple, TypeVar, Union
+import typing
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
 import chirho.dynamical.internals._patterns  # noqa: F401
-from chirho.dynamical.handlers.interruption.interruption import (
-    DynamicInterruption,
-    Interruption,
-    StaticInterruption,
-)
 from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
 
-if TYPE_CHECKING:
-    from chirho.dynamical.handlers.solver import Solver
+if typing.TYPE_CHECKING:
+    from chirho.dynamical.handlers.interruption.interruption import (
+        DynamicInterruption,
+        Interruption,
+        StaticInterruption,
+    )
 
 
 R = Union[numbers.Real, torch.Tensor]
@@ -24,9 +24,25 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+class Solver(pyro.poutine.messenger.Messenger):
+    def _pyro_get_solver(self, msg) -> None:
+        # Overwrite the solver in the message with the enclosing solver when used as a context manager.
+        msg["value"] = self
+        msg["done"] = True
+        msg["stop"] = True
+
+
+@pyro.poutine.runtime.effectful(type="get_solver")
+def get_solver() -> Solver:
+    """
+    Get the current solver from the context.
+    """
+    raise ValueError("Solver not found in context.")
+
+
 @functools.singledispatch
 def simulate_point(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Solver,
     dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     start_time: R,
@@ -43,7 +59,7 @@ def simulate_point(
 
 @functools.singledispatch
 def simulate_trajectory(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Solver,
     dynamics: InPlaceDynamics[T],
     initial_state: State[T],
     timespan: R,
@@ -60,7 +76,7 @@ def simulate_trajectory(
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,
@@ -109,7 +125,7 @@ def apply_interruptions(
 
 
 def get_next_interruptions(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,
@@ -119,6 +135,8 @@ def get_next_interruptions(
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], R]:
+    from chirho.dynamical.handlers.interruption.interruption import StaticInterruption
+
     nodyn = len(dynamic_interruptions) == 0
     nostat = next_static_interruption is None
 
@@ -152,7 +170,7 @@ def get_next_interruptions(
 # noinspection PyUnusedLocal
 @functools.singledispatch
 def get_next_interruptions_dynamic(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,

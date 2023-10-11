@@ -5,7 +5,6 @@ from typing import Callable, Dict, Generic, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-import chirho.dynamical.internals.interventional  # noqa: F401
 from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
