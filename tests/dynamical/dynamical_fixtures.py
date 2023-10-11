@@ -22,7 +22,9 @@ class UnifiedFixtureDynamics(Dynamics):
             self.gamma = pyro.param("gamma", torch.tensor(0.7), constraints.positive)
 
     def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
-        beta = self.beta * (1.0 + 0.1 * torch.sin(0.1 * X.t))  # beta oscilates slowly in time.
+        beta = self.beta * (
+            1.0 + 0.1 * torch.sin(0.1 * X.t)
+        )  # beta oscilates slowly in time.
 
         dX.S = -beta * X.S * X.I
         dX.I = beta * X.S * X.I - self.gamma * X.I  # noqa
