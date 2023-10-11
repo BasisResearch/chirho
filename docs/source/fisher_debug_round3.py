@@ -200,20 +200,23 @@ def empirical_ihvp(
     X: Dict[str, torch.tensor],
     twice_diff: bool = True,
     hessian_rescale: Optional[Union[float, None]] = None,
-    n_max_hessian_samples: int = 25,
+    n_max_hessian_samples: int = 1000,
 ) -> torch.tensor:
     n_monte_carlo = X[next(iter(X))].shape[0]
     assert n_monte_carlo > 0
 
     if hessian_rescale is None:
-        assert n_max_hessian_samples <= n_monte_carlo
+        if n_max_hessian_samples > n_monte_carlo:
+            print(
+                "Warning: n_max_hessian_samples is more than n_monte_carlo. Setting n_max_hessian_samples = n_monte_carlo"
+            )
         dim_latents = theta.shape[0]
         hessian_rescale = torch.tensor(1.0)
         # Approximate based on randomized max trace which provides high probability upper bound on spectral norm
         # (1) Sample random element of diagonal of Hessian
         # (2) Multiply by number of latents
         # (3) take max over n_max_hessian_samples
-        for _ in range(n_max_hessian_samples):
+        for _ in range(min(n_max_hessian_samples, n_monte_carlo)):
             # Randomly sample a datapoint
             j = torch.randint(0, n_monte_carlo, (1,)).item()
             f_j = partial(f, X={key: val[[j]] for key, val in X.items()})
@@ -249,18 +252,15 @@ def empirical_ihvp(
     for j in range(n_monte_carlo):
         # If twice differentiable, use VHP
         # https://pytorch.org/docs/stable/generated/torch.autograd.functional.hvp.html
-        f_j = partial(f, X={key: val[[j]] for key, val in X.items()})
+        f_j = (
+            lambda theta: 1
+            / hessian_rescale
+            * partial(f, X={key: val[[j]] for key, val in X.items()})(theta)
+        )
         if twice_diff:
-            update = (
-                v
-                - torch.autograd.functional.vhp(f_j, theta, v=ihvp)[1].t()
-                / hessian_rescale
-            )
+            update = v - torch.autograd.functional.vhp(f_j, theta, v=ihvp)[1].t()
         else:
-            update = (
-                v
-                - torch.autograd.functional.hvp(f_j, theta, v=ihvp)[1] / hessian_rescale
-            )
+            update = v - torch.autograd.functional.hvp(f_j, theta, v=ihvp)[1]
         ihvp = ihvp + update
     import pdb
 
@@ -276,7 +276,7 @@ def inv_fisher_info_of_model_issa(
     theta_hat: Dict[str, torch.tensor],
     obs_names: List[str],
     N_monte_carlo: int = None,
-    hessian_rescale: Optional[Union[float, None]] = None,
+    hessian_rescale: Optional[Union[float, None]] = 100,
 ) -> torch.tensor:
     """
     Compute the monte carlo estimate of the fisher information matrix.
@@ -302,7 +302,9 @@ def inv_fisher_info_of_model_issa(
     log_likelihood_fn = make_log_likelihood_fn_two(
         conditioned_model, theta_hat, obs_names
     )
-    return empirical_ihvp(log_likelihood_fn, flat_theta, v, D_model)
+    return empirical_ihvp(
+        log_likelihood_fn, flat_theta, v, D_model, hessian_rescale=hessian_rescale
+    )
 
 
 def flatten_dict(d: Dict[str, torch.tensor]) -> torch.tensor:
@@ -421,6 +423,10 @@ def one_step_correction(
         obs_names,
         N_monte_carlo,
     )
+
+    import pdb
+
+    pdb.set_trace()
 
     return plug_in_grads.dot(a)
 
