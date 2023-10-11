@@ -2,7 +2,6 @@ import functools
 import numbers
 from typing import (
     TYPE_CHECKING,
-    Callable,
     FrozenSet,
     Generic,
     Optional,
@@ -107,9 +106,6 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
             **{k: getattr(self, k) for k in self.keys}
         )
         return ret
-
-
-Dynamics = Callable[[State[S]], State[S]]
 
 
 @runtime_checkable
