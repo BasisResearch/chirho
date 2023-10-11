@@ -13,7 +13,7 @@ from chirho.dynamical.internals.backend import (
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import Dynamics
+from chirho.dynamical.ops import InPlaceDynamics
 from chirho.dynamical.ops.dynamical import State, Trajectory
 
 S = TypeVar("S")
@@ -22,7 +22,7 @@ T = TypeVar("T")
 
 # noinspection PyMethodParameters
 def _deriv(
-    dynamics: Dynamics[torch.Tensor, torch.Tensor],
+    dynamics: InPlaceDynamics[torch.Tensor],
     var_order: Tuple[str, ...],
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
@@ -40,7 +40,7 @@ def _deriv(
 
 
 def _torchdiffeq_ode_simulate_inner(
-    dynamics: Dynamics[torch.Tensor, torch.Tensor],
+    dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan,
     **odeint_kwargs,
@@ -106,7 +106,7 @@ def _batched_odeint(
 @simulate_point.register(TorchDiffEq)
 def torchdiffeq_ode_simulate(
     solver: TorchDiffEq,
-    dynamics: Dynamics[torch.Tensor, torch.Tensor],
+    dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
@@ -121,7 +121,7 @@ def torchdiffeq_ode_simulate(
 @simulate_trajectory.register(TorchDiffEq)
 def torchdiffeq_ode_simulate_trajectory(
     solver: TorchDiffEq,
-    dynamics: Dynamics[torch.Tensor, torch.Tensor],
+    dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
 ) -> Trajectory[torch.Tensor]:
@@ -133,7 +133,7 @@ def torchdiffeq_ode_simulate_trajectory(
 @get_next_interruptions_dynamic.register(TorchDiffEq)
 def torchdiffeq_get_next_interruptions_dynamic(
     solver: TorchDiffEq,
-    dynamics: Dynamics[torch.Tensor, torch.Tensor],
+    dynamics: InPlaceDynamics[torch.Tensor],
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
     next_static_interruption: StaticInterruption,

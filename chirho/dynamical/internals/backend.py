@@ -13,7 +13,7 @@ from chirho.dynamical.handlers.interruption.interruption import (
     Interruption,
     StaticInterruption,
 )
-from chirho.dynamical.ops.dynamical import Dynamics, State, Trajectory, simulate
+from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
 
 if TYPE_CHECKING:
     from chirho.dynamical.handlers.solver import Solver
@@ -61,7 +61,7 @@ def simulate_trajectory(
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
@@ -99,8 +99,8 @@ def simulate_to_interruption(
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
 def apply_interruptions(
-    dynamics: Dynamics[S, T], start_state: State[T]
-) -> Tuple[Dynamics[S, T], State[T]]:
+    dynamics: InPlaceDynamics[T], start_state: State[T]
+) -> Tuple[InPlaceDynamics[T], State[T]]:
     """
     Apply the effects of an interruption to a dynamical system.
     """
@@ -110,7 +110,7 @@ def apply_interruptions(
 
 def get_next_interruptions(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
@@ -153,7 +153,7 @@ def get_next_interruptions(
 @functools.singledispatch
 def get_next_interruptions_dynamic(
     solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
+    dynamics: InPlaceDynamics[T],
     start_state: State[T],
     start_time: R,
     next_static_interruption: StaticInterruption,
