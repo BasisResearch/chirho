@@ -9,8 +9,8 @@ from pyro.distributions import Normal, Uniform
 
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    StaticBatchObservation,
     SimulatorEventLoop,
+    StaticBatchObservation,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate

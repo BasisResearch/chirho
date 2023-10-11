@@ -8,8 +8,8 @@ from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
     DynamicTrace,
-    StaticBatchObservation,
     SimulatorEventLoop,
+    StaticBatchObservation,
     StaticObservation,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
@@ -86,9 +86,7 @@ def _get_compatible_observations(obs_handler, time, data):
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
-@pytest.mark.parametrize(
-    "obs_handler", [StaticObservation, StaticBatchObservation]
-)
+@pytest.mark.parametrize("obs_handler", [StaticObservation, StaticBatchObservation])
 def test_log_prob_exists(model, obs_handler):
     """
     Tests if the log_prob exists at the observed site.
@@ -104,9 +102,7 @@ def test_log_prob_exists(model, obs_handler):
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
-@pytest.mark.parametrize(
-    "obs_handler", [StaticObservation, StaticBatchObservation]
-)
+@pytest.mark.parametrize("obs_handler", [StaticObservation, StaticBatchObservation])
 def test_tspan_collision(model, obs_handler):
     """
     Tests if observation times that intersect with tspan do not raise an error or create
@@ -125,9 +121,7 @@ def test_tspan_collision(model, obs_handler):
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
-@pytest.mark.parametrize(
-    "obs_handler", [StaticObservation, StaticBatchObservation]
-)
+@pytest.mark.parametrize("obs_handler", [StaticObservation, StaticBatchObservation])
 def test_svi_composition_test_one(model, obs_handler):
     data1 = {
         "S_obs": torch.tensor(10.0),
