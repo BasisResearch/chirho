@@ -8,7 +8,6 @@ import pyro
 import torch
 
 import chirho.dynamical.internals._patterns  # noqa: F401
-
 from chirho.dynamical.handlers.interruption.interruption import (
     DynamicInterruption,
     Interruption,
@@ -23,6 +22,39 @@ if TYPE_CHECKING:
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
+
+
+@functools.singledispatch
+def simulate_point(
+    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    start_time: T,
+    end_time: T,
+    **kwargs,
+) -> State[T]:
+    """
+    Simulate a dynamical system.
+    """
+    raise NotImplementedError(
+        f"simulate not implemented for solver of type {type(solver)}"
+    )
+
+
+@functools.singledispatch
+def simulate_trajectory(
+    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    dynamics: Dynamics[S, T],
+    initial_state: State[T],
+    timespan: T,
+    **kwargs,
+) -> Trajectory[T]:
+    """
+    Simulate a dynamical system.
+    """
+    raise NotImplementedError(
+        f"simulate_trajectory not implemented for solver of type {type(solver)}"
+    )
 
 
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
@@ -63,6 +95,17 @@ def simulate_to_interruption(
     )
 
     return event_state, interruptions, interruption_time
+
+
+@pyro.poutine.runtime.effectful(type="apply_interruptions")
+def apply_interruptions(
+    dynamics: Dynamics[S, T], start_state: State[T]
+) -> Tuple[Dynamics[S, T], State[T]]:
+    """
+    Apply the effects of an interruption to a dynamical system.
+    """
+    # Default is to do nothing.
+    return dynamics, start_state
 
 
 def get_next_interruptions(
@@ -118,48 +161,4 @@ def get_next_interruptions_dynamic(
 ) -> Tuple[Tuple[Interruption, ...], R]:
     raise NotImplementedError(
         f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
-    )
-
-
-@pyro.poutine.runtime.effectful(type="apply_interruptions")
-def apply_interruptions(
-    dynamics: Dynamics[S, T], start_state: State[T]
-) -> Tuple[Dynamics[S, T], State[T]]:
-    """
-    Apply the effects of an interruption to a dynamical system.
-    """
-    # Default is to do nothing.
-    return dynamics, start_state
-
-
-@functools.singledispatch
-def simulate_trajectory(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
-    initial_state: State[T],
-    timespan: T,
-    **kwargs,
-) -> Trajectory[T]:
-    """
-    Simulate a dynamical system.
-    """
-    raise NotImplementedError(
-        f"simulate_trajectory not implemented for solver of type {type(solver)}"
-    )
-
-
-@functools.singledispatch
-def simulate_point(
-    solver: "Solver",  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
-    dynamics: Dynamics[S, T],
-    initial_state: State[T],
-    start_time: T,
-    end_time: T,
-    **kwargs,
-) -> State[T]:
-    """
-    Simulate a dynamical system.
-    """
-    raise NotImplementedError(
-        f"simulate not implemented for solver of type {type(solver)}"
     )
