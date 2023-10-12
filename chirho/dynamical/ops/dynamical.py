@@ -1,6 +1,5 @@
 import numbers
 from typing import (
-    TYPE_CHECKING,
     FrozenSet,
     Generic,
     Optional,
@@ -14,9 +13,6 @@ import pyro
 import torch
 
 from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
-
-if TYPE_CHECKING:
-    from chirho.dynamical.internals.backend import Solver
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -117,17 +113,15 @@ def simulate(
     start_time: R,
     end_time: R,
     *,
-    solver: Optional[
-        "Solver"
-    ] = None,  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Optional[S] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.backend import get_solver, simulate_point
+    from chirho.dynamical.internals.backend import Solver, get_solver, simulate_point
 
-    solver = solver if solver is not None else get_solver()
+    solver_: Solver = solver if solver is not None else get_solver()
     return simulate_point(
-        solver, dynamics, initial_state, start_time, end_time, **kwargs
+        solver_, dynamics, initial_state, start_time, end_time, **kwargs
     )
