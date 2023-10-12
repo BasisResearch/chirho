@@ -101,7 +101,7 @@ def test_shape_twincounterfactual_observation_intervention_commutes():
         with pyro.poutine.trace() as tr:
             conditioned_model()
 
-    ret = dt.trace
+    ret = dt.trajectory
 
     num_worlds = 2
 

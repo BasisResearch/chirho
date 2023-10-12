@@ -104,7 +104,7 @@ def simulate_to_interruption(
     )
     # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
     #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
-    #  a DynamicTrace context.
+    #  a LogTrajectory context.
     event_state = simulate(
         dynamics, start_state, start_time, interruption_time, solver=solver
     )

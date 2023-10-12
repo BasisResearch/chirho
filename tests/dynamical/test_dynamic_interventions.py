@@ -100,7 +100,7 @@ def test_nested_dynamic_intervention_causes_change(
 
     # Each intervention just adds a certain amount of susceptible people after the recovered count exceeds some amount
 
-    trajectory = dt.trace
+    trajectory = dt.trajectory
 
     postint_mask1 = trajectory.R > ts1.R
     postint_mask2 = trajectory.R > ts2.R
@@ -168,7 +168,7 @@ def test_dynamic_intervention_causes_change(
 
     preint_total = init_state.S + init_state.I + init_state.R
 
-    trajectory = dt.trace
+    trajectory = dt.trajectory
 
     # The intervention just "adds" (sets) 50 "people" to the susceptible population.
     #  It happens that the susceptible population is roughly 0 at the intervention point,
@@ -237,7 +237,7 @@ def test_split_twinworld_dynamic_intervention(
                         )
 
     with cf:
-        cf_trajectory = dt.trace
+        cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys:
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))
@@ -285,7 +285,7 @@ def test_split_multiworld_dynamic_intervention(
                         )
 
     with cf:
-        cf_trajectory = dt.trace
+        cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys:
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))

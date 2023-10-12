@@ -93,8 +93,8 @@ def test_point_intervention_causes_difference(
                         model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
-    observational_trajectory = observational_dt.trace
-    intervened_trajectory = intervened_dt.trace
+    observational_trajectory = observational_dt.trajectory
+    intervened_trajectory = intervened_dt.trajectory
 
     assert check_trajectories_match_in_all_but_values(
         observational_trajectory, intervened_trajectory
@@ -189,7 +189,7 @@ def test_nested_point_interventions_cause_difference(
                         )
 
     assert check_trajectories_match_in_all_but_values(
-        observational_dt.trace, intervened_dt.trace
+        observational_dt.trajectory, intervened_dt.trajectory
     )
 
     # Don't need to flip order b/c the argument permutation will effectively do this for us.
@@ -226,7 +226,7 @@ def test_twinworld_point_intervention(
                         )
 
     with cf:
-        cf_trajectory = dt.trace
+        cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys:
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))
@@ -261,7 +261,7 @@ def test_multiworld_point_intervention(
                         )
 
     with cf:
-        cf_trajectory = dt.trace
+        cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys:
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))
@@ -285,7 +285,7 @@ def test_split_odeint_broadcast(
             simulate(model, cf_init_state, start_time, end_time, solver=TorchDiffEq())
 
     with cf:
-        trajectory = dt.trace
+        trajectory = dt.trajectory
         for k in trajectory.keys:
             assert len(indices_of(getattr(trajectory, k), event_dim=1)) > 0
 

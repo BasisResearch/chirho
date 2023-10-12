@@ -183,9 +183,9 @@ class StaticBatchObservation(LogTrajectory):
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
         super()._pyro_post_simulate(msg)
         # This condition checks whether all of the simulate calls have been executed.
-        if len(self.trace) == len(self.times):
+        if len(self.trajectory) == len(self.times):
             with condition(data=self.data):
-                dynamics.observation(self.trace)
+                dynamics.observation(self.trajectory)
 
             # Reset the trace for the next simulate call.
             super()._reset()

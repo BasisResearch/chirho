@@ -38,12 +38,12 @@ def test_logging():
     result3 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert isinstance(result1, State)
-    assert isinstance(dt1.trace, Trajectory)
-    assert isinstance(dt2.trace, Trajectory)
-    assert len(dt1.trace.keys) == 3
-    assert len(dt2.trace.keys) == 3
-    assert dt1.trace.keys == result1.keys
-    assert dt2.trace.keys == result2.keys
+    assert isinstance(dt1.trajectory, Trajectory)
+    assert isinstance(dt2.trajectory, Trajectory)
+    assert len(dt1.trajectory.keys) == 3
+    assert len(dt2.trajectory.keys) == 3
+    assert dt1.trajectory.keys == result1.keys
+    assert dt2.trajectory.keys == result2.keys
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
 

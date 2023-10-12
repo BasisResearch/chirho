@@ -114,7 +114,7 @@ def test_tspan_collision(model, obs_handler):
         with InterruptionEventLoop():
             with _get_compatible_observations(obs_handler, time=start_time, data=data):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
-    result = dt.trace
+    result = dt.trajectory
     assert result.S.shape[0] == len(logging_times)
     assert result.I.shape[0] == len(logging_times)
     assert result.R.shape[0] == len(logging_times)
@@ -308,7 +308,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
                             end_time,
                             solver=TorchDiffEq(),
                         )
-    result = dt.trace
+    result = dt.trajectory
 
     assert result.S.shape[0] == len(logging_times)
     assert result.I.shape[0] == len(logging_times)
