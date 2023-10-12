@@ -193,79 +193,82 @@ def make_log_likelihood_fn_two(
     return log_likelihood_fn
 
 
+# From https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
+def _conjugate_gradient(f_Ax, b, cg_iters, residual_tol=1e-10):
+    """Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
+
+    Args:
+        f_Ax (callable): A function to compute matrix vector product.
+        b (torch.Tensor): Right hand side of the equation to solve.
+        cg_iters (int): Number of iterations to run conjugate gradient
+            algorithm.
+        residual_tol (float): Tolerence for convergence.
+
+    Returns:
+        torch.Tensor: Solution x* for equation Ax = b.
+
+    """
+    p = b.clone()
+    r = b.clone()
+    x = torch.zeros_like(b)
+    rdotr = torch.dot(r, r)
+
+    for _ in range(cg_iters):
+        z = f_Ax(p)
+        v = rdotr / torch.dot(p, z)
+        x += v * p
+        r -= v * z
+        newrdotr = torch.dot(r, r)
+        mu = newrdotr / rdotr
+        p = r + mu * p
+
+        rdotr = newrdotr
+        if rdotr < residual_tol:
+            break
+    return x
+
+
+def make_empirical_hessian_vector_product(
+    f: Callable,
+    theta: torch.tensor,
+    X: Dict[str, torch.tensor],
+    twice_diff: bool = True,
+) -> torch.tensor:
+    def empirical_hvp(v):
+        est = torch.zeros_like(theta)
+        n_monte_carlo = X[next(iter(X))].shape[0]
+        for n in range(n_monte_carlo):
+            f_n = partial(f, X={key: val[[n]] for key, val in X.items()})
+            if twice_diff:
+                est += (
+                    torch.autograd.functional.vhp(f_n, theta, v=v)[1].t()
+                    / n_monte_carlo
+                )
+            else:
+                est += torch.autograd.functional.hvp(f_n, theta, v=v) / n_monte_carlo
+        return est
+
+    return empirical_hvp
+
+
 def empirical_ihvp(
     f: Callable,
     theta: torch.tensor,
     v: torch.tensor,
     X: Dict[str, torch.tensor],
+    cg_iters: int,
     twice_diff: bool = True,
-    hessian_rescale: Optional[Union[float, None]] = None,
-    n_max_hessian_samples: int = 1000,
+    use_jacobian: bool = True,
 ) -> torch.tensor:
-    n_monte_carlo = X[next(iter(X))].shape[0]
-    assert n_monte_carlo > 0
-
-    if hessian_rescale is None:
-        if n_max_hessian_samples > n_monte_carlo:
-            print(
-                "Warning: n_max_hessian_samples is more than n_monte_carlo. Setting n_max_hessian_samples = n_monte_carlo"
-            )
-        dim_latents = theta.shape[0]
-        hessian_rescale = torch.tensor(1.0)
-        # Approximate based on randomized max trace which provides high probability upper bound on spectral norm
-        # (1) Sample random element of diagonal of Hessian
-        # (2) Multiply by number of latents
-        # (3) take max over n_max_hessian_samples
-        for _ in range(min(n_max_hessian_samples, n_monte_carlo)):
-            # Randomly sample a datapoint
-            j = torch.randint(0, n_monte_carlo, (1,)).item()
-            f_j = partial(f, X={key: val[[j]] for key, val in X.items()})
-
-            # Randomly sample an element from the diagonal of the Hessian
-            h_ix = torch.randint(0, dim_latents, (1,)).item()
-            e_rand = torch.zeros(dim_latents)
-            e_rand[h_ix] = 1.0
-            if twice_diff:
-                stochastic_trace = (
-                    dim_latents
-                    * -1
-                    * torch.autograd.functional.vhp(f_j, theta, v=e_rand)[1].t()[h_ix]
-                )
-            else:
-                stochastic_trace = (
-                    dim_latents
-                    * -1
-                    * torch.autograd.functional.hvp(f_j, theta, v=e_rand)[1][h_ix]
-                )
-            if stochastic_trace > hessian_rescale:
-                hessian_rescale = stochastic_trace
-
-    assert hessian_rescale >= 1
-
-    # If hessian rescale is very large, raise a warning
-    if hessian_rescale > 1e6:
-        print(
-            f"Warning: hessian_rescale is large ({hessian_rescale}) and might lead to numerical instability."
-        )
-
-    ihvp = v
-    for j in range(n_monte_carlo):
-        # If twice differentiable, use VHP
-        # https://pytorch.org/docs/stable/generated/torch.autograd.functional.hvp.html
-        f_j = (
-            lambda theta: 1
-            / hessian_rescale
-            * partial(f, X={key: val[[j]] for key, val in X.items()})(theta)
-        )
-        if twice_diff:
-            update = v - torch.autograd.functional.vhp(f_j, theta, v=ihvp)[1].t()
-        else:
-            update = v - torch.autograd.functional.hvp(f_j, theta, v=ihvp)[1]
-        ihvp = ihvp + update
-    import pdb
-
-    pdb.set_trace()
-    return -1 * ihvp / hessian_rescale  # Fisher information = -1 * E[hessian]
+    # Make hessian vector product function
+    if use_jacobian:
+        J = torch.autograd.functional.jacobian(partial(f, X=X), theta)
+        f_Ax = lambda x: J.T.mv(J.mv(x) / J.shape[0])
+        return _conjugate_gradient(f_Ax, v, cg_iters)
+    else:
+        f_Ax = make_empirical_hessian_vector_product(f, theta, X, twice_diff=twice_diff)
+        ihvp = _conjugate_gradient(f_Ax, v, cg_iters)
+        return -1 * ihvp  # Fisher information = -1 * E[hessian]
 
 
 # TODO: change so that only need model
@@ -276,7 +279,7 @@ def inv_fisher_info_of_model_issa(
     theta_hat: Dict[str, torch.tensor],
     obs_names: List[str],
     N_monte_carlo: int = None,
-    hessian_rescale: Optional[Union[float, None]] = 100,
+    cg_iters: int = 1000,
 ) -> torch.tensor:
     """
     Compute the monte carlo estimate of the fisher information matrix.
@@ -302,9 +305,7 @@ def inv_fisher_info_of_model_issa(
     log_likelihood_fn = make_log_likelihood_fn_two(
         conditioned_model, theta_hat, obs_names
     )
-    return empirical_ihvp(
-        log_likelihood_fn, flat_theta, v, D_model, hessian_rescale=hessian_rescale
-    )
+    return empirical_ihvp(log_likelihood_fn, flat_theta, v, D_model, cg_iters)
 
 
 def flatten_dict(d: Dict[str, torch.tensor]) -> torch.tensor:
@@ -331,6 +332,49 @@ def unflatten_dict(
             ],
         )
     )
+
+
+# TODO: change so that only need model
+def monte_carlo_fisher_info_of_model(
+    unconditioned_model: Callable[[], torch.tensor],  # simulates data
+    conditioned_model: Callable[[], torch.tensor],  # computes log likelihood
+    theta_hat: Dict[str, torch.tensor],
+    obs_names: List[str],
+    N_monte_carlo: int = None,
+) -> torch.tensor:
+    """
+    Compute the monte carlo estimate of the fisher information matrix.
+    """
+    flat_theta = flatten_dict(theta_hat)
+    theta_dim = flat_theta.shape[0]
+    model_theta_hat_unconditioned = condition(data=theta_hat)(unconditioned_model)
+    if N_monte_carlo is None:
+        N_monte_carlo = 25 * theta_dim  # 25 samples per parameter
+    else:
+        assert (
+            N_monte_carlo >= theta_dim
+        ), "N_monte_carlo must be at least as large as the number of parameters"
+        if N_monte_carlo < 25 * theta_dim:
+            print(
+                "Warning: N_monte_carlo is less than 25 times the number of parameters. This may lead to inaccurate estimates."
+            )
+
+    # Generate N_monte_carlo samples from the model
+    with pyro.poutine.trace() as model_tr:
+        model_theta_hat_unconditioned(N=N_monte_carlo)
+    D_model = {k: model_tr.trace.nodes[k]["value"] for k in obs_names}
+
+    log_prob_at_datapoints = make_log_likelihood_fn(
+        conditioned_model, theta_hat, D_model, obs_names
+    )
+
+    log_prob_grads = torch.autograd.functional.jacobian(
+        log_prob_at_datapoints, flat_theta
+    )
+
+    assert log_prob_grads.shape[0] == N_monte_carlo
+    assert log_prob_grads.shape[1] == theta_dim
+    return 1 / N_monte_carlo * log_prob_grads.T.mm(log_prob_grads)
 
 
 def one_step_correction(
@@ -415,6 +459,7 @@ def one_step_correction(
     # inverse_fisher_info = torch.inverse(
     #     fisher_info_approx + eps_fisher * torch.eye(fisher_info_approx.shape[0])
     # )
+
     a = inv_fisher_info_of_model_issa(
         scores,
         unconditioned_model,
@@ -424,9 +469,9 @@ def one_step_correction(
         N_monte_carlo,
     )
 
-    import pdb
+    # import pdb
 
-    pdb.set_trace()
+    # pdb.set_trace()
 
     return plug_in_grads.dot(a)
 
@@ -507,7 +552,6 @@ ATE_plugin = ATE(model_cond_theta, num_samples=10000)
 
 dim_latents = flatten_dict(theta_hat).shape[0]
 N_monte_carlo_grid = [
-    10 * dim_latents,
     100 * dim_latents,
     1000 * dim_latents,
     10000 * dim_latents,
@@ -541,6 +585,6 @@ for N_monte_carlo in N_monte_carlo_grid:
     absolute_errors.append((ATE_correction - analytic_eif_at_test_pts).abs())
     monte_correction.append(ATE_correction)
     actual_correction.append(analytic_eif_at_test_pts)
-
-    print((analytic_correction - ATE_correction).abs())
-    print((analytic_correction - ATE_correction).abs() / analytic_correction.abs())
+    print(analytic_correction, ATE_correction)
+    # print((analytic_correction - ATE_correction).abs())
+    # print((analytic_correction - ATE_correction).abs() / analytic_correction.abs())
