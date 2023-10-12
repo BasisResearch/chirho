@@ -74,7 +74,7 @@ def counterf_model():
 
 def conditioned_model():
     # This is equivalent to the following:
-    # with SimulatorEventLoop():
+    # with InterruptionEventLoop():
     #   with vec_obs3:
     #       return simulate(...)
     # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from

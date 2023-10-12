@@ -175,7 +175,7 @@ class StaticBatchObservation(LogTrajectory):
         if "in_SEL" not in msg.keys():
             msg["in_SEL"] = False
 
-        # This checks whether the simulate has already redirected in a SimulatorEventLoop.
+        # This checks whether the simulate has already redirected in a InterruptionEventLoop.
         # If so, we don't want to run the observation again.
         if msg["in_SEL"]:
             return

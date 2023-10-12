@@ -420,7 +420,7 @@ def test_grad_of_point_intervention_params():
     # )
     #
     # # noinspection DuplicatedCode
-    # with SimulatorEventLoop():
+    # with InterruptionEventLoop():
     #     with point_intervention:
     #         traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
     #
