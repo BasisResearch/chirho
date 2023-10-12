@@ -43,12 +43,7 @@ class StaticBatchObservation(DynamicTrace):
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
         super()._pyro_post_simulate(msg)
         # This condition checks whether all of the simulate calls have been executed.
-        len_trace = (
-            0
-            if not self.trace.keys
-            else getattr(self.trace, next(iter(self.trace.keys))).shape[-1]
-        )
-        if len_trace == len(self.times):
+        if len(self.trace) == len(self.times):
             with condition(data=self.data):
                 dynamics.observation(self.trace)
 
