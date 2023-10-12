@@ -5,7 +5,8 @@ import torch
 
 from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops_ import State, Trajectory, simulate
+from chirho.dynamical.internals._utils import append
+from chirho.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import bayes_sir_model, check_states_match
 
@@ -45,3 +46,18 @@ def test_logging():
     assert dt2.trace.keys == result2.keys
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
+
+
+def test_trajectory_methods():
+    trajectory = Trajectory(S=torch.tensor([1.0, 2.0, 3.0]))
+    assert trajectory.keys == frozenset({"S"})
+    assert str(trajectory) == "Trajectory({'S': tensor([1., 2., 3.])})"
+
+
+def test_append():
+    trajectory1 = Trajectory(S=torch.tensor([1.0, 2.0, 3.0]))
+    trajectory2 = Trajectory(S=torch.tensor([4.0, 5.0, 6.0]))
+    trajectory = append(trajectory1, trajectory2)
+    assert torch.allclose(
+        trajectory.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    ), "append() failed to append a trajectory"

@@ -14,7 +14,7 @@ from chirho.dynamical.handlers import (
     LogTrajectory,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops_ import InPlaceDynamics, State, simulate
+from chirho.dynamical.ops import InPlaceDynamics, State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics

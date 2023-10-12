@@ -13,7 +13,7 @@ from chirho.dynamical.handlers import (
     StaticObservation,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops_ import State, simulate
+from chirho.dynamical.ops import State, simulate
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
