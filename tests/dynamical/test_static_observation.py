@@ -9,8 +9,8 @@ from pyro.infer.autoguide import AutoMultivariateNormal
 from chirho.dynamical.handlers import (
     DynamicTrace,
     SimulatorEventLoop,
-    StaticObservation,
     StaticBatchObservation,
+    StaticObservation,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
