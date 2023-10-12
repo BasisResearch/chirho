@@ -5,7 +5,7 @@ from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.handlers.trace import LogTrajectory
+from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
