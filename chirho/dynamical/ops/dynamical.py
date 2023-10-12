@@ -1,13 +1,6 @@
 import numbers
 import typing
-from typing import (
-    FrozenSet,
-    Generic,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-)
+from typing import FrozenSet, Generic, Optional, Protocol, TypeVar, Union
 
 import pyro
 import torch
@@ -119,7 +112,7 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.backend import Solver, get_solver, simulate_point
+    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
 
     solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
     return simulate_point(

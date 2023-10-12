@@ -5,7 +5,7 @@ from typing import Generic, TypeVar
 import pyro
 
 from chirho.dynamical.handlers.interruption import Interruption
-from chirho.dynamical.internals.backend import (
+from chirho.dynamical.internals.solver import (
     apply_interruptions,
     get_solver,
     simulate_to_interruption,

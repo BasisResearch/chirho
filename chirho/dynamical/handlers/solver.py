@@ -1,4 +1,4 @@
-from chirho.dynamical.internals.backend import Solver
+from chirho.dynamical.internals.solver import Solver
 
 
 class TorchDiffEq(Solver):
