@@ -4,3 +4,4 @@ nbval
 graphviz 
 matplotlib 
 seaborn
+chirho
