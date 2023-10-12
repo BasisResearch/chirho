@@ -5,7 +5,7 @@ import torch
 
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.internals.backend import simulate_trajectory
-from chirho.dynamical.ops import Trajectory
+from chirho.dynamical.ops import State, Trajectory
 
 T = TypeVar("T")
 
@@ -58,10 +58,12 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
             initial_state,
             timespan,
         )
-        self.trace: Trajectory[T] = append(self.trace, trajectory[..., 1:-1])
-        if len(self.trace) > len(self.logging_times):
+        idx = (timespan > timespan[0]) & (timespan < timespan[-1])
+        if idx.any():
+            self.trace: Trajectory[T] = append(self.trace, trajectory[idx])
+        if idx.sum() > len(self.logging_times):
             raise ValueError(
                 "Multiple simulates were used with a single DynamicTrace handler."
                 "This is currently not supported."
             )
-        msg["value"] = trajectory[..., -1].to_state()
+        msg["value"] = trajectory[timespan == timespan[-1]].to_state()

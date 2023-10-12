@@ -21,7 +21,7 @@ def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet
     )
 
 
-@indices_of.register(Trajectory)
+# @indices_of.register(Trajectory)
 def _indices_of_trajectory(
     trj: Trajectory, *, event_dim: int = 0, **kwargs
 ) -> IndexSet:
@@ -45,7 +45,7 @@ def _gather_state(
     )
 
 
-@gather.register(Trajectory)
+# @gather.register(Trajectory)
 def _gather_trajectory(
     trj: Trajectory[T], indices: IndexSet, *, event_dim: int = 0, **kwargs
 ) -> Trajectory[T]:

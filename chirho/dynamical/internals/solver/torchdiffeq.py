@@ -117,7 +117,7 @@ def torchdiffeq_ode_simulate(
     trajectory = _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )
-    return trajectory[..., -1].to_state()
+    return trajectory[timespan == timespan[-1]].to_state()
 
 
 @simulate_trajectory.register(TorchDiffEq)
