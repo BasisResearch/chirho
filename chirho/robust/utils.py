@@ -89,14 +89,18 @@ def _check_correct_model_signature(model):
 
 def _check_correct_functional_signature(functional):
     r"""
-    Assert that the functional takes only arguments `model`, `theta`, and
+    Assert that the functional takes only arguments `model`, `theta_hat`, and
     potentially an optional argument `n_monte_carlo`.
 
     Args:
         functional (Callable): Functional to check.
     """
     sig = inspect.signature(functional)
-    expected_params = ["model", "theta"]
+    expected_params = ["model", "theta_hat"]
     arg_names = list(sig.parameters.keys())
     arg_names = [arg for arg in arg_names if arg != "n_monte_carlo"]
-    assert arg_names == expected_params, "Functional signature doesn't match."
+    assert (
+        arg_names == expected_params
+    ), "Functional signature doesn't match. Got {}, expected {}".format(
+        arg_names, expected_params
+    )

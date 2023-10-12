@@ -13,7 +13,7 @@ from chirho.indexed.ops import IndexSet, gather
 def average_treatment_effect(
     model: PyroModule,
     theta_hat: Dict[str, torch.tensor],
-    n_monte_carlo: int,
+    n_monte_carlo: int = 10000,
 ) -> torch.Tensor:
     """Compute the average treatment effect of a model."""
     model_at_theta = condition(data=theta_hat)(model)

@@ -78,8 +78,10 @@ def one_step_correction(
         target_functional (Callable): The functional to compute the one step correction for.
         X_test (Dict[str, torch.tensor]): The test data.
         pointwise_influence (bool): If True, compute the one step correction for each data point in `X_test`.
-            Otherwise, compute the one step correction averaged over `X_test` (which is the final one step correction).
+            Otherwise, compute the one step correction averaged over `X_test`
+            (which is the final one step correction estimator).
         n_monte_carlo (int): The number of Monte Carlo samples to use when approximating fisher information matrix.
+            If None, this defaults to 25 * dim(`theta_hat`).
         cg_iters (int): The number of conjugate gradient iterations to use for inverting fisher information matrix.
         obs_names (List[str]): The names of the observed variables in the model. If None, defaults to the keys in
             `X_test`.
@@ -92,11 +94,23 @@ def one_step_correction(
     _check_correct_model_signature(model)
     _check_correct_functional_signature(target_functional)
 
-    # Cannonical ordering of parameters when flattening and unflattening
+    # Canonical ordering of parameters when flattening and unflattening
     theta_hat = collections.OrderedDict(
         (k, theta_hat[k]) for k in sorted(theta_hat.keys())
     )
     flat_theta = _flatten_dict(theta_hat)
+    theta_dim = flat_theta.shape[0]
+
+    if n_monte_carlo is None:
+        n_monte_carlo = 25 * theta_dim  # 25 samples per parameter
+    else:
+        assert (
+            n_monte_carlo >= theta_dim
+        ), "n_monte_carlo must be at least as large as the number of parameters to invert empirical fisher matrix."
+        if n_monte_carlo < 25 * theta_dim:
+            print(
+                "Warning: n_monte_carlo is less than 25x # of parameters, which may lead to inaccurate estimates."
+            )
 
     # Compute gradient of plug-in functional
     plug_in = target_functional(model, theta_hat)
@@ -129,6 +143,9 @@ def one_step_correction(
     # fisher information is approximated by simulating data from the model
     efficient_influence_fn_vals = torch.zeros(scores_test.shape[0])
     sim_data = simulate_data_from_model(model, theta_hat, n_monte_carlo, obs_names)
+
+    # TODO: find a way to vectorize this loop. This can severely slow down the algorithm
+    # if `pointwise_influence` = True and `X_test` is large.
     for j, score in enumerate(scores_test):
         inv_fish_score = empirical_inverse_fisher_vp(
             log_likelihood_fn, flat_theta, score, sim_data, cg_iters=cg_iters
@@ -136,6 +153,13 @@ def one_step_correction(
         efficient_influence_fn_vals[j] = plug_in_grads.dot(inv_fish_score).item()
 
     return efficient_influence_fn_vals
+
+
+def bayesian_one_step_correction():
+    # TODO: implement Bayesian one step correction using
+    # `one_step_correction` in Algorithm 1 of
+    # https://arxiv.org/abs/2306.06059
+    raise NotImplementedError
 
 
 def simulate_data_from_model(
@@ -179,7 +203,7 @@ def make_log_likelihood_fn(
     def log_likelihood_fn(flat_theta: torch.tensor, X: Dict[str, torch.Tensor]):
         n_monte_carlo = X[next(iter(X))].shape[0]
         theta = _unflatten_dict(flat_theta, theta_hat)
-        model_at_theta = condition(data=theta)(ConditionedModel(model))
+        model_at_theta = condition(data=theta)(DataConditionedModel(model))
         log_like_trace = pyro.poutine.trace(model_at_theta).get_trace(X)
         log_like_trace.compute_log_prob()
         log_prob_at_datapoints = torch.zeros(n_monte_carlo)
@@ -190,7 +214,7 @@ def make_log_likelihood_fn(
     return log_likelihood_fn
 
 
-class ConditionedModel(PyroModule):
+class DataConditionedModel(PyroModule):
     r"""
     Helper class for conditioning on data.
     """
