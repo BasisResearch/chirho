@@ -1,4 +1,3 @@
-import functools
 import numbers
 from typing import (
     TYPE_CHECKING,
@@ -13,6 +12,8 @@ from typing import (
 
 import pyro
 import torch
+
+from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
 
 if TYPE_CHECKING:
     from chirho.dynamical.internals.backend import Solver
@@ -63,17 +64,27 @@ class _Sliceable(Protocol[T_co]):
 
 
 class Trajectory(Generic[T], State[_Sliceable[T]]):
+    def __len__(self) -> int:
+        if not self.keys:
+            return 0
+
+        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim["__time"] = -1
+        # TODO support event_dim > 0
+        return len(indices_of(self, event_dim=0, name_to_dim=name_to_dim)["__time"])
 
     def __getitem__(self, key: torch.Tensor) -> "Trajectory[T]":
-        from chirho.indexed.ops import IndexSet, gather, get_index_plates
         assert key.dtype == torch.bool
-        assert len(key.shape) == 1  # DEBUG
-        assert key.shape[0] > 1  # DEBUG
-        assert key.any()  # DEBUG
+
+        assert len(key.shape) == 1 and key.shape[0] > 1  # DEBUG
+
+        if not key.any():  # DEBUG
+            return Trajectory()
 
         name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
         name_to_dim["__time"] = -1
         idx = IndexSet(__time={i for i in range(key.shape[0]) if key[i]})
+        # TODO support event_dim > 0
         return gather(self, idx, event_dim=0, name_to_dim=name_to_dim)
 
     def to_state(self) -> State[T]:

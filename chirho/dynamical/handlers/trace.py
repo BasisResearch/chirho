@@ -5,7 +5,7 @@ import torch
 
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.internals.backend import simulate_trajectory
-from chirho.dynamical.ops import State, Trajectory
+from chirho.dynamical.ops import Trajectory
 
 T = TypeVar("T")
 
