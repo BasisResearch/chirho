@@ -3,4 +3,4 @@ pytest-xdist
 nbval  
 graphviz 
 matplotlib 
-sns
+seaborn
