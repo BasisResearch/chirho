@@ -1,4 +1,3 @@
-import functools
 import numbers
 from typing import (
     TYPE_CHECKING,
@@ -13,6 +12,8 @@ from typing import (
 
 import pyro
 import torch
+
+from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
 
 if TYPE_CHECKING:
     from chirho.dynamical.internals.backend import Solver
@@ -55,55 +56,41 @@ class State(Generic[T]):
 
 
 class _Sliceable(Protocol[T_co]):
-    def __getitem__(self, key) -> Union[T_co, "_Sliceable[T_co]"]:
+    def __getitem__(self, key: torch.Tensor) -> Union[T_co, "_Sliceable[T_co]"]:
+        ...
+
+    def squeeze(self, dim: int) -> "_Sliceable[T_co]":
         ...
 
 
 class Trajectory(Generic[T], State[_Sliceable[T]]):
     def __len__(self) -> int:
-        # TODO this implementation is just for tensors, but we should support other types.
-        return getattr(self, next(iter(self.keys))).shape[-1]
+        if not self.keys:
+            return 0
 
-    def _getitem(self, key):
-        from chirho.dynamical.internals._utils import _index_last_dim_with_mask
+        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim["__time"] = -1
+        # TODO support event_dim > 0
+        return len(indices_of(self, event_dim=0, name_to_dim=name_to_dim)["__time"])
 
-        if isinstance(key, str):
-            raise ValueError(
-                "Trajectory does not support string indexing, use getattr instead if you want to access a specific "
-                "state variable."
-            )
+    def __getitem__(self, key: torch.Tensor) -> "Trajectory[T]":
+        assert key.dtype == torch.bool
 
-        item = State() if isinstance(key, int) else Trajectory()
-        for k, v in self.__dict__["_values"].items():
-            if isinstance(key, torch.Tensor):
-                keyd_v = _index_last_dim_with_mask(v, key)
-            else:
-                keyd_v = v[key]
-            setattr(item, k, keyd_v)
-        return item
+        assert len(key.shape) == 1 and key.shape[0] > 1  # DEBUG
 
-    # This is needed so that mypy and other type checkers believe that Trajectory can be indexed into.
-    @functools.singledispatchmethod
-    def __getitem__(self, key):
-        return self._getitem(key)
+        if not key.any():  # DEBUG
+            return Trajectory()
 
-    @__getitem__.register(int)
-    def _getitem_int(self, key: int) -> State[T]:
-        return self._getitem(key)
-
-    @__getitem__.register(torch.Tensor)
-    def _getitem_torchmask(self, key: torch.Tensor) -> "Trajectory[T]":
-        if key.dtype != torch.bool:
-            raise ValueError(
-                f"__getitem__ with a torch.Tensor only supports boolean mask indexing, but got dtype {key.dtype}."
-            )
-
-        return self._getitem(key)
+        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim["__time"] = -1
+        idx = IndexSet(__time={i for i in range(key.shape[0]) if key[i]})
+        # TODO support event_dim > 0
+        return gather(self, idx, event_dim=0, name_to_dim=name_to_dim)
 
     def to_state(self) -> State[T]:
         ret: State[T] = State(
             # TODO support event_dim > 0
-            **{k: getattr(self, k) for k in self.keys}
+            **{k: getattr(self, k).squeeze(-1) for k in self.keys}
         )
         return ret
 
