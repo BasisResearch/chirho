@@ -144,7 +144,7 @@ def one_step_correction(
     efficient_influence_fn_vals = torch.zeros(scores_test.shape[0])
     sim_data = simulate_data_from_model(model, theta_hat, n_monte_carlo, obs_names)
 
-    # TODO: find a way to vectorize this loop. This can severely slow down the algorithm
+    # TODO: use functorch to vectorize this loop. Current for loop severely slows method down
     # if `pointwise_influence` = True and `X_test` is large.
     for j, score in enumerate(scores_test):
         inv_fish_score = empirical_inverse_fisher_vp(
