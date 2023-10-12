@@ -251,6 +251,15 @@ def make_empirical_hessian_vector_product(
     return empirical_hvp
 
 
+def make_fisher_jvp(f, theta, n_monte_carlo):
+    def fisher_jvp(v):
+        vnew = torch.func.jvp(f, (theta,), (v / n_monte_carlo,))[1]
+        (_, vjpfunc) = torch.func.vjp(f, theta)
+        return vjpfunc(vnew)[0]
+
+    return fisher_jvp
+
+
 def empirical_ihvp(
     f: Callable,
     theta: torch.tensor,
@@ -262,8 +271,14 @@ def empirical_ihvp(
 ) -> torch.tensor:
     # Make hessian vector product function
     if use_jacobian:
-        J = torch.autograd.functional.jacobian(partial(f, X=X), theta)
-        f_Ax = lambda x: J.T.mv(J.mv(x) / J.shape[0])
+        # import pdb
+
+        # pdb.set_trace()
+        # Forward mode autodiff is faster since number of monte carlo
+        # samples is larger than the number of parameters
+        # J = torch.func.jacfwd(partial(f, X=X))(theta)
+        # f_Ax = lambda x: J.T.mv(J.mv(x) / J.shape[0])
+        f_Ax = make_fisher_jvp(partial(f, X=X), theta, X[next(iter(X))].shape[0])
         return _conjugate_gradient(f_Ax, v, cg_iters)
     else:
         f_Ax = make_empirical_hessian_vector_product(f, theta, X, twice_diff=twice_diff)
