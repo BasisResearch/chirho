@@ -1,0 +1,6 @@
+pytest
+pytest-xdist
+nbval  
+graphviz 
+matplotlib 
+sns
