@@ -170,15 +170,22 @@ class StaticBatchObservation(LogTrajectory):
         super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        super()._pyro_post_simulate(msg)
+        dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
+
+        if "in_SEL" not in msg.keys():
+            msg["in_SEL"] = False
 
         # This checks whether the simulate has already redirected in a SimulatorEventLoop.
         # If so, we don't want to run the observation again.
-        if msg.setdefault("in_SEL", False):
+        if msg["in_SEL"]:
             return
 
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
+        super()._pyro_post_simulate(msg)
+        # This condition checks whether all of the simulate calls have been executed.
         if len(self.trace) == len(self.times):
-            dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
             with condition(data=self.data):
                 dynamics.observation(self.trace)
+
+            # Reset the trace for the next simulate call.
+            super()._reset()
