@@ -3,7 +3,7 @@ from typing import TypeVar
 
 import torch
 
-from chirho.dynamical.ops.dynamical import State, Trajectory
+from chirho.dynamical.ops_.ops import State, Trajectory
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 

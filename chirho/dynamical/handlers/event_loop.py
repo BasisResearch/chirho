@@ -15,7 +15,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
+class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def _pyro_simulate(self, msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
         if msg["kwargs"].get("solver", None) is not None:

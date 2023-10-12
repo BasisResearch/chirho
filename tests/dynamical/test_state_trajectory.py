@@ -3,7 +3,7 @@ import logging
 import torch
 
 from chirho.dynamical.internals._utils import append
-from chirho.dynamical.ops import Trajectory
+from chirho.dynamical.ops_ import Trajectory
 
 logger = logging.getLogger(__name__)
 

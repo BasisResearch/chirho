@@ -10,11 +10,11 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.dynamical.handlers import (
     DynamicIntervention,
+    InterruptionEventLoop,
     LogTrajectory,
-    SimulatorEventLoop,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import InPlaceDynamics, State, simulate
+from chirho.dynamical.ops_ import InPlaceDynamics, State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -83,7 +83,7 @@ def test_nested_dynamic_intervention_causes_change(
     with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
@@ -159,7 +159,7 @@ def test_dynamic_intervention_causes_change(
     with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(trigger_state),
                 intervention=intervene_state,
@@ -218,7 +218,7 @@ def test_split_twinworld_dynamic_intervention(
     with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
@@ -266,7 +266,7 @@ def test_split_multiworld_dynamic_intervention(
     with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with DynamicIntervention(
                 event_f=get_state_reached_event_f(ts1),
                 intervention=is1,
@@ -310,7 +310,7 @@ def test_split_twinworld_dynamic_matches_output(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -324,7 +324,7 @@ def test_split_twinworld_dynamic_matches_output(
                         model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with DynamicIntervention(
             event_f=get_state_reached_event_f(ts1),
             intervention=is1,
@@ -337,7 +337,7 @@ def test_split_twinworld_dynamic_matches_output(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
 
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         factual_expected = simulate(
             model, init_state, start_time, end_time, solver=TorchDiffEq()
         )
@@ -392,7 +392,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     )
 
     # noinspection DuplicatedCode
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with dynamic_intervention:
             result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
 

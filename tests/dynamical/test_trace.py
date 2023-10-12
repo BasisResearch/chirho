@@ -3,9 +3,9 @@ import logging
 import pyro
 import torch
 
-from chirho.dynamical.handlers import LogTrajectory, SimulatorEventLoop
+from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import State, Trajectory, simulate
+from chirho.dynamical.ops_ import State, Trajectory, simulate
 
 from .dynamical_fixtures import bayes_sir_model, check_states_match
 
@@ -30,7 +30,7 @@ def test_logging():
     with LogTrajectory(
         logging_times=logging_times,
     ) as dt2:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             result2 = simulate(
                 sir, init_state, start_time, end_time, solver=TorchDiffEq()
             )

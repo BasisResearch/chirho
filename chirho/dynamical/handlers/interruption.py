@@ -6,7 +6,7 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
+from chirho.dynamical.ops_.ops import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
 from chirho.observational.ops import Observation

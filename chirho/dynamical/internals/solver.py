@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
+from chirho.dynamical.ops_.ops import InPlaceDynamics, State, Trajectory, simulate
 
 if typing.TYPE_CHECKING:
     from chirho.dynamical.handlers.interruption import (

@@ -7,13 +7,13 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
+    InterruptionEventLoop,
     LogTrajectory,
-    SimulatorEventLoop,
     StaticBatchObservation,
     StaticIntervention,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops_ import State, simulate
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamics,
@@ -61,7 +61,7 @@ vec_obs3 = StaticBatchObservation(times=flight_landing_times, data=flight_landin
 
 def counterf_model():
     with vec_obs3:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with reparam, twin_world, intervention:
                 return simulate(
                     UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),

@@ -15,8 +15,8 @@ from chirho.dynamical.internals.solver import (
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics
-from chirho.dynamical.ops.dynamical import State, Trajectory
+from chirho.dynamical.ops_ import InPlaceDynamics
+from chirho.dynamical.ops_.ops import State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
