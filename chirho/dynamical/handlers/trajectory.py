@@ -10,7 +10,7 @@ from chirho.dynamical.ops import Trajectory
 T = TypeVar("T")
 
 
-class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
+class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
     trace: Trajectory[T]
 
     def __init__(self, logging_times: torch.Tensor, epsilon: float = 1e-6):

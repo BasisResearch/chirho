@@ -8,7 +8,7 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.dynamical.handlers import (
-    DynamicTrace,
+    LogTrajectory,
     SimulatorEventLoop,
     StaticIntervention,
 )
@@ -65,13 +65,13 @@ def test_point_intervention_causes_difference(
     intervene_state,
     intervene_time,
 ):
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as intervened_dt:
         with SimulatorEventLoop():
@@ -141,13 +141,13 @@ def test_nested_point_interventions_cause_difference(
     intervene_state2,
     intervene_time2,
 ):
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as intervened_dt:
         with SimulatorEventLoop():
@@ -208,7 +208,7 @@ def test_twinworld_point_intervention(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():
@@ -243,7 +243,7 @@ def test_multiworld_point_intervention(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():
@@ -277,7 +277,7 @@ def test_multiworld_point_intervention(
 def test_split_odeint_broadcast(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with TwinWorldCounterfactual() as cf:

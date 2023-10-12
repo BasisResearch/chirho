@@ -9,4 +9,4 @@ from .interruption import (  # noqa: F401
     StaticIntervention,
     StaticObservation,
 )
-from .trace import DynamicTrace  # noqa: F401
+from .trajectory import LogTrajectory  # noqa: F401

@@ -7,7 +7,7 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.dynamical.handlers import (
-    DynamicTrace,
+    LogTrajectory,
     SimulatorEventLoop,
     StaticBatchObservation,
     StaticObservation,
@@ -110,7 +110,7 @@ def test_tspan_collision(model, obs_handler):
     """
     S_obs = torch.tensor(10.0)
     data = {"S_obs": S_obs}
-    with DynamicTrace(logging_times) as dt:
+    with LogTrajectory(logging_times) as dt:
         with SimulatorEventLoop():
             with _get_compatible_observations(obs_handler, time=start_time, data=data):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
@@ -291,7 +291,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
 
     model = RandBetaUnifiedFixtureDynamics()
 
-    with DynamicTrace(logging_times) as dt:
+    with LogTrajectory(logging_times) as dt:
         if not use_event_loop:
             simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
         else:

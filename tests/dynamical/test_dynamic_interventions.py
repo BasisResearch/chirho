@@ -10,7 +10,7 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    DynamicTrace,
+    LogTrajectory,
     SimulatorEventLoop,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
@@ -80,7 +80,7 @@ def test_nested_dynamic_intervention_causes_change(
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():
@@ -156,7 +156,7 @@ def test_dynamic_intervention_causes_change(
     trigger_state,
     intervene_state,
 ):
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():
@@ -215,7 +215,7 @@ def test_split_twinworld_dynamic_intervention(
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():
@@ -263,7 +263,7 @@ def test_split_multiworld_dynamic_intervention(
     is1, is2 = intervene_states
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt:
         with SimulatorEventLoop():

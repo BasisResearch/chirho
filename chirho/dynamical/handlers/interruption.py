@@ -5,7 +5,7 @@ from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.handlers.trace import DynamicTrace
+from chirho.dynamical.handlers.trace import LogTrajectory
 from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
@@ -147,7 +147,7 @@ class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]
         super().__init__(event_f)
 
 
-class StaticBatchObservation(DynamicTrace):
+class StaticBatchObservation(LogTrajectory):
     def __init__(
         self,
         times: torch.Tensor,

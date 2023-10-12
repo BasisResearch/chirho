@@ -7,7 +7,7 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
-    DynamicTrace,
+    LogTrajectory,
     SimulatorEventLoop,
     StaticBatchObservation,
     StaticIntervention,
@@ -97,7 +97,7 @@ class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
 
 
 def test_shape_twincounterfactual_observation_intervention_commutes():
-    with DynamicTrace(logging_times) as dt:
+    with LogTrajectory(logging_times) as dt:
         with pyro.poutine.trace() as tr:
             conditioned_model()
 
