@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Optional
+from typing import Dict
 
 import torch
 import pyro
