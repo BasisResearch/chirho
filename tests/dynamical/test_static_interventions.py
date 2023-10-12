@@ -43,7 +43,7 @@ intervene_states = [
 ]
 
 # Define intervention times before all tspan values.
-intervene_times = logging_times - 0.5
+intervene_times = (logging_times - 0.5).tolist()
 
 
 eps = 1e-3
@@ -103,6 +103,8 @@ def test_point_intervention_causes_difference(
     # Make sure the intervention only causes a difference after the intervention time.
     after = intervene_time < logging_times
     before = ~after
+
+    assert torch.any(before) or torch.any(after), "trivial test case"
 
     observational_trajectory_before_int = observational_trajectory[before]
     intervened_trajectory_before_int = intervened_trajectory[before]
