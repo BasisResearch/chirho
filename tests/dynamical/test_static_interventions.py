@@ -43,7 +43,7 @@ intervene_states = [
 ]
 
 # Define intervention times before all tspan values.
-intervene_times = logging_times - 0.5
+intervene_times = (logging_times - 0.5).tolist()
 
 
 eps = 1e-3
@@ -106,19 +106,17 @@ def test_point_intervention_causes_difference(
 
     assert torch.any(before) or torch.any(after), "trivial test case"
 
-    if torch.any(before):
-        observational_trajectory_before_int = observational_trajectory[before]
-        intervened_trajectory_before_int = intervened_trajectory[before]
-        assert check_trajectories_match(
-            observational_trajectory_before_int, intervened_trajectory_before_int
-        )
+    observational_trajectory_before_int = observational_trajectory[before]
+    intervened_trajectory_before_int = intervened_trajectory[before]
+    assert check_trajectories_match(
+        observational_trajectory_before_int, intervened_trajectory_before_int
+    )
 
-    if torch.any(after):
-        observational_trajectory_after_int = observational_trajectory[after]
-        intervened_trajectory_after_int = intervened_trajectory[after]
-        assert check_trajectories_match_in_all_but_values(
-            observational_trajectory_after_int, intervened_trajectory_after_int
-        )
+    observational_trajectory_after_int = observational_trajectory[after]
+    intervened_trajectory_after_int = intervened_trajectory[after]
+    assert check_trajectories_match_in_all_but_values(
+        observational_trajectory_after_int, intervened_trajectory_after_int
+    )
 
 
 # TODO test what happens when the intervention time is exactly at the start of the time span.

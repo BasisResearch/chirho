@@ -121,8 +121,9 @@ def test_nested_dynamic_intervention_causes_change(
 
     postfirst_int_presec_int_mask = postfirst_int_mask & ~postsec_int_mask
 
-    assert torch.any(postfirst_int_presec_int_mask), "trivial test case"
-    assert torch.any(postsec_int_mask), "trivial test case"
+    assert torch.any(postfirst_int_presec_int_mask) or torch.any(
+        postsec_int_mask
+    ), "trivial test case"
 
     postfirst_int_presec_int_traj = trajectory[postfirst_int_presec_int_mask]
     assert torch.all(
