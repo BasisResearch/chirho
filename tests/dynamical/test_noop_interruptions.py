@@ -5,7 +5,7 @@ import torch
 
 from chirho.dynamical.handlers import (
     DynamicInterruption,
-    SimulatorEventLoop,
+    InterruptionEventLoop,
     StaticInterruption,
     StaticIntervention,
 )
@@ -44,7 +44,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
     )
 
     # Test with standard point interruptions within timespan.
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with StaticInterruption(time=end_time / 2.0 + eps):
             result_pint = simulate(
                 model, init_state, start_time, end_time, solver=TorchDiffEq()
@@ -53,7 +53,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
     assert check_states_match(observational_execution_result, result_pint)
 
     # Test with two standard point interruptions.
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with StaticInterruption(
             time=end_time / 4.0 + eps
         ):  # roughly 1/4 of the way through the timespan
@@ -65,7 +65,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
     assert check_states_match(observational_execution_result, result_double_pint1)
 
     # Test with two standard point interruptions, in a different order.
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with StaticInterruption(time=(end_time / 4.0) * 3 + eps):  # roughly 3/4
             with StaticInterruption(time=end_time / 4.0 + eps):  # roughly 1/3
                 result_double_pint2 = simulate(
@@ -100,7 +100,7 @@ def test_noop_point_interventions(
     with pytest.warns(
         expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with StaticIntervention(
                 time=post_measurement_intervention_time, intervention=intervene_state
             ):
@@ -114,7 +114,7 @@ def test_noop_point_interventions(
     with pytest.warns(
         expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with StaticIntervention(
                 time=post_measurement_intervention_time, intervention=intervene_state
             ):
@@ -132,7 +132,7 @@ def test_noop_point_interventions(
     with pytest.warns(
         expected_warning=UserWarning, match="occurred after the end of the timespan"
     ):
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with StaticIntervention(
                 time=post_measurement_intervention_time + 1.0,
                 intervention=intervene_state,
@@ -157,7 +157,7 @@ def test_point_interruption_at_start(model, init_state, start_time, end_time):
         model, init_state, start_time, end_time, solver=TorchDiffEq()
     )
 
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         with StaticInterruption(time=1.0):
             result_pint = simulate(
                 model, init_state, start_time, end_time, solver=TorchDiffEq()
@@ -178,7 +178,7 @@ def test_noop_dynamic_interruption(
         model, init_state, start_time, end_time, solver=TorchDiffEq()
     )
 
-    with SimulatorEventLoop():
+    with InterruptionEventLoop():
         tt = (end_time - start_time) / 2.0
         with DynamicInterruption(
             event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),

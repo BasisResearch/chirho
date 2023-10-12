@@ -3,8 +3,9 @@ import logging
 import pyro
 import torch
 
-from chirho.dynamical.handlers import DynamicTrace, SimulatorEventLoop
+from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, Trajectory, simulate
 
 from .dynamical_fixtures import bayes_sir_model, check_states_match
@@ -22,26 +23,41 @@ logging_times = torch.tensor([1.0, 2.0, 3.0])
 
 def test_logging():
     sir = bayes_sir_model()
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt1:
         result1 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
-    with DynamicTrace(
+    with LogTrajectory(
         logging_times=logging_times,
     ) as dt2:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             result2 = simulate(
                 sir, init_state, start_time, end_time, solver=TorchDiffEq()
             )
     result3 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert isinstance(result1, State)
-    assert isinstance(dt1.trace, Trajectory)
-    assert isinstance(dt2.trace, Trajectory)
-    assert len(dt1.trace.keys) == 3
-    assert len(dt2.trace.keys) == 3
-    assert dt1.trace.keys == result1.keys
-    assert dt2.trace.keys == result2.keys
+    assert isinstance(dt1.trajectory, Trajectory)
+    assert isinstance(dt2.trajectory, Trajectory)
+    assert len(dt1.trajectory.keys) == 3
+    assert len(dt2.trajectory.keys) == 3
+    assert dt1.trajectory.keys == result1.keys
+    assert dt2.trajectory.keys == result2.keys
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
+
+
+def test_trajectory_methods():
+    trajectory = Trajectory(S=torch.tensor([1.0, 2.0, 3.0]))
+    assert trajectory.keys == frozenset({"S"})
+    assert str(trajectory) == "Trajectory({'S': tensor([1., 2., 3.])})"
+
+
+def test_append():
+    trajectory1 = Trajectory(S=torch.tensor([1.0, 2.0, 3.0]))
+    trajectory2 = Trajectory(S=torch.tensor([4.0, 5.0, 6.0]))
+    trajectory = append(trajectory1, trajectory2)
+    assert torch.allclose(
+        trajectory.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+    ), "append() failed to append a trajectory"

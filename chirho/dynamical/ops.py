@@ -1,22 +1,11 @@
 import numbers
-from typing import (
-    TYPE_CHECKING,
-    FrozenSet,
-    Generic,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-    runtime_checkable,
-)
+import typing
+from typing import FrozenSet, Generic, Optional, Protocol, TypeVar, Union
 
 import pyro
 import torch
 
 from chirho.indexed.ops import IndexSet, gather, get_index_plates, indices_of
-
-if TYPE_CHECKING:
-    from chirho.dynamical.internals.backend import Solver
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -95,13 +84,13 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
         return ret
 
 
-@runtime_checkable
+@typing.runtime_checkable
 class InPlaceDynamics(Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
         ...
 
 
-@runtime_checkable
+@typing.runtime_checkable
 class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
         ...
@@ -117,17 +106,15 @@ def simulate(
     start_time: R,
     end_time: R,
     *,
-    solver: Optional[
-        "Solver"
-    ] = None,  # Quoted type necessary w/ TYPE_CHECKING to avoid circular import error
+    solver: Optional[S] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.backend import get_solver, simulate_point
+    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
 
-    solver = solver if solver is not None else get_solver()
+    solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
     return simulate_point(
-        solver, dynamics, initial_state, start_time, end_time, **kwargs
+        solver_, dynamics, initial_state, start_time, end_time, **kwargs
     )

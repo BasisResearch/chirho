@@ -4,14 +4,14 @@ import pyro
 import torch
 
 from chirho.dynamical.internals._utils import append
-from chirho.dynamical.internals.backend import simulate_trajectory
+from chirho.dynamical.internals.solver import simulate_trajectory
 from chirho.dynamical.ops import Trajectory
 
 T = TypeVar("T")
 
 
-class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
-    trace: Trajectory[T]
+class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
+    trajectory: Trajectory[T]
 
     def __init__(self, logging_times: torch.Tensor, epsilon: float = 1e-6):
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
@@ -27,7 +27,7 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _reset(self) -> None:
-        self.trace: Trajectory[T] = Trajectory()
+        self.trajectory: Trajectory[T] = Trajectory()
 
     def __enter__(self):
         self._reset()
@@ -60,10 +60,10 @@ class DynamicTrace(Generic[T], pyro.poutine.messenger.Messenger):
         )
         idx = (timespan > timespan[0]) & (timespan < timespan[-1])
         if idx.any():
-            self.trace: Trajectory[T] = append(self.trace, trajectory[idx])
+            self.trajectory: Trajectory[T] = append(self.trajectory, trajectory[idx])
         if idx.sum() > len(self.logging_times):
             raise ValueError(
-                "Multiple simulates were used with a single DynamicTrace handler."
+                "Multiple simulates were used with a single LogTrajectory handler."
                 "This is currently not supported."
             )
         msg["value"] = trajectory[timespan == timespan[-1]].to_state()

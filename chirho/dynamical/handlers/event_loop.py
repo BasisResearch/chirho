@@ -4,8 +4,8 @@ from typing import Generic, TypeVar
 
 import pyro
 
-from chirho.dynamical.handlers.interruption.interruption import Interruption
-from chirho.dynamical.internals.backend import (
+from chirho.dynamical.handlers.interruption import Interruption
+from chirho.dynamical.internals.solver import (
     apply_interruptions,
     get_solver,
     simulate_to_interruption,
@@ -15,7 +15,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class SimulatorEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
+class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def _pyro_simulate(self, msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
         if msg["kwargs"].get("solver", None) is not None:

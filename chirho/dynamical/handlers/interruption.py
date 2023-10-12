@@ -5,7 +5,8 @@ from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops.dynamical import ObservableInPlaceDynamics, State
+from chirho.dynamical.handlers.trajectory import LogTrajectory
+from chirho.dynamical.ops import ObservableInPlaceDynamics, State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
 from chirho.observational.ops import Observation
@@ -144,3 +145,47 @@ class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]
     ):
         self.intervention = intervention
         super().__init__(event_f)
+
+
+class StaticBatchObservation(LogTrajectory):
+    def __init__(
+        self,
+        times: torch.Tensor,
+        data: Dict[str, torch.Tensor],
+        eps: float = 1e-6,
+    ):
+        self.data = data
+        # Add a small amount of time to the observation time to ensure that
+        # the observation occurs after the logging period.
+        self.times = times + eps
+
+        # Require that each data element maps 1:1 with the times.
+        if not all(len(v) == len(times) for v in data.values()):
+            raise ValueError(
+                f"Each data element must have the same length as the passed times. Got lengths "
+                f"{[len(v) for v in data.values()]} for data elements {[k for k in data.keys()]}, but "
+                f"expected length {len(times)}."
+            )
+
+        super().__init__(times)
+
+    def _pyro_post_simulate(self, msg) -> None:
+        dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
+
+        if "in_SEL" not in msg.keys():
+            msg["in_SEL"] = False
+
+        # This checks whether the simulate has already redirected in a InterruptionEventLoop.
+        # If so, we don't want to run the observation again.
+        if msg["in_SEL"]:
+            return
+
+        # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
+        super()._pyro_post_simulate(msg)
+        # This condition checks whether all of the simulate calls have been executed.
+        if len(self.trajectory) == len(self.times):
+            with condition(data=self.data):
+                dynamics.observation(self.trajectory)
+
+            # Reset the trace for the next simulate call.
+            super()._reset()

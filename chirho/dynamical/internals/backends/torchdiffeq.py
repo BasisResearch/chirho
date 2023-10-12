@@ -4,19 +4,18 @@ from typing import Callable, List, Tuple, TypeVar
 import torch
 import torchdiffeq
 
-from chirho.dynamical.handlers.interruption.interruption import (
+from chirho.dynamical.handlers.interruption import (
     DynamicInterruption,
     Interruption,
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.internals.backend import (
+from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics
-from chirho.dynamical.ops.dynamical import State, Trajectory
+from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")

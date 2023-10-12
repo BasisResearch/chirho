@@ -8,10 +8,10 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
+from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory, simulate
 
 if typing.TYPE_CHECKING:
-    from chirho.dynamical.handlers.interruption.interruption import (
+    from chirho.dynamical.handlers.interruption import (
         DynamicInterruption,
         Interruption,
         StaticInterruption,
@@ -104,7 +104,7 @@ def simulate_to_interruption(
     )
     # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
     #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
-    #  a DynamicTrace context.
+    #  a LogTrajectory context.
     event_state = simulate(
         dynamics, start_state, start_time, interruption_time, solver=solver
     )
@@ -134,7 +134,7 @@ def get_next_interruptions(
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], R]:
-    from chirho.dynamical.handlers.interruption.interruption import StaticInterruption
+    from chirho.dynamical.handlers.interruption import StaticInterruption
 
     if isinstance(next_static_interruption, type(None)):
         # If there's no static interruption or the next static interruption is after the end time,

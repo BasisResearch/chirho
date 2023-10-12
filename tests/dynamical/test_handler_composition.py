@@ -7,8 +7,8 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
-    DynamicTrace,
-    SimulatorEventLoop,
+    InterruptionEventLoop,
+    LogTrajectory,
     StaticBatchObservation,
     StaticIntervention,
 )
@@ -61,7 +61,7 @@ vec_obs3 = StaticBatchObservation(times=flight_landing_times, data=flight_landin
 
 def counterf_model():
     with vec_obs3:
-        with SimulatorEventLoop():
+        with InterruptionEventLoop():
             with reparam, twin_world, intervention:
                 return simulate(
                     UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
@@ -74,7 +74,7 @@ def counterf_model():
 
 def conditioned_model():
     # This is equivalent to the following:
-    # with SimulatorEventLoop():
+    # with InterruptionEventLoop():
     #   with vec_obs3:
     #       return simulate(...)
     # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from
@@ -97,11 +97,11 @@ class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
 
 
 def test_shape_twincounterfactual_observation_intervention_commutes():
-    with DynamicTrace(logging_times) as dt:
+    with LogTrajectory(logging_times) as dt:
         with pyro.poutine.trace() as tr:
             conditioned_model()
 
-    ret = dt.trace
+    ret = dt.trajectory
 
     num_worlds = 2
 
