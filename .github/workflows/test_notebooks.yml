@@ -39,9 +39,8 @@ jobs:
         - name: Install Python packages from requirements.txt
           run: |
             pip install --upgrade pip
-            pip install -r docs/source/notebook_requirements.txt 
-            python -m pip install -r docs/source/requirements.txt 
-    
+            pip install -e .[test]
+            
         - name: Run Notebook Test
           run: | 
            ./scripts/test_notebooks.sh
