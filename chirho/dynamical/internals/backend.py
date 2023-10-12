@@ -11,7 +11,7 @@ import torch
 from chirho.dynamical.ops.dynamical import InPlaceDynamics, State, Trajectory, simulate
 
 if typing.TYPE_CHECKING:
-    from chirho.dynamical.handlers.interruption.interruption import (
+    from chirho.dynamical.handlers.interruption import (
         DynamicInterruption,
         Interruption,
         StaticInterruption,
@@ -134,7 +134,7 @@ def get_next_interruptions(
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], R]:
-    from chirho.dynamical.handlers.interruption.interruption import StaticInterruption
+    from chirho.dynamical.handlers.interruption import StaticInterruption
 
     if isinstance(next_static_interruption, type(None)):
         # If there's no static interruption or the next static interruption is after the end time,

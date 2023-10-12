@@ -10,8 +10,8 @@ from chirho.dynamical.handlers import (
     DynamicTrace,
     SimulatorEventLoop,
     StaticObservation,
+    StaticBatchObservation,
 )
-from chirho.dynamical.handlers.interruption.interruption import StaticBatchObservation
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 

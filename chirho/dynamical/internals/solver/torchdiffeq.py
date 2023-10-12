@@ -4,7 +4,7 @@ from typing import Callable, List, Tuple, TypeVar
 import torch
 import torchdiffeq
 
-from chirho.dynamical.handlers.interruption.interruption import (
+from chirho.dynamical.handlers.interruption import (
     DynamicInterruption,
     Interruption,
     StaticInterruption,
