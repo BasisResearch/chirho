@@ -1,4 +1,5 @@
 import numbers
+import typing
 from typing import (
     FrozenSet,
     Generic,
@@ -6,7 +7,6 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
-    runtime_checkable,
 )
 
 import pyro
@@ -91,13 +91,13 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
         return ret
 
 
-@runtime_checkable
+@typing.runtime_checkable
 class InPlaceDynamics(Protocol[S]):
     def diff(self, __state: State[S], __dstate: State[S]) -> None:
         ...
 
 
-@runtime_checkable
+@typing.runtime_checkable
 class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
     def diff(self, __state: State[S], __dstate: State[S]) -> None:
         ...
@@ -121,7 +121,7 @@ def simulate(
     """
     from chirho.dynamical.internals.backend import Solver, get_solver, simulate_point
 
-    solver_: Solver = solver if solver is not None else get_solver()
+    solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
     return simulate_point(
         solver_, dynamics, initial_state, start_time, end_time, **kwargs
     )
