@@ -9,9 +9,9 @@ from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
     DynamicTrace,
     SimulatorEventLoop,
-    StaticBatchObservation,
     StaticIntervention,
 )
+from chirho.dynamical.handlers.interruption.interruption import StaticBatchObservation
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
