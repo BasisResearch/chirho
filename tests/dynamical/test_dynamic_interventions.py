@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Points at which to measure the state of the system.
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(10.0)
-logging_times = torch.linspace(start_time + 1, end_time - 2, 20)
+logging_times = torch.linspace(start_time + 1, end_time - 2, 10)
 
 # Initial state of the system.
 init_state = State(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
@@ -119,10 +119,12 @@ def test_nested_dynamic_intervention_causes_change(
     )
     firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
 
-    assert torch.any(postfirst_int_mask & ~postsec_int_mask)
+    postfirst_int_presec_int_mask = postfirst_int_mask & ~postsec_int_mask
 
-    postfirst_int_presec_int_traj = trajectory[postfirst_int_mask & ~postsec_int_mask]
-    # noinspection PyTypeChecker
+    assert torch.any(postfirst_int_presec_int_mask), "trivial test case"
+    assert torch.any(postsec_int_mask), "trivial test case"
+
+    postfirst_int_presec_int_traj = trajectory[postfirst_int_presec_int_mask]
     assert torch.all(
         postfirst_int_presec_int_traj.S
         + postfirst_int_presec_int_traj.I
@@ -131,7 +133,6 @@ def test_nested_dynamic_intervention_causes_change(
     )
 
     postsec_int_traj = trajectory[postsec_int_mask]
-    # noinspection PyTypeChecker
     assert torch.all(
         postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
         > (preint_total + firstis.S + secondis.S) * 0.95
