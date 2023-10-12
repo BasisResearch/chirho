@@ -104,17 +104,21 @@ def test_point_intervention_causes_difference(
     after = intervene_time < logging_times
     before = ~after
 
-    observational_trajectory_before_int = observational_trajectory[before]
-    intervened_trajectory_before_int = intervened_trajectory[before]
-    assert check_trajectories_match(
-        observational_trajectory_before_int, intervened_trajectory_before_int
-    )
+    assert torch.any(before) or torch.any(after), "trivial test case"
 
-    observational_trajectory_after_int = observational_trajectory[after]
-    intervened_trajectory_after_int = intervened_trajectory[after]
-    assert check_trajectories_match_in_all_but_values(
-        observational_trajectory_after_int, intervened_trajectory_after_int
-    )
+    if torch.any(before):
+        observational_trajectory_before_int = observational_trajectory[before]
+        intervened_trajectory_before_int = intervened_trajectory[before]
+        assert check_trajectories_match(
+            observational_trajectory_before_int, intervened_trajectory_before_int
+        )
+
+    if torch.any(after):
+        observational_trajectory_after_int = observational_trajectory[after]
+        intervened_trajectory_after_int = intervened_trajectory[after]
+        assert check_trajectories_match_in_all_but_values(
+            observational_trajectory_after_int, intervened_trajectory_after_int
+        )
 
 
 # TODO test what happens when the intervention time is exactly at the start of the time span.

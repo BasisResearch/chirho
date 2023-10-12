@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Points at which to measure the state of the system.
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(10.0)
-logging_times = torch.linspace(start_time + 1, end_time - 2, 5)
+logging_times = torch.linspace(start_time + 1, end_time - 2, 20)
 
 # Initial state of the system.
 init_state = State(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
@@ -118,6 +118,8 @@ def test_nested_dynamic_intervention_causes_change(
         else (postint_mask2, postint_mask1)
     )
     firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
+
+    assert torch.any(postfirst_int_mask & ~postsec_int_mask)
 
     postfirst_int_presec_int_traj = trajectory[postfirst_int_mask & ~postsec_int_mask]
     # noinspection PyTypeChecker
