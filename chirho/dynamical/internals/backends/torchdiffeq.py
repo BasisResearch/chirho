@@ -1,5 +1,5 @@
 import functools
-from typing import Callable, FrozenSet, List, Tuple, TypeVar
+from typing import Callable, List, Tuple, TypeVar
 
 import torch
 import torchdiffeq
@@ -10,6 +10,7 @@ from chirho.dynamical.handlers.interruption import (
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals._utils import _var_order
 from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
@@ -19,11 +20,6 @@ from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-@functools.cache
-def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
-    return tuple(sorted(varnames))
 
 
 # noinspection PyMethodParameters
