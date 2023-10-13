@@ -77,6 +77,6 @@ def _append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
     return torch.cat([prev_v, curr_v], dim=time_dim)
 
 
-@functools.cache
+@functools.lru_cache
 def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
