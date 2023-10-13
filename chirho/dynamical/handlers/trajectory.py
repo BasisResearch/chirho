@@ -36,7 +36,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
         dynamics, initial_state, start_time, end_time = msg["args"]
         if msg["kwargs"].get("solver", None) is not None:
-            solver: Solver = typing.cast(Solver, msg["kwargs"]["solver"])
+            solver = typing.cast(Solver, msg["kwargs"]["solver"])
         else:
             solver = get_solver()
 
