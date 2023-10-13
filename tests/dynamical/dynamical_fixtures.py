@@ -1,10 +1,10 @@
-from typing import TypeVar, Union
+from typing import TypeVar
 
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
-from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
+from chirho.dynamical.ops import InPlaceDynamics, State
 
 T = TypeVar("T")
 
@@ -30,7 +30,7 @@ class UnifiedFixtureDynamics(InPlaceDynamics):
         dX.I = beta * X.S * X.I - self.gamma * X.I  # noqa
         dX.R = self.gamma * X.I
 
-    def _unit_measurement_error(self, name: str, x: torch.tensor):
+    def _unit_measurement_error(self, name: str, x: torch.Tensor):
         if x.ndim == 0:
             return pyro.sample(name, Normal(x, 1))
         else:
@@ -51,15 +51,13 @@ def bayes_sir_model():
     return sir
 
 
-def check_keys_match(
-    obj1: Union[Trajectory[T], State[T]], obj2: Union[Trajectory[T], State[T]]
-):
+def check_keys_match(obj1: State[T], obj2: State[T]):
     assert obj1.keys == obj2.keys, "Objects have different variables."
     return True
 
 
 def check_trajectory_length_match(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
+    traj1: State[torch.Tensor], traj2: State[torch.Tensor]
 ):
     for k in traj1.keys:
         assert len(getattr(traj2, k)) == len(
@@ -68,9 +66,7 @@ def check_trajectory_length_match(
     return True
 
 
-def check_trajectories_match(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
-):
+def check_trajectories_match(traj1: State[torch.Tensor], traj2: State[torch.Tensor]):
     assert check_keys_match(traj1, traj2)
 
     assert check_trajectory_length_match(traj1, traj2)
@@ -83,7 +79,7 @@ def check_trajectories_match(
     return True
 
 
-def check_states_match(state1: State[torch.tensor], state2: State[torch.tensor]):
+def check_states_match(state1: State[torch.Tensor], state2: State[torch.Tensor]):
     assert check_keys_match(state1, state2)
 
     for k in state1.keys:
@@ -95,7 +91,7 @@ def check_states_match(state1: State[torch.tensor], state2: State[torch.tensor])
 
 
 def check_trajectories_match_in_all_but_values(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
+    traj1: State[torch.Tensor], traj2: State[torch.Tensor]
 ):
     assert check_keys_match(traj1, traj2)
 

@@ -16,7 +16,7 @@ from chirho.dynamical.internals.solver import (
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
+from chirho.dynamical.ops import InPlaceDynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
@@ -57,7 +57,7 @@ def _torchdiffeq_ode_simulate_inner(
         **odeint_kwargs,
     )
 
-    trajectory: Trajectory[torch.Tensor] = Trajectory()
+    trajectory: State[torch.Tensor] = State()
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -136,7 +136,7 @@ def torchdiffeq_ode_simulate_trajectory(
     dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
-) -> Trajectory[torch.Tensor]:
+) -> State[torch.Tensor]:
     return _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )

@@ -42,10 +42,6 @@ class State(Generic[T]):
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
-class Trajectory(Generic[T], State[T]):
-    pass
-
-
 @typing.runtime_checkable
 class InPlaceDynamics(Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
@@ -57,7 +53,7 @@ class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
         ...
 
-    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
+    def observation(self, __state: State[S]) -> None:
         ...
 
 
