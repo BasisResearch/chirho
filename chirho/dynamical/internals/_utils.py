@@ -75,3 +75,7 @@ def _append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
     prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
     curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
     return torch.cat([prev_v, curr_v], dim=time_dim)
+
+
+def _trajectory_to_state(traj: Trajectory[T]) -> State[T]:
+    return State(**{k: getattr(traj, k).squeeze(-1) for k in traj.keys})

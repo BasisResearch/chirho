@@ -10,6 +10,7 @@ from chirho.dynamical.handlers.interruption import (
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals._utils import _trajectory_to_state
 from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
@@ -125,7 +126,7 @@ def torchdiffeq_ode_simulate(
 
     final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
     final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-    final_state = final_state_traj.to_state()
+    final_state = _trajectory_to_state(final_state_traj)
     return final_state
 
 

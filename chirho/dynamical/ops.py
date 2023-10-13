@@ -42,18 +42,8 @@ class State(Generic[T]):
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
-class _Sliceable(Protocol[T_co]):
-    def squeeze(self, dim: int) -> "_Sliceable[T_co]":
-        ...
-
-
-class Trajectory(Generic[T], State[_Sliceable[T]]):
-    def to_state(self) -> State[T]:
-        ret: State[T] = State(
-            # TODO support event_dim > 0
-            **{k: getattr(self, k).squeeze(-1) for k in self.keys}
-        )
-        return ret
+class Trajectory(Generic[T], State[T]):
+    pass
 
 
 @typing.runtime_checkable
