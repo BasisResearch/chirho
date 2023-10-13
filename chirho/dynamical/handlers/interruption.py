@@ -7,6 +7,7 @@ import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.ops import ObservableInPlaceDynamics, State
+from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
 from chirho.observational.ops import Observation
@@ -152,6 +153,7 @@ class StaticBatchObservation(LogTrajectory):
         self,
         times: torch.Tensor,
         data: Dict[str, torch.Tensor],
+        *,
         eps: float = 1e-6,
     ):
         self.data = data
@@ -170,22 +172,23 @@ class StaticBatchObservation(LogTrajectory):
         super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
-
-        if "in_SEL" not in msg.keys():
-            msg["in_SEL"] = False
+        super()._pyro_post_simulate(msg)
 
         # This checks whether the simulate has already redirected in a InterruptionEventLoop.
         # If so, we don't want to run the observation again.
-        if msg["in_SEL"]:
+        if msg.setdefault("in_SEL", False):
             return
 
-        # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
-        super()._pyro_post_simulate(msg)
-        # This condition checks whether all of the simulate calls have been executed.
-        if len(self.trajectory) == len(self.times):
+        # TODO remove this redundant check by fixing semantics of LogTrajectory and simulate
+        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim["__time"] = -1
+        len_traj = (
+            0
+            if not self.trajectory.keys
+            else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
+        )
+
+        if len_traj == len(self.times):
+            dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
             with condition(data=self.data):
                 dynamics.observation(self.trajectory)
-
-            # Reset the trace for the next simulate call.
-            super()._reset()
