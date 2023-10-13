@@ -60,6 +60,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             timespan,
         )
 
+        # TODO support dim != -1
         idx_name = "__time"
         name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
         name_to_dim[idx_name] = -1

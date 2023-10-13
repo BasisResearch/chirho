@@ -16,6 +16,7 @@ from chirho.dynamical.internals.solver import (
     simulate_trajectory,
 )
 from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
+from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -116,7 +117,16 @@ def torchdiffeq_ode_simulate(
     trajectory = _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )
-    return trajectory[timespan == timespan[-1]].to_state()
+
+    # TODO support dim != -1
+    idx_name = "__time"
+    name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+    name_to_dim[idx_name] = -1
+
+    final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
+    final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
+    final_state = final_state_traj.to_state()
+    return final_state
 
 
 @simulate_trajectory.register(TorchDiffEq)

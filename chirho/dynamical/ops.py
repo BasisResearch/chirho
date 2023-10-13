@@ -5,8 +5,6 @@ from typing import FrozenSet, Generic, Optional, Protocol, TypeVar, Union
 import pyro
 import torch
 
-from chirho.indexed.ops import IndexSet, gather, get_index_plates
-
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
@@ -45,28 +43,11 @@ class State(Generic[T]):
 
 
 class _Sliceable(Protocol[T_co]):
-    def __getitem__(self, key: torch.Tensor) -> Union[T_co, "_Sliceable[T_co]"]:
-        ...
-
     def squeeze(self, dim: int) -> "_Sliceable[T_co]":
         ...
 
 
 class Trajectory(Generic[T], State[_Sliceable[T]]):
-    def __getitem__(self, key: torch.Tensor) -> "Trajectory[T]":
-        assert key.dtype == torch.bool
-
-        assert len(key.shape) == 1 and key.shape[0] > 1  # DEBUG
-
-        if not key.any():  # DEBUG
-            return Trajectory()
-
-        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
-        name_to_dim["__time"] = -1
-        idx = IndexSet(__time={i for i in range(key.shape[0]) if key[i]})
-        # TODO support event_dim > 0
-        return gather(self, idx, event_dim=0, name_to_dim=name_to_dim)
-
     def to_state(self) -> State[T]:
         ret: State[T] = State(
             # TODO support event_dim > 0
