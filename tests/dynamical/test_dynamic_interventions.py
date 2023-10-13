@@ -106,8 +106,12 @@ def test_nested_dynamic_intervention_causes_change(
     postint_mask2 = trajectory.R > ts2.R
     preint_mask = ~(postint_mask1 | postint_mask2)
 
+    # TODO support dim != -1
+    name_to_dim = {"__time": -1}
+    preint_idx = IndexSet(__time=set(i for i in range(len(preint_mask)) if preint_mask[i]))
+
     # Make sure all points before the intervention maintain the same total population.
-    preint_traj = trajectory[preint_mask]
+    preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
     assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
 
     # Make sure all points after the first intervention, but before the second, include the added population of that
@@ -125,7 +129,9 @@ def test_nested_dynamic_intervention_causes_change(
         postsec_int_mask
     ), "trivial test case"
 
-    postfirst_int_presec_int_traj = trajectory[postfirst_int_presec_int_mask]
+    postfirst_int_presec_int_idx = IndexSet(__time=set(i for i in range(len(postfirst_int_presec_int_mask)) if postfirst_int_presec_int_mask[i]))
+
+    postfirst_int_presec_int_traj = gather(trajectory, postfirst_int_presec_int_idx, name_to_dim=name_to_dim)
     assert torch.all(
         postfirst_int_presec_int_traj.S
         + postfirst_int_presec_int_traj.I
@@ -133,7 +139,9 @@ def test_nested_dynamic_intervention_causes_change(
         > (preint_total + firstis.S) * 0.95
     )
 
-    postsec_int_traj = trajectory[postsec_int_mask]
+    postsec_int_idx = IndexSet(__time=set(i for i in range(len(postsec_int_mask)) if postsec_int_mask[i]))
+
+    postsec_int_traj = gather(trajectory, postsec_int_idx, name_to_dim=name_to_dim)
     assert torch.all(
         postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
         > (preint_total + firstis.S + secondis.S) * 0.95
@@ -175,8 +183,15 @@ def test_dynamic_intervention_causes_change(
     #  so this serves to make sure the intervention actually causes that population influx.
 
     postint_mask = trajectory.R > trigger_state.R
-    postint_traj = trajectory[postint_mask]
-    preint_traj = trajectory[~postint_mask]
+
+    # TODO support dim != -1
+    name_to_dim = {"__time": -1}
+
+    preint_idx = IndexSet(__time=set(i for i in range(len(postint_mask)) if not postint_mask[i]))
+    postint_idx = IndexSet(__time=set(i for i in range(len(postint_mask)) if postint_mask[i]))
+
+    postint_traj = gather(trajectory, postint_idx, name_to_dim=name_to_dim)
+    preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
 
     # Make sure all points before the intervention maintain the same total population.
     assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
