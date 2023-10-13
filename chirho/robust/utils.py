@@ -61,9 +61,11 @@ def _conjugate_gradient(
         mu = newrdotr / rdotr
         p = r + mu * p
 
-        rdotr = newrdotr
-        if rdotr < residual_tol:
-            break
+        # Still executes loop but effectively stops update (can't break loop since we're using vmap)
+        # rdotr = torch.where(rdotr < residual_tol, rdotr, newrdotr)
+        # rdotr = newrdotr
+        # if rdotr < residual_tol:
+        #     break
     return x
 
 

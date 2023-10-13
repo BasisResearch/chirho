@@ -66,7 +66,9 @@ def one_step_correction(
     *,
     pointwise_influence: bool = False,
     n_monte_carlo: int = None,
-    cg_iters: int = 1000,
+    cg_iters: Optional[
+        int
+    ] = None,  # TODO: make this None and default to dim(theta_hat) max 1000
     obs_names: Optional[List[str]] = None,
 ) -> torch.tensor:
     r"""
@@ -100,6 +102,11 @@ def one_step_correction(
     )
     flat_theta = _flatten_dict(theta_hat)
     theta_dim = flat_theta.shape[0]
+
+    if cg_iters is None:
+        cg_iters = min(theta_dim, 1000)
+
+    assert cg_iters <= theta_dim
 
     if n_monte_carlo is None:
         n_monte_carlo = 25 * theta_dim  # 25 samples per parameter
@@ -141,18 +148,17 @@ def one_step_correction(
 
     # Compute inverse fisher information x scores_test, where
     # fisher information is approximated by simulating data from the model
-    efficient_influence_fn_vals = torch.zeros(scores_test.shape[0])
     sim_data = simulate_data_from_model(model, theta_hat, n_monte_carlo, obs_names)
 
-    # TODO: use functorch to vectorize this loop. Current for loop severely slows method down
-    # if `pointwise_influence` = True and `X_test` is large.
-    for j, score in enumerate(scores_test):
-        inv_fish_score = empirical_inverse_fisher_vp(
+    @torch.vmap
+    def f(score):
+        return empirical_inverse_fisher_vp(
             log_likelihood_fn, flat_theta, score, sim_data, cg_iters=cg_iters
         )
-        efficient_influence_fn_vals[j] = plug_in_grads.dot(inv_fish_score).item()
 
-    return efficient_influence_fn_vals
+    assert not f(scores_test).isnan().any()
+
+    return torch.einsum("p,np->n", plug_in_grads, f(scores_test))
 
 
 def bayesian_one_step_correction():
