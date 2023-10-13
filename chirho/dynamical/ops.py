@@ -8,7 +8,6 @@ import torch
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
 
 
 class State(Generic[T]):
