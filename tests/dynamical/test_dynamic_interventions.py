@@ -108,7 +108,9 @@ def test_nested_dynamic_intervention_causes_change(
 
     # TODO support dim != -1
     name_to_dim = {"__time": -1}
-    preint_idx = IndexSet(__time=set(i for i in range(len(preint_mask)) if preint_mask[i]))
+    preint_idx = IndexSet(
+        __time=set(i for i in range(len(preint_mask)) if preint_mask[i])
+    )
 
     # Make sure all points before the intervention maintain the same total population.
     preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
@@ -129,9 +131,17 @@ def test_nested_dynamic_intervention_causes_change(
         postsec_int_mask
     ), "trivial test case"
 
-    postfirst_int_presec_int_idx = IndexSet(__time=set(i for i in range(len(postfirst_int_presec_int_mask)) if postfirst_int_presec_int_mask[i]))
+    postfirst_int_presec_int_idx = IndexSet(
+        __time=set(
+            i
+            for i in range(len(postfirst_int_presec_int_mask))
+            if postfirst_int_presec_int_mask[i]
+        )
+    )
 
-    postfirst_int_presec_int_traj = gather(trajectory, postfirst_int_presec_int_idx, name_to_dim=name_to_dim)
+    postfirst_int_presec_int_traj = gather(
+        trajectory, postfirst_int_presec_int_idx, name_to_dim=name_to_dim
+    )
     assert torch.all(
         postfirst_int_presec_int_traj.S
         + postfirst_int_presec_int_traj.I
@@ -139,7 +149,9 @@ def test_nested_dynamic_intervention_causes_change(
         > (preint_total + firstis.S) * 0.95
     )
 
-    postsec_int_idx = IndexSet(__time=set(i for i in range(len(postsec_int_mask)) if postsec_int_mask[i]))
+    postsec_int_idx = IndexSet(
+        __time=set(i for i in range(len(postsec_int_mask)) if postsec_int_mask[i])
+    )
 
     postsec_int_traj = gather(trajectory, postsec_int_idx, name_to_dim=name_to_dim)
     assert torch.all(
@@ -187,8 +199,12 @@ def test_dynamic_intervention_causes_change(
     # TODO support dim != -1
     name_to_dim = {"__time": -1}
 
-    preint_idx = IndexSet(__time=set(i for i in range(len(postint_mask)) if not postint_mask[i]))
-    postint_idx = IndexSet(__time=set(i for i in range(len(postint_mask)) if postint_mask[i]))
+    preint_idx = IndexSet(
+        __time=set(i for i in range(len(postint_mask)) if not postint_mask[i])
+    )
+    postint_idx = IndexSet(
+        __time=set(i for i in range(len(postint_mask)) if postint_mask[i])
+    )
 
     postint_traj = gather(trajectory, postint_idx, name_to_dim=name_to_dim)
     preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
