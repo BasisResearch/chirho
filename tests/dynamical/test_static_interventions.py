@@ -118,7 +118,7 @@ def test_point_intervention_causes_difference(
     intervened_trajectory_before_int = gather(
         intervened_trajectory, before_idx, name_to_dim=name_to_dim
     )
-    assert check_trajectories_match(
+    assert after.all() or check_trajectories_match(
         observational_trajectory_before_int, intervened_trajectory_before_int
     )
 
@@ -128,7 +128,7 @@ def test_point_intervention_causes_difference(
     intervened_trajectory_after_int = gather(
         intervened_trajectory, after_idx, name_to_dim=name_to_dim
     )
-    assert check_trajectories_match_in_all_but_values(
+    assert before.all() or check_trajectories_match_in_all_but_values(
         observational_trajectory_after_int, intervened_trajectory_after_int
     )
 
