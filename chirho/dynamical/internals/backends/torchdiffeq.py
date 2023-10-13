@@ -1,5 +1,5 @@
 import functools
-from typing import Callable, List, Tuple, TypeVar
+from typing import Callable, FrozenSet, List, Tuple, TypeVar
 
 import torch
 import torchdiffeq
@@ -19,6 +19,11 @@ from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
 
 S = TypeVar("S")
 T = TypeVar("T")
+
+
+@functools.cache
+def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
+    return tuple(sorted(varnames))
 
 
 # noinspection PyMethodParameters
@@ -46,7 +51,7 @@ def _torchdiffeq_ode_simulate_inner(
     timespan,
     **odeint_kwargs,
 ):
-    var_order = initial_state.var_order  # arbitrary, but fixed
+    var_order = _var_order(initial_state.keys)  # arbitrary, but fixed
 
     solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(_deriv, dynamics, var_order),
@@ -141,15 +146,17 @@ def torchdiffeq_get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
+    var_order = _var_order(start_state.keys)  # arbitrary, but fixed
+
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
-        next_static_interruption, dynamic_interruptions, start_state.var_order
+        next_static_interruption, dynamic_interruptions, var_order
     )
 
     # Simulate to the event execution.
     event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
-        functools.partial(_deriv, dynamics, start_state.var_order),
-        tuple(getattr(start_state, v) for v in start_state.var_order),
+        functools.partial(_deriv, dynamics, var_order),
+        tuple(getattr(start_state, v) for v in var_order),
         start_time,
         event_fn=combined_event_f,
         **solver.odeint_kwargs,
