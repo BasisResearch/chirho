@@ -27,7 +27,7 @@ using a sine initial condition:
       0 |_______________________________________________________
          0                          0.5                        1
 
-# This script copied from:
+# This script adapted from:
 https://github.com/Ceyron/machine-learning-and-simulation/blob/main/english/fenics/heat_conduction_simple.py
 """
 
@@ -59,9 +59,9 @@ if __name__ == "__main__":
         boundary_boolean_function,
     )
 
-    # The initial condition, u(t=0, x) = sin(pi * x)
+    # The initial condition, u(t=0, x) = sin(2 * pi * x ** 2.)
     initial_condition = fe.Expression(
-        "sin(3.141 * x[0])",
+        "sin(2.0 * 3.141 * x[0] * x[0])",
         degree=1
     )
 
@@ -75,27 +75,18 @@ if __name__ == "__main__":
 
     # The time stepping of the implicit Euler discretization (=dt)
     time_step_length = 0.1
-
-    # The forcing on the rhs of the PDE
-    heat_source = fe.Constant(0.0)
+    diffusivity = fe.Constant(.5)
 
     # Create the Finite Element Problem
     u_trial = fe.TrialFunction(lagrange_polynomial_space_first_order)
     v_test = fe.TestFunction(lagrange_polynomial_space_first_order)
 
     weak_form_residuum = (
-            u_trial * v_test * fe.dx
-            +
-            time_step_length * fe.dot(
-        fe.grad(u_trial),
-        fe.grad(v_test),
-    ) * fe.dx
-            -
-            (
-                    u_old * v_test * fe.dx
-                    +
-                    time_step_length * heat_source * v_test * fe.dx
-            )
+        u_trial * v_test * fe.dx
+        - u_old * v_test * fe.dx
+        + time_step_length * diffusivity * fe.dot(
+            fe.grad(u_trial), fe.grad(v_test)
+        ) * fe.dx
     )
 
     # We have a linear PDE that is separable into a lhs and rhs
