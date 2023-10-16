@@ -4,7 +4,7 @@ from typing import Generic, TypeVar
 import pyro
 import torch
 
-from chirho.dynamical.internals._utils import append
+from chirho.dynamical.internals._utils import _trajectory_to_state, append
 from chirho.dynamical.internals.solver import Solver, get_solver, simulate_trajectory
 from chirho.dynamical.ops import Trajectory
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
@@ -67,4 +67,4 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
         final_state = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-        msg["value"] = final_state.to_state()
+        msg["value"] = _trajectory_to_state(final_state)

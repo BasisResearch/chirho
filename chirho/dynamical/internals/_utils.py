@@ -80,3 +80,7 @@ def _append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
 @functools.lru_cache
 def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
+
+
+def _trajectory_to_state(traj: Trajectory[T]) -> State[T]:
+    return State(**{k: getattr(traj, k).squeeze(-1) for k in traj.keys})
