@@ -106,15 +106,29 @@ def test_point_intervention_causes_difference(
 
     assert torch.any(before) or torch.any(after), "trivial test case"
 
-    observational_trajectory_before_int = observational_trajectory[before]
-    intervened_trajectory_before_int = intervened_trajectory[before]
-    assert check_trajectories_match(
+    # TODO support dim != -1
+    name_to_dim = {"__time": -1}
+
+    before_idx = IndexSet(__time={i for i in range(len(before)) if before[i]})
+    after_idx = IndexSet(__time={i for i in range(len(after)) if after[i]})
+
+    observational_trajectory_before_int = gather(
+        observational_trajectory, before_idx, name_to_dim=name_to_dim
+    )
+    intervened_trajectory_before_int = gather(
+        intervened_trajectory, before_idx, name_to_dim=name_to_dim
+    )
+    assert after.all() or check_trajectories_match(
         observational_trajectory_before_int, intervened_trajectory_before_int
     )
 
-    observational_trajectory_after_int = observational_trajectory[after]
-    intervened_trajectory_after_int = intervened_trajectory[after]
-    assert check_trajectories_match_in_all_but_values(
+    observational_trajectory_after_int = gather(
+        observational_trajectory, after_idx, name_to_dim=name_to_dim
+    )
+    intervened_trajectory_after_int = gather(
+        intervened_trajectory, after_idx, name_to_dim=name_to_dim
+    )
+    assert before.all() or check_trajectories_match_in_all_but_values(
         observational_trajectory_after_int, intervened_trajectory_after_int
     )
 

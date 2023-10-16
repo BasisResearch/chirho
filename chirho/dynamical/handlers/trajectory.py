@@ -7,6 +7,7 @@ import torch
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.internals.solver import Solver, get_solver, simulate_trajectory
 from chirho.dynamical.ops import Trajectory
+from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 T = TypeVar("T")
 
@@ -53,12 +54,17 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             initial_state,
             timespan,
         )
-        idx = (timespan > timespan[0]) & (timespan < timespan[-1])
-        if idx.any():
-            self.trajectory: Trajectory[T] = append(self.trajectory, trajectory[idx])
-        if idx.sum() > len(self.times):
-            raise ValueError(
-                "Multiple simulates were used with a single LogTrajectory handler."
-                "This is currently not supported."
-            )
-        msg["value"] = trajectory[timespan == timespan[-1]].to_state()
+
+        # TODO support dim != -1
+        idx_name = "__time"
+        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim[idx_name] = -1
+
+        if len(timespan) > 2:
+            part_idx = IndexSet(**{idx_name: set(range(1, len(timespan) - 1))})
+            new_part = gather(trajectory, part_idx, name_to_dim=name_to_dim)
+            self.trajectory: Trajectory[T] = append(self.trajectory, new_part)
+
+        final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
+        final_state = gather(trajectory, final_idx, name_to_dim=name_to_dim)
+        msg["value"] = final_state.to_state()

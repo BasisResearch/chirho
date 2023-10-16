@@ -175,8 +175,7 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
             if not self.trajectory.keys
             else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
         )
-        # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
-        # This condition checks whether all of the simulate calls have been executed.
+
         if len_traj == len(self.times):
             dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
             with condition(data=self.data):
