@@ -24,12 +24,12 @@ logging_times = torch.tensor([1.0, 2.0, 3.0])
 def test_logging():
     sir = bayes_sir_model()
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt1:
         result1 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt2:
         with InterruptionEventLoop():
             result2 = simulate(

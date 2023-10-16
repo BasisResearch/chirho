@@ -18,10 +18,6 @@ class State(Generic[T]):
             setattr(self, k, v)
 
     @property
-    def var_order(self):
-        return tuple(sorted(self.keys))
-
-    @property
     def keys(self) -> FrozenSet[str]:
         return frozenset(self.__dict__["_values"].keys())
 

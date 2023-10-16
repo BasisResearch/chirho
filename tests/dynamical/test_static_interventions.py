@@ -66,13 +66,13 @@ def test_point_intervention_causes_difference(
     intervene_time,
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as intervened_dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -156,13 +156,13 @@ def test_nested_point_interventions_cause_difference(
     intervene_time2,
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as intervened_dt:
         with InterruptionEventLoop():
             with StaticIntervention(
@@ -223,7 +223,7 @@ def test_twinworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -258,7 +258,7 @@ def test_multiworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -292,7 +292,7 @@ def test_split_odeint_broadcast(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with TwinWorldCounterfactual() as cf:
             cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
