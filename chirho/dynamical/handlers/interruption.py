@@ -6,7 +6,7 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops import ObservableInPlaceDynamics, State
+from chirho.dynamical.ops import Observable, State
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
@@ -90,7 +90,7 @@ class _PointObservationMixin(Generic[T]):
     time: R
 
     def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
+        dynamics: Observable[T] = msg["args"][0]
         current_state: State[T] = msg["args"][1]
 
         with condition(data=self.data):
@@ -178,6 +178,6 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
         # This condition checks whether all of the simulate calls have been executed.
         if len_traj == len(self.times):
-            dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
+            dynamics: Observable[T] = msg["args"][0]
             with condition(data=self.data):
                 dynamics.observation(self.trajectory)

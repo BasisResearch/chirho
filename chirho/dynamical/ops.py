@@ -72,17 +72,14 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
 
 
 @typing.runtime_checkable
-class InPlaceDynamics(Protocol[S]):
-    def diff(self, __dstate: State[S], __state: State[S]) -> None:
+class Observable(Protocol[S]):
+    def observation(self, __state: State[S]) -> None:
         ...
 
 
 @typing.runtime_checkable
-class ObservableInPlaceDynamics(InPlaceDynamics[S], Protocol[S]):
+class InPlaceDynamics(Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
-        ...
-
-    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
         ...
 
 
