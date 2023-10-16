@@ -150,4 +150,7 @@ def main():
 
 
 if __name__ == '__main__':
+    import time
+    t0 = time.time()
     main()
+    print(f"Time taken: {time.time() - t0:.2f}s")
