@@ -82,5 +82,5 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
-def _trajectory_to_state(traj: State[T]) -> State[T]:
+def _squeeze_time_dim(traj: State[T]) -> State[T]:
     return State(**{k: getattr(traj, k).squeeze(-1) for k in traj.keys})
