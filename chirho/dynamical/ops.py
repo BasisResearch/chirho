@@ -73,7 +73,7 @@ class Trajectory(Generic[T], State[_Sliceable[T]]):
 
 @typing.runtime_checkable
 class Observable(Protocol[S]):
-    def observation(self, __state: State[S]) -> None:
+    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
         ...
 
 
