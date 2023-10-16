@@ -10,6 +10,7 @@ from chirho.dynamical.handlers.interruption import (
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals._utils import _var_order
 from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
@@ -47,7 +48,7 @@ def _torchdiffeq_ode_simulate_inner(
     timespan,
     **odeint_kwargs,
 ):
-    var_order = initial_state.var_order  # arbitrary, but fixed
+    var_order = _var_order(initial_state.keys)  # arbitrary, but fixed
 
     solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(_deriv, dynamics, var_order),
@@ -151,15 +152,17 @@ def torchdiffeq_get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
+    var_order = _var_order(start_state.keys)  # arbitrary, but fixed
+
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
-        next_static_interruption, dynamic_interruptions, start_state.var_order
+        next_static_interruption, dynamic_interruptions, var_order
     )
 
     # Simulate to the event execution.
     event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
-        functools.partial(_deriv, dynamics, start_state.var_order),
-        tuple(getattr(start_state, v) for v in start_state.var_order),
+        functools.partial(_deriv, dynamics, var_order),
+        tuple(getattr(start_state, v) for v in var_order),
         start_time,
         event_fn=combined_event_f,
         **solver.odeint_kwargs,
