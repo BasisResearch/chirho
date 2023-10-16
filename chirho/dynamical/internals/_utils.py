@@ -3,7 +3,7 @@ from typing import FrozenSet, Tuple, TypeVar
 
 import torch
 
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops import State, get_keys
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 
@@ -16,7 +16,7 @@ def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet
     return union(
         *(
             indices_of(getattr(state, k), event_dim=event_dim, **kwargs)
-            for k in state.keys
+            for k in get_keys(state)
         )
     )
 
@@ -28,7 +28,7 @@ def _gather_state(
     return type(state)(
         **{
             k: gather(getattr(state, k), indices, event_dim=event_dim, **kwargs)
-            for k in state.keys
+            for k in get_keys(state)
         }
     )
 
@@ -36,7 +36,7 @@ def _gather_state(
 @intervene.register(State)
 def _state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
     new_state: State[T] = State()
-    for k in obs.keys:
+    for k in get_keys(obs):
         setattr(
             new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
         )
@@ -50,19 +50,19 @@ def append(fst, rest: T) -> T:
 
 @append.register(State)
 def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
-    if len(traj1.keys) == 0:
+    if len(get_keys(traj1)) == 0:
         return traj2
 
-    if len(traj2.keys) == 0:
+    if len(get_keys(traj2)) == 0:
         return traj1
 
-    if traj1.keys != traj2.keys:
+    if get_keys(traj1) != get_keys(traj2):
         raise ValueError(
-            f"Trajectories must have the same keys to be appended, but got {traj1.keys} and {traj2.keys}."
+            f"Trajectories must have the same keys to be appended, but got {get_keys(traj1)} and {get_keys(traj2)}."
         )
 
     result: State[T] = State()
-    for k in traj1.keys:
+    for k in get_keys(traj1):
         setattr(result, k, append(getattr(traj1, k), getattr(traj2, k)))
 
     return result
@@ -83,4 +83,4 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
 
 
 def _squeeze_time_dim(traj: State[T]) -> State[T]:
-    return State(**{k: getattr(traj, k).squeeze(-1) for k in traj.keys})
+    return State(**{k: getattr(traj, k).squeeze(-1) for k in get_keys(traj)})

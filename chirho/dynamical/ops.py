@@ -12,14 +12,9 @@ T = TypeVar("T")
 
 class State(Generic[T]):
     def __init__(self, **values: T):
-        # self.class_name =
         self.__dict__["_values"] = {}
         for k, v in values.items():
             setattr(self, k, v)
-
-    @property
-    def keys(self) -> FrozenSet[str]:
-        return frozenset(self.__dict__["_values"].keys())
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}({self.__dict__['_values']})"
@@ -35,6 +30,10 @@ class State(Generic[T]):
             return self.__dict__["_values"][__name]
         else:
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
+
+
+def get_keys(state: State[T]) -> FrozenSet[str]:
+    return frozenset(state.__dict__["_values"].keys())
 
 
 @typing.runtime_checkable

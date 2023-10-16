@@ -16,7 +16,7 @@ from chirho.dynamical.internals.solver import (
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics, State
+from chirho.dynamical.ops import InPlaceDynamics, State, get_keys
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
@@ -35,7 +35,7 @@ def _deriv(
     for var, value in zip(var_order, state):
         setattr(env, var, value)
 
-    assert "t" not in env.keys, "variable name t is reserved for time"
+    assert "t" not in get_keys(env), "variable name t is reserved for time"
     env.t = time
 
     dynamics.diff(ddt, env)
@@ -48,7 +48,7 @@ def _torchdiffeq_ode_simulate_inner(
     timespan,
     **odeint_kwargs,
 ):
-    var_order = _var_order(initial_state.keys)  # arbitrary, but fixed
+    var_order = _var_order(get_keys(initial_state))  # arbitrary, but fixed
 
     solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(_deriv, dynamics, var_order),
@@ -152,7 +152,7 @@ def torchdiffeq_get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
-    var_order = _var_order(start_state.keys)  # arbitrary, but fixed
+    var_order = _var_order(get_keys(start_state))  # arbitrary, but fixed
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
