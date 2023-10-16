@@ -8,7 +8,6 @@ import torch
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
-T_co = TypeVar("T_co", covariant=True)
 
 
 class State(Generic[T]):
@@ -38,13 +37,9 @@ class State(Generic[T]):
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
-class Trajectory(Generic[T], State[T]):
-    pass
-
-
 @typing.runtime_checkable
 class Observable(Protocol[S]):
-    def observation(self, __state: Union[State[S], Trajectory[S]]) -> None:
+    def observation(self, __state: State[S]) -> None:
         ...
 
 

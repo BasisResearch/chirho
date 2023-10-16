@@ -3,7 +3,7 @@ from typing import FrozenSet, Tuple, TypeVar
 
 import torch
 
-from chirho.dynamical.ops import State, Trajectory
+from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 
@@ -48,8 +48,8 @@ def append(fst, rest: T) -> T:
     raise NotImplementedError(f"append not implemented for type {type(fst)}.")
 
 
-@append.register(Trajectory)
-def _append_trajectory(traj1: Trajectory[T], traj2: Trajectory[T]) -> Trajectory[T]:
+@append.register(State)
+def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
     if len(traj1.keys) == 0:
         return traj2
 
@@ -61,7 +61,7 @@ def _append_trajectory(traj1: Trajectory[T], traj2: Trajectory[T]) -> Trajectory
             f"Trajectories must have the same keys to be appended, but got {traj1.keys} and {traj2.keys}."
         )
 
-    result: Trajectory[T] = Trajectory()
+    result: State[T] = State()
     for k in traj1.keys:
         setattr(result, k, append(getattr(traj1, k), getattr(traj2, k)))
 
@@ -82,5 +82,5 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
-def _trajectory_to_state(traj: Trajectory[T]) -> State[T]:
+def _squeeze_time_dim(traj: State[T]) -> State[T]:
     return State(**{k: getattr(traj, k).squeeze(-1) for k in traj.keys})

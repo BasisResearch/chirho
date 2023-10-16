@@ -10,13 +10,13 @@ from chirho.dynamical.handlers.interruption import (
     StaticInterruption,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.internals._utils import _trajectory_to_state, _var_order
+from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
+from chirho.dynamical.ops import InPlaceDynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
@@ -57,7 +57,7 @@ def _torchdiffeq_ode_simulate_inner(
         **odeint_kwargs,
     )
 
-    trajectory: Trajectory[torch.Tensor] = Trajectory()
+    trajectory: State[torch.Tensor] = State()
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -126,7 +126,7 @@ def torchdiffeq_ode_simulate(
 
     final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
     final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-    final_state = _trajectory_to_state(final_state_traj)
+    final_state = _squeeze_time_dim(final_state_traj)
     return final_state
 
 
@@ -136,7 +136,7 @@ def torchdiffeq_ode_simulate_trajectory(
     dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
-) -> Trajectory[torch.Tensor]:
+) -> State[torch.Tensor]:
     return _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )

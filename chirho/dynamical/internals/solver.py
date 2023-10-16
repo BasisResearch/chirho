@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory, simulate
+from chirho.dynamical.ops import InPlaceDynamics, State, simulate
 
 if typing.TYPE_CHECKING:
     from chirho.dynamical.handlers.interruption import (
@@ -63,7 +63,7 @@ def simulate_trajectory(
     initial_state: State[T],
     timespan: R,
     **kwargs,
-) -> Trajectory[T]:
+) -> State[T]:
     """
     Simulate a dynamical system.
     """
