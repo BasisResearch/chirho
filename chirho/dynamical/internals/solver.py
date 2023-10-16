@@ -187,5 +187,5 @@ def check_dynamics(
     Returns True if the dynamics are valid for the solver, False otherwise.
     """
     raise NotImplementedError(
-        f"check_dynamics not implemented for type {type(dynamics)}"
+        f"check_dynamics not implemented for type {type(solver)}"
     )
