@@ -170,3 +170,22 @@ def get_next_interruptions_dynamic(
     raise NotImplementedError(
         f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
     )
+
+
+@functools.singledispatch
+def check_dynamics(
+    solver: Solver,
+    dynamics: InPlaceDynamics[T],
+    state: State[T],
+    time: R,
+) -> bool:
+    """
+    One-sided runtime check of whether the dynamics are valid for the solver.
+    These checks should only be used for debugging, as they are not guaranteed to be
+    correct. They are also not guaranteed to be efficient.
+
+    Returns True if the dynamics are valid for the solver, False otherwise.
+    """
+    raise NotImplementedError(
+        f"check_dynamics not implemented for type {type(dynamics)}"
+    )
