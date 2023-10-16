@@ -1,120 +1,155 @@
-# HACK when running osx-64 conda env on M2 mac. Side effects could be an issue:
-# https://stackoverflow.com/a/53014308
-import os
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-
+from heat_over_time import HeatOverTime
+import pyro
+import pyro.distributions as dist
 import torch
-import fenics_overloaded as fe
-import torch_fenics
+import matplotlib.pyplot as plt
+from torch import tensor as tt
+from torch import float64 as f64
 
-# A combination of two sources:
-# https://github.com/Ceyron/machine-learning-and-simulation/blob/main/english/fenics/heat_conduction_simple.py
-# https://github.com/barkm/torch-fenics/blob/master/examples/poisson.py
+pyro.settings.set(module_local_params=True)
 
 
-class HeatOverTime(torch_fenics.FEniCSModule):
+N_ELEMENTS = 32
+SUBSELECT_N_ELEMENTS = 3
 
-    def __init__(self, n_elements=32):
 
-        super().__init__()
+def obs_model(temps: torch.Tensor):
+    # Apply independent normal noise to each element of the obs_temp vector.
+    return pyro.sample('obs_temps', dist.Normal(temps, 0.01).to_event(1))
 
-        self.n_elements = n_elements
 
-        # Mesh on which to build finite element function space.
-        self.mesh = fe.UnitIntervalMesh(n_elements)
+def diffusivity_model(diffusivity: torch.Tensor, obs_time: torch.Tensor, hot: HeatOverTime):
 
-        # Linear lagrangian finite element function.
-        self.V = fe.FunctionSpace(self.mesh, 'Lagrange', 1)
+    # Just a single execution.
+    all_obs_temp = hot(*torch.atleast_2d(diffusivity, obs_time))
+    subselected_elements = all_obs_temp[0, ::N_ELEMENTS // (SUBSELECT_N_ELEMENTS + 2)][1:-1]
 
-        # Homogeneous Dirichlet boundary condition.
-        self.bc = fe.DirichletBC(
-            self.V,
-            # Boundary condition of zero.
-            fe.Constant(0.0),
-            'on_boundary'
-        )
+    return obs_model(subselected_elements)
 
-        # The initial condition, u(t=0, x) = sin(pi * x)
-        self.initial_condition = fe.Expression(
-            "sin(2.0 * 3.141 * x[0] * x[0])",
-            degree=1
-        )
 
-        self.u_init = fe.interpolate(self.initial_condition, self.V)
+LOW_DIFFUSIVITY = 0.01
+HIGH_DIFFUSIVITY = 2.
 
-        self.u_trial = fe.TrialFunction(self.V)
-        self.v_test = fe.TestFunction(self.V)
 
-    def solve(self, diffusivity, tstep):
+def prior():
+    return pyro.sample('diffusivity', dist.Uniform(
+        tt(LOW_DIFFUSIVITY, dtype=f64),
+        tt(HIGH_DIFFUSIVITY, dtype=f64)
+    ))
 
-        utr = self.u_trial
-        vte = self.v_test
-        uin = self.u_init
 
-        weak_form_residuum = (
-            utr * vte * fe.dx
-            - uin * vte * fe.dx
-            + tstep * diffusivity * fe.dot(
-                fe.grad(utr), fe.grad(vte)
-            ) * fe.dx
-        )
+def model(obs_time: torch.Tensor, hot: HeatOverTime):
 
-        lhs = fe.lhs(weak_form_residuum)
-        rhs = fe.rhs(weak_form_residuum)
+    # diffusivity = pyro.sample('diffusivity', dist.Uniform(0.01, 2.))
+    # As before but float64.
+    diffusivity = prior()
 
-        u_sol = fe.Function(self.V)
+    return diffusivity_model(diffusivity, obs_time, hot)
 
-        # Solve from initial condition out to tstep in time.
-        fe.solve(
-            lhs == rhs,
-            u_sol,
-            self.bc
-        )
 
-        return u_sol
+def run_inference(obs_time: torch.Tensor, hot: HeatOverTime, steps=2000):
 
-    def input_templates(self):
-        # diffusivity, tstep
-        return fe.Constant(0), fe.Constant(0)
+    # FIXME passing the model in here gives a "obs_temp" must be in the trace error when obs_temp is observed.
+    guide = pyro.infer.autoguide.AutoNormal(prior)
+
+    elbo = pyro.infer.Trace_ELBO()(lambda: model(obs_time, hot), guide)
+    elbo()
+    optim = torch.optim.Adam(elbo.parameters(), lr=1e-3)
+
+    losses = []
+
+    for i in range(steps):
+        for param in elbo.parameters():
+            param.grad = None
+        optim.zero_grad()
+
+        loss = elbo()
+        losses.append(loss.clone().detach())
+        loss.backward()
+
+        if i % 500 == 0:
+            print(f"Step {i}, loss {loss}")
+
+        optim.step()
+
+    return losses, guide
 
 
 def main():
+    """
+    Define a very simple pyro model that infers the diffusivity of heat in a unit-length, 1D rod by observing a noisy
+    measurement of the heat at a few points across the rod.
+    """
 
-    diffusivities = torch.linspace(0.1, 1.0, 3, requires_grad=True, dtype=torch.float64)
-    times = torch.linspace(0.0, 1.0, 5, requires_grad=True, dtype=torch.float64)
+    heat_over_time = HeatOverTime(n_elements=N_ELEMENTS)
+    obs_time = tt(3., dtype=f64)
 
-    all_d_t_combos = torch.cartesian_prod(diffusivities, times)
-    ds = all_d_t_combos[:, 0]
-    ts = all_d_t_combos[:, 1]
+    # Generate data from one execution.
+    true_diffusivity = tt(0.3, dtype=f64)
+    obs_temps = diffusivity_model(true_diffusivity, obs_time, heat_over_time)
+    true_temps = heat_over_time(*torch.atleast_2d(true_diffusivity, obs_time))[0]
+    obs_locs = torch.linspace(0., 1., N_ELEMENTS)[::N_ELEMENTS // (SUBSELECT_N_ELEMENTS + 2)][1:-1]
 
-    heat_over_time = HeatOverTime(n_elements=32)
+    # Run inference.
+    with pyro.condition(data={'obs_temps': obs_temps}):
+        losses, guide = run_inference(obs_time, heat_over_time)
 
-    sols = heat_over_time(ds[:, None], ts[:, None]).reshape(3, 5, heat_over_time.n_elements + 1)
+    plt.figure()
+    plt.plot(losses)
 
-    # FIXME these plots are reversed across x for some reason. Run heat_conduction_simple.py and compare.
-    #  Also see that initial condition is reversed.
-    # sols = sols[:, :, ::-1]
+    def plot_stuff(include_prior):
 
-    for diff_sols in sols:
         plt.figure()
-        for t_sols in diff_sols:
-            plt.plot(t_sols.detach().numpy())
 
-    remaining_heat = sols.sum(axis=-1)
+        if include_prior:
 
-    for di in range(len(diffusivities)):
-        print(f"Grad at termination with diffusivity {di}:")
-        remaining_heat[di, -1].backward()
-        print(diffusivities.grad)
-        print(times.grad)
+            # Spaghetti plot a bunch of thin, low alpha lines to show the prior.
+            for _ in range(500):
+                prior_diffusivity_sample = prior()
+                prior_temps = heat_over_time(*torch.atleast_2d(prior_diffusivity_sample, obs_time))[0]
+                plt.plot(torch.linspace(0., 1., N_ELEMENTS+1).numpy(), prior_temps.detach().numpy(),
+                         color='gray', alpha=0.05, linewidth=0.2)
 
-        # Zero out the grads.
-        diffusivities.grad.zero_()
-        times.grad.zero_()
+        # Note: propagating "confidence levels" from diffusivity to temps doesn't necessarily yield the confidence
+        #  levels of true temps, but for current demonstration purposes this is fine.
+
+        # Plot the inferred diffusivity.
+        inferred_diffusivity_mid = guide.median()['diffusivity']
+        inferred_diffusivity_low = guide.quantiles(0.1)['diffusivity']
+        inferred_diffusivity_high = guide.quantiles(0.9)['diffusivity']
+
+        inferred_temps_mid = heat_over_time(*torch.atleast_2d(inferred_diffusivity_mid, obs_time))[0]
+        inferred_temps_low = heat_over_time(*torch.atleast_2d(inferred_diffusivity_low, obs_time))[0]
+        inferred_temps_high = heat_over_time(*torch.atleast_2d(inferred_diffusivity_high, obs_time))[0]
+
+        plt.plot(torch.linspace(0., 1., N_ELEMENTS+1).numpy(), inferred_temps_mid.detach().numpy(),
+                 label='inferred', color='orange')
+        plt.fill_between(
+            torch.linspace(0., 1., N_ELEMENTS+1).numpy(),
+            inferred_temps_low.detach().numpy(),
+            inferred_temps_high.detach().numpy(),
+            color='orange',
+            alpha=0.3
+        )
+
+        plt.scatter(obs_locs.numpy(), obs_temps.detach().numpy(),
+                    label='observed', color='purple', marker='x')
+        plt.plot(torch.linspace(0., 1., N_ELEMENTS + 1).numpy(), true_temps.detach().numpy(),
+                 label='true', color='purple')
+
+        plt.suptitle(f"Inferring Diffusivity with Known Initial \n "
+                     f"True: {true_diffusivity:.3f} \n"
+                     f"Inferred: {inferred_diffusivity_mid:.3f}")
+
+        plt.ylabel("Temperature")
+        plt.xlabel("Unit Length Rod")
+
+        plt.legend()
+        plt.show()
+
+    plot_stuff(include_prior=False)
+    plot_stuff(include_prior=True)
 
 
-if __name__ == "__main__":
-    import matplotlib.pyplot as plt
+if __name__ == '__main__':
     main()
-
-    plt.show()

@@ -14,6 +14,7 @@ import torch_fenics
 from fenics import *
 from fenics_adjoint import *
 
+
 # Declare the FEniCS model corresponding to solving the Poisson equation
 # with variable source term and boundary value
 class Poisson(torch_fenics.FEniCSModule):
@@ -74,4 +75,5 @@ if __name__ == '__main__':
     dJdf: torch.Tensor = f.grad
     dJdg: torch.Tensor = g.grad
 
-    print(dJdf, dJdg)
+    print("dJdf", dJdf)
+    print("dJdg", dJdg)
