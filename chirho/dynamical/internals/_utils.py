@@ -1,5 +1,5 @@
 import functools
-from typing import TypeVar
+from typing import FrozenSet, Tuple, TypeVar
 
 import torch
 
@@ -75,6 +75,11 @@ def _append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
     prev_v = prev_v.expand(*batch_shape, *prev_v.shape[-1:])
     curr_v = curr_v.expand(*batch_shape, *curr_v.shape[-1:])
     return torch.cat([prev_v, curr_v], dim=time_dim)
+
+
+@functools.lru_cache
+def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
+    return tuple(sorted(varnames))
 
 
 def _trajectory_to_state(traj: Trajectory[T]) -> State[T]:
