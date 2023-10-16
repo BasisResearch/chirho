@@ -28,7 +28,7 @@ def diffusivity_model(diffusivity: torch.Tensor, obs_time: torch.Tensor, hot: He
 
 
 LOW_DIFFUSIVITY = 0.01
-HIGH_DIFFUSIVITY = 2.
+HIGH_DIFFUSIVITY = 1.
 
 
 def prior():
@@ -82,7 +82,7 @@ def main():
     """
 
     heat_over_time = HeatOverTime(n_elements=N_ELEMENTS)
-    obs_time = tt(3., dtype=f64)
+    obs_time = tt(4., dtype=f64)
 
     # Generate data from one execution.
     true_diffusivity = tt(0.3, dtype=f64)
@@ -97,40 +97,39 @@ def main():
     plt.figure()
     plt.plot(losses)
 
+    def plot_cis(diffusivities, color, alpha):
+        assert diffusivities.ndim == 1
+
+        diffusivities = diffusivities[:, None]
+        tempss = heat_over_time(diffusivities, obs_time.expand(*diffusivities.shape))
+
+        # Fill between confidence levels.
+        temps_low = tempss.quantile(0.1, dim=0)
+        temps_high = tempss.quantile(0.9, dim=0)
+
+        plt.fill_between(
+            torch.linspace(0., 1., N_ELEMENTS+1).numpy(),
+            temps_low.detach().numpy(),
+            temps_high.detach().numpy(),
+            color=color,
+            alpha=alpha
+        )
+
     def plot_stuff(include_prior):
 
         plt.figure()
 
         if include_prior:
-
-            # Spaghetti plot a bunch of thin, low alpha lines to show the prior.
-            for _ in range(500):
-                prior_diffusivity_sample = prior()
-                prior_temps = heat_over_time(*torch.atleast_2d(prior_diffusivity_sample, obs_time))[0]
-                plt.plot(torch.linspace(0., 1., N_ELEMENTS+1).numpy(), prior_temps.detach().numpy(),
-                         color='gray', alpha=0.05, linewidth=0.2)
-
-        # Note: propagating "confidence levels" from diffusivity to temps doesn't necessarily yield the confidence
-        #  levels of true temps, but for current demonstration purposes this is fine.
+            plot_cis(tt([prior() for _ in range(500)], dtype=f64), color='blue', alpha=0.05)
+            plt.plot([], [], color='blue', alpha=0.05, label='prior')
 
         # Plot the inferred diffusivity.
-        inferred_diffusivity_mid = guide.median()['diffusivity']
-        inferred_diffusivity_low = guide.quantiles(0.1)['diffusivity']
-        inferred_diffusivity_high = guide.quantiles(0.9)['diffusivity']
+        inferred_diffusivity_med = guide.median()['diffusivity']
+        inferred_temps_med = heat_over_time(*torch.atleast_2d(inferred_diffusivity_med, obs_time))[0]
 
-        inferred_temps_mid = heat_over_time(*torch.atleast_2d(inferred_diffusivity_mid, obs_time))[0]
-        inferred_temps_low = heat_over_time(*torch.atleast_2d(inferred_diffusivity_low, obs_time))[0]
-        inferred_temps_high = heat_over_time(*torch.atleast_2d(inferred_diffusivity_high, obs_time))[0]
-
-        plt.plot(torch.linspace(0., 1., N_ELEMENTS+1).numpy(), inferred_temps_mid.detach().numpy(),
+        plt.plot(torch.linspace(0., 1., N_ELEMENTS+1).numpy(), inferred_temps_med.detach().numpy(),
                  label='inferred', color='orange')
-        plt.fill_between(
-            torch.linspace(0., 1., N_ELEMENTS+1).numpy(),
-            inferred_temps_low.detach().numpy(),
-            inferred_temps_high.detach().numpy(),
-            color='orange',
-            alpha=0.3
-        )
+        plot_cis(tt([guide()['diffusivity'] for _ in range(500)], dtype=f64), color='orange', alpha=0.3)
 
         plt.scatter(obs_locs.numpy(), obs_temps.detach().numpy(),
                     label='observed', color='purple', marker='x')
@@ -139,7 +138,7 @@ def main():
 
         plt.suptitle(f"Inferring Diffusivity with Known Initial \n "
                      f"True: {true_diffusivity:.3f} \n"
-                     f"Inferred: {inferred_diffusivity_mid:.3f}")
+                     f"Inferred: {inferred_diffusivity_med:.3f}")
 
         plt.ylabel("Temperature")
         plt.xlabel("Unit Length Rod")
@@ -147,7 +146,6 @@ def main():
         plt.legend()
         plt.show()
 
-    plot_stuff(include_prior=False)
     plot_stuff(include_prior=True)
 
 
