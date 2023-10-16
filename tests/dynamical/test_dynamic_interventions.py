@@ -81,7 +81,7 @@ def test_nested_dynamic_intervention_causes_change(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with DynamicIntervention(
@@ -157,7 +157,7 @@ def test_dynamic_intervention_causes_change(
     intervene_state,
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with DynamicIntervention(
@@ -216,7 +216,7 @@ def test_split_twinworld_dynamic_intervention(
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with DynamicIntervention(
@@ -264,7 +264,7 @@ def test_split_multiworld_dynamic_intervention(
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with DynamicIntervention(
