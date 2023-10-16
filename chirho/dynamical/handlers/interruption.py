@@ -6,7 +6,7 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops import ObservableInPlaceDynamics, State
+from chirho.dynamical.ops import ObservableInPlaceDynamics, State, get_keys
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.handlers import condition
@@ -172,7 +172,7 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         name_to_dim["__time"] = -1
         len_traj = (
             0
-            if not self.trajectory.keys
+            if not get_keys(self.trajectory)
             else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
         )
 
