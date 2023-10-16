@@ -4,16 +4,16 @@ from typing import Generic, TypeVar
 import pyro
 import torch
 
-from chirho.dynamical.internals._utils import _trajectory_to_state, append
+from chirho.dynamical.internals._utils import _squeeze_time_dim, append
 from chirho.dynamical.internals.solver import Solver, get_solver, simulate_trajectory
-from chirho.dynamical.ops import Trajectory
+from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 T = TypeVar("T")
 
 
 class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
-    trajectory: Trajectory[T]
+    trajectory: State[T]
 
     def __init__(self, times: torch.Tensor, *, eps: float = 1e-6):
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
@@ -27,7 +27,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def __enter__(self) -> "LogTrajectory[T]":
-        self.trajectory: Trajectory[T] = Trajectory()
+        self.trajectory: State[T] = State()
         return super().__enter__()
 
     def _pyro_simulate(self, msg) -> None:
@@ -63,8 +63,8 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         if len(timespan) > 2:
             part_idx = IndexSet(**{idx_name: set(range(1, len(timespan) - 1))})
             new_part = gather(trajectory, part_idx, name_to_dim=name_to_dim)
-            self.trajectory: Trajectory[T] = append(self.trajectory, new_part)
+            self.trajectory: State[T] = append(self.trajectory, new_part)
 
         final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
         final_state = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-        msg["value"] = _trajectory_to_state(final_state)
+        msg["value"] = _squeeze_time_dim(final_state)

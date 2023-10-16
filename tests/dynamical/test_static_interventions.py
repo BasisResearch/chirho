@@ -19,7 +19,7 @@ from chirho.interventional.ops import intervene
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
-    check_trajectories_match,
+    check_states_match,
     check_trajectories_match_in_all_but_values,
 )
 
@@ -118,7 +118,7 @@ def test_point_intervention_causes_difference(
     intervened_trajectory_before_int = gather(
         intervened_trajectory, before_idx, name_to_dim=name_to_dim
     )
-    assert after.all() or check_trajectories_match(
+    assert after.all() or check_states_match(
         observational_trajectory_before_int, intervened_trajectory_before_int
     )
 
