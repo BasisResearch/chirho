@@ -178,6 +178,6 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         # TODO: Check to make sure that the observations all fall within the outermost `simulate` start and end times.
         # This condition checks whether all of the simulate calls have been executed.
         if len_traj == len(self.times):
-            dynamics: ObservableInPlaceDynamics[torch.Tensor] = msg["args"][0]
+            dynamics: ObservableInPlaceDynamics[T] = msg["args"][0]
             with condition(data=self.data):
                 dynamics.observation(self.trajectory)
