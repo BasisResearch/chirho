@@ -15,6 +15,7 @@ from chirho.dynamical.internals.solver import (
     get_next_interruptions_dynamic,
     simulate_point,
     simulate_trajectory,
+    check_dynamics,
 )
 from chirho.dynamical.ops import InPlaceDynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
@@ -22,6 +23,22 @@ from chirho.indexed.ops import IndexSet, gather, get_index_plates
 S = TypeVar("S")
 T = TypeVar("T")
 
+
+@check_dynamics.register(TorchDiffEq)
+def torchdiffeq_check_dynamics(
+    solver: TorchDiffEq,
+    dynamics: InPlaceDynamics[torch.Tensor],
+    state: State[torch.Tensor],
+    time: torch.Tensor,
+) -> bool:  
+    var_order = _var_order(state.keys)  # arbitrary, but fixed
+    state_tuple = tuple(getattr(state, v) for v in var_order)
+    # Check if the derivative is the same when called twice.
+    result1 = _deriv(dynamics, var_order, time, state_tuple)
+    result2 = _deriv(dynamics, var_order, time, state_tuple)
+    # If the derivative is not the same for two succesive calls, return False
+    return result1 == result2
+    
 
 # noinspection PyMethodParameters
 def _deriv(
