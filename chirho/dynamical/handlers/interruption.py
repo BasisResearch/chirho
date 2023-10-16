@@ -61,8 +61,6 @@ class DynamicInterruption(Generic[T], Interruption):
     :param event_f: An event trigger function that approaches and returns 0.0 when the event should be triggered.
         This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
         element of the state exceeds some threshold, etc. It takes both the current time and current state.
-    :param var_order: The full State.var_order. This could be intervention.var_order if the intervention applies
-        to the full state.
     """
 
     def __init__(self, event_f: Callable[[R, State[T]], R]):
