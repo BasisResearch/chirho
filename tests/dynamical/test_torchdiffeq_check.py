@@ -1,14 +1,13 @@
 import logging
 
 import pyro
-import torch
 import pytest
+import torch
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import State, simulate
-
-from chirho.dynamical.internals.solver import check_dynamics
 from chirho.dynamical.handlers.check_dynamics import RuntimeCheckDynamics
+from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals.solver import check_dynamics
+from chirho.dynamical.ops import State, simulate
 
 pyro.settings.set(module_local_params=True)
 
@@ -36,11 +35,14 @@ def test_torch_diffeq_check_dynamics():
 
 
 def test_runtime_check_handler():
-    
     with RuntimeCheckDynamics():
-        result = simulate(ValidModel(), init_state, start_time, end_time, solver=TorchDiffEq())
+        result = simulate(
+            ValidModel(), init_state, start_time, end_time, solver=TorchDiffEq()
+        )
     assert result is not None
 
     with pytest.raises(ValueError):
         with RuntimeCheckDynamics():
-            simulate(InvalidModel(), init_state, start_time, end_time, solver=TorchDiffEq())
+            simulate(
+                InvalidModel(), init_state, start_time, end_time, solver=TorchDiffEq()
+            )
