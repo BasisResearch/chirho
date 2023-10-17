@@ -1,7 +1,0 @@
-pytest
-pytest-xdist
-nbval  
-graphviz 
-matplotlib 
-seaborn
-chirho
