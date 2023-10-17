@@ -23,7 +23,7 @@ class UnifiedFixtureDynamics:
 
     def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
         beta = self.beta * (
-            1.0 + 0.1 * torch.sin(0.1 * X.t)
+            1.0 + 0.1 * torch.sin(0.1 * X.time)
         )  # beta oscilates slowly in time.
 
         dX.S = -beta * X.S * X.I
@@ -72,7 +72,7 @@ def check_trajectories_match_in_all_but_values(
 ):
     assert check_keys_match(traj1, traj2)
 
-    for k in get_keys(traj1):
+    for k in get_keys(traj1, include_time=False):
         assert not torch.allclose(
             getattr(traj2, k), getattr(traj1, k)
         ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."

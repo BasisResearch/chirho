@@ -26,8 +26,12 @@ pyro.settings.set(module_local_params=True)
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-start_time = torch.tensor(0.0)
+init_state = State(
+    time=torch.tensor(0.0),
+    S=torch.tensor(1.0),
+    I=torch.tensor(2.0),
+    R=torch.tensor(3.3),
+)
 end_time = torch.tensor(4.0)
 logging_times = torch.tensor([1.0, 2.0, 3.0])
 
@@ -58,14 +62,10 @@ def test_multiple_point_observations(model):
     data1 = {"S_obs": S_obs}
     data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
     with InterruptionEventLoop():
-        result1 = simulate(
-            model, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
+        result1 = simulate(model, init_state, end_time, solver=TorchDiffEq())
         with StaticObservation(time=3.1, data=data2):
             with StaticObservation(time=2.9, data=data1):
-                result2 = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                result2 = simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     check_states_match(result1, result2)
 
@@ -96,7 +96,7 @@ def test_log_prob_exists(model, obs_handler):
     with pyro.poutine.trace() as tr:
         with InterruptionEventLoop():
             with _get_compatible_observations(obs_handler, time=2.9, data=data):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     assert isinstance(tr.trace.log_prob_sum(), torch.Tensor), "No log_prob found!"
 
@@ -112,8 +112,10 @@ def test_tspan_collision(model, obs_handler):
     data = {"S_obs": S_obs}
     with LogTrajectory(logging_times) as dt:
         with InterruptionEventLoop():
-            with _get_compatible_observations(obs_handler, time=start_time, data=data):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+            with _get_compatible_observations(
+                obs_handler, time=init_state.time, data=data
+            ):
+                simulate(model, init_state, end_time, solver=TorchDiffEq())
     result = dt.trajectory
     assert result.S.shape[0] == len(logging_times)
     assert result.I.shape[0] == len(logging_times)
@@ -134,9 +136,7 @@ def test_svi_composition_test_one(model, obs_handler):
             sir = model()
             with InterruptionEventLoop():
                 with _get_compatible_observations(obs_handler, time=2.9, data=data1):
-                    traj = simulate(
-                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    traj = simulate(sir, init_state, end_time, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -172,7 +172,6 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
                         interrupting_ret = simulate(
                             model,
                             init_state,
-                            start_time,
                             end_time,
                             solver=TorchDiffEq(),
                         )
@@ -181,7 +180,7 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
         with InterruptionEventLoop():
             with StaticBatchObservation(times=times, data=data):
                 non_interrupting_ret = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    model, init_state, end_time, solver=TorchDiffEq()
                 )
 
     assert check_states_match(interrupting_ret, non_interrupting_ret)
@@ -191,14 +190,11 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.skip(
     "The error that this test was written for has been fixed. Leaving for posterity."
 )
-def test_point_observation_at_tspan_start_excepts(
-    model, init_state, start_time, end_time
-):
+def test_point_observation_at_tspan_start_excepts(model, init_state, end_time):
     """
     This test requires that we raise an explicit exception when a StaticObservation
     occurs at the beginning of the tspan.
@@ -207,8 +203,10 @@ def test_point_observation_at_tspan_start_excepts(
 
     with InterruptionEventLoop():
         with pytest.raises(ValueError, match="occurred at the start of the timespan"):
-            with StaticObservation(time=start_time, data={"S_obs": torch.tensor(10.0)}):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+            with StaticObservation(
+                time=init_state.time, data={"S_obs": torch.tensor(10.0)}
+            ):
+                simulate(model, init_state, end_time, solver=TorchDiffEq())
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
@@ -240,9 +238,7 @@ def test_svi_composition_test_multi_point_obs(model):
                 with ExitStack() as stack:
                     for manager in observation_managers:
                         stack.enter_context(manager)
-                    traj = simulate(
-                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    traj = simulate(sir, init_state, end_time, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -266,9 +262,7 @@ def test_svi_composition_vectorized_obs(model):
             sir = model()
             with InterruptionEventLoop():
                 with StaticBatchObservation(times=times, data=data):
-                    traj = simulate(
-                        sir, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    traj = simulate(sir, init_state, end_time, solver=TorchDiffEq())
             return traj
 
     conditioned_sir = ConditionedSIR()
@@ -293,7 +287,7 @@ def test_simulate_persistent_pyrosample(use_event_loop):
 
     with LogTrajectory(logging_times) as dt:
         if not use_event_loop:
-            simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+            simulate(model, init_state, end_time, solver=TorchDiffEq())
         else:
             S_obs = torch.tensor(10.0)
             data1 = {"S_obs": S_obs}
@@ -304,7 +298,6 @@ def test_simulate_persistent_pyrosample(use_event_loop):
                         simulate(
                             model,
                             init_state,
-                            start_time,
                             end_time,
                             solver=TorchDiffEq(),
                         )

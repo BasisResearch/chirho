@@ -23,8 +23,7 @@ from tests.dynamical.dynamical_fixtures import (
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
-start_time = torch.tensor(0.0)
+init_state = State(time=torch.tensor(0.0), S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
 end_time = torch.tensor(1.2)
 logging_times = torch.tensor([0.3, 0.6, 0.9])
 
@@ -66,7 +65,6 @@ def counterf_model():
                 return simulate(
                     UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
                     init_state,
-                    start_time,
                     end_time,
                     solver=TorchDiffEq(),
                 )
