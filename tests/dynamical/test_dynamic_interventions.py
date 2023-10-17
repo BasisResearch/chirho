@@ -22,7 +22,12 @@ from .dynamical_fixtures import UnifiedFixtureDynamics
 logger = logging.getLogger(__name__)
 
 # Initial state of the system.
-init_state = State(time=torch.tensor(0.0), S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
+init_state = State(
+    time=torch.tensor(0.0),
+    S=torch.tensor(50.0),
+    I=torch.tensor(3.0),
+    R=torch.tensor(0.0),
+)
 
 # Points at which to measure the state of the system.
 end_time = torch.tensor(10.0)
@@ -89,9 +94,7 @@ def test_nested_dynamic_intervention_causes_change(
                     event_f=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
-                    simulate(
-                        model, init_state, end_time, solver=TorchDiffEq()
-                    )
+                    simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     preint_total = init_state.S + init_state.I + init_state.R
 
@@ -358,9 +361,7 @@ def test_split_twinworld_dynamic_matches_output(
                 )
 
     with InterruptionEventLoop():
-        factual_expected = simulate(
-            model, init_state, end_time, solver=TorchDiffEq()
-        )
+        factual_expected = simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     with cf:
         factual_indices = IndexSet(

@@ -15,7 +15,12 @@ pyro.settings.set(module_local_params=True)
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(time=torch.tensor(0.0), S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
+init_state = State(
+    time=torch.tensor(0.0),
+    S=torch.tensor(1.0),
+    I=torch.tensor(2.0),
+    R=torch.tensor(3.3),
+)
 end_time = torch.tensor(4.0)
 logging_times = torch.tensor([1.0, 2.0, 3.0])
 
@@ -31,9 +36,7 @@ def test_logging():
         times=logging_times,
     ) as dt2:
         with InterruptionEventLoop():
-            result2 = simulate(
-                sir, init_state, end_time, solver=TorchDiffEq()
-            )
+            result2 = simulate(sir, init_state, end_time, solver=TorchDiffEq())
     result3 = simulate(sir, init_state, end_time, solver=TorchDiffEq())
 
     assert isinstance(result1, State)

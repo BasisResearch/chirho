@@ -149,7 +149,9 @@ def torchdiffeq_get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
-    var_order = _var_order(get_keys(start_state, include_time=False))  # arbitrary, but fixed
+    var_order = _var_order(
+        get_keys(start_state, include_time=False)
+    )  # arbitrary, but fixed
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(

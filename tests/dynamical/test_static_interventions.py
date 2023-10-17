@@ -86,9 +86,7 @@ def test_point_intervention_causes_difference(
                         )
                     return
                 else:
-                    simulate(
-                        model, init_state, end_time, solver=TorchDiffEq()
-                    )
+                    simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     observational_trajectory = observational_dt.trajectory
     intervened_trajectory = intervened_dt.trajectory
@@ -174,7 +172,6 @@ def test_nested_point_interventions_cause_difference(
                             simulate(
                                 model,
                                 init_state,
-                        
                                 end_time,
                                 solver=TorchDiffEq(),
                             )
@@ -192,7 +189,6 @@ def test_nested_point_interventions_cause_difference(
                         simulate(
                             model,
                             init_state,
-                    
                             end_time,
                             solver=TorchDiffEq(),
                         )
@@ -261,7 +257,6 @@ def test_multiworld_point_intervention(
                         cf_state = simulate(
                             model,
                             init_state,
-                    
                             end_time,
                             solver=TorchDiffEq(),
                         )
@@ -324,9 +319,7 @@ def test_twinworld_matches_output(
                 )
 
     with InterruptionEventLoop():
-        factual_expected = simulate(
-            model, init_state, end_time, solver=TorchDiffEq()
-        )
+        factual_expected = simulate(model, init_state, end_time, solver=TorchDiffEq())
 
     with cf:
         factual_indices = IndexSet(
