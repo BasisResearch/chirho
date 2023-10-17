@@ -35,17 +35,21 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
     def _pyro_post_simulate(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
-        dynamics, initial_state, start_time, end_time = msg["args"]
+        dynamics, initial_state, end_time = msg["args"]
         if msg["kwargs"].get("solver", None) is not None:
             solver = typing.cast(Solver, msg["kwargs"]["solver"])
         else:
             solver = get_solver()
 
         filtered_timespan = self.times[
-            (self.times >= start_time) & (self.times <= end_time)
+            (self.times >= initial_state.time) & (self.times <= end_time)
         ]
         timespan = torch.concat(
-            (start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1))
+            (
+                initial_state.time.unsqueeze(-1),
+                filtered_timespan,
+                end_time.unsqueeze(-1),
+            )
         )
 
         trajectory = simulate_trajectory(

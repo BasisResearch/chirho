@@ -44,7 +44,6 @@ def simulate_point(
     solver: Solver,
     dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    start_time: R,
     end_time: R,
     **kwargs,
 ) -> State[T]:
@@ -78,7 +77,6 @@ def simulate_to_interruption(
     solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: R,
     end_time: R,
     *,
     next_static_interruption: Optional[StaticInterruption] = None,
@@ -96,7 +94,6 @@ def simulate_to_interruption(
         solver,
         dynamics,
         start_state,
-        start_time,
         end_time,
         next_static_interruption=next_static_interruption,
         dynamic_interruptions=dynamic_interruptions,
@@ -105,11 +102,9 @@ def simulate_to_interruption(
     # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
     #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
     #  a LogTrajectory context.
-    event_state = simulate(
-        dynamics, start_state, start_time, interruption_time, solver=solver
-    )
+    event_state = simulate(dynamics, start_state, interruption_time, solver=solver)
 
-    return event_state, interruptions, interruption_time
+    return event_state, interruptions
 
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
@@ -127,7 +122,6 @@ def get_next_interruptions(
     solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: R,
     end_time: R,
     *,
     next_static_interruption: Optional[StaticInterruption] = None,
@@ -151,7 +145,6 @@ def get_next_interruptions(
             solver,
             dynamics,
             start_state,
-            start_time,
             next_static_interruption=next_static_interruption,
             dynamic_interruptions=dynamic_interruptions,
             **kwargs,
@@ -163,7 +156,6 @@ def get_next_interruptions_dynamic(
     solver: Solver,
     dynamics: InPlaceDynamics[T],
     start_state: State[T],
-    start_time: R,
     next_static_interruption: StaticInterruption,
     dynamic_interruptions: List[DynamicInterruption],
 ) -> Tuple[Tuple[Interruption, ...], R]:

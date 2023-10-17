@@ -30,13 +30,10 @@ def _deriv(
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
 ) -> Tuple[torch.Tensor, ...]:
-    ddt: State[torch.Tensor] = State()
-    env: State[torch.Tensor] = State()
+    ddt: State[torch.Tensor] = State(time=time)
+    env: State[torch.Tensor] = State(time=time)
     for var, value in zip(var_order, state):
         setattr(env, var, value)
-
-    assert "t" not in get_keys(env), "variable name t is reserved for time"
-    env.t = time
 
     dynamics.diff(ddt, env)
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
@@ -47,8 +44,10 @@ def _torchdiffeq_ode_simulate_inner(
     initial_state: State[torch.Tensor],
     timespan,
     **odeint_kwargs,
-):
-    var_order = _var_order(get_keys(initial_state))  # arbitrary, but fixed
+) -> State[torch.Tensor]:
+    var_order = _var_order(
+        get_keys(initial_state, include_time=False)
+    )  # arbitrary, but fixed
 
     solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(_deriv, dynamics, var_order),
@@ -57,7 +56,7 @@ def _torchdiffeq_ode_simulate_inner(
         **odeint_kwargs,
     )
 
-    trajectory: State[torch.Tensor] = State()
+    trajectory: State[torch.Tensor] = State(time=timespan)
     for var, soln in zip(var_order, solns):
         setattr(trajectory, var, soln)
 
@@ -107,14 +106,13 @@ def _batched_odeint(
 
 
 @simulate_point.register(TorchDiffEq)
-def torchdiffeq_ode_simulate(
+def torchdiffeq_ode_simulate_point(
     solver: TorchDiffEq,
     dynamics: InPlaceDynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
-    start_time: torch.Tensor,
     end_time: torch.Tensor,
 ) -> State[torch.Tensor]:
-    timespan = torch.stack((start_time, end_time))
+    timespan = torch.stack((initial_state.time, end_time))
     trajectory = _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
     )
@@ -147,12 +145,11 @@ def torchdiffeq_get_next_interruptions_dynamic(
     solver: TorchDiffEq,
     dynamics: InPlaceDynamics[torch.Tensor],
     start_state: State[torch.Tensor],
-    start_time: torch.Tensor,
     next_static_interruption: StaticInterruption,
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
-    var_order = _var_order(get_keys(start_state))  # arbitrary, but fixed
+    var_order = _var_order(get_keys(start_state, include_time=False))  # arbitrary, but fixed
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
     combined_event_f = torchdiffeq_combined_event_f(
@@ -163,7 +160,7 @@ def torchdiffeq_get_next_interruptions_dynamic(
     event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
         functools.partial(_deriv, dynamics, var_order),
         tuple(getattr(start_state, v) for v in var_order),
-        start_time,
+        start_state.time,
         event_fn=combined_event_f,
         **solver.odeint_kwargs,
     )

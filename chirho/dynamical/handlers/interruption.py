@@ -36,7 +36,8 @@ class StaticInterruption(Interruption):
         super().__init__()
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        _, _, _, start_time, end_time = msg["args"]
+        start_time: R = msg["args"][2].time
+        end_time: R = msg["args"][3]
 
         if start_time < self.time < end_time:
             next_static_interruption: Optional[StaticInterruption] = msg["kwargs"].get(

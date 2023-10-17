@@ -11,8 +11,10 @@ T = TypeVar("T")
 
 
 class State(Generic[T]):
-    def __init__(self, **values: T):
+    def __init__(self, time: Optional[T] = None, **values: T):
         self.__dict__["_values"] = {}
+        if time is not None:
+            self.time = time
         for k, v in values.items():
             setattr(self, k, v)
 
@@ -32,8 +34,11 @@ class State(Generic[T]):
             raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
 
 
-def get_keys(state: State[T]) -> FrozenSet[str]:
-    return frozenset(state.__dict__["_values"].keys())
+def get_keys(state: State[T], include_time: bool = True) -> FrozenSet[str]:
+    if include_time:
+        return frozenset(state.__dict__["_values"].keys())
+    else:
+        return frozenset(k for k in state.__dict__["_values"].keys() if k != "time")
 
 
 @typing.runtime_checkable
@@ -52,7 +57,6 @@ class InPlaceDynamics(Protocol[S]):
 def simulate(
     dynamics: InPlaceDynamics[T],
     initial_state: State[T],
-    start_time: R,
     end_time: R,
     *,
     solver: Optional[S] = None,
@@ -64,6 +68,4 @@ def simulate(
     from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
 
     solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_point(
-        solver_, dynamics, initial_state, start_time, end_time, **kwargs
-    )
+    return simulate_point(solver_, dynamics, initial_state, end_time, **kwargs)

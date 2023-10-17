@@ -35,8 +35,8 @@ def _gather_state(
 
 @intervene.register(State)
 def _state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
-    new_state: State[T] = State()
-    for k in get_keys(obs):
+    new_state: State[T] = State(time=obs.time)
+    for k in get_keys(obs, include_time=False):
         setattr(
             new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
         )
@@ -50,13 +50,13 @@ def append(fst, rest: T) -> T:
 
 @append.register(State)
 def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
-    if len(get_keys(traj1)) == 0:
+    if len(get_keys(traj1, include_time=False)) == 0:
         return traj2
 
-    if len(get_keys(traj2)) == 0:
+    if len(get_keys(traj2, include_time=False)) == 0:
         return traj1
 
-    if get_keys(traj1) != get_keys(traj2):
+    if get_keys(traj1, include_time=False) != get_keys(traj2, include_time=False):
         raise ValueError(
             f"Trajectories must have the same keys to be appended, but got {get_keys(traj1)} and {get_keys(traj2)}."
         )
