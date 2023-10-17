@@ -31,7 +31,7 @@ def torchdiffeq_check_dynamics(
     state: State[torch.Tensor],
     time: torch.Tensor,
 ) -> bool:
-    var_order = _var_order(state.keys)  # arbitrary, but fixed
+    var_order = _var_order(get_keys(state))  # arbitrary, but fixed
     state_tuple = tuple(getattr(state, v) for v in var_order)
     # Check if the derivative is the same when called twice.
     result1 = _deriv(dynamics, var_order, time, state_tuple)
