@@ -30,7 +30,7 @@ def _deriv(
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
 ) -> Tuple[torch.Tensor, ...]:
-    ddt: State[torch.Tensor] = State(time=time)
+    ddt: State[torch.Tensor] = State()
     env: State[torch.Tensor] = State(time=time)
     for var, value in zip(var_order, state):
         setattr(env, var, value)
