@@ -112,6 +112,8 @@ def torchdiffeq_ode_simulate_point(
     initial_state: State[torch.Tensor],
     end_time: torch.Tensor,
 ) -> State[torch.Tensor]:
+    assert initial_state.time is not None
+
     timespan = torch.stack((initial_state.time, end_time))
     trajectory = _torchdiffeq_ode_simulate_inner(
         dynamics, initial_state, timespan, **solver.odeint_kwargs
@@ -149,6 +151,8 @@ def torchdiffeq_get_next_interruptions_dynamic(
     dynamic_interruptions: List[DynamicInterruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
+    assert start_state.time is not None
+
     var_order = _var_order(
         get_keys(start_state, include_time=False)
     )  # arbitrary, but fixed

@@ -82,7 +82,7 @@ def simulate_to_interruption(
     next_static_interruption: Optional[StaticInterruption] = None,
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
-) -> Tuple[State[T], Tuple[Interruption, ...], R]:
+) -> Tuple[State[T], Tuple[Interruption, ...]]:
     """
     Simulate a dynamical system until the next interruption. This will be either one of the passed
     dynamic interruptions, the next static interruption, or the end time, whichever comes first.

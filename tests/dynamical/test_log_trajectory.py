@@ -51,15 +51,24 @@ def test_logging():
 
 
 def test_trajectory_methods():
-    trajectory = State(time=torch.tensor([0.0, 1.0, 2.0]), S=torch.tensor([1.0, 2.0, 3.0]))
+    trajectory = State(
+        time=torch.tensor([0.0, 1.0, 2.0]), S=torch.tensor([1.0, 2.0, 3.0])
+    )
     assert get_keys(trajectory, include_time=False) == frozenset({"S"})
     assert get_keys(trajectory) == frozenset({"S", "time"})
-    assert str(trajectory) == "State({'time': tensor([0., 1., 2.]), 'S': tensor([1., 2., 3.])})"
+    assert (
+        str(trajectory)
+        == "State({'time': tensor([0., 1., 2.]), 'S': tensor([1., 2., 3.])})"
+    )
 
 
 def test_append():
-    trajectory1 = State(time=torch.tensor([0.0, 1.0, 2.0]), S=torch.tensor([1.0, 2.0, 3.0]))
-    trajectory2 = State(time=torch.tensor([3.0, 4.0, 5.0]), S=torch.tensor([4.0, 5.0, 6.0]))
+    trajectory1 = State(
+        time=torch.tensor([0.0, 1.0, 2.0]), S=torch.tensor([1.0, 2.0, 3.0])
+    )
+    trajectory2 = State(
+        time=torch.tensor([3.0, 4.0, 5.0]), S=torch.tensor([4.0, 5.0, 6.0])
+    )
     trajectory = append(trajectory1, trajectory2)
     assert torch.allclose(
         trajectory.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
