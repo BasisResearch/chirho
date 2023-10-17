@@ -13,8 +13,7 @@ T = TypeVar("T")
 class State(Generic[T]):
     def __init__(self, time: Optional[T] = None, **values: T):
         self.__dict__["_values"] = {}
-        if time is not None:
-            self.time = time
+        self.time = time
         for k, v in values.items():
             setattr(self, k, v)
 

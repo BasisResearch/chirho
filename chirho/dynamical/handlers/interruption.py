@@ -173,7 +173,7 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         name_to_dim["__time"] = -1
         len_traj = (
             0
-            if not get_keys(self.trajectory)
+            if not get_keys(self.trajectory, include_time=False)
             else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
         )
 
