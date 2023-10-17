@@ -6,7 +6,7 @@ import torch
 from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops import State, get_keys, simulate
 
 from .dynamical_fixtures import bayes_sir_model, check_states_match
 
@@ -40,17 +40,17 @@ def test_logging():
     assert isinstance(result1, State)
     assert isinstance(dt1.trajectory, State)
     assert isinstance(dt2.trajectory, State)
-    assert len(dt1.trajectory.keys) == 3
-    assert len(dt2.trajectory.keys) == 3
-    assert dt1.trajectory.keys == result1.keys
-    assert dt2.trajectory.keys == result2.keys
+    assert len(get_keys(dt1.trajectory)) == 3
+    assert len(get_keys(dt2.trajectory)) == 3
+    assert get_keys(dt1.trajectory) == get_keys(result1)
+    assert get_keys(dt2.trajectory) == get_keys(result2)
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
 
 
 def test_trajectory_methods():
     trajectory = State(S=torch.tensor([1.0, 2.0, 3.0]))
-    assert trajectory.keys == frozenset({"S"})
+    assert get_keys(trajectory) == frozenset({"S"})
     assert str(trajectory) == "State({'S': tensor([1., 2., 3.])})"
 
 

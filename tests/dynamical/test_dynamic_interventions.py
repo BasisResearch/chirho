@@ -14,7 +14,7 @@ from chirho.dynamical.handlers import (
     LogTrajectory,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import InPlaceDynamics, State, simulate
+from chirho.dynamical.ops import InPlaceDynamics, State, get_keys, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -269,7 +269,7 @@ def test_split_twinworld_dynamic_intervention(
 
     with cf:
         cf_trajectory = dt.trajectory
-        for k in cf_trajectory.keys:
+        for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
@@ -317,7 +317,7 @@ def test_split_multiworld_dynamic_intervention(
 
     with cf:
         cf_trajectory = dt.trajectory
-        for k in cf_trajectory.keys:
+        for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
             assert cf.default_name in indices_of(getattr(cf_state, k))
             assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
@@ -388,15 +388,15 @@ def test_split_twinworld_dynamic_matches_output(
         assert not set(indices_of(cf_actual, event_dim=0))
         assert not set(indices_of(factual_actual, event_dim=0))
 
-    assert set(cf_result.keys) == set(cf_actual.keys) == set(cf_expected.keys)
-    assert set(cf_result.keys) == set(factual_actual.keys) == set(factual_expected.keys)
+    assert get_keys(cf_result) == get_keys(cf_actual) == get_keys(cf_expected)
+    assert get_keys(cf_result) == get_keys(factual_actual) == get_keys(factual_expected)
 
-    for k in cf_result.keys:
+    for k in get_keys(cf_result):
         assert torch.allclose(
             getattr(cf_actual, k), getattr(cf_expected, k), atol=1e-3, rtol=0
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
-    for k in cf_result.keys:
+    for k in get_keys(cf_result):
         assert torch.allclose(
             getattr(factual_actual, k), getattr(factual_expected, k), atol=1e-3, rtol=0
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
