@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import Callable, Dict, FrozenSet, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -12,10 +12,6 @@ T = TypeVar("T")
 
 class State(Generic[T], Dict[str, T]):
     pass
-
-
-def get_keys(state: State[T]) -> FrozenSet[str]:
-    return frozenset(state.keys())
 
 
 Dynamics = Callable[[State[T]], State[T]]
