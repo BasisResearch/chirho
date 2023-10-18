@@ -3,7 +3,7 @@ from typing import FrozenSet, Optional, Tuple, TypeVar
 
 import torch
 
-from chirho.dynamical.ops import State, get_keys
+from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
 from chirho.observational.ops import Observation, observe
@@ -15,7 +15,7 @@ T = TypeVar("T")
 @indices_of.register(State)
 def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet:
     return union(
-        *(indices_of(state[k], event_dim=event_dim, **kwargs) for k in get_keys(state))
+        *(indices_of(state[k], event_dim=event_dim, **kwargs) for k in state.keys())
     )
 
 
@@ -26,7 +26,7 @@ def _gather_state(
     return type(state)(
         **{
             k: gather(state[k], indices, event_dim=event_dim, **kwargs)
-            for k in get_keys(state)
+            for k in state.keys()
         }
     )
 
@@ -34,7 +34,7 @@ def _gather_state(
 @intervene.register(State)
 def _state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
     new_state: State[T] = State()
-    for k in get_keys(obs):
+    for k in obs.keys():
         new_state[k] = intervene(obs[k], act[k] if k in act else None, **kwargs)
     return new_state
 
@@ -46,19 +46,19 @@ def append(fst, rest: T) -> T:
 
 @append.register(State)
 def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
-    if len(get_keys(traj1)) == 0:
+    if len(traj1.keys()) == 0:
         return traj2
 
-    if len(get_keys(traj2)) == 0:
+    if len(traj2.keys()) == 0:
         return traj1
 
-    if get_keys(traj1) != get_keys(traj2):
+    if traj1.keys() != traj2.keys():
         raise ValueError(
-            f"Trajectories must have the same keys to be appended, but got {get_keys(traj1)} and {get_keys(traj2)}."
+            f"Trajectories must have the same keys to be appended, but got {traj1.keys()} and {traj2.keys()}."
         )
 
     result: State[T] = State()
-    for k in get_keys(traj1):
+    for k in traj1.keys():
         result[k] = append(traj1[k], traj2[k])
     return result
 
@@ -78,7 +78,7 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
 
 
 def _squeeze_time_dim(traj: State[torch.Tensor]) -> State[torch.Tensor]:
-    return State(**{k: traj[k].squeeze(-1) for k in get_keys(traj)})
+    return State(**{k: traj[k].squeeze(-1) for k in traj.keys()})
 
 
 @observe.register(State)
@@ -100,8 +100,5 @@ def _observe_state(
     assert isinstance(obs, State)
 
     return State(
-        **{
-            k: observe(rv[k], obs[k], name=f"{name}__{k}", **kwargs)
-            for k in get_keys(rv)
-        }
+        **{k: observe(rv[k], obs[k], name=f"{name}__{k}", **kwargs) for k in rv.keys()}
     )
