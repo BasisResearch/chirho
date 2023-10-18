@@ -88,8 +88,9 @@ def simulate_to_interruption(
     """
     Simulate a dynamical system until the next interruption. This will be either one of the passed
     dynamic interruptions, the next static interruption, or the end time, whichever comes first.
+
     :returns: the final state, a collection of interruptions that ended the simulation
-    (this will usually just be a single interruption), and the time the interruption occurred.
+      (this will usually just be a single interruption), and the time the interruption occurred.
     """
 
     interruptions, interruption_time = get_next_interruptions(

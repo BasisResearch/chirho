@@ -23,7 +23,6 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-# noinspection PyMethodParameters
 def _deriv(
     dynamics: Dynamics[torch.Tensor],
     var_order: Tuple[str, ...],
@@ -211,6 +210,7 @@ def torchdiffeq_point_interruption_flattened_event_f(
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a flattened event function for a point interruption.
+
     :param pi: The point interruption for which to build the event function.
     :return: The constructed event function.
     """
@@ -227,6 +227,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a flattened event function for a dynamic interruption.
+
     :param di: The dynamic interruption for which to build the event function.
     :return: The constructed event function.
     """
@@ -250,6 +251,7 @@ def torchdiffeq_combined_event_f(
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
     Construct a combined event function from a list of dynamic interruptions and a single terminal static interruption.
+
     :param next_static_interruption: The next static interruption. Viewed as terminal in the context of this event func.
     :param dynamic_interruptions: The dynamic interruptions.
     :return: The combined event function, taking in state and time, and returning a vector of floats. When any element
