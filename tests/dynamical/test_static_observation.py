@@ -278,9 +278,9 @@ def test_simulate_persistent_pyrosample(use_event_loop):
         def beta(self):
             return pyro.distributions.Beta(1, 1)
 
-        def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
-            super().diff(dX, X)
+        def forward(self, X: State[torch.Tensor]):
             assert torch.allclose(self.beta, self.beta)
+            return super().forward(X)
 
     model = RandBetaUnifiedFixtureDynamics()
 

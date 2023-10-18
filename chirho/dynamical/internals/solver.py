@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops import InPlaceDynamics, State, simulate
+from chirho.dynamical.ops import Dynamics, State, simulate
 
 if typing.TYPE_CHECKING:
     from chirho.dynamical.handlers.interruption import (
@@ -42,7 +42,7 @@ def get_solver() -> Solver:
 @functools.singledispatch
 def simulate_point(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     initial_state: State[T],
     start_time: R,
     end_time: R,
@@ -59,7 +59,7 @@ def simulate_point(
 @functools.singledispatch
 def simulate_trajectory(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     initial_state: State[T],
     timespan: R,
     **kwargs,
@@ -76,7 +76,7 @@ def simulate_trajectory(
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
@@ -115,8 +115,8 @@ def simulate_to_interruption(
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
 def apply_interruptions(
-    dynamics: InPlaceDynamics[T], start_state: State[T]
-) -> Tuple[InPlaceDynamics[T], State[T]]:
+    dynamics: Dynamics[T], start_state: State[T]
+) -> Tuple[Dynamics[T], State[T]]:
     """
     Apply the effects of an interruption to a dynamical system.
     """
@@ -126,7 +126,7 @@ def apply_interruptions(
 
 def get_next_interruptions(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
@@ -162,7 +162,7 @@ def get_next_interruptions(
 @functools.singledispatch
 def get_next_interruptions_dynamic(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     next_static_interruption: StaticInterruption,

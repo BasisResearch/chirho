@@ -16,7 +16,7 @@ from chirho.dynamical.internals.solver import (
     simulate_point,
     simulate_trajectory,
 )
-from chirho.dynamical.ops import InPlaceDynamics, State, get_keys
+from chirho.dynamical.ops import Dynamics, State, get_keys
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
@@ -24,12 +24,11 @@ T = TypeVar("T")
 
 
 def _deriv(
-    dynamics: InPlaceDynamics[torch.Tensor],
+    dynamics: Dynamics[torch.Tensor],
     var_order: Tuple[str, ...],
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
 ) -> Tuple[torch.Tensor, ...]:
-    ddt: State[torch.Tensor] = State()
     env: State[torch.Tensor] = State()
     for var, value in zip(var_order, state):
         setattr(env, var, value)
@@ -37,12 +36,12 @@ def _deriv(
     assert "t" not in get_keys(env), "variable name t is reserved for time"
     env.t = time
 
-    dynamics.diff(ddt, env)
+    ddt: State[torch.Tensor] = dynamics(env)
     return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
 
 
 def _torchdiffeq_ode_simulate_inner(
-    dynamics: InPlaceDynamics[torch.Tensor],
+    dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan,
     **odeint_kwargs,
@@ -108,7 +107,7 @@ def _batched_odeint(
 @simulate_point.register(TorchDiffEq)
 def torchdiffeq_ode_simulate(
     solver: TorchDiffEq,
-    dynamics: InPlaceDynamics[torch.Tensor],
+    dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
@@ -132,7 +131,7 @@ def torchdiffeq_ode_simulate(
 @simulate_trajectory.register(TorchDiffEq)
 def torchdiffeq_ode_simulate_trajectory(
     solver: TorchDiffEq,
-    dynamics: InPlaceDynamics[torch.Tensor],
+    dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
 ) -> State[torch.Tensor]:
@@ -144,7 +143,7 @@ def torchdiffeq_ode_simulate_trajectory(
 @get_next_interruptions_dynamic.register(TorchDiffEq)
 def torchdiffeq_get_next_interruptions_dynamic(
     solver: TorchDiffEq,
-    dynamics: InPlaceDynamics[torch.Tensor],
+    dynamics: Dynamics[torch.Tensor],
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
     next_static_interruption: StaticInterruption,

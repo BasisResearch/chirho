@@ -14,7 +14,7 @@ from chirho.dynamical.handlers import (
     LogTrajectory,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import InPlaceDynamics, State, get_keys, simulate
+from chirho.dynamical.ops import State, get_keys, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
 from .dynamical_fixtures import UnifiedFixtureDynamics
@@ -403,16 +403,14 @@ def test_split_twinworld_dynamic_matches_output(
 
 
 def test_grad_of_dynamic_intervention_event_f_params():
-    class Model(InPlaceDynamics):
-        def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
-            dX.x = tt(1.0)
-            dX.z = X.dz
-            dX.dz = tt(0.0)  # also a constant, this gets set by interventions.
-            dX.param = tt(
-                0.0
-            )  # this is a constant event function parameter, so no change.
+    def model(X: State[torch.Tensor]):
+        dX = State()
+        dX.x = tt(1.0)
+        dX.z = X.dz
+        dX.dz = tt(0.0)  # also a constant, this gets set by interventions.
+        dX.param = tt(0.0)  # this is a constant event function parameter, so no change.
+        return dX
 
-    model = Model()
     param = torch.nn.Parameter(tt(5.0))
     # Param has to be part of the state in order to take gradients with respect to it.
     s0 = State(x=tt(0.0), z=tt(0.0), dz=tt(0.0), param=param)
