@@ -103,7 +103,7 @@ def _observe_state(
     if obs is rv or obs is None:
         return rv
 
-    return type(rv)(
+    return State(
         **{
             k: observe(getattr(rv, k), getattr(obs, k), name=f"{name}__{k}", **kwargs)
             for k in get_keys(rv)
