@@ -1,16 +1,15 @@
 import numbers
 import warnings
-from typing import Callable, Dict, Generic, Optional, TypeVar, Union
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops import Observable, State, get_keys
+from chirho.dynamical.ops import State, get_keys
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
-from chirho.observational.handlers import condition
-from chirho.observational.ops import Observation
+from chirho.observational.ops import Observation, observe
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -86,15 +85,13 @@ class _InterventionMixin(Generic[T]):
 
 
 class _PointObservationMixin(Generic[T]):
-    data: Dict[str, Observation[T]]
+    observation: Observation[State[T]]
     time: R
 
     def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics: Observable[T] = msg["args"][0]
-        current_state: State[T] = msg["args"][1]
-
-        with condition(data=self.data):
-            dynamics.observation(current_state)
+        dynamics = msg["args"][0]
+        state: State[T] = msg["args"][1]
+        msg["value"] = (dynamics, observe(state, self.observation))
 
     def _pyro_sample(self, msg):
         # modify observed site names to handle multiple time points
@@ -105,11 +102,11 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
     def __init__(
         self,
         time: R,
-        data: Dict[str, Observation[T]],
+        observation: Observation[State[T]],
         *,
         eps: float = 1e-6,
     ):
-        self.data = data
+        self.observation = observation
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
         super().__init__(time + eps)
@@ -147,16 +144,16 @@ class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]
 
 
 class StaticBatchObservation(Generic[T], LogTrajectory[T]):
-    data: Dict[str, Observation[T]]
+    observation: Observation[State[T]]
 
     def __init__(
         self,
         times: torch.Tensor,
-        data: Dict[str, Observation[T]],
+        observation: Observation[State[T]],
         *,
         eps: float = 1e-6,
     ):
-        self.data = data
+        self.observation = observation
         super().__init__(times, eps=eps)
 
     def _pyro_post_simulate(self, msg) -> None:
@@ -177,6 +174,4 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         )
 
         if len_traj == len(self.times):
-            dynamics: Observable[T] = msg["args"][0]
-            with condition(data=self.data):
-                dynamics.observation(self.trajectory)
+            msg["value"] = observe(self.trajectory, self.observation)

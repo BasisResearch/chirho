@@ -14,6 +14,7 @@ from chirho.dynamical.handlers import (
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
+from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamics,
@@ -56,15 +57,17 @@ reparam_config = AutoSoftConditioning(scale=0.01, alpha=0.5)
 twin_world = TwinWorldCounterfactual()
 intervention = StaticIntervention(time=superspreader_time, intervention=counterfactual)
 reparam = pyro.poutine.reparam(config=reparam_config)
-vec_obs3 = StaticBatchObservation(times=flight_landing_times, data=flight_landing_data)
 
 
 def counterf_model():
+    model = UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7)
+    obs = condition(data=flight_landing_data)(model.observation)
+    vec_obs3 = StaticBatchObservation(times=flight_landing_times, observation=obs)
     with vec_obs3:
         with InterruptionEventLoop():
             with reparam, twin_world, intervention:
                 return simulate(
-                    UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7),
+                    model,
                     init_state,
                     start_time,
                     end_time,
@@ -131,8 +134,3 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
     )
     # Noise is shared between factual and counterfactual worlds.
     assert pred["u_ip"].squeeze().shape == (num_samples, len(flight_landing_times))
-
-
-@pytest.mark.skip
-def test_shape_multicounterfactual_observation_intervention_commutes():
-    raise NotImplementedError()

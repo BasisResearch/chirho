@@ -37,12 +37,6 @@ def get_keys(state: State[T]) -> FrozenSet[str]:
 
 
 @typing.runtime_checkable
-class Observable(Protocol[S]):
-    def observation(self, __state: State[S]) -> None:
-        ...
-
-
-@typing.runtime_checkable
 class InPlaceDynamics(Protocol[S]):
     def diff(self, __dstate: State[S], __state: State[S]) -> None:
         ...

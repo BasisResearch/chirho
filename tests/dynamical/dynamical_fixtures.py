@@ -37,11 +37,9 @@ class UnifiedFixtureDynamics:
             return pyro.sample(name, Normal(x, 1).to_event(1))
 
     def observation(self, X: State[torch.Tensor]):
-        S_obs = self._unit_measurement_error("S_obs", X.S)
-        I_obs = self._unit_measurement_error("I_obs", X.I)
-        R_obs = self._unit_measurement_error("R_obs", X.R)
-
-        return {"S_obs": S_obs, "I_obs": I_obs, "R_obs": R_obs}
+        self._unit_measurement_error("S_obs", X.S)
+        self._unit_measurement_error("I_obs", X.I)
+        self._unit_measurement_error("R_obs", X.R)
 
 
 def bayes_sir_model():
