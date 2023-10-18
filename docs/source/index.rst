@@ -39,6 +39,7 @@ Table of Contents
    interventional
    observational
    indexed
+   dynamical
 
 .. toctree::
    :maxdepth: 2
