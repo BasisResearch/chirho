@@ -1,4 +1,3 @@
-import collections.abc
 import functools
 from typing import FrozenSet, Optional, Tuple, TypeVar
 
@@ -94,10 +93,9 @@ def _observe_state(
     obs: Optional[Observation[State[T]]] = None,
     *,
     name: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> State[T]:
-
-    if isinstance(obs, collections.abc.Callable):
+    if callable(obs):
         obs = obs(rv)
         if obs is not rv and obs is not None:
             raise NotImplementedError("Dependent observations are not yet supported")
@@ -105,7 +103,9 @@ def _observe_state(
     if obs is rv or obs is None:
         return rv
 
-    return type(rv)(**{
-        k: observe(getattr(rv, k), getattr(obs, k), name=f"{name}__{k}", **kwargs)
-        for k in get_keys(rv)
-    })
+    return type(rv)(
+        **{
+            k: observe(getattr(rv, k), getattr(obs, k), name=f"{name}__{k}", **kwargs)
+            for k in get_keys(rv)
+        }
+    )

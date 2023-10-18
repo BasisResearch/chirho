@@ -179,15 +179,9 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
 
     with pyro.poutine.trace() as tr1:
         with InterruptionEventLoop():
-            with StaticObservation(
-                time=times[1].item(), observation=obs1
-            ):
-                with StaticObservation(
-                    time=times[0].item(), observation=obs0
-                ):
-                    with StaticObservation(
-                        time=times[2].item(), observation=obs2
-                    ):
+            with StaticObservation(time=times[1].item(), observation=obs1):
+                with StaticObservation(time=times[0].item(), observation=obs0):
+                    with StaticObservation(time=times[2].item(), observation=obs2):
                         interrupting_ret = simulate(
                             model,
                             init_state,
