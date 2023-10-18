@@ -6,10 +6,12 @@ from pyro.distributions import Normal, Uniform, constraints
 
 from chirho.dynamical.ops import State, get_keys
 
+pyro.settings.set(module_local_params=True)
+
 T = TypeVar("T")
 
 
-class UnifiedFixtureDynamics:
+class UnifiedFixtureDynamics(pyro.nn.PyroModule):
     def __init__(self, beta=None, gamma=None):
         super().__init__()
 
@@ -21,7 +23,8 @@ class UnifiedFixtureDynamics:
         if self.gamma is None:
             self.gamma = pyro.param("gamma", torch.tensor(0.7), constraints.positive)
 
-    def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+    def forward(self, X: State[torch.Tensor]):
+        dX: State[torch.Tensor] = State()
         beta = self.beta * (
             1.0 + 0.1 * torch.sin(0.1 * X.t)
         )  # beta oscilates slowly in time.
@@ -29,6 +32,7 @@ class UnifiedFixtureDynamics:
         dX.S = -beta * X.S * X.I
         dX.I = beta * X.S * X.I - self.gamma * X.I  # noqa
         dX.R = self.gamma * X.I
+        return dX
 
     def _unit_measurement_error(self, name: str, x: torch.Tensor):
         if x.ndim == 0:
@@ -36,6 +40,7 @@ class UnifiedFixtureDynamics:
         else:
             return pyro.sample(name, Normal(x, 1).to_event(1))
 
+    @pyro.nn.pyro_method
     def observation(self, X: State[torch.Tensor]):
         self._unit_measurement_error("S_obs", X.S)
         self._unit_measurement_error("I_obs", X.I)

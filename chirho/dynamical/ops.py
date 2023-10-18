@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import FrozenSet, Generic, Optional, Protocol, TypeVar, Union
+from typing import Callable, FrozenSet, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -36,15 +36,12 @@ def get_keys(state: State[T]) -> FrozenSet[str]:
     return frozenset(state.__dict__["_values"].keys())
 
 
-@typing.runtime_checkable
-class InPlaceDynamics(Protocol[S]):
-    def diff(self, __dstate: State[S], __state: State[S]) -> None:
-        ...
+Dynamics = Callable[[State[T]], State[T]]
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     initial_state: State[T],
     start_time: R,
     end_time: R,
