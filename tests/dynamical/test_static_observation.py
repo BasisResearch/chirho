@@ -189,28 +189,6 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     assert torch.isclose(tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum())
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
-@pytest.mark.parametrize("init_state", [init_state])
-@pytest.mark.parametrize("start_time", [start_time])
-@pytest.mark.parametrize("end_time", [end_time])
-@pytest.mark.skip(
-    "The error that this test was written for has been fixed. Leaving for posterity."
-)
-def test_point_observation_at_tspan_start_excepts(
-    model, init_state, start_time, end_time
-):
-    """
-    This test requires that we raise an explicit exception when a StaticObservation
-    occurs at the beginning of the tspan.
-    This occurs right now due to an undiagnosed error, so this test is a stand-in until that can be fixed.
-    """
-
-    with InterruptionEventLoop():
-        with pytest.raises(ValueError, match="occurred at the start of the timespan"):
-            with StaticObservation(time=start_time, data={"S_obs": torch.tensor(10.0)}):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
-
-
 @pytest.mark.parametrize("model", [bayes_sir_model])
 def test_svi_composition_test_multi_point_obs(model):
     data1 = {

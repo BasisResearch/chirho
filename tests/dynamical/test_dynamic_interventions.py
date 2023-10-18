@@ -439,32 +439,6 @@ def test_grad_of_dynamic_intervention_event_f_params():
     assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
 
 
-@pytest.mark.skip(reason="TODO")
-def test_grad_of_point_intervention_params():
-    # TODO This, somewhat unsurprisingly, does not work with point interventions,
-    #  presumably because its treated as two completely separate simulations.
-    # Note: implementing this would require the boilerplate from the dynamic test above.
-
-    # point_intervention = StaticIntervention(
-    #     intervention=State(dz=tt(1.0)),
-    #     time=param
-    # )
-    #
-    # # noinspection DuplicatedCode
-    # with InterruptionEventLoop():
-    #     with point_intervention:
-    #         traj = simulate(model, initial_state=s0, timespan=torch.tensor([0.0, 10.0]))
-    #
-    # dxdparam, = torch.autograd.grad(outputs=(traj.x[-1],), inputs=(param,), create_graph=True)
-    # assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
-    #
-    # # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
-    # dzdparam, = torch.autograd.grad(outputs=(traj.z[-1],), inputs=(param,), create_graph=True)
-    # assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
-
-    raise NotImplementedError()
-
-
 def test_grad_of_event_f_params_torchdiffeq_only():
     # This tests functionality tests in test_grad_of_dynamic_intervention_event_f_params
     # See "NOTE: parameters for the event function must be in the state itself to obtain gradients."

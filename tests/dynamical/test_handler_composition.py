@@ -131,8 +131,3 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
     )
     # Noise is shared between factual and counterfactual worlds.
     assert pred["u_ip"].squeeze().shape == (num_samples, len(flight_landing_times))
-
-
-@pytest.mark.skip
-def test_shape_multicounterfactual_observation_intervention_commutes():
-    raise NotImplementedError()
