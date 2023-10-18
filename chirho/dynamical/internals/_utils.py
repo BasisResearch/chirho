@@ -15,10 +15,7 @@ T = TypeVar("T")
 @indices_of.register(State)
 def _indices_of_state(state: State, *, event_dim: int = 0, **kwargs) -> IndexSet:
     return union(
-        *(
-            indices_of(getattr(state, k), event_dim=event_dim, **kwargs)
-            for k in get_keys(state)
-        )
+        *(indices_of(state[k], event_dim=event_dim, **kwargs) for k in get_keys(state))
     )
 
 
@@ -28,7 +25,7 @@ def _gather_state(
 ) -> State[T]:
     return type(state)(
         **{
-            k: gather(getattr(state, k), indices, event_dim=event_dim, **kwargs)
+            k: gather(state[k], indices, event_dim=event_dim, **kwargs)
             for k in get_keys(state)
         }
     )
@@ -38,9 +35,7 @@ def _gather_state(
 def _state_intervene(obs: State[T], act: State[T], **kwargs) -> State[T]:
     new_state: State[T] = State()
     for k in get_keys(obs):
-        setattr(
-            new_state, k, intervene(getattr(obs, k), getattr(act, k, None), **kwargs)
-        )
+        new_state[k] = intervene(obs[k], act[k] if k in act else None, **kwargs)
     return new_state
 
 
@@ -64,8 +59,7 @@ def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
 
     result: State[T] = State()
     for k in get_keys(traj1):
-        setattr(result, k, append(getattr(traj1, k), getattr(traj2, k)))
-
+        result[k] = append(traj1[k], traj2[k])
     return result
 
 
@@ -83,8 +77,8 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
-def _squeeze_time_dim(traj: State[T]) -> State[T]:
-    return State(**{k: getattr(traj, k).squeeze(-1) for k in get_keys(traj)})
+def _squeeze_time_dim(traj: State[torch.Tensor]) -> State[torch.Tensor]:
+    return State(**{k: traj[k].squeeze(-1) for k in get_keys(traj)})
 
 
 @observe.register(State)
@@ -103,9 +97,11 @@ def _observe_state(
     if obs is rv or obs is None:
         return rv
 
+    assert isinstance(obs, State)
+
     return State(
         **{
-            k: observe(getattr(rv, k), getattr(obs, k), name=f"{name}__{k}", **kwargs)
+            k: observe(rv[k], obs[k], name=f"{name}__{k}", **kwargs)
             for k in get_keys(rv)
         }
     )

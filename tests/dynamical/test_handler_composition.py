@@ -94,8 +94,10 @@ class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
 
         # A flight arrives in a country that tests all arrivals for a disease. The number of people infected on the
         #  plane is a noisy function of the number of infected people in the country of origin at that time.
-        u_ip = pyro.sample("u_ip", Normal(7.0, 2.0).expand(X.I.shape[-1:]).to_event(1))
-        pyro.deterministic("infected_passengers", X.I + u_ip, event_dim=1)
+        u_ip = pyro.sample(
+            "u_ip", Normal(7.0, 2.0).expand(X["I"].shape[-1:]).to_event(1)
+        )
+        pyro.deterministic("infected_passengers", X["I"] + u_ip, event_dim=1)
 
 
 def test_shape_twincounterfactual_observation_intervention_commutes():
@@ -108,9 +110,9 @@ def test_shape_twincounterfactual_observation_intervention_commutes():
     num_worlds = 2
 
     state_shape = (num_worlds, len(logging_times))
-    assert ret.S.squeeze().squeeze().shape == state_shape
-    assert ret.I.squeeze().squeeze().shape == state_shape
-    assert ret.R.squeeze().squeeze().shape == state_shape
+    assert ret["S"].squeeze().squeeze().shape == state_shape
+    assert ret["I"].squeeze().squeeze().shape == state_shape
+    assert ret["R"].squeeze().squeeze().shape == state_shape
 
     nodes = tr.get_trace().nodes
 
