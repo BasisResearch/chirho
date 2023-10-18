@@ -119,9 +119,9 @@ def test_tspan_collision(model, obs_handler_cls):
             with obs_handler_cls(time, observation=obs):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
     result = dt.trajectory
-    assert result.S.shape[0] == len(logging_times)
-    assert result.I.shape[0] == len(logging_times)
-    assert result.R.shape[0] == len(logging_times)
+    assert result["S"].shape[0] == len(logging_times)
+    assert result["I"].shape[0] == len(logging_times)
+    assert result["R"].shape[0] == len(logging_times)
 
 
 @pytest.mark.parametrize("model", [bayes_sir_model])
@@ -305,6 +305,6 @@ def test_simulate_persistent_pyrosample(use_event_loop):
                         )
     result = dt.trajectory
 
-    assert result.S.shape[0] == len(logging_times)
-    assert result.I.shape[0] == len(logging_times)
-    assert result.R.shape[0] == len(logging_times)
+    assert result["S"].shape[0] == len(logging_times)
+    assert result["I"].shape[0] == len(logging_times)
+    assert result["R"].shape[0] == len(logging_times)

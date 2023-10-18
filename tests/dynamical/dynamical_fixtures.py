@@ -26,12 +26,12 @@ class UnifiedFixtureDynamics(pyro.nn.PyroModule):
     def forward(self, X: State[torch.Tensor]):
         dX: State[torch.Tensor] = State()
         beta = self.beta * (
-            1.0 + 0.1 * torch.sin(0.1 * X.t)
+            1.0 + 0.1 * torch.sin(0.1 * X["t"])
         )  # beta oscilates slowly in time.
 
-        dX.S = -beta * X.S * X.I
-        dX.I = beta * X.S * X.I - self.gamma * X.I  # noqa
-        dX.R = self.gamma * X.I
+        dX["S"] = -beta * X["S"] * X["I"]
+        dX["I"] = beta * X["S"] * X["I"] - self.gamma * X["I"]  # noqa
+        dX["R"] = self.gamma * X["I"]
         return dX
 
     def _unit_measurement_error(self, name: str, x: torch.Tensor):
@@ -42,9 +42,9 @@ class UnifiedFixtureDynamics(pyro.nn.PyroModule):
 
     @pyro.nn.pyro_method
     def observation(self, X: State[torch.Tensor]):
-        self._unit_measurement_error("S_obs", X.S)
-        self._unit_measurement_error("I_obs", X.I)
-        self._unit_measurement_error("R_obs", X.R)
+        self._unit_measurement_error("S_obs", X["S"])
+        self._unit_measurement_error("I_obs", X["I"])
+        self._unit_measurement_error("R_obs", X["R"])
 
 
 def bayes_sir_model():
@@ -64,7 +64,7 @@ def check_states_match(state1: State[torch.Tensor], state2: State[torch.Tensor])
 
     for k in get_keys(state1):
         assert torch.allclose(
-            getattr(state1, k), getattr(state2, k)
+            state1[k], state2[k]
         ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
 
     return True
@@ -77,7 +77,7 @@ def check_trajectories_match_in_all_but_values(
 
     for k in get_keys(traj1):
         assert not torch.allclose(
-            getattr(traj2, k), getattr(traj1, k)
+            traj2[k], traj1[k]
         ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."
 
     return True

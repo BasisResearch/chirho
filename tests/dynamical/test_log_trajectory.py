@@ -51,7 +51,6 @@ def test_logging():
 def test_trajectory_methods():
     trajectory = State(S=torch.tensor([1.0, 2.0, 3.0]))
     assert get_keys(trajectory) == frozenset({"S"})
-    assert str(trajectory) == "State({'S': tensor([1., 2., 3.])})"
 
 
 def test_append():
@@ -59,5 +58,5 @@ def test_append():
     trajectory2 = State(S=torch.tensor([4.0, 5.0, 6.0]))
     trajectory = append(trajectory1, trajectory2)
     assert torch.allclose(
-        trajectory.S, torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
+        trajectory["S"], torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
     ), "append() failed to append a trajectory"

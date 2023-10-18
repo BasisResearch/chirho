@@ -243,8 +243,8 @@ def test_twinworld_point_intervention(
         cf_trajectory = dt.trajectory
         for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -278,8 +278,8 @@ def test_multiworld_point_intervention(
         cf_trajectory = dt.trajectory
         for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -301,7 +301,7 @@ def test_split_odeint_broadcast(
     with cf:
         trajectory = dt.trajectory
         for k in get_keys(trajectory):
-            assert len(indices_of(getattr(trajectory, k), event_dim=1)) > 0
+            assert len(indices_of(trajectory[k], event_dim=1)) > 0
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -358,10 +358,10 @@ def test_twinworld_matches_output(
 
     for k in get_keys(cf_state):
         assert torch.allclose(
-            getattr(cf_actual, k), getattr(cf_expected, k)
+            cf_actual[k], cf_expected[k]
         ), f"States differ in state trajectory of variable {k}, but should be identical."
 
     for k in get_keys(cf_state):
         assert torch.allclose(
-            getattr(factual_actual, k), getattr(factual_expected, k)
+            factual_actual[k], factual_expected[k]
         ), f"States differ in state trajectory of variable {k}, but should be identical."

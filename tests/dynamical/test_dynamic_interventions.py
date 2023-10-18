@@ -40,7 +40,7 @@ intervene_state2 = State(S=torch.tensor(30.0))
 
 def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int = 0):
     def event_f(t: torch.tensor, state: State[torch.tensor]):
-        actual, target = state.R, target_state.R
+        actual, target = state["R"], target_state["R"]
         cf_indices = IndexSet(
             **{
                 k: {1}
@@ -96,14 +96,14 @@ def test_nested_dynamic_intervention_causes_change(
                         model, init_state, start_time, end_time, solver=TorchDiffEq()
                     )
 
-    preint_total = init_state.S + init_state.I + init_state.R
+    preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
     # Each intervention just adds a certain amount of susceptible people after the recovered count exceeds some amount
 
     trajectory = dt.trajectory
 
-    postint_mask1 = trajectory.R > ts1.R
-    postint_mask2 = trajectory.R > ts2.R
+    postint_mask1 = trajectory["R"] > ts1["R"]
+    postint_mask2 = trajectory["R"] > ts2["R"]
     preint_mask = ~(postint_mask1 | postint_mask2)
 
     # TODO support dim != -1
@@ -114,16 +114,18 @@ def test_nested_dynamic_intervention_causes_change(
 
     # Make sure all points before the intervention maintain the same total population.
     preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
-    assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
+    assert torch.allclose(
+        preint_total, preint_traj["S"] + preint_traj["I"] + preint_traj["R"]
+    )
 
     # Make sure all points after the first intervention, but before the second, include the added population of that
     #  first intervention.
     postfirst_int_mask, postsec_int_mask = (
         (postint_mask1, postint_mask2)
-        if ts1.R < ts2.R
+        if ts1["R"] < ts2["R"]
         else (postint_mask2, postint_mask1)
     )
-    firstis, secondis = (is1, is2) if ts1.R < ts2.R else (is2, is1)
+    firstis, secondis = (is1, is2) if ts1["R"] < ts2["R"] else (is2, is1)
 
     postfirst_int_presec_int_mask = postfirst_int_mask & ~postsec_int_mask
 
@@ -143,10 +145,10 @@ def test_nested_dynamic_intervention_causes_change(
         trajectory, postfirst_int_presec_int_idx, name_to_dim=name_to_dim
     )
     assert torch.all(
-        postfirst_int_presec_int_traj.S
-        + postfirst_int_presec_int_traj.I
-        + postfirst_int_presec_int_traj.R
-        > (preint_total + firstis.S) * 0.95
+        postfirst_int_presec_int_traj["S"]
+        + postfirst_int_presec_int_traj["I"]
+        + postfirst_int_presec_int_traj["R"]
+        > (preint_total + firstis["S"]) * 0.95
     )
 
     postsec_int_idx = IndexSet(
@@ -155,8 +157,8 @@ def test_nested_dynamic_intervention_causes_change(
 
     postsec_int_traj = gather(trajectory, postsec_int_idx, name_to_dim=name_to_dim)
     assert torch.all(
-        postsec_int_traj.S + postsec_int_traj.I + postsec_int_traj.R
-        > (preint_total + firstis.S + secondis.S) * 0.95
+        postsec_int_traj["S"] + postsec_int_traj["I"] + postsec_int_traj["R"]
+        > (preint_total + firstis["S"] + secondis["S"]) * 0.95
     )
 
 
@@ -186,7 +188,7 @@ def test_dynamic_intervention_causes_change(
             ):
                 simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
-    preint_total = init_state.S + init_state.I + init_state.R
+    preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
     trajectory = dt.trajectory
 
@@ -194,7 +196,7 @@ def test_dynamic_intervention_causes_change(
     #  It happens that the susceptible population is roughly 0 at the intervention point,
     #  so this serves to make sure the intervention actually causes that population influx.
 
-    postint_mask = trajectory.R > trigger_state.R
+    postint_mask = trajectory["R"] > trigger_state["R"]
 
     # TODO support dim != -1
     name_to_dim = {"__time": -1}
@@ -210,13 +212,15 @@ def test_dynamic_intervention_causes_change(
     preint_traj = gather(trajectory, preint_idx, name_to_dim=name_to_dim)
 
     # Make sure all points before the intervention maintain the same total population.
-    assert torch.allclose(preint_total, preint_traj.S + preint_traj.I + preint_traj.R)
+    assert torch.allclose(
+        preint_total, preint_traj["S"] + preint_traj["I"] + preint_traj["R"]
+    )
 
     # Make sure all points after the intervention include the added population.
     # noinspection PyTypeChecker
     assert torch.all(
-        postint_traj.S + postint_traj.I + postint_traj.R
-        > (preint_total + intervene_state.S) * 0.95
+        postint_traj["S"] + postint_traj["I"] + postint_traj["R"]
+        > (preint_total + intervene_state["S"]) * 0.95
     )
 
 
@@ -271,8 +275,8 @@ def test_split_twinworld_dynamic_intervention(
         cf_trajectory = dt.trajectory
         for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -319,8 +323,8 @@ def test_split_multiworld_dynamic_intervention(
         cf_trajectory = dt.trajectory
         for k in get_keys(cf_trajectory):
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -393,22 +397,27 @@ def test_split_twinworld_dynamic_matches_output(
 
     for k in get_keys(cf_result):
         assert torch.allclose(
-            getattr(cf_actual, k), getattr(cf_expected, k), atol=1e-3, rtol=0
+            cf_actual[k], cf_expected[k], atol=1e-3, rtol=0
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
     for k in get_keys(cf_result):
         assert torch.allclose(
-            getattr(factual_actual, k), getattr(factual_expected, k), atol=1e-3, rtol=0
+            factual_actual[k],
+            factual_expected[k],
+            atol=1e-3,
+            rtol=0,
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
 
 def test_grad_of_dynamic_intervention_event_f_params():
     def model(X: State[torch.Tensor]):
         dX = State()
-        dX.x = tt(1.0)
-        dX.z = X.dz
-        dX.dz = tt(0.0)  # also a constant, this gets set by interventions.
-        dX.param = tt(0.0)  # this is a constant event function parameter, so no change.
+        dX["x"] = tt(1.0)
+        dX["z"] = X["dz"]
+        dX["dz"] = tt(0.0)  # also a constant, this gets set by interventions.
+        dX["param"] = tt(
+            0.0
+        )  # this is a constant event function parameter, so no change.
         return dX
 
     param = torch.nn.Parameter(tt(5.0))
@@ -416,7 +425,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     s0 = State(x=tt(0.0), z=tt(0.0), dz=tt(0.0), param=param)
 
     dynamic_intervention = DynamicIntervention(
-        event_f=lambda t, s: t - s.param,
+        event_f=lambda t, s: t - s["param"],
         intervention=State(dz=tt(1.0)),
     )
 
@@ -426,13 +435,13 @@ def test_grad_of_dynamic_intervention_event_f_params():
             result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
 
     (dxdparam,) = torch.autograd.grad(
-        outputs=(result.x,), inputs=(param,), create_graph=True
+        outputs=(result["x"],), inputs=(param,), create_graph=True
     )
     assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
 
     # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
     (dzdparam,) = torch.autograd.grad(
-        outputs=(result.z,), inputs=(param,), create_graph=True
+        outputs=(result["z"],), inputs=(param,), create_graph=True
     )
     assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
 

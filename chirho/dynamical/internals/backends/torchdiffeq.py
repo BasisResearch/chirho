@@ -31,13 +31,13 @@ def _deriv(
 ) -> Tuple[torch.Tensor, ...]:
     env: State[torch.Tensor] = State()
     for var, value in zip(var_order, state):
-        setattr(env, var, value)
+        env[var] = value
 
     assert "t" not in get_keys(env), "variable name t is reserved for time"
-    env.t = time
+    env["t"] = time
 
     ddt: State[torch.Tensor] = dynamics(env)
-    return tuple(getattr(ddt, var, torch.tensor(0.0)) for var in var_order)
+    return tuple(ddt.get(var, torch.tensor(0.0)) for var in var_order)
 
 
 def _torchdiffeq_ode_simulate_inner(
@@ -50,14 +50,14 @@ def _torchdiffeq_ode_simulate_inner(
 
     solns = _batched_odeint(  # torchdiffeq.odeint(
         functools.partial(_deriv, dynamics, var_order),
-        tuple(getattr(initial_state, v) for v in var_order),
+        tuple(initial_state[v] for v in var_order),
         timespan,
         **odeint_kwargs,
     )
 
     trajectory: State[torch.Tensor] = State()
     for var, soln in zip(var_order, solns):
-        setattr(trajectory, var, soln)
+        trajectory[var] = soln
 
     return trajectory
 
@@ -160,7 +160,7 @@ def torchdiffeq_get_next_interruptions_dynamic(
     # Simulate to the event execution.
     event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
         functools.partial(_deriv, dynamics, var_order),
-        tuple(getattr(start_state, v) for v in var_order),
+        tuple(start_state[v] for v in var_order),
         start_time,
         event_fn=combined_event_f,
         **solver.odeint_kwargs,

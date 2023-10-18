@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import Callable, FrozenSet, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, FrozenSet, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -10,30 +10,12 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class State(Generic[T]):
-    def __init__(self, **values: T):
-        self.__dict__["_values"] = {}
-        for k, v in values.items():
-            setattr(self, k, v)
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({self.__dict__['_values']})"
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}({self.__dict__['_values']})"
-
-    def __setattr__(self, __name: str, __value: T) -> None:
-        self.__dict__["_values"][__name] = __value
-
-    def __getattr__(self, __name: str) -> T:
-        if __name in self.__dict__["_values"]:
-            return self.__dict__["_values"][__name]
-        else:
-            raise AttributeError(f"{__name} not in {self.__dict__['_values']}")
+class State(Generic[T], Dict[str, T]):
+    pass
 
 
 def get_keys(state: State[T]) -> FrozenSet[str]:
-    return frozenset(state.__dict__["_values"].keys())
+    return frozenset(state.keys())
 
 
 Dynamics = Callable[[State[T]], State[T]]
