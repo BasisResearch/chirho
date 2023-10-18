@@ -1,11 +1,12 @@
 import functools
-from typing import FrozenSet, Tuple, TypeVar
+from typing import FrozenSet, Optional, Tuple, TypeVar
 
 import torch
 
 from chirho.dynamical.ops import State, get_keys
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
+from chirho.observational.ops import Observation, observe
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -84,3 +85,27 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
 
 def _squeeze_time_dim(traj: State[T]) -> State[T]:
     return State(**{k: getattr(traj, k).squeeze(-1) for k in get_keys(traj)})
+
+
+@observe.register(State)
+def _observe_state(
+    rv: State[T],
+    obs: Optional[Observation[State[T]]] = None,
+    *,
+    name: Optional[str] = None,
+    **kwargs,
+) -> State[T]:
+    if callable(obs):
+        obs = obs(rv)
+        if obs is not rv and obs is not None:
+            raise NotImplementedError("Dependent observations are not yet supported")
+
+    if obs is rv or obs is None:
+        return rv
+
+    return State(
+        **{
+            k: observe(getattr(rv, k), getattr(obs, k), name=f"{name}__{k}", **kwargs)
+            for k in get_keys(rv)
+        }
+    )
