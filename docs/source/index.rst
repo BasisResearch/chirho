@@ -30,6 +30,7 @@ Table of Contents
    sciplex
    sdid
    dr_learner
+   dynamical_intro
 
 .. toctree::
    :maxdepth: 2
