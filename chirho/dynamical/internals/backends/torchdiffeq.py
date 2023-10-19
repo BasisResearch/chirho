@@ -40,7 +40,6 @@ def torchdiffeq_check_dynamics(
     return result1 == result2
 
 
-# noinspection PyMethodParameters
 def _deriv(
     dynamics: Dynamics[torch.Tensor],
     var_order: Tuple[str, ...],
