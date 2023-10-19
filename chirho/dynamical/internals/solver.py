@@ -8,7 +8,7 @@ from typing import List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho.dynamical.ops import Dynamics, State, simulate
+from chirho.dynamical.ops import Dynamics, State
 
 if typing.TYPE_CHECKING:
     from chirho.dynamical.handlers.interruption import (
@@ -39,6 +39,22 @@ def get_solver() -> Solver:
     raise ValueError("Solver not found in context.")
 
 
+@pyro.poutine.runtime.effectful(type="get_static_interruptions")
+def get_static_interruptions() -> List[StaticInterruption]:
+    """
+    Get the current static interruptions from the context.
+    """
+    return []
+
+
+@pyro.poutine.runtime.effectful(type="get_dynamic_interruptions")
+def get_dynamic_interruptions() -> List[DynamicInterruption]:
+    """
+    Get the current dynamic interruptions from the context.
+    """
+    return []
+
+
 @functools.singledispatch
 def simulate_point(
     solver: Solver,
@@ -52,7 +68,7 @@ def simulate_point(
     Simulate a dynamical system.
     """
     raise NotImplementedError(
-        f"simulate not implemented for solver of type {type(solver)}"
+        f"simulate_point not implemented for solver of type {type(solver)}"
     )
 
 
@@ -80,48 +96,21 @@ def simulate_to_interruption(
     start_state: State[T],
     start_time: R,
     end_time: R,
-    *,
-    next_static_interruption: Optional[StaticInterruption] = None,
-    dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
 ) -> Tuple[State[T], Tuple[Interruption, ...], R]:
     """
     Simulate a dynamical system until the next interruption. This will be either one of the passed
     dynamic interruptions, the next static interruption, or the end time, whichever comes first.
 
-    :returns: the final state, a collection of interruptions that ended the simulation
-      (this will usually just be a single interruption), and the time the interruption occurred.
+    :returns: the final state
     """
-
-    interruptions, interruption_time = get_next_interruptions(
+    return simulate_point(
         solver,
         dynamics,
         start_state,
         start_time,
         end_time,
-        next_static_interruption=next_static_interruption,
-        dynamic_interruptions=dynamic_interruptions,
-        **kwargs,
     )
-    # TODO: consider memoizing results of `get_next_interruptions` to avoid recomputing
-    #  the solver in the dynamic setting. The interactions are a bit tricky here though, as we couldn't be in
-    #  a LogTrajectory context.
-    event_state = simulate(
-        dynamics, start_state, start_time, interruption_time, solver=solver
-    )
-
-    return event_state, interruptions, interruption_time
-
-
-@pyro.poutine.runtime.effectful(type="apply_interruptions")
-def apply_interruptions(
-    dynamics: Dynamics[T], start_state: State[T]
-) -> Tuple[Dynamics[T], State[T]]:
-    """
-    Apply the effects of an interruption to a dynamical system.
-    """
-    # Default is to do nothing.
-    return dynamics, start_state
 
 
 def get_next_interruptions(

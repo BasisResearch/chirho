@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import Callable, Dict, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, Generic, List, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -20,7 +20,7 @@ Dynamics = Callable[[State[T]], State[T]]
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
     dynamics: Dynamics[T],
-    initial_state: State[T],
+    state: State[T],
     start_time: R,
     end_time: R,
     *,
@@ -30,9 +30,55 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
+    from chirho.dynamical.handlers.interruption import (
+        DynamicInterruption,
+        Interruption,
+        StaticInterruption,
+    )
+    from chirho.dynamical.internals.solver import (
+        Solver,
+        get_dynamic_interruptions,
+        get_next_interruptions,
+        get_solver,
+        get_static_interruptions,
+        simulate_to_interruption,
+    )
 
     solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_point(
-        solver_, dynamics, initial_state, start_time, end_time, **kwargs
-    )
+
+    static_interruptions: List[StaticInterruption] = get_static_interruptions()
+    dynamic_interruptions: List[DynamicInterruption] = get_dynamic_interruptions()
+
+    while start_time < end_time:
+        with pyro.poutine.messenger.block_messengers(
+            lambda m: (isinstance(m, Interruption) and m.used)
+        ):
+            next_static_interruption = (
+                None if len(static_interruptions) == 0 else static_interruptions.pop(0)
+            )
+
+            terminal_interruptions, interruption_time = get_next_interruptions(
+                solver_,
+                dynamics,
+                state,
+                start_time,
+                end_time,
+                next_static_interruption=next_static_interruption,
+                dynamic_interruptions=dynamic_interruptions,
+            )
+
+            state = simulate_to_interruption(
+                solver_,
+                dynamics,
+                state,
+                start_time,
+                interruption_time,
+            )
+
+            start_time = interruption_time
+
+            for interruption in terminal_interruptions:
+                interruption.used = True
+                dynamics, state = interruption.apply(dynamics, state)
+
+    return state

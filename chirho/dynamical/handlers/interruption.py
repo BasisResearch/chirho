@@ -1,12 +1,12 @@
+import bisect
 import numbers
-import warnings
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import Callable, Generic, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
@@ -23,8 +23,9 @@ class Interruption(pyro.poutine.messenger.Messenger):
         self.used = False
         return super().__enter__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        raise NotImplementedError("shouldn't be here!")
+    def apply(self, dynamics: Dynamics, state: State[T]) -> Tuple[Dynamics, State[T]]:
+        # Do nothing unless the interruption overwrites the apply method.
+        return dynamics, state
 
 
 class StaticInterruption(Interruption):
@@ -34,26 +35,12 @@ class StaticInterruption(Interruption):
         self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        _, _, _, start_time, end_time = msg["args"]
+    def _pyro_get_static_interruptions(self, msg) -> None:
+        # static_interruptions are always sorted by time
+        bisect.insort(msg["value"], self)
 
-        if start_time < self.time < end_time:
-            next_static_interruption: Optional[StaticInterruption] = msg["kwargs"].get(
-                "next_static_interruption", None
-            )
-
-            # Usurp the next static interruption if this one occurs earlier.
-            if (
-                next_static_interruption is None
-                or self.time < next_static_interruption.time
-            ):
-                msg["kwargs"]["next_static_interruption"] = self
-        elif self.time >= end_time:
-            warnings.warn(
-                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
-                f"{end_time}. This interruption will have no effect.",
-                UserWarning,
-            )
+    def __lt__(self, other: "StaticInterruption"):
+        return self.time < other.time
 
 
 class DynamicInterruption(Generic[T], Interruption):
@@ -67,8 +54,8 @@ class DynamicInterruption(Generic[T], Interruption):
         self.event_f = event_f
         super().__init__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        msg["kwargs"].setdefault("dynamic_interruptions", []).append(self)
+    def _pyro_get_dynamic_interruptions(self, msg) -> None:
+        msg["value"].append(self)
 
 
 class _InterventionMixin(Generic[T]):
@@ -79,19 +66,16 @@ class _InterventionMixin(Generic[T]):
 
     intervention: Intervention[State[T]]
 
-    def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics, initial_state = msg["args"]
-        msg["args"] = (dynamics, intervene(initial_state, self.intervention))
+    def apply(self, dynamics: Dynamics, state: State[T]) -> Tuple[Dynamics, State[T]]:
+        return dynamics, intervene(state, self.intervention)
 
 
 class _PointObservationMixin(Generic[T]):
     observation: Observation[State[T]]
     time: R
 
-    def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics = msg["args"][0]
-        state: State[T] = msg["args"][1]
-        msg["value"] = (dynamics, observe(state, self.observation))
+    def apply(self, dynamics: Dynamics, state: State[T]) -> Tuple[Dynamics, State[T]]:
+        return dynamics, observe(state, self.observation)
 
     def _pyro_sample(self, msg):
         # modify observed site names to handle multiple time points
