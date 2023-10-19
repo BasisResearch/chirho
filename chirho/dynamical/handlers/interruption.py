@@ -141,21 +141,4 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         super().__init__(times, eps=eps)
 
     def _pyro_post_simulate(self, msg) -> None:
-        super()._pyro_post_simulate(msg)
-
-        # This checks whether the simulate has already redirected in a InterruptionEventLoop.
-        # If so, we don't want to run the observation again.
-        if msg.setdefault("in_SEL", False):
-            return
-
-        # TODO remove this redundant check by fixing semantics of LogTrajectory and simulate
-        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
-        name_to_dim["__time"] = -1
-        len_traj = (
-            0
-            if len(self.trajectory.keys()) == 0
-            else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
-        )
-
-        if len_traj == len(self.times):
-            msg["value"] = observe(self.trajectory, self.observation)
+        msg["value"] = observe(self.trajectory, self.observation)
