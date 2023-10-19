@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ master, staging-dynamic ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, staging-dynamic ]
+    branches: [ master ]
 
 jobs:
   build:
@@ -51,5 +51,5 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          pytest tests/ -s --cov=chirho/ --cov-report=term-missing ${@-}
+          pytest tests/ -s -n auto --cov=chirho/ --cov-report=term-missing ${@-}
           cd docs && make html
