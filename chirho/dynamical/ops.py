@@ -34,9 +34,13 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
+    from chirho.dynamical.internals.solver import (
+        Solver,
+        get_solver,
+        simulate_to_interruption,
+    )
 
     solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_point(
+    return simulate_to_interruption(
         solver_, dynamics, initial_state, start_time, end_time, **kwargs
     )
