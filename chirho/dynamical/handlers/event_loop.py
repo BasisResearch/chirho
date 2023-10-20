@@ -7,6 +7,7 @@ import pyro
 from chirho.dynamical.handlers.interruption import Interruption
 from chirho.dynamical.internals.solver import (
     apply_interruptions,
+    get_next_interruptions,
     get_solver,
     simulate_to_interruption,
 )
@@ -29,13 +30,18 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             with pyro.poutine.messenger.block_messengers(
                 lambda m: m is self or (isinstance(m, Interruption) and m.used)
             ):
-                state, terminal_interruptions, start_time = simulate_to_interruption(
+                terminal_interruptions, interruption_time = get_next_interruptions(
+                    solver, dynamics, state, start_time, end_time
+                )
+
+                state = simulate_to_interruption(
                     solver,
                     dynamics,
                     state,
                     start_time,
-                    end_time,
+                    interruption_time,
                 )
+                start_time = interruption_time
                 for h in terminal_interruptions:
                     h.used = True
 
@@ -46,6 +52,4 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 dynamics, state = apply_interruptions(dynamics, state)
 
         msg["value"] = state
-        msg["stop"] = True
         msg["done"] = True
-        msg["in_SEL"] = True

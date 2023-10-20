@@ -1,11 +1,10 @@
-import typing
 from typing import Generic, TypeVar
 
 import pyro
 import torch
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, append
-from chirho.dynamical.internals.solver import Solver, get_solver, simulate_trajectory
+from chirho.dynamical.internals.solver import simulate_trajectory
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
@@ -30,16 +29,12 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         self.trajectory: State[T] = State()
         return super().__enter__()
 
-    def _pyro_simulate(self, msg) -> None:
+    def _pyro_simulate_to_interruption(self, msg) -> None:
         msg["done"] = True
 
-    def _pyro_post_simulate(self, msg) -> None:
+    def _pyro_post_simulate_to_interruption(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
-        dynamics, initial_state, start_time, end_time = msg["args"]
-        if msg["kwargs"].get("solver", None) is not None:
-            solver = typing.cast(Solver, msg["kwargs"]["solver"])
-        else:
-            solver = get_solver()
+        solver, dynamics, initial_state, start_time, end_time = msg["args"]
 
         filtered_timespan = self.times[
             (self.times >= start_time) & (self.times <= end_time)
