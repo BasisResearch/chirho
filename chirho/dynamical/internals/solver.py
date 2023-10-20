@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import numbers
 import typing
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import List, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -137,7 +137,7 @@ def get_next_interruptions(
     if len(dynamic_interruptions) == 0:
         # If there's no dynamic intervention, we'll simulate until either the end_time,
         # or the `next_static_interruption` whichever comes first.
-        terminal_dynamic_interruptions = tuple()
+        terminal_dynamic_interruptions: Tuple[Interruption, ...] = tuple()
         interruption_time = next_static_interruption.time
     else:
         (
@@ -153,9 +153,9 @@ def get_next_interruptions(
             **kwargs,
         )
 
-    terminal_interruptions = terminal_dynamic_interruptions + tuple([
-        si for si in static_interruptions if si.time == interruption_time
-    ])
+    terminal_interruptions = terminal_dynamic_interruptions + tuple(
+        [si for si in static_interruptions if si.time == interruption_time]
+    )
     return terminal_interruptions, interruption_time
 
 
