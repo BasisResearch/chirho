@@ -7,7 +7,6 @@ import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.ops import Dynamics, State
-from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
 
@@ -17,15 +16,7 @@ T = TypeVar("T")
 
 
 class Interruption(pyro.poutine.messenger.Messenger):
-    used: bool
-
-    def __enter__(self):
-        self.used = False
-        return super().__enter__()
-
-    def apply(self, dynamics: Dynamics, state: State[T]) -> Tuple[Dynamics, State[T]]:
-        # Do nothing unless the interruption overwrites the apply method.
-        return dynamics, state
+    pass
 
 
 class StaticInterruption(Interruption):

@@ -88,6 +88,6 @@ def simulate(
             for interruption in terminal_interruptions:
                 if isinstance(interruption, DynamicInterruption):
                     dynamic_interruptions.remove(interruption)
-                dynamics, state = interruption.apply(dynamics, state)
-
+                if hasattr(interruption, "apply"):
+                    dynamics, state = interruption.apply(dynamics, state)
     return state

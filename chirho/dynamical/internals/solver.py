@@ -126,7 +126,10 @@ def get_next_interruptions(
 ) -> Tuple[Tuple[Interruption, ...], R]:
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
-    if isinstance(next_static_interruption, type(None)) or next_static_interruption.time > end_time:
+    if (
+        isinstance(next_static_interruption, type(None))
+        or typing.cast(StaticInterruption, next_static_interruption).time > end_time
+    ):
         # If there's no static interruption or the next static interruption is after the end time,
         # we'll just simulate until the end time.
         next_static_interruption = StaticInterruption(time=end_time)
