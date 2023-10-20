@@ -10,7 +10,6 @@ from chirho.counterfactual.handlers import (
 )
 from chirho.dynamical.handlers import (
     DynamicIntervention,
-    InterruptionEventLoop,
     LogTrajectory,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
@@ -83,18 +82,17 @@ def test_nested_dynamic_intervention_causes_change(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+        ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
-                intervention=is1,
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
             ):
-                with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
-                    intervention=is2,
-                ):
-                    simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                simulate(
+                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                )
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
@@ -181,12 +179,11 @@ def test_dynamic_intervention_causes_change(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
-            with DynamicIntervention(
-                event_f=get_state_reached_event_f(trigger_state),
-                intervention=intervene_state,
-            ):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(trigger_state),
+            intervention=intervene_state,
+        ):
+            simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
@@ -253,23 +250,22 @@ def test_split_twinworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+        ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
-                intervention=is1,
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
             ):
-                with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
-                    intervention=is2,
-                ):
-                    with TwinWorldCounterfactual() as cf:
-                        cf_state = simulate(
-                            model,
-                            init_state,
-                            start_time,
-                            end_time,
-                            solver=TorchDiffEq(),
-                        )
+                with TwinWorldCounterfactual() as cf:
+                    cf_state = simulate(
+                        model,
+                        init_state,
+                        start_time,
+                        end_time,
+                        solver=TorchDiffEq(),
+                    )
 
     with cf:
         cf_trajectory = dt.trajectory
@@ -301,23 +297,22 @@ def test_split_multiworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts1),
+            intervention=is1,
+        ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
-                intervention=is1,
+                event_f=get_state_reached_event_f(ts2),
+                intervention=is2,
             ):
-                with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
-                    intervention=is2,
-                ):
-                    with MultiWorldCounterfactual() as cf:
-                        cf_state = simulate(
-                            model,
-                            init_state,
-                            start_time,
-                            end_time,
-                            solver=TorchDiffEq(),
-                        )
+                with MultiWorldCounterfactual() as cf:
+                    cf_state = simulate(
+                        model,
+                        init_state,
+                        start_time,
+                        end_time,
+                        solver=TorchDiffEq(),
+                    )
 
     with cf:
         cf_trajectory = dt.trajectory
@@ -345,37 +340,34 @@ def test_split_twinworld_dynamic_matches_output(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with InterruptionEventLoop():
+    with DynamicIntervention(
+        event_f=get_state_reached_event_f(ts1),
+        intervention=is1,
+    ):
         with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
-            intervention=is1,
+            event_f=get_state_reached_event_f(ts2),
+            intervention=is2,
         ):
-            with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
-                intervention=is2,
-            ):
-                with TwinWorldCounterfactual() as cf:
-                    cf_result = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
-
-    with InterruptionEventLoop():
-        with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
-            intervention=is1,
-        ):
-            with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
-                intervention=is2,
-            ):
-                cf_expected = simulate(
+            with TwinWorldCounterfactual() as cf:
+                cf_result = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
 
-    with InterruptionEventLoop():
-        factual_expected = simulate(
-            model, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
+    with DynamicIntervention(
+        event_f=get_state_reached_event_f(ts1),
+        intervention=is1,
+    ):
+        with DynamicIntervention(
+            event_f=get_state_reached_event_f(ts2),
+            intervention=is2,
+        ):
+            cf_expected = simulate(
+                model, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
+
+    factual_expected = simulate(
+        model, init_state, start_time, end_time, solver=TorchDiffEq()
+    )
 
     with cf:
         factual_indices = IndexSet(
@@ -430,9 +422,8 @@ def test_grad_of_dynamic_intervention_event_f_params():
     )
 
     # noinspection DuplicatedCode
-    with InterruptionEventLoop():
-        with dynamic_intervention:
-            result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
+    with dynamic_intervention:
+        result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
 
     (dxdparam,) = torch.autograd.grad(
         outputs=(result["x"],), inputs=(param,), create_graph=True

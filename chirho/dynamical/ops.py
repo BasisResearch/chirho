@@ -50,35 +50,36 @@ def simulate(
     dynamic_interruptions: List[DynamicInterruption] = get_dynamic_interruptions()
 
     while start_time < end_time:
+        next_static_interruption = (
+            None if len(static_interruptions) == 0 else static_interruptions.pop(0)
+        )
+
+        terminal_interruptions, interruption_time = get_next_interruptions(
+            solver_,
+            dynamics,
+            state,
+            start_time,
+            end_time,
+            next_static_interruption=next_static_interruption,
+            dynamic_interruptions=dynamic_interruptions,
+        )
+
+        state = simulate_to_interruption(
+            solver_,
+            dynamics,
+            state,
+            start_time,
+            interruption_time,
+        )
+
+        start_time = interruption_time
+
         with pyro.poutine.messenger.block_messengers(
-            lambda m: (isinstance(m, Interruption) and m.used)
+            lambda m: isinstance(m, Interruption) and m not in terminal_interruptions
         ):
-            next_static_interruption = (
-                None if len(static_interruptions) == 0 else static_interruptions.pop(0)
-            )
-
-            terminal_interruptions, interruption_time = get_next_interruptions(
-                solver_,
-                dynamics,
-                state,
-                start_time,
-                end_time,
-                next_static_interruption=next_static_interruption,
-                dynamic_interruptions=dynamic_interruptions,
-            )
-
-            state = simulate_to_interruption(
-                solver_,
-                dynamics,
-                state,
-                start_time,
-                interruption_time,
-            )
-
-            start_time = interruption_time
-
             for interruption in terminal_interruptions:
-                interruption.used = True
+                if isinstance(interruption, DynamicInterruption):
+                    dynamic_interruptions.remove(interruption)
                 dynamics, state = interruption.apply(dynamics, state)
 
     return state

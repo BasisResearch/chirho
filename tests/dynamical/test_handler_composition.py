@@ -6,7 +6,6 @@ from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
-    InterruptionEventLoop,
     LogTrajectory,
     StaticBatchObservation,
     StaticIntervention,
@@ -63,22 +62,20 @@ def counterf_model():
     obs = condition(data=flight_landing_data)(model.observation)
     vec_obs3 = StaticBatchObservation(times=flight_landing_times, observation=obs)
     with vec_obs3:
-        with InterruptionEventLoop():
-            with reparam, twin_world, intervention:
-                return simulate(
-                    model,
-                    init_state,
-                    start_time,
-                    end_time,
-                    solver=TorchDiffEq(),
-                )
+        with reparam, twin_world, intervention:
+            return simulate(
+                model,
+                init_state,
+                start_time,
+                end_time,
+                solver=TorchDiffEq(),
+            )
 
 
 def conditioned_model():
     # This is equivalent to the following:
-    # with InterruptionEventLoop():
-    #   with vec_obs3:
-    #       return simulate(...)
+    # with vec_obs3:
+    #    return simulate(...)
     # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from
     #  the factual conditional world.
     with pyro.poutine.messenger.block_messengers(

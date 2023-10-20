@@ -3,7 +3,7 @@ import logging
 import pyro
 import torch
 
-from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
+from chirho.dynamical.handlers import LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, simulate
@@ -31,10 +31,9 @@ def test_logging():
     with LogTrajectory(
         times=logging_times,
     ) as dt2:
-        with InterruptionEventLoop():
-            result2 = simulate(
-                sir, init_state, start_time, end_time, solver=TorchDiffEq()
-            )
+        result2 = simulate(
+            sir, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
     result3 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert isinstance(result1, State)

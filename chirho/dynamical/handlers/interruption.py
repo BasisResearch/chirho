@@ -35,7 +35,7 @@ class StaticInterruption(Interruption):
         self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
-    def _pyro_get_static_interruptions(self, msg) -> None:
+    def _pyro_post_get_static_interruptions(self, msg) -> None:
         # static_interruptions are always sorted by time
         bisect.insort(msg["value"], self)
 
@@ -54,7 +54,7 @@ class DynamicInterruption(Generic[T], Interruption):
         self.event_f = event_f
         super().__init__()
 
-    def _pyro_get_dynamic_interruptions(self, msg) -> None:
+    def _pyro_post_get_dynamic_interruptions(self, msg) -> None:
         msg["value"].append(self)
 
 
@@ -82,7 +82,7 @@ class _PointObservationMixin(Generic[T]):
         msg["name"] = msg["name"] + "_" + str(torch.as_tensor(self.time).item())
 
 
-class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T]):
+class StaticObservation(Generic[T], _PointObservationMixin[T], StaticInterruption):
     def __init__(
         self,
         time: R,
@@ -96,7 +96,7 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
         super().__init__(time + eps)
 
 
-class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
+class StaticIntervention(Generic[T], _InterventionMixin[T], StaticInterruption):
     """
     This effect handler interrupts a simulation at a given time, and
     applies an intervention to the state at that time.
@@ -141,4 +141,4 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         super().__init__(times, eps=eps)
 
     def _pyro_post_simulate(self, msg) -> None:
-        msg["value"] = observe(self.trajectory, self.observation)
+        self.trajectory = observe(self.trajectory, self.observation)
