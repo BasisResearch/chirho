@@ -120,27 +120,30 @@ def get_next_interruptions(
     start_time: R,
     end_time: R,
     *,
-    next_static_interruption: Optional[StaticInterruption] = None,
+    static_interruptions: List[StaticInterruption] = [],
     dynamic_interruptions: List[DynamicInterruption] = [],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], R]:
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
-    if (
-        isinstance(next_static_interruption, type(None))
-        or typing.cast(StaticInterruption, next_static_interruption).time > end_time
-    ):
+    # static_interruptions are always sorted by time
+    if len(static_interruptions) == 0 or static_interruptions[0].time > end_time:
         # If there's no static interruption or the next static interruption is after the end time,
         # we'll just simulate until the end time.
         next_static_interruption = StaticInterruption(time=end_time)
+    else:
+        next_static_interruption = static_interruptions[0]
 
-    assert isinstance(next_static_interruption, StaticInterruption)
     if len(dynamic_interruptions) == 0:
         # If there's no dynamic intervention, we'll simulate until either the end_time,
         # or the `next_static_interruption` whichever comes first.
-        return (next_static_interruption,), next_static_interruption.time
+        terminal_dynamic_interruptions = tuple()
+        interruption_time = next_static_interruption.time
     else:
-        return get_next_interruptions_dynamic(
+        (
+            terminal_dynamic_interruptions,
+            interruption_time,
+        ) = get_next_interruptions_dynamic(
             solver,
             dynamics,
             start_state,
@@ -149,6 +152,11 @@ def get_next_interruptions(
             dynamic_interruptions=dynamic_interruptions,
             **kwargs,
         )
+
+    terminal_interruptions = terminal_dynamic_interruptions + tuple([
+        si for si in static_interruptions if si.time == interruption_time
+    ])
+    return terminal_interruptions, interruption_time
 
 
 @functools.singledispatch

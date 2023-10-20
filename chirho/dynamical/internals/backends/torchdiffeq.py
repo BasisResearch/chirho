@@ -192,14 +192,12 @@ def torchdiffeq_get_next_interruptions_dynamic(
             "The event function returned an unexpected number of events."
         )
 
-    triggered_events = [
+    triggered_dynamic_events = [
         de for de, fm in zip(dynamic_interruptions, fired_mask[:-1]) if fm
     ]
-    if fired_mask[-1]:
-        triggered_events.append(next_static_interruption)
 
     return (
-        tuple(triggered_events),
+        tuple(triggered_dynamic_events),
         event_time,
     )
 

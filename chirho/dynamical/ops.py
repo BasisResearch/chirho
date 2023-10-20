@@ -50,27 +50,15 @@ def simulate(
     dynamic_interruptions: List[DynamicInterruption] = get_dynamic_interruptions()
 
     while start_time < end_time:
-        next_static_interruption = (
-            None if len(static_interruptions) == 0 else static_interruptions.pop(0)
-        )
-
         terminal_interruptions, interruption_time = get_next_interruptions(
             solver_,
             dynamics,
             state,
             start_time,
             end_time,
-            next_static_interruption=next_static_interruption,
+            static_interruptions=static_interruptions,
             dynamic_interruptions=dynamic_interruptions,
         )
-
-        # This makes sure that we don't miss any static interruptions that happen at the same time
-        # as `next_static_interruption`. This should probably move into `get_next_interruptions`
-        while (
-            len(static_interruptions) > 0
-            and static_interruptions[0].time == interruption_time
-        ):
-            terminal_interruptions += (static_interruptions.pop(0),)
 
         state = simulate_to_interruption(
             solver_,
@@ -88,6 +76,8 @@ def simulate(
             for interruption in terminal_interruptions:
                 if isinstance(interruption, DynamicInterruption):
                     dynamic_interruptions.remove(interruption)
+                if isinstance(interruption, StaticInterruption):
+                    static_interruptions.remove(interruption)
                 if hasattr(interruption, "apply"):
                     dynamics, state = interruption.apply(dynamics, state)
     return state
