@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import Callable, Dict, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, FrozenSet, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -12,6 +12,10 @@ T = TypeVar("T")
 
 class State(Generic[T], Dict[str, T]):
     pass
+
+
+def get_keys(state: State[T]) -> FrozenSet[str]:
+    return frozenset(state.keys())
 
 
 Dynamics = Callable[[State[T]], State[T]]
@@ -30,9 +34,13 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
+    from chirho.dynamical.internals.solver import (
+        Solver,
+        get_solver,
+        simulate_to_interruption,
+    )
 
     solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_point(
+    return simulate_to_interruption(
         solver_, dynamics, initial_state, start_time, end_time, **kwargs
     )
