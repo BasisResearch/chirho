@@ -1,6 +1,7 @@
 import logging
 
 import pyro
+import pytest
 import torch
 from pyro.distributions import Normal
 
@@ -138,34 +139,54 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
     assert pred["u_ip"].squeeze().shape == (num_samples, len(flight_landing_times))
 
 
-def test_shallow_handler():
-    class ShallowLogSample(ShallowMessenger):
-        log: set
+class ShallowLogSample(ShallowMessenger):
+    log: set
 
-        def __enter__(self):
-            self.log = set()
-            return super().__enter__()
+    def __enter__(self):
+        self.log = set()
+        return super().__enter__()
 
-        def _pyro_sample(self, msg):
-            self.log.add(msg["name"])
-            pyro.sample(f"{msg['name']}__2", pyro.distributions.Bernoulli(0.5))
+    def _pyro_sample(self, msg):
+        self.log.add(msg["name"])
+        pyro.sample(f"{msg['name']}__2", pyro.distributions.Bernoulli(0.5))
 
+
+def test_shallow_handler_stack():
     with pyro.poutine.trace() as tr1:
         with ShallowLogSample() as h1, ShallowLogSample() as h2:
             pyro.sample("a", pyro.distributions.Bernoulli(0.5))
             with pyro.poutine.trace() as tr2, ShallowLogSample() as h3:
                 pyro.sample("b", pyro.distributions.Bernoulli(0.5))
 
-        with ShallowLogSample() as h4, pyro.poutine.block(hide_types=["sample"]):
-            pyro.sample("c", pyro.distributions.Bernoulli(0.5))
-            with ShallowLogSample() as h5:
-                pyro.sample("d", pyro.distributions.Bernoulli(0.5))
-
     assert h1.log == {"a__2"}
     assert h2.log == {"a"}
     assert h3.log == {"b"}
-    assert h4.log == set()
-    assert h5.log == {"d"}
 
     assert set(tr1.trace.nodes.keys()) == {"a", "a__2", "a__2__2", "b", "b__2"}
     assert set(tr2.trace.nodes.keys()) == {"b", "b__2"}
+
+
+def test_shallow_handler_block():
+    with ShallowLogSample() as h1, pyro.poutine.block(hide_types=["sample"]):
+        pyro.sample("a", pyro.distributions.Bernoulli(0.5))
+        with ShallowLogSample() as h2:
+            pyro.sample("b", pyro.distributions.Bernoulli(0.5))
+
+    assert h1.log == set()
+    assert h2.log == {"b"}
+
+
+@pytest.mark.parametrize("error_before_sample", [True, False])
+def test_shallow_handler_error(error_before_sample):
+    class ShallowLogSampleError(ShallowLogSample):
+        def _pyro_sample(self, msg):
+            super()._pyro_sample(msg)
+            raise RuntimeError("error")
+
+    with pytest.raises(RuntimeError, match="error"):
+        with ShallowLogSampleError():
+            if error_before_sample:
+                raise RuntimeError("error")
+            pyro.sample("a", pyro.distributions.Bernoulli(0.5))
+
+    assert not pyro.poutine.runtime._PYRO_STACK
