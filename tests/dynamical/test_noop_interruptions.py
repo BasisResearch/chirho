@@ -93,50 +93,41 @@ def test_noop_point_interventions(
     )
 
     # Test a single point intervention.
-    with pytest.warns(
-        expected_warning=UserWarning, match="occurred after the end of the timespan"
+    with StaticIntervention(
+        time=post_measurement_intervention_time, intervention=intervene_state
     ):
-        with StaticIntervention(
-            time=post_measurement_intervention_time, intervention=intervene_state
-        ):
-            result_single_pi = simulate(
-                model, init_state, start_time, end_time, solver=TorchDiffEq()
-            )
+        result_single_pi = simulate(
+            model, init_state, start_time, end_time, solver=TorchDiffEq()
+        )
 
     assert check_states_match(observational_execution_result, result_single_pi)
 
     # Test two point interventions out of scope.
-    with pytest.warns(
-        expected_warning=UserWarning, match="occurred after the end of the timespan"
-    ):
-        with StaticIntervention(
-            time=post_measurement_intervention_time, intervention=intervene_state
-        ):
-            with StaticIntervention(
-                time=post_measurement_intervention_time + 1.0,
-                intervention=intervene_state,
-            ):
-                result_double_pi1 = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
-
-    assert check_states_match(observational_execution_result, result_double_pi1)
-
-    # Test with two point interventions out of scope, in a different order.
-    with pytest.warns(
-        expected_warning=UserWarning, match="occurred after the end of the timespan"
+    with StaticIntervention(
+        time=post_measurement_intervention_time, intervention=intervene_state
     ):
         with StaticIntervention(
             time=post_measurement_intervention_time + 1.0,
             intervention=intervene_state,
         ):
-            with StaticIntervention(
-                time=post_measurement_intervention_time,
-                intervention=intervene_state,
-            ):
-                result_double_pi2 = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+            result_double_pi1 = simulate(
+                model, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
+
+    assert check_states_match(observational_execution_result, result_double_pi1)
+
+    # Test with two point interventions out of scope, in a different order.
+    with StaticIntervention(
+        time=post_measurement_intervention_time + 1.0,
+        intervention=intervene_state,
+    ):
+        with StaticIntervention(
+            time=post_measurement_intervention_time,
+            intervention=intervene_state,
+        ):
+            result_double_pi2 = simulate(
+                model, init_state, start_time, end_time, solver=TorchDiffEq()
+            )
 
     assert check_states_match(observational_execution_result, result_double_pi2)
 

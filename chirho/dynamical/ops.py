@@ -64,6 +64,14 @@ def simulate(
             dynamic_interruptions=dynamic_interruptions,
         )
 
+        # This makes sure that we don't miss any static interruptions that happen at the same time
+        # as `next_static_interruption`. This should probably move into `get_next_interruptions`
+        while (
+            len(static_interruptions) > 0
+            and static_interruptions[0].time == interruption_time
+        ):
+            terminal_interruptions += (static_interruptions.pop(0),)
+
         state = simulate_to_interruption(
             solver_,
             dynamics,

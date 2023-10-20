@@ -7,10 +7,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import (
-    LogTrajectory,
-    StaticIntervention,
-)
+from chirho.dynamical.handlers import LogTrajectory, StaticIntervention
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
@@ -87,9 +84,7 @@ def test_point_intervention_causes_difference(
                     )
                 return
             else:
-                simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     observational_trajectory = observational_dt.trajectory
     intervened_trajectory = intervened_dt.trajectory
@@ -162,9 +157,7 @@ def test_nested_point_interventions_cause_difference(
     with LogTrajectory(
         times=logging_times,
     ) as intervened_dt:
-        with StaticIntervention(
-            time=intervene_time1, intervention=intervene_state1
-        ):
+        with StaticIntervention(time=intervene_time1, intervention=intervene_state1):
             with StaticIntervention(
                 time=intervene_time2, intervention=intervene_state2
             ):
@@ -181,15 +174,6 @@ def test_nested_point_interventions_cause_difference(
                             solver=TorchDiffEq(),
                         )
                     return
-                # AZ - We've decided to support this case and have interventions apply sequentially in the order
-                #  they are handled.
-                # elif torch.isclose(intervene_time1, intervene_time2):
-                #     with pytest.raises(
-                #         ValueError,
-                #         match="Two point interruptions cannot occur at the same time.",
-                #     ):
-                #         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
-                #     return
                 else:
                     simulate(
                         model,

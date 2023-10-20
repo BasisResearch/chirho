@@ -15,7 +15,7 @@ T = TypeVar("T")
 class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
     trajectory: State[T]
 
-    def __init__(self, times: torch.Tensor, *, eps: float = 1e-6):
+    def __init__(self, times: torch.Tensor, *, eps: float = 1e-5):
         # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
         #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
         self.times = times + eps

@@ -31,9 +31,7 @@ def test_logging():
     with LogTrajectory(
         times=logging_times,
     ) as dt2:
-        result2 = simulate(
-            sir, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
+        result2 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
     result3 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
     assert isinstance(result1, State)

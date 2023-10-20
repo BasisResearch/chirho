@@ -31,8 +31,8 @@ class Interruption(pyro.poutine.messenger.Messenger):
 class StaticInterruption(Interruption):
     time: R
 
-    def __init__(self, time: R):
-        self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
+    def __init__(self, time: R, *, eps: float = 1e-6):
+        self.time = torch.as_tensor(time) + eps  # TODO enforce this where it is needed
         super().__init__()
 
     def _pyro_post_get_static_interruptions(self, msg) -> None:
@@ -93,7 +93,7 @@ class StaticObservation(Generic[T], _PointObservationMixin[T], StaticInterruptio
         self.observation = observation
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
-        super().__init__(time + eps)
+        super().__init__(time, eps=eps)
 
 
 class StaticIntervention(Generic[T], _InterventionMixin[T], StaticInterruption):
@@ -105,9 +105,11 @@ class StaticIntervention(Generic[T], _InterventionMixin[T], StaticInterruption):
     :param intervention: The instantaneous intervention applied to the state when the event is triggered.
     """
 
-    def __init__(self, time: R, intervention: Intervention[State[T]]):
+    def __init__(
+        self, time: R, intervention: Intervention[State[T]], *, eps: float = 1e-6
+    ):
         self.intervention = intervention
-        super().__init__(time)
+        super().__init__(time, eps=eps)
 
 
 class DynamicIntervention(Generic[T], DynamicInterruption, _InterventionMixin[T]):

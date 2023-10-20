@@ -59,9 +59,7 @@ def test_multiple_point_observations(model):
     data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
     obs1 = condition(data=data1)(model.observation)
     obs2 = condition(data=data2)(model.observation)
-    result1 = simulate(
-        model, init_state, start_time, end_time, solver=TorchDiffEq()
-    )
+    result1 = simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
     with StaticObservation(time=3.1, observation=obs2):
         with StaticObservation(time=2.9, observation=obs1):
             result2 = simulate(

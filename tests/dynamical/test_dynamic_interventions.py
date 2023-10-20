@@ -8,10 +8,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import (
-    DynamicIntervention,
-    LogTrajectory,
-)
+from chirho.dynamical.handlers import DynamicIntervention, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
@@ -90,9 +87,7 @@ def test_nested_dynamic_intervention_causes_change(
                 event_f=get_state_reached_event_f(ts2),
                 intervention=is2,
             ):
-                simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
