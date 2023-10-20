@@ -6,8 +6,7 @@ import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.ops import State, get_keys
-from chirho.indexed.ops import get_index_plates, indices_of
+from chirho.dynamical.ops import State
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
 

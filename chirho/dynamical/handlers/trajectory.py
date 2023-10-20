@@ -1,11 +1,10 @@
-import typing
 from typing import Generic, TypeVar
 
 import pyro
 import torch
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, append
-from chirho.dynamical.internals.solver import Solver, get_solver, simulate_trajectory
+from chirho.dynamical.internals.solver import simulate_trajectory
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
