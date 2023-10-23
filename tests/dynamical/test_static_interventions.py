@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Points at which to measure the state of the system.
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(10.0)
-logging_times = torch.linspace(start_time + 1, end_time - 2, 5)
+logging_times = torch.linspace(start_time + 0.01, end_time - 2, 5)
 
 # Initial state of the system.
 init_state_values = State(
