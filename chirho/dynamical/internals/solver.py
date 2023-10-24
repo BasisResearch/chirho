@@ -39,6 +39,14 @@ def get_solver() -> Solver:
     raise ValueError("Solver not found in context.")
 
 
+@pyro.poutine.runtime.effectful(type="get_new_interruptions")
+def get_new_interruptions() -> List[Interruption]:
+    """
+    Install the active interruptions into the context.
+    """
+    return []
+
+
 @functools.singledispatch
 def simulate_point(
     solver: Solver,
@@ -101,49 +109,12 @@ def apply_interruptions(
     return dynamics, start_state
 
 
-@pyro.poutine.runtime.effectful(type="get_next_interruptions")
+@functools.singledispatch
 def get_next_interruptions(
     solver: Solver,
     dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
-    end_time: R,
-    *,
-    next_static_interruption: Optional[StaticInterruption] = None,
-    dynamic_interruptions: List[DynamicInterruption] = [],
-    **kwargs,
-) -> Tuple[Tuple[Interruption, ...], R]:
-    from chirho.dynamical.handlers.interruption import StaticInterruption
-
-    if isinstance(next_static_interruption, type(None)):
-        # If there's no static interruption or the next static interruption is after the end time,
-        # we'll just simulate until the end time.
-        next_static_interruption = StaticInterruption(time=end_time)
-
-    assert isinstance(next_static_interruption, StaticInterruption)
-    if len(dynamic_interruptions) == 0:
-        # If there's no dynamic intervention, we'll simulate until either the end_time,
-        # or the `next_static_interruption` whichever comes first.
-        return (next_static_interruption,), next_static_interruption.time
-    else:
-        return get_next_interruptions_dynamic(
-            solver,
-            dynamics,
-            start_state,
-            start_time,
-            next_static_interruption=next_static_interruption,
-            dynamic_interruptions=dynamic_interruptions,
-            **kwargs,
-        )
-
-
-@functools.singledispatch
-def get_next_interruptions_dynamic(
-    solver: Solver,
-    dynamics: Dynamics[T],
-    start_state: State[T],
-    start_time: R,
-    next_static_interruption: StaticInterruption,
     dynamic_interruptions: List[DynamicInterruption],
 ) -> Tuple[Tuple[Interruption, ...], R]:
     raise NotImplementedError(
