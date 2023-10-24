@@ -51,7 +51,10 @@ def _torchdiffeq_ode_simulate_inner(
     diff = timespan[:-1] < timespan[1:]
 
     # We should only encounter collisions at the beginning or end of the timespan.
-    assert torch.all(diff[1:-1])
+    if not torch.all(diff[1:-1]):
+        raise ValueError(
+            "elements of timespan must be strictly increasing, except at endpoints where interruptions can occur."
+        )
 
     # Add a leading "true" to diff for masking, as we've excluded the first element.
     timespan_ = timespan[torch.cat((torch.tensor([True]), diff))]
