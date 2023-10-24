@@ -67,7 +67,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             else:
                 dynamic_interruptions.append(h)
 
-        dynamic_interruptions.append(min(static_interruptions, key=lambda h: h.time))
+        dynamic_interruptions += [min(static_interruptions, key=lambda h: h.time)]
 
         (self._interruption,), self._start_time = get_next_interruptions(
             solver, dynamics, state, start_time, dynamic_interruptions
