@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import heapq
 import warnings
 from typing import Generic, List, Optional, TypeVar
@@ -20,6 +21,12 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+@dataclasses.dataclass(order=True)
+class Prioritized:
+    priority: float
+    interruption: Interruption = dataclasses.field(compare=False)
+
+
 class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     _interruption: Optional[Interruption]
     _interruption_stack: List[Interruption]
@@ -32,10 +39,15 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             solver = get_solver()
 
         # local state
-        static_interruptions = [StaticInterruption(end_time)]
+        active_interruptions: List[Prioritized] = []
         self._interruption_stack = []
         self._interruption = None
         self._start_time = start_time
+
+        heapq.heappush(
+            active_interruptions,
+            Prioritized(float(end_time), StaticInterruption(end_time)),
+        )
 
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
@@ -55,14 +67,17 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                         f"occurred before the start of the timespan ({start_time}, {end_time})."
                         "This interruption will have no effect."
                     )
-                elif isinstance(h, StaticInterruption):
-                    static_interruptions = list(heapq.merge(static_interruptions, [h], key=lambda h: h.time))
                 else:
-                    self._interruption_stack.append(h)
+                    heapq.heappush(
+                        active_interruptions,
+                        Prioritized(float(getattr(h, "time", start_time - 1)), h),
+                    )
 
-            if static_interruptions:
-                if not self._interruption_stack or not isinstance(self._interruption_stack[-1], StaticInterruption):
-                    self._interruption_stack.append(static_interruptions.pop(0))
+            while active_interruptions:
+                ph = heapq.heappop(active_interruptions)
+                self._interruption_stack.append(ph.interruption)
+                if ph.priority > self._start_time:
+                    break
 
             state = simulate_to_interruption(
                 solver,
@@ -76,8 +91,14 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 with self._interruption:
                     dynamics, state = apply_interruptions(dynamics, state)
 
-                ix = self._interruption_stack.index(self._interruption)
-                self._interruption_stack.pop(ix)
+                while self._interruption_stack:
+                    h = self._interruption_stack.pop()
+                    if h is not self._interruption:
+                        heapq.heappush(
+                            active_interruptions,
+                            Prioritized(float(getattr(h, "time", start_time - 1)), h),
+                        )
+
                 self._interruption = None
 
         msg["value"] = state
@@ -86,8 +107,10 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def _pyro_simulate_to_interruption(self, msg) -> None:
         solver, dynamics, state, start_time = msg["args"][:-1]
 
+        interruptions = self._interruption_stack
+
         (self._interruption,), self._start_time = get_next_interruptions(
-            solver, dynamics, state, start_time, self._interruption_stack
+            solver, dynamics, state, start_time, interruptions
         )
 
         msg["args"] = msg["args"][:-1] + (self._start_time,)
