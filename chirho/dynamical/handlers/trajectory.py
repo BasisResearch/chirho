@@ -14,10 +14,8 @@ T = TypeVar("T")
 class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
     trajectory: State[T]
 
-    def __init__(self, times: torch.Tensor, *, eps: float = 1e-6):
-        # Adding epsilon to the logging times to avoid collision issues with the logging times being exactly on the
-        #  boundaries of the simulation times. This is a hack, but it's a hack that should work for now.
-        self.times = times + eps
+    def __init__(self, times: torch.Tensor):
+        self.times = times
 
         # Require that the times are sorted. This is required by the index masking we do below.
         if not torch.all(self.times[1:] > self.times[:-1]):
