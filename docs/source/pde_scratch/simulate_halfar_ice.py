@@ -71,9 +71,9 @@ def main():
 
     sols = [u_last_t[0]]
 
-    tstep = tt(0.1).double()[None, None]
+    tstep = tt(0.3).double()[None, None]
     end_t = 1.
-    for i in range(1000):
+    for i in range(300):
         if len(sols) > 1:
             outer_div = torch.linalg.norm(sols[-1] - sols[-2])
             outer_div = outer_div.item()
@@ -136,13 +136,21 @@ def main():
 
     # Now, make sure we get proper gradients. Get the gradient of the final solution just
     #  to the left of the center with respect to the initial condition.
-    poi = sols[-1][230]
+    pio_idx = 230
+    poi = sols[-1][pio_idx]
     poi.backward()
     if u_init.grad is None:
         print("No gradient")
     else:
         plt.figure()
         plt.plot(xx, u_init.grad[0].detach().numpy())
+        # Plot a vertical line on the point of interest.
+        plt.axvline(xx[pio_idx].item(), color='red', linestyle='--')
+        # And plot thin initial and final conditions on the right axis.
+        tax = plt.twinx()
+        tax.plot(xx, u_init[0].detach().numpy(), color='gray', linestyle='--')
+        tax.plot(xx, sols[-1].detach().numpy(), color='gray', linestyle='--')
+
 
 
 if __name__ == "__main__":

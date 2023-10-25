@@ -33,6 +33,7 @@ class HalfarIceNonLinear(torch_fenics.FEniCSModule):
 
     def solve(self, tstep, u_last_t, _):
 
+        # TODO figure out why this has to be declared inside the solve for gradients to propagate.
         u = fe.Function(self.V)
         vte = self.v_test
         ult = u_last_t
