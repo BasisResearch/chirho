@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import heapq
+import math
 import warnings
 from typing import Generic, List, Optional, TypeVar
 
@@ -64,7 +65,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                 else:
                     heapq.heappush(
                         active_interruptions,
-                        Prioritized(float(getattr(h, "time", start_time - 1)), h),
+                        Prioritized(float(getattr(h, "time", -math.inf)), h),
                     )
 
             while active_interruptions:
@@ -90,7 +91,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     if h is not self._interruption:
                         heapq.heappush(
                             active_interruptions,
-                            Prioritized(float(getattr(h, "time", start_time - 1)), h),
+                            Prioritized(float(getattr(h, "time", -math.inf)), h),
                         )
 
                 self._interruption = None
