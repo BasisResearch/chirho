@@ -46,9 +46,6 @@ intervene_states = [
 intervene_times = (logging_times - 0.5).tolist()
 
 
-eps = 1e-3
-
-
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
