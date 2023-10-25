@@ -33,6 +33,21 @@ class StaticInterruption(Interruption):
         self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
+    def _pyro_simulate(self, msg) -> None:
+        _, _, start_time, end_time = msg["args"]
+
+        if self.time < start_time:
+            raise ValueError(
+                f"{StaticInterruption.__name__} time {self.time} occurred before the start of the "
+                f"timespan {start_time}. This interruption will have no effect."
+            )
+        elif self.time >= end_time:
+            warnings.warn(
+                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
+                f"{end_time}. This interruption will have no effect.",
+                UserWarning,
+            )
+
     def _pyro_get_next_interruptions(self, msg) -> None:
         _, _, _, start_time, end_time = msg["args"]
 
@@ -47,12 +62,6 @@ class StaticInterruption(Interruption):
                 or self.time < next_static_interruption.time
             ):
                 msg["kwargs"]["next_static_interruption"] = self
-        elif self.time >= end_time:
-            warnings.warn(
-                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
-                f"{end_time}. This interruption will have no effect.",
-                UserWarning,
-            )
 
 
 class DynamicInterruption(Generic[T], Interruption):
