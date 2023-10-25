@@ -3,7 +3,7 @@ from __future__ import annotations
 import functools
 import numbers
 import typing
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import List, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -12,9 +12,7 @@ from chirho.dynamical.ops import Dynamics, State
 
 if typing.TYPE_CHECKING:
     from chirho.dynamical.handlers.interruption import (
-        DynamicInterruption,
         Interruption,
-        StaticInterruption,
     )
 
 
@@ -115,8 +113,8 @@ def get_next_interruptions(
     dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
-    dynamic_interruptions: List[DynamicInterruption],
+    interruptions: List[Interruption],
 ) -> Tuple[Tuple[Interruption, ...], R]:
     raise NotImplementedError(
-        f"get_next_interruptions_dynamic not implemented for type {type(dynamics)}"
+        f"get_next_interruptions not implemented for type {type(dynamics)}"
     )

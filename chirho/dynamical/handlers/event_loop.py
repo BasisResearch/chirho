@@ -36,7 +36,9 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         # Simulate through the timespan, stopping at each interruption. This gives e.g. intervention handlers
         #  a chance to modify the state and/or dynamics before the next span is simulated.
         while self._start_time < end_time:
-            self._interruption_stack += get_new_interruptions()
+            new_interruptons = get_new_interruptions()
+            for h in new_interruptons:
+                self._interruption_stack.append(h)
 
             state = simulate_to_interruption(
                 solver,
