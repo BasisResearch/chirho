@@ -48,8 +48,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                         "This interruption will have no effect.",
                         UserWarning,
                     )
-                else:
-                    self._interruption_stack.append(h)
+                self._interruption_stack.append(h)
 
             state = simulate_to_interruption(
                 solver,
