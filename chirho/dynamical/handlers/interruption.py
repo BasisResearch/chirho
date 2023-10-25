@@ -1,8 +1,6 @@
 import numbers
-import warnings
-from typing import Callable, Generic, Optional, TypeVar, Union
+from typing import Callable, Generic, TypeVar, Union
 
-import pyro
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
@@ -84,13 +82,11 @@ class StaticObservation(Generic[T], StaticInterruption[T], _PointObservationMixi
         self,
         time: R,
         observation: Observation[State[T]],
-        *,
-        eps: float = 1e-6,
     ):
         self.observation = observation
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
-        super().__init__(time + eps)
+        super().__init__(time)
 
 
 class StaticIntervention(Generic[T], StaticInterruption[T], _InterventionMixin[T]):
@@ -131,11 +127,9 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         self,
         times: torch.Tensor,
         observation: Observation[State[T]],
-        *,
-        eps: float = 1e-6,
     ):
         self.observation = observation
-        super().__init__(times, eps=eps)
+        super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
         self.trajectory = observe(self.trajectory, self.observation)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Generic, List, Optional, TypeVar
 
 import pyro
@@ -38,7 +39,15 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         while self._start_time < end_time:
             new_interruptons = get_new_interruptions()
             for h in new_interruptons:
-                self._interruption_stack.append(h)
+                if isinstance(h, StaticInterruption) and not (start_time < h.time < end_time):
+                    warnings.warn(
+                        f"{StaticInterruption.__name__} {h} with time={h.time}"
+                        "occurred outside the timespan ({start_time}, {end_time})."
+                        "This interruption will have no effect.",
+                        UserWarning,
+                    )
+                else:
+                    self._interruption_stack.append(h)
 
             state = simulate_to_interruption(
                 solver,

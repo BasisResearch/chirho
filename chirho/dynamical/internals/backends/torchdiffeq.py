@@ -44,12 +44,41 @@ def _torchdiffeq_ode_simulate_inner(
 ):
     var_order = _var_order(frozenset(initial_state.keys()))  # arbitrary, but fixed
 
-    solns = _batched_odeint(  # torchdiffeq.odeint(
-        functools.partial(_deriv, dynamics, var_order),
-        tuple(initial_state[v] for v in var_order),
-        timespan,
-        **odeint_kwargs,
-    )
+    diff = timespan[:-1] < timespan[1:]
+
+    # We should only encounter collisions at the beginning or end of the timespan.
+    if not torch.all(diff[1:-1]):
+        raise ValueError(
+            "elements of timespan must be strictly increasing, except at endpoints where interruptions can occur."
+        )
+
+    # Add a leading "true" to diff for masking, as we've excluded the first element.
+    timespan_ = timespan[torch.cat((torch.tensor([True]), diff))]
+
+    # time_dim is set to -1 by convention.
+    # TODO: change this when time dim is allowed to vary.
+    time_dim = -1
+
+    if torch.any(diff):
+        solns = _batched_odeint(  # torchdiffeq.odeint(
+            functools.partial(_deriv, dynamics, var_order),
+            tuple(initial_state[v] for v in var_order),
+            timespan_,
+            **odeint_kwargs,
+        )
+    else:
+        solns = tuple(initial_state[v].unsqueeze(time_dim) for v in var_order)
+
+    # As we've already asserted that collisions only happen at the beginning or end of the timespan, we can just
+    #  concatenate the initial and final states to get the full trajectory if there are collisions.
+    if not diff[0].item():
+        solns = tuple(
+            torch.cat((s[..., 0].unsqueeze(time_dim), s), dim=time_dim) for s in solns
+        )
+    if not diff[-1].item() and len(diff) > 1:
+        solns = tuple(
+            torch.cat((s, s[..., -1].unsqueeze(time_dim)), dim=time_dim) for s in solns
+        )
 
     trajectory: State[torch.Tensor] = State()
     for var, soln in zip(var_order, solns):
