@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import heapq
 import warnings
 from typing import Generic, List, Optional, TypeVar
 
@@ -31,7 +32,8 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             solver = get_solver()
 
         # local state
-        self._interruption_stack = [StaticInterruption(end_time)]
+        static_interruptions = [StaticInterruption(end_time)]
+        self._interruption_stack = []
         self._interruption = None
         self._start_time = start_time
 
@@ -53,8 +55,14 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                         f"occurred before the start of the timespan ({start_time}, {end_time})."
                         "This interruption will have no effect."
                     )
+                elif isinstance(h, StaticInterruption):
+                    static_interruptions = list(heapq.merge(static_interruptions, [h], key=lambda h: h.time))
                 else:
                     self._interruption_stack.append(h)
+
+            if static_interruptions:
+                if not self._interruption_stack or not isinstance(self._interruption_stack[-1], StaticInterruption):
+                    self._interruption_stack.append(static_interruptions.pop(0))
 
             state = simulate_to_interruption(
                 solver,
@@ -78,19 +86,8 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
     def _pyro_simulate_to_interruption(self, msg) -> None:
         solver, dynamics, state, start_time = msg["args"][:-1]
 
-        static_interruptions, dynamic_interruptions = [], []
-        for h in self._interruption_stack:
-            if isinstance(h, StaticInterruption):
-                static_interruptions.append(h)
-            else:
-                dynamic_interruptions.append(h)
-
-        dynamic_interruptions += [
-            min(static_interruptions, key=lambda h: float(h.time))
-        ]
-
         (self._interruption,), self._start_time = get_next_interruptions(
-            solver, dynamics, state, start_time, dynamic_interruptions
+            solver, dynamics, state, start_time, self._interruption_stack
         )
 
         msg["args"] = msg["args"][:-1] + (self._start_time,)
