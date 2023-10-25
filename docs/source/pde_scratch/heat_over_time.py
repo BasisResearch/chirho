@@ -4,7 +4,7 @@ import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 import torch
-import fenics_overloaded as fe
+import src.fenics_overloaded as fe
 import torch_fenics
 
 # A combination of two sources:
@@ -42,7 +42,8 @@ class HeatOverTime(torch_fenics.FEniCSModule):
 
         self.u_init = fe.interpolate(self.initial_condition, self.V)
 
-        self.u_trial = fe.TrialFunction(self.V)
+        # self.u_trial = fe.TrialFunction(self.V)
+        self.u_trial = fe.Function(self.V)
         self.v_test = fe.TestFunction(self.V)
 
     def solve(self, diffusivity, tstep):
@@ -66,7 +67,8 @@ class HeatOverTime(torch_fenics.FEniCSModule):
 
         # Solve from initial condition out to tstep in time.
         fe.solve(
-            lhs == rhs,
+            # lhs == rhs,
+            weak_form_residuum == 0,
             u_sol,
             self.bc
         )
