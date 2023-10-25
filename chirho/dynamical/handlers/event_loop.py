@@ -69,7 +69,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
             while active_interruptions:
                 ph = heapq.heappop(active_interruptions)
-                self._interruption_stack.append(ph.interruption)
+                self._interruption_stack.append(ph.item)
                 if ph.priority > self._start_time:
                     break
 

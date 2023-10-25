@@ -1,12 +1,11 @@
 import dataclasses
 import functools
 import typing
-from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, FrozenSet, Generic, Optional, Tuple, TypeVar
 
 import pyro
 import torch
 
-from chirho.dynamical.internals.solver import Interruption
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
@@ -151,6 +150,6 @@ class ShallowMessenger(pyro.poutine.messenger.Messenger):
 
 
 @dataclasses.dataclass(order=True)
-class Prioritized:
+class Prioritized(Generic[T]):
     priority: float
-    interruption: Interruption = dataclasses.field(compare=False)
+    item: T = dataclasses.field(compare=False)
