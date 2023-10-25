@@ -1,3 +1,4 @@
+import dataclasses
 import functools
 import typing
 from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple, TypeVar
@@ -5,6 +6,7 @@ from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple, TypeVar
 import pyro
 import torch
 
+from chirho.dynamical.internals.solver import Interruption
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 from chirho.interventional.handlers import intervene
@@ -146,3 +148,9 @@ class ShallowMessenger(pyro.poutine.messenger.Messenger):
     def _postprocess_message(self, msg: Dict[str, Any]) -> None:
         if hasattr(self, f"_pyro_post_{msg['type']}"):
             raise NotImplementedError("ShallowHandler does not support postprocessing")
+
+
+@dataclasses.dataclass(order=True)
+class Prioritized:
+    priority: float
+    interruption: Interruption = dataclasses.field(compare=False)

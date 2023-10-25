@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import dataclasses
 import heapq
 import warnings
 from typing import Generic, List, Optional, TypeVar
@@ -8,6 +7,7 @@ from typing import Generic, List, Optional, TypeVar
 import pyro
 
 from chirho.dynamical.handlers.interruption import StaticInterruption
+from chirho.dynamical.internals._utils import Prioritized
 from chirho.dynamical.internals.solver import (
     Interruption,
     apply_interruptions,
@@ -19,12 +19,6 @@ from chirho.dynamical.internals.solver import (
 
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-@dataclasses.dataclass(order=True)
-class Prioritized:
-    priority: float
-    interruption: Interruption = dataclasses.field(compare=False)
 
 
 class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
