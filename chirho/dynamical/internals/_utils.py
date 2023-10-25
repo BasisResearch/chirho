@@ -1,6 +1,8 @@
 import functools
-from typing import FrozenSet, Optional, Tuple, TypeVar
+import typing
+from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple, TypeVar
 
+import pyro
 import torch
 
 from chirho.dynamical.ops import State
@@ -102,3 +104,45 @@ def _observe_state(
     return State(
         **{k: observe(rv[k], obs[k], name=f"{name}__{k}", **kwargs) for k in rv.keys()}
     )
+
+
+class ShallowMessenger(pyro.poutine.messenger.Messenger):
+    """
+    Base class for so-called "shallow" effect handlers that uninstall themselves
+    after handling a single operation.
+
+    .. warning::
+
+        Does not support post-processing or overriding generic ``_process_message``
+    """
+
+    used: bool
+
+    def __enter__(self):
+        self.used = False
+        return super().__enter__()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        if self in pyro.poutine.runtime._PYRO_STACK:
+            super().__exit__(exc_type, exc_value, traceback)
+
+    @typing.final
+    def _process_message(self, msg: Dict[str, Any]) -> None:
+        if not self.used and hasattr(self, f"_pyro_{msg['type']}"):
+            self.used = True
+            super()._process_message(msg)
+
+            prev_cont: Optional[Callable[[Dict[str, Any]], None]] = msg["continuation"]
+
+            def cont(msg: Dict[str, Any]) -> None:
+                ix = pyro.poutine.runtime._PYRO_STACK.index(self)
+                pyro.poutine.runtime._PYRO_STACK.pop(ix)
+                if prev_cont is not None:
+                    prev_cont(msg)
+
+            msg["continuation"] = cont
+
+    @typing.final
+    def _postprocess_message(self, msg: Dict[str, Any]) -> None:
+        if hasattr(self, f"_pyro_post_{msg['type']}"):
+            raise NotImplementedError("ShallowHandler does not support postprocessing")
