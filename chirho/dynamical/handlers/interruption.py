@@ -4,7 +4,7 @@ from typing import Callable, Generic, TypeVar, Union
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.internals._utils import ShallowMessenger
+from chirho.dynamical.internals.solver import Interruption
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import cond
 from chirho.interventional.ops import Intervention, intervene
@@ -13,14 +13,6 @@ from chirho.observational.ops import Observation, observe
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-class Interruption(ShallowMessenger):
-    def _pyro_get_new_interruptions(self, msg) -> None:
-        if msg["value"] is None:
-            msg["value"] = []
-        assert isinstance(msg["value"], list)
-        msg["value"].append(self)
 
 
 class DependentInterruption(Generic[T], Interruption):

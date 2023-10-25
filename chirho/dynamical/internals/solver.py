@@ -2,17 +2,13 @@ from __future__ import annotations
 
 import functools
 import numbers
-import typing
 from typing import List, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
+from chirho.dynamical.internals._utils import ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State
-
-if typing.TYPE_CHECKING:
-    from chirho.dynamical.handlers.interruption import Interruption
-
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -33,6 +29,14 @@ def get_solver() -> Solver:
     Get the current solver from the context.
     """
     raise ValueError("Solver not found in context.")
+
+
+class Interruption(ShallowMessenger):
+    def _pyro_get_new_interruptions(self, msg) -> None:
+        if msg["value"] is None:
+            msg["value"] = []
+        assert isinstance(msg["value"], list)
+        msg["value"].append(self)
 
 
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")

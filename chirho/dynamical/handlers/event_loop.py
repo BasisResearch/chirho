@@ -5,8 +5,9 @@ from typing import Generic, List, Optional, TypeVar
 
 import pyro
 
-from chirho.dynamical.handlers.interruption import Interruption, StaticInterruption
+from chirho.dynamical.handlers.interruption import StaticInterruption
 from chirho.dynamical.internals.solver import (
+    Interruption,
     apply_interruptions,
     get_new_interruptions,
     get_next_interruptions,
@@ -39,16 +40,21 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         while self._start_time < end_time:
             new_interruptons = get_new_interruptions()
             for h in new_interruptons:
-                if isinstance(h, StaticInterruption) and not (
-                    start_time < h.time < end_time
-                ):
+                if isinstance(h, StaticInterruption) and h.time >= end_time:
                     warnings.warn(
                         f"{StaticInterruption.__name__} {h} with time={h.time} "
-                        f"occurred outside the timespan ({start_time}, {end_time})."
+                        f"occurred after the end of the timespan ({start_time}, {end_time})."
                         "This interruption will have no effect.",
                         UserWarning,
                     )
-                self._interruption_stack.append(h)
+                elif isinstance(h, StaticInterruption) and h.time < start_time:
+                    raise ValueError(
+                        f"{StaticInterruption.__name__} {h} with time {h.time} "
+                        f"occurred before the start of the timespan ({start_time}, {end_time})."
+                        "This interruption will have no effect."
+                    )
+                else:
+                    self._interruption_stack.append(h)
 
             state = simulate_to_interruption(
                 solver,

@@ -4,10 +4,10 @@ from typing import Callable, List, Tuple, TypeVar
 import torch
 import torchdiffeq
 
-from chirho.dynamical.handlers.interruption import Interruption
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import (
+    Interruption,
     get_next_interruptions,
     simulate_point,
     simulate_trajectory,
