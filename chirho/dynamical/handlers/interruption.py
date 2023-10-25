@@ -6,6 +6,7 @@ import torch
 from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.internals._utils import ShallowMessenger
 from chirho.dynamical.ops import State
+from chirho.indexed.ops import cond
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
 
@@ -15,10 +16,10 @@ T = TypeVar("T")
 
 
 class Interruption(ShallowMessenger):
-
     def _pyro_get_new_interruptions(self, msg) -> None:
         if msg["value"] is None:
             msg["value"] = []
+        assert isinstance(msg["value"], list)
         msg["value"].append(self)
 
 
@@ -30,11 +31,11 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
     time: R
 
     def __init__(self, time: R):
-        self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
+        self.time = time
         super().__init__()
 
     def event_f(self, time: R, state: State[T]) -> R:
-        return torch.where(time < self.time, self.time - time, torch.tensor(0.0))
+        return cond(0.0, self.time - time, case=time < self.time)
 
 
 class DynamicInterruption(Generic[T], DependentInterruption[T]):
@@ -43,6 +44,7 @@ class DynamicInterruption(Generic[T], DependentInterruption[T]):
         This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
         element of the state exceeds some threshold, etc. It takes both the current time and current state.
     """
+
     event_f: Callable[[R, State[T]], R]
 
     def __init__(self, event_f: Callable[[R, State[T]], R]):

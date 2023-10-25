@@ -214,9 +214,7 @@ def torchdiffeq_get_next_interruptions(
             "The event function returned an unexpected number of events."
         )
 
-    triggered_events = [
-        de for de, fm in zip(interruptions, fired_mask) if fm
-    ]
+    triggered_events = [de for de, fm in zip(interruptions, fired_mask) if fm]
 
     return (
         tuple(triggered_events),

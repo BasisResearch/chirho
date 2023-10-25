@@ -11,9 +11,7 @@ import torch
 from chirho.dynamical.ops import Dynamics, State
 
 if typing.TYPE_CHECKING:
-    from chirho.dynamical.handlers.interruption import (
-        Interruption,
-    )
+    from chirho.dynamical.handlers.interruption import Interruption
 
 
 R = Union[numbers.Real, torch.Tensor]

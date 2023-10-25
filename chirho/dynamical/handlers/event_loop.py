@@ -8,8 +8,8 @@ import pyro
 from chirho.dynamical.handlers.interruption import Interruption, StaticInterruption
 from chirho.dynamical.internals.solver import (
     apply_interruptions,
-    get_next_interruptions,
     get_new_interruptions,
+    get_next_interruptions,
     get_solver,
     simulate_to_interruption,
 )
@@ -39,10 +39,12 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         while self._start_time < end_time:
             new_interruptons = get_new_interruptions()
             for h in new_interruptons:
-                if isinstance(h, StaticInterruption) and not (start_time < h.time < end_time):
+                if isinstance(h, StaticInterruption) and not (
+                    start_time < h.time < end_time
+                ):
                     warnings.warn(
-                        f"{StaticInterruption.__name__} {h} with time={h.time}"
-                        "occurred outside the timespan ({start_time}, {end_time})."
+                        f"{StaticInterruption.__name__} {h} with time={h.time} "
+                        f"occurred outside the timespan ({start_time}, {end_time})."
                         "This interruption will have no effect.",
                         UserWarning,
                     )
@@ -78,7 +80,9 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             else:
                 dynamic_interruptions.append(h)
 
-        dynamic_interruptions += [min(static_interruptions, key=lambda h: h.time)]
+        dynamic_interruptions += [
+            min(static_interruptions, key=lambda h: float(h.time))
+        ]
 
         (self._interruption,), self._start_time = get_next_interruptions(
             solver, dynamics, state, start_time, dynamic_interruptions
