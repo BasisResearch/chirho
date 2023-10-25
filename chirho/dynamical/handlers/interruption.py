@@ -1,6 +1,8 @@
 import numbers
 from typing import Callable, Generic, TypeVar, Union
 
+import pyro
+import pyro.contrib.autoname
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
@@ -64,11 +66,10 @@ class _PointObservationMixin(Generic[T]):
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics = msg["args"][0]
         state: State[T] = msg["args"][1]
-        msg["value"] = (dynamics, observe(state, self.observation))
-
-    def _pyro_sample(self, msg):
-        # modify observed site names to handle multiple time points
-        msg["name"] = msg["name"] + "_" + str(torch.as_tensor(self.time).item())
+        with pyro.contrib.autoname.scope(
+            prefix=f"t={torch.as_tensor(self.time).item()}"
+        ):
+            msg["value"] = (dynamics, observe(state, self.observation))
 
 
 class StaticObservation(Generic[T], StaticInterruption[T], _PointObservationMixin[T]):
