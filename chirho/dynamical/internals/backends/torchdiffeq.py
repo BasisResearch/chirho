@@ -222,29 +222,6 @@ def torchdiffeq_get_next_interruptions(
     )
 
 
-# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
-def torchdiffeq_dynamic_interruption_flattened_event_f(
-    di: Interruption, var_order: Tuple[str, ...]
-) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
-    """
-    Construct a flattened event function for a dynamic interruption.
-
-    :param di: The dynamic interruption for which to build the event function.
-    :return: The constructed event function.
-    """
-
-    def event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
-        # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
-        #  user-provided event function of time and State.
-        state: State[torch.Tensor] = State(
-            **{k: v for k, v in zip(var_order, flat_state)}
-        )
-        return di.event_f(t, state)
-
-    return event_f
-
-
-# TODO AZ — maybe do multiple dispatch on the interruption type and state type?
 def torchdiffeq_combined_event_f(
     interruptions: List[Interruption],
     var_order: Tuple[str, ...],
@@ -252,21 +229,19 @@ def torchdiffeq_combined_event_f(
     """
     Construct a combined event function from a list of dynamic interruptions
 
-    :param dynamic_interruptions: The dynamic interruptions.
+    :param interruptions: The dynamic interruptions.
     :return: The combined event function, taking in state and time, and returning a vector of floats. When any element
      of this vector is zero, the corresponding event terminates the simulation.
     """
-    dynamic_event_fs = [
-        torchdiffeq_dynamic_interruption_flattened_event_f(di, var_order)
-        for di in interruptions
-    ]
 
     def combined_event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
+        state: State[torch.Tensor] = State(
+            **{k: v for k, v in zip(var_order, flat_state)}
+        )
+
         return torch.stack(
-            torch.broadcast_tensors(
-                *[f(t, flat_state) for f in dynamic_event_fs],
-            ),
+            torch.broadcast_tensors(*[di.event_f(t, state) for di in interruptions]),
             dim=-1,
-        )  # TODO support event_dim > 0
+        )
 
     return combined_event_f
