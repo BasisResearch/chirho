@@ -29,13 +29,11 @@ class HalfarIceNonLinear(torch_fenics.FEniCSModule):
             'on_boundary'
         )
 
-        # self.u_trial = fe.TrialFunction(self.V)
-        self.u = fe.Function(self.V)
         self.v_test = fe.TestFunction(self.V)
 
     def solve(self, tstep, u_last_t, _):
 
-        u = self.u
+        u = fe.Function(self.V)
         vte = self.v_test
         ult = u_last_t
 

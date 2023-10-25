@@ -52,6 +52,7 @@ def plot_sols(xx, sols, ax, skip=5, color1='purple', color2='orange', thickness1
 def main():
 
     halfar_ice = HalfarIceNonLinear(511)
+    # halfar_ice = HalfarIceLinear(511)
 
     xx = torch.linspace(-2., 2., halfar_ice.n_elements + 1)
 
@@ -137,7 +138,11 @@ def main():
     #  to the left of the center with respect to the initial condition.
     poi = sols[-1][230]
     poi.backward()
-    print(f"Gradient of final solution at point of interest", u_init.grad[230].item())
+    if u_init.grad is None:
+        print("No gradient")
+    else:
+        plt.figure()
+        plt.plot(xx, u_init.grad[0].detach().numpy())
 
 
 if __name__ == "__main__":
