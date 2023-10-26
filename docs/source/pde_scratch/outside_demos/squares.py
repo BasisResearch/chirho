@@ -9,6 +9,8 @@ import numpy as np
 
 import torch_fenics
 
+# From https://github.com/barkm/torch-fenics/blob/master/tests/test_torch_fenics.py
+
 
 class Squares(torch_fenics.FEniCSModule):
     def __init__(self):

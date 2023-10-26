@@ -8,10 +8,10 @@ from torch import tensor as tt
 import src.fenics_overloaded as fe
 import torch_fenics
 
-from src.halfar_ice.analytical import halfar_ice_analytical
+from src.halfar_ice.analytical import halfar_ice_analytical, t0f
 from src.halfar_ice.utils import fillna
-from src.halfar_ice.numeric_linear import HalfarIceLinear
-from src.halfar_ice.numeric_nonlinear import HalfarIceNonLinear
+from src.halfar_ice.numeric_nonlinear import HalfarIceNonLinearPolar
+from src.halfar_ice.utils import stable_gamma
 
 
 def anamain():
@@ -51,10 +51,12 @@ def plot_sols(xx, sols, ax, skip=5, color1='purple', color2='orange', thickness1
 
 def main():
 
-    halfar_ice = HalfarIceNonLinear(511)
-    # halfar_ice = HalfarIceLinear(511)
+    halfar_ice = HalfarIceNonLinearPolar(511)
 
     xx = torch.linspace(-2., 2., halfar_ice.n_elements + 1)
+
+    ice_density = tt(910.).double()
+    log_flow_rate = torch.log(tt(1e-16)).double()
 
     # # A tricky initial glacier.
     # u_init = initial_curve(xx)\
@@ -62,8 +64,11 @@ def main():
 
     # Init with analytically known progression in time.
     h0, r0 = 1., 1.
-    u_init = halfar_ice_analytical(r=xx, t=1., h0=h0, r0=r0)\
-        [None, :].double().clone().detach().requires_grad_(True)
+    gamma = stable_gamma(rho=ice_density, lA=log_flow_rate)
+    t0 = t0f(r0, h0, gamma)
+    u_init = halfar_ice_analytical(
+        r=xx, t=t0, h0=h0, r0=r0, gamma=gamma)[None, :] \
+        .double().clone().detach().requires_grad_(True)
 
     u_last_t = u_init
 
@@ -71,29 +76,21 @@ def main():
 
     sols = [u_last_t[0]]
 
-    tstep = tt(0.3).double()[None, None]
-    end_t = 1.
+    tstep = tt(1000).double()[None, None]
+    end_t = t0
     for i in range(300):
         if len(sols) > 1:
-            outer_div = torch.linalg.norm(sols[-1] - sols[-2])
-            outer_div = outer_div.item()
+            change = torch.linalg.norm(sols[-1] - sols[-2])
+            change = change.item()
         else:
-            outer_div = torch.inf
+            change = torch.inf
 
-        print(f"\rIteration {i:05d}; Div {outer_div:6.6f}", end='')
+        print(f"\rIteration {i:05d}; Div {change:6.6f}", end='')
 
-        u_last_k = u_last_t
-        min_div = torch.inf
-        for k in range(1):
-            u_last_k_ = halfar_ice(tstep, u_last_t, u_last_k)
-            div = torch.linalg.norm(u_last_k - u_last_k_)
-            # FIXME HACK b/c the divergence goes down and then explodes for some reason. Still debugging.
-            if div > min_div:
-                break
-            min_div = div
-            u_last_k = u_last_k_
-        u_last_t = u_last_k
+        u_last_t = halfar_ice(tstep, u_last_t, *torch.atleast_2d(ice_density, log_flow_rate))
+
         end_t += tstep.item()
+
         sols.append(u_last_t[0])
     print()
 
@@ -104,19 +101,7 @@ def main():
     fig, ax = plt.subplots(dpi=500, figsize=(4, 2))
     plot_sols(xx, sols, ax, skip=5)
 
-    # remaining_heat = sols.sum(axis=-1)
-    #
-    # for di in range(len(diffusivities)):
-    #     print(f"Grad at termination with diffusivity {di}:")
-    #     remaining_heat[di, -1].backward()
-    #     print(diffusivities.grad)
-    #     print(times.grad)
-    #
-    #     # Zero out the grads.
-    #     diffusivities.grad.zero_()
-    #     times.grad.zero_()
-
-    analytical_solution_maybe = halfar_ice_analytical(xx, t=end_t, h0=h0, r0=r0)
+    analytical_solution_maybe = halfar_ice_analytical(xx, t=end_t, h0=h0, r0=r0, gamma=gamma)
     plt.plot(xx, analytical_solution_maybe, color='white', linestyle='--',
              linewidth=0.5, label="Analytical Equilibrium (Maybe)")
     plt.gca().set_aspect('equal')
@@ -150,7 +135,6 @@ def main():
         tax = plt.twinx()
         tax.plot(xx, u_init[0].detach().numpy(), color='gray', linestyle='--')
         tax.plot(xx, sols[-1].detach().numpy(), color='gray', linestyle='--')
-
 
 
 if __name__ == "__main__":

@@ -42,8 +42,7 @@ class HeatOverTime(torch_fenics.FEniCSModule):
 
         self.u_init = fe.interpolate(self.initial_condition, self.V)
 
-        # self.u_trial = fe.TrialFunction(self.V)
-        self.u_trial = fe.Function(self.V)
+        self.u_trial = fe.TrialFunction(self.V)
         self.v_test = fe.TestFunction(self.V)
 
     def solve(self, diffusivity, tstep):
@@ -67,8 +66,7 @@ class HeatOverTime(torch_fenics.FEniCSModule):
 
         # Solve from initial condition out to tstep in time.
         fe.solve(
-            # lhs == rhs,
-            weak_form_residuum == 0,
+            lhs == rhs,
             u_sol,
             self.bc
         )

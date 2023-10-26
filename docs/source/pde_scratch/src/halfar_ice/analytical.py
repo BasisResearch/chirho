@@ -1,12 +1,12 @@
 from .utils import fillna
 
 
-def _t0(r0, h0, gamma=1.):
+def t0f(r0, h0, gamma=1.):
     return (1. / (18. * gamma)) * ((7. / 4.) ** 3.) * (r0 ** 4. / h0 ** 7.)
 
 
 def halfar_ice_analytical(r, t, h0, r0, gamma=1.):
-    t0 = _t0(r0, h0, gamma)
+    t0 = t0f(r0, h0, gamma)
 
     r = r.abs()
 
