@@ -9,44 +9,8 @@ import src.fenics_overloaded as fe
 import torch_fenics
 
 from src.halfar_ice.analytical import halfar_ice_analytical, t0f
-from src.halfar_ice.utils import fillna
 from src.halfar_ice.numeric_nonlinear import HalfarIceNonLinearPolar
-from src.halfar_ice.utils import stable_gamma
-
-
-def anamain():
-    h0 = 1.
-    r0 = 1.
-
-    xx = torch.linspace(0., 2., 512)
-
-    sols = []
-
-    t = 1.
-    tstep = 1.0
-    for i in range(1000):
-        h = halfar_ice_analytical(xx, t, h0, r0)
-        sols.append(h)
-        t += tstep
-
-    fig, ax = plt.subplots(dpi=500, figsize=(4, 2))
-    plot_sols(xx, sols, ax, skip=5)
-
-    # Sum across each solution to check if mass is being conserved.
-    # FIXME for some reason this was sigsegv-ing :/
-    # ice_sum = torch.stack(sols).sum(axis=-1)
-    ice_sum = [(sol * xx.abs()).sum() / len(sol) for sol in sols]
-    print(min(ice_sum), max(ice_sum), max(ice_sum) - min(ice_sum), len(xx))
-    plt.figure()
-    plt.plot(ice_sum)
-
-
-def plot_sols(xx, sols, ax, skip=5, color1='purple', color2='orange', thickness1=1.0, thickness2=0.1):
-
-    ax.plot(xx, sols[0].detach(), color=color1, linestyle='--', label="Initial Condition", linewidth=thickness1)
-    for t_sols in sols[1:-1:skip]:
-        ax.plot(xx, t_sols.detach(), color=color2, alpha=0.5, linewidth=thickness2)
-    ax.plot(xx, sols[-1].detach(), color=color1, label="Final Solution", linewidth=thickness1)
+from src.halfar_ice.utils import stable_gamma, plot_sols
 
 
 def main():
