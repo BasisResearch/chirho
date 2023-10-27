@@ -2,7 +2,7 @@ import collections.abc
 import contextlib
 import functools
 import itertools
-from typing import Callable, Iterable, Mapping, TypeVar
+from typing import Callable, Iterable, Mapping, TypeVar, Union
 
 import pyro
 import torch
@@ -210,10 +210,14 @@ def SearchForCause(
 
 @contextlib.contextmanager
 def ExplainCauses(
-    antecedents: Mapping[str, Intervention[T]]
-    | Mapping[str, pyro.distributions.constraints.Constraint],
-    witnesses: Mapping[str, Intervention[T]] | Iterable[str],
-    consequents: Mapping[str, Callable[[T], float | torch.Tensor]] | Iterable[str],
+    antecedents: Union[
+        Mapping[str, Intervention[T]],
+        Mapping[str, pyro.distributions.constraints.Constraint],
+    ],
+    witnesses: Union[Mapping[str, Intervention[T]], Iterable[str]],
+    consequents: Union[
+        Mapping[str, Callable[[T], Union[float, torch.Tensor]]], Iterable[str]
+    ],
     *,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
