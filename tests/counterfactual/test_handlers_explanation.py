@@ -10,6 +10,7 @@ from chirho.counterfactual.handlers.counterfactual import (
     Preemptions,
 )
 from chirho.counterfactual.handlers.explanation import (
+    ExplainCauses,
     SearchForCause,
     consequent_differs,
     random_intervention,
@@ -459,3 +460,90 @@ def test_random_intervention(support):
         samples = samples[samples != 0]
 
     assert torch.all(support.check(samples))
+
+
+def test_ExplainCauses_():
+    observations = {
+        "prob_sally_throws": 1.0,
+        "prob_bill_throws": 1.0,
+        "prob_sally_hits": 1.0,
+        "prob_bill_hits": 1.0,
+        "prob_bottle_shatters_if_sally": 1.0,
+        "prob_bottle_shatters_if_bill": 1.0,
+    }
+
+    observations_conditioning = condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    )
+
+    antecedents = {"sally_throws": 0.0}
+    witnesses = ["bill_throws", "bill_hits"]
+    consequents = ["bottle_shatters"]
+
+    with MultiWorldCounterfactual() as mwc:
+        with ExplainCauses(
+            antecedents=antecedents,
+            witnesses=witnesses,
+            consequents=consequents,
+            antecedent_bias=0.1,
+        ):
+            with observations_conditioning:
+                with pyro.plate("sample", 200):
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
+
+    tr.trace.compute_log_prob()
+    tr = tr.trace.nodes
+
+    with mwc:
+
+        log_probs = (
+            gather(
+                tr["__consequent_bottle_shatters"]["log_prob"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
+
+        st_obs = (
+            gather(
+                tr["sally_throws"]["value"],
+                IndexSet(**{i: {0} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
+
+        st_int = (
+            gather(
+                tr["sally_throws"]["value"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
+
+        bh_int = (
+            gather(
+                tr["bill_hits"]["value"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
+
+        st_ant = tr["__antecedent_sally_throws"]["value"].squeeze().tolist()
+
+        assert all(lp == -1e8 or lp == 0.0 for lp in log_probs)
+
+        for step in range(200):
+            bottle_will_shatter = (
+                st_obs[step] != st_int[step] and st_ant == 0.0
+            ) or bh_int[step] == 1.0
+            if bottle_will_shatter:
+                assert log_probs[step] == -1e8
