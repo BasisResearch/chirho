@@ -422,7 +422,7 @@ def test_SearchForCause_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 
-def test_ExplainCauses_():
+def test_ExplainCauses():
     observations = {
         "prob_sally_throws": 1.0,
         "prob_bill_throws": 1.0,
