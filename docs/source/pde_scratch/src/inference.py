@@ -18,7 +18,7 @@ def retry_elbo_on_solver_nonconvergence(elbo, max_attempts=5, verbose=False):
             raise RuntimeError(f"Solver did not converge over {max_attempts} attempts.")
 
         try:
-            return specify_if_solver_did_not_converge(elbo())
+            return specify_if_solver_did_not_converge(elbo)()
         except SolverDidNotConvergeOnce:
             if verbose:
                 print(f"Solver did not converge, retrying. Attempt {num_attempts + 1} of {max_attempts}")

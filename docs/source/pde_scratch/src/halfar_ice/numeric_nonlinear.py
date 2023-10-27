@@ -6,9 +6,11 @@ from .utils import stable_gamma
 
 class HalfarIceNonLinearPolar(torch_fenics.FEniCSModule):
 
-    def __init__(self, n_elements=64):
+    def __init__(self, n_elements=64, solver_parameters: dict = None):
 
         super().__init__()
+
+        self.solver_parameters = solver_parameters or dict()
 
         self.n_elements = n_elements
 
@@ -62,7 +64,8 @@ class HalfarIceNonLinearPolar(torch_fenics.FEniCSModule):
         fe.solve(
             weak_form_residuum == 0,
             u,
-            self.bc
+            self.bc,
+            solver_parameters=self.solver_parameters
         )
 
         return u
