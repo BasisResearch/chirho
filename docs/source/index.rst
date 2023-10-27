@@ -30,6 +30,7 @@ Table of Contents
    sciplex
    sdid
    dr_learner
+   dynamical_intro
 
 .. toctree::
    :maxdepth: 2
@@ -39,6 +40,7 @@ Table of Contents
    interventional
    observational
    indexed
+   dynamical
 
 .. toctree::
    :maxdepth: 2

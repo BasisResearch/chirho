@@ -5,7 +5,7 @@ import itertools
 from typing import Callable, Iterable, Mapping, TypeVar
 
 import pyro
-import torch  # noqa: F401
+import torch
 
 from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import get_factual_indices
@@ -90,35 +90,6 @@ def consequent_differs(
     return _consequent_differs
 
 
-@contextlib.contextmanager
-def SearchForCause(
-    actions: Mapping[str, Intervention[T]],
-    *,
-    bias: float = 0.0,
-    prefix: str = "__cause_split_",
-):
-    """
-    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
-    On each run, nodes listed in `actions` are randomly seleted and intervened on with probability `.5 + bias`
-    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
-    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
-    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
-
-    :param actions: A mapping of sites to interventions.
-    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
-    """
-    # TODO support event_dim != 0 propagation in factual_preemption
-    preemptions = {
-        antecedent: undo_split(antecedents=[antecedent])
-        for antecedent in actions.keys()
-    }
-
-    with do(actions=actions):
-        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
-            yield
-
-
 @functools.singledispatch
 def uniform_proposal(
     support: pyro.distributions.constraints.Constraint,
@@ -140,7 +111,7 @@ def uniform_proposal(
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0, 100).mask(False)
+        return pyro.distributions.Normal(0, 10).mask(False)
     elif support is pyro.distributions.constraints.boolean:
         return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
@@ -156,26 +127,6 @@ def _uniform_proposal_indep(
     event_shape: torch.Size = torch.Size([]),
     **kwargs,
 ) -> pyro.distributions.Distribution:
-    """
-    This constructs a probability distribution with independent dimensions
-    over a specified support. The choice of distribution depends on the type of support provided
-    (see the documentation for `uniform_proposal`).
-
-    :param support: The support used to create the probability distribution.
-    :param event_shape: The event shape specifying the dimensions of the distribution.
-    :param kwargs: Additional keyword arguments.
-    :return: A probability distribution with independent dimensions over the specified support.
-
-    Example:
-    ```
-    indep_constraint = pyro.distributions.constraints.independent(
-    pyro.distributions.constraints.real, reinterpreted_batch_ndims=2)
-    dist = uniform_proposal(indep_constraint, event_shape=torch.Size([2, 3]))
-    with pyro.plate("data", 3):
-        samples_indep = pyro.sample("samples_indep", dist.expand([4, 2, 3]))
-    ```
-    """
-
     d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
 
@@ -185,22 +136,6 @@ def _uniform_proposal_integer(
     support: pyro.distributions.constraints.integer_interval,
     **kwargs,
 ) -> pyro.distributions.Distribution:
-    """
-    This constructs a uniform categorical distribution over an integer_interval support
-    where the lower bound is 0 and the upper bound is specified by the support.
-
-    :param support: The integer_interval support with a lower bound of 0 and a specified upper bound.
-    :param kwargs: Additional keyword arguments.
-    :return: A categorical probability distribution over the specified integer_interval support.
-
-    Example:
-    ```
-    constraint = pyro.distributions.constraints.integer_interval(0, 2)
-    dist = _uniform_proposal_integer(constraint)
-    samples = dist.sample(torch.Size([100]))
-    print(dist.probs.tolist())
-    ```
-    """
     if support.lower_bound != 0:
         raise NotImplementedError(
             "integer_interval with lower_bound > 0 not yet supported"
@@ -214,23 +149,23 @@ def random_intervention(
     name: str,
 ) -> Callable[[torch.Tensor], torch.Tensor]:
     """
-    Creates a random `pyro`sample` function for a single sample site, determined by
+    Creates a random-valued intervention for a single sample site, determined by
     by the distribution support, and site name.
 
-    :param support: The support constraint for the sample site..can take.
-    :param name: The name of the sample site.
+    :param support: The support constraint for the sample site.
+    :param name: The name of the auxiliary sample site.
 
-    :return: A `pyro.sample` function that takes a torch.Tensor as input
+    :return: A function that takes a ``torch.Tensor`` as input
         and returns a random sample over the pre-specified support of the same
         event shape as the input tensor.
 
-    Example:
-    ```
-    support = pyro.distributions.constraints.real
-    name = "real_sample"
-    intervention_fn = random_intervention(support, name)
-    random_sample = intervention_fn(torch.tensor(2.0))
-    ```
+    Example::
+
+        >>> support = pyro.distributions.constraints.real
+        >>> intervention_fn = random_intervention(support, name="random_value")
+        >>> with chirho.interventional.handlers.do(actions={"x": intervention_fn}):
+        ...   x = pyro.deterministic("x", torch.tensor(2.))
+        >>> assert x != 2
     """
 
     def _random_intervention(value: torch.Tensor) -> torch.Tensor:
@@ -242,6 +177,35 @@ def random_intervention(
         return pyro.sample(name, proposal_dist)
 
     return _random_intervention
+
+
+@contextlib.contextmanager
+def SearchForCause(
+    actions: Mapping[str, Intervention[T]],
+    *,
+    bias: float = 0.0,
+    prefix: str = "__cause_split_",
+):
+    """
+    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
+    On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
+    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
+    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
+
+    :param actions: A mapping of sites to interventions.
+    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
+    """
+    # TODO support event_dim != 0 propagation in factual_preemption
+    preemptions = {
+        antecedent: undo_split(antecedents=[antecedent])
+        for antecedent in actions.keys()
+    }
+
+    with do(actions=actions):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+            yield
 
 
 @contextlib.contextmanager
