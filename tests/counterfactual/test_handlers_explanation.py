@@ -259,16 +259,17 @@ def test_random_intervention(support, event_shape):
 
 
 def stones_bayesian_model():
-    prob_sally_throws = pyro.sample("prob_sally_throws", dist.Beta(1, 1))
-    prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
-    prob_sally_hits = pyro.sample("prob_sally_hits", dist.Beta(1, 1))
-    prob_bill_hits = pyro.sample("prob_bill_hits", dist.Beta(1, 1))
-    prob_bottle_shatters_if_sally = pyro.sample(
-        "prob_bottle_shatters_if_sally", dist.Beta(1, 1)
-    )
-    prob_bottle_shatters_if_bill = pyro.sample(
-        "prob_bottle_shatters_if_bill", dist.Beta(1, 1)
-    )
+    with pyro.poutine.mask(mask=False):
+        prob_sally_throws = pyro.sample("prob_sally_throws", dist.Beta(1, 1))
+        prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
+        prob_sally_hits = pyro.sample("prob_sally_hits", dist.Beta(1, 1))
+        prob_bill_hits = pyro.sample("prob_bill_hits", dist.Beta(1, 1))
+        prob_bottle_shatters_if_sally = pyro.sample(
+            "prob_bottle_shatters_if_sally", dist.Beta(1, 1)
+        )
+        prob_bottle_shatters_if_bill = pyro.sample(
+            "prob_bottle_shatters_if_bill", dist.Beta(1, 1)
+        )
 
     sally_throws = pyro.sample("sally_throws", dist.Bernoulli(prob_sally_throws))
     bill_throws = pyro.sample("bill_throws", dist.Bernoulli(prob_bill_throws))
@@ -456,7 +457,6 @@ def test_ExplainCauses():
     tr = tr.trace.nodes
 
     with mwc:
-
         log_probs = (
             gather(
                 tr["__consequent_bottle_shatters"]["log_prob"],
