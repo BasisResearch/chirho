@@ -228,13 +228,23 @@ def ExplainCauses(
 ):
     """
     Effect handler used for causal explanation search. On each run:
-    (1) unless alternative interventions are provided, proposal interventions are uniformly sampled
-    for each antecedent node given a `pyro.distributions.constraints.Constraint`.
-    (2) These interventions are randomly preempted (as in `SearchForCause`).
-    (3) The witness nodes are randomly preempted to be kept at their actual values.
-    (4) A factor node is added tracking whether the consequent nodes differ between
-        the factual and counterfactual worlds. This difference is recorded in its corresponding `log_prob` message,
-        if `pyro.poutine.trace` is used.
+
+      1. The antecedent nodes are intervened on with the values in ``antecedents`` \
+        using :func:`~chirho.counterfactual.ops.split` . \
+        Unless alternative interventions are provided, \
+        counterfactual values are uniformly sampled for each antecedent node \
+        using :func:`~chirho.counterfactual.handlers.explanation.uniform_proposal` \
+        given its support as a :class:`~pyro.distributions.constraints.Constraint` .
+
+      2. These interventions are randomly :func:`~chirho.counterfactual.ops.preempt`-ed \
+        using :func:`~chirho.counterfactual.handlers.explanation.undo_split` \
+        by a :func:`~chirho.counterfactual.handlers.explanation.SearchForCause` handler.
+
+      3. The witness nodes are randomly :func:`~chirho.counterfactual.ops.preempt`-ed \
+        to be kept at the values given in ``witnesses`` .
+
+      4. A :func:`~pyro.factor` node is added tracking whether the consequent nodes differ \
+        between the factual and counterfactual worlds.
 
     :param antecedents: A mapping from antecedent names to interventions.
     :param witnesses: A mapping from witness names to interventions.
