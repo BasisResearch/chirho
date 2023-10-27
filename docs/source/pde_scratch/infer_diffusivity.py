@@ -47,6 +47,7 @@ def model(obs_time: torch.Tensor, hot: HeatOverTime):
     return diffusivity_model(diffusivity, obs_time, hot)
 
 
+# TODO replace with src.run_inference
 def run_inference(obs_time: torch.Tensor, hot: HeatOverTime, steps=2000):
 
     # FIXME passing the model in here gives a "obs_temp" must be in the trace error when obs_temp is observed.
