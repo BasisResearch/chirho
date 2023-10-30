@@ -3,7 +3,11 @@ import logging
 import pyro
 import torch
 
-from chirho.dynamical.handlers import InterruptionEventLoop, LogTrajectory
+from chirho.dynamical.handlers import (
+    InterruptionEventLoop,
+    LogTrajectory,
+    StaticInterruption,
+)
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, simulate
@@ -46,6 +50,25 @@ def test_logging():
     assert dt2.trajectory.keys() == result2.keys()
     assert check_states_match(result1, result2)
     assert check_states_match(result1, result3)
+
+
+def test_logging_with_colliding_interruption():
+    sir = bayes_sir_model()
+    with LogTrajectory(
+        times=logging_times,
+    ) as dt1:
+        simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+
+    with LogTrajectory(
+        times=logging_times,
+    ) as dt2:
+        with InterruptionEventLoop():
+            with StaticInterruption(
+                time=torch.tensor(2.0),
+            ):
+                simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+
+    check_states_match(dt1.trajectory, dt2.trajectory)
 
 
 def test_trajectory_methods():
