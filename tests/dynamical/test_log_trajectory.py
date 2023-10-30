@@ -66,10 +66,8 @@ def test_logging_with_colliding_interruption():
             with StaticInterruption(
                 time=torch.tensor(2.0),
             ):
-                simulate(
-                    sir, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
-    
+                simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+
     check_states_match(dt1.trajectory, dt2.trajectory)
 
 
