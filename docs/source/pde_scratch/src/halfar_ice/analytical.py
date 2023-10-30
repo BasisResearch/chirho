@@ -10,7 +10,7 @@ def halfar_ice_analytical(r, t, h0, r0, gamma=1.):
 
     # We assume the user's t0 == 0, but the analytical solution calculates a t0 depending on the parameters.
     # So add that value to the user's t to get the correct time.
-    t += t0
+    t = t + t0
 
     r = r.abs()
 
