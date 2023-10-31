@@ -7,7 +7,6 @@ import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.ops import State
-from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
 
@@ -23,7 +22,7 @@ class Interruption(pyro.poutine.messenger.Messenger):
         self.used = False
         return super().__enter__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
+    def _pyro_get_next_interruptions(self, msg) -> None:
         raise NotImplementedError("shouldn't be here!")
 
 
@@ -34,7 +33,22 @@ class StaticInterruption(Interruption):
         self.time = torch.as_tensor(time)  # TODO enforce this where it is needed
         super().__init__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
+    def _pyro_simulate(self, msg) -> None:
+        _, _, start_time, end_time = msg["args"]
+
+        if self.time < start_time:
+            raise ValueError(
+                f"{StaticInterruption.__name__} time {self.time} occurred before the start of the "
+                f"timespan {start_time}. This interruption will have no effect."
+            )
+        elif self.time >= end_time:
+            warnings.warn(
+                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
+                f"{end_time}. This interruption will have no effect.",
+                UserWarning,
+            )
+
+    def _pyro_get_next_interruptions(self, msg) -> None:
         _, _, _, start_time, end_time = msg["args"]
 
         if start_time < self.time < end_time:
@@ -48,12 +62,6 @@ class StaticInterruption(Interruption):
                 or self.time < next_static_interruption.time
             ):
                 msg["kwargs"]["next_static_interruption"] = self
-        elif self.time >= end_time:
-            warnings.warn(
-                f"{StaticInterruption.__name__} time {self.time} occurred after the end of the timespan "
-                f"{end_time}. This interruption will have no effect.",
-                UserWarning,
-            )
 
 
 class DynamicInterruption(Generic[T], Interruption):
@@ -67,7 +75,7 @@ class DynamicInterruption(Generic[T], Interruption):
         self.event_f = event_f
         super().__init__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
+    def _pyro_get_next_interruptions(self, msg) -> None:
         msg["kwargs"].setdefault("dynamic_interruptions", []).append(self)
 
 
@@ -103,13 +111,11 @@ class StaticObservation(Generic[T], StaticInterruption, _PointObservationMixin[T
         self,
         time: R,
         observation: Observation[State[T]],
-        *,
-        eps: float = 1e-6,
     ):
         self.observation = observation
         # Add a small amount of time to the observation time to ensure that
         # the observation occurs after the logging period.
-        super().__init__(time + eps)
+        super().__init__(time)
 
 
 class StaticIntervention(Generic[T], StaticInterruption, _InterventionMixin[T]):
@@ -150,28 +156,9 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         self,
         times: torch.Tensor,
         observation: Observation[State[T]],
-        *,
-        eps: float = 1e-6,
     ):
         self.observation = observation
-        super().__init__(times, eps=eps)
+        super().__init__(times)
 
     def _pyro_post_simulate(self, msg) -> None:
-        super()._pyro_post_simulate(msg)
-
-        # This checks whether the simulate has already redirected in a InterruptionEventLoop.
-        # If so, we don't want to run the observation again.
-        if msg.setdefault("in_SEL", False):
-            return
-
-        # TODO remove this redundant check by fixing semantics of LogTrajectory and simulate
-        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
-        name_to_dim["__time"] = -1
-        len_traj = (
-            0
-            if len(self.trajectory.keys()) == 0
-            else 1 + max(indices_of(self.trajectory, name_to_dim=name_to_dim)["__time"])
-        )
-
-        if len_traj == len(self.times):
-            msg["value"] = observe(self.trajectory, self.observation)
+        self.trajectory = observe(self.trajectory, self.observation)
