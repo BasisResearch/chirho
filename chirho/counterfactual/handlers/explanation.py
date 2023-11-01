@@ -3,7 +3,7 @@ import contextlib
 import dataclasses
 import functools
 import itertools
-from typing import Callable, Generic, Iterable, Mapping, Optional, ParamSpec, Tuple, TypeVar, Union
+from typing import Callable, Dict, Generic, Iterable, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -303,16 +303,31 @@ def ExplainCauses(
 
 @dataclasses.dataclass
 class Alignment(Generic[S, T]):
-    variables: Mapping[frozenset[str], Optional[str]]
+    variables: Mapping[str, Set[str]]
     functions: Mapping[str, Callable[[Mapping[str, S]], T]]
 
 
 def align_data(
     alignment: Alignment[S, T],
-    data: Optional[Mapping[str, Observation[S]]] = None,
-    actions: Optional[Mapping[str, Intervention[S]]] = None,
+    data: Mapping[str, Observation[S]] = {},
+    actions: Mapping[str, Intervention[S]] = {},
 ) -> Tuple[Mapping[str, Observation[T]], Mapping[str, Intervention[T]]]:
-    ...  # TODO
+
+    aligned_data = {
+        var_h: alignment.functions[var_h]({
+            var_l: data[var_l] for var_l in alignment.variables[var_h]
+        }) for var_h in alignment.variables.keys()
+        if alignment.variables[var_h] <= set(data.keys())
+    }
+
+    aligned_actions = {
+        var_h: alignment.functions[var_h]({
+            var_l: actions[var_l] for var_l in alignment.variables[var_h]
+        }) for var_h in alignment.variables.keys()
+        if alignment.variables[var_h] <= set(actions.keys())
+    }
+
+    return aligned_data, aligned_actions
 
 
 class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
