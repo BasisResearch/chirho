@@ -1,19 +1,22 @@
 import collections.abc
 import contextlib
+import dataclasses
 import functools
 import itertools
-from typing import Callable, Iterable, Mapping, TypeVar, Union
+from typing import Callable, Generic, Iterable, Mapping, Optional, ParamSpec, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import Preemptions
+from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual, Preemptions
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
-from chirho.observational.handlers.condition import Factors
+from chirho.observational.handlers.condition import Factors, condition
+from chirho.observational.ops import Observation
 
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -296,3 +299,47 @@ def ExplainCauses(
 
     with antecedent_handler, witness_handler, consequent_handler:
         yield
+
+
+@dataclasses.dataclass
+class Alignment(Generic[S, T]):
+    variables: Mapping[frozenset[str], Optional[str]]
+    functions: Mapping[str, Callable[[Mapping[str, S]], T]]
+
+
+def align_data(
+    alignment: Alignment[S, T],
+    data: Optional[Mapping[str, Observation[S]]] = None,
+    actions: Optional[Mapping[str, Intervention[S]]] = None,
+) -> Tuple[Mapping[str, Observation[T]], Mapping[str, Intervention[T]]]:
+    ...  # TODO
+
+
+class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
+    alignment: Alignment[S, T]
+
+    def __init__(self, alignment: Alignment[S, T]):
+        self.alignment = alignment
+        super().__init__()
+
+    def _pyro_sample(self, msg: dict) -> None:
+        ...  # TODO
+
+
+def abstraction_distance(
+    model_l: Callable[P, S],
+    model_h: Callable[P, T],
+    alignment: Alignment[S, T],
+    *,
+    data: Mapping[str, Observation[S]] = {},
+    actions: Mapping[str, Intervention[S]] = {},
+    loss: pyro.infer.elbo.ELBO = pyro.infer.Trace_ELBO(),
+) -> Callable[P, torch.Tensor]:
+
+    intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
+    abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
+
+    abstracted_data, abstracted_actions = align_data(alignment, data=data, actions=actions)
+    intervened_model_h: Callable[P, T] = do(actions=abstracted_actions)(condition(data=abstracted_data)(model_h))
+
+    return MultiWorldCounterfactual()(loss(intervened_model_h, abstracted_model_l))
