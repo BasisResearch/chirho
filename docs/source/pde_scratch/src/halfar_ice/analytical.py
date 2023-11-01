@@ -16,6 +16,8 @@ def _halfar_ice_analytical(r, t, h0, r0, gamma=1.):
     r = r.abs()
 
     hterm = (h0 * (t0 / t) ** (1. / 9.))
+    # TODO relu(...) the term with the r in it before it gets raised to the 4/3 power. This is --> nan.
+    #  This can replace the wrapper below with the where business. Mmmm but 1 - that.
     rterm = (1. - ((t0 / t) ** (1. / 18.) * (r / r0)) ** (4. / 3.)) ** (3. / 7.)
 
     return hterm * rterm
