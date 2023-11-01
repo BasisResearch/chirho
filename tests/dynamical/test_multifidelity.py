@@ -12,6 +12,11 @@ logger = logging.getLogger(__name__)
 
 
 class BaseShortColumn(pyro.nn.PyroModule):
+    """
+    Analytic short column deformation model
+    from Section 4.3 of "OPTIMAL MODEL MANAGEMENT FOR MULTIFIDELITY MONTE CARLO ESTIMATION"
+    by Benjamin Peherstorfer, Karen Willcox, and Max Gunzburger.
+    """
     cost: torch.Tensor
 
     def __init__(self, cost: float = 1.):
