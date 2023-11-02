@@ -15,7 +15,7 @@ class BaseShortColumn(pyro.nn.PyroModule):
     """
     Analytic short column deformation model
     from Section 4.3 of "OPTIMAL MODEL MANAGEMENT FOR MULTIFIDELITY MONTE CARLO ESTIMATION"
-    by Benjamin Peherstorfer, Karen Willcox, and Max Gunzburger.
+    by Benjamin Peherstorfer, Karen Willcox, and Max Gunzburger (https://epubs.siam.org/doi/abs/10.1137/15M1046472)
     """
     cost: torch.Tensor
 
