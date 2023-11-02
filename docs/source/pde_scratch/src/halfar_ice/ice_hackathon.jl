@@ -33,6 +33,8 @@ using GeometryBasics: Point2, Point3
 Point2D = Point2{Float64};
 Point3D = Point3{Float64};
 
+@info("Packages Loaded")
+
 halfar_eq2 = @decapode begin
   h::Form0
   Γ::Form1
@@ -44,9 +46,11 @@ end
 glens_law = @decapode begin
   Γ::Form1
   (A,ρ,g,n)::Constant
-  
+
   Γ == (2/(n+2))*A*(ρ*g)^n
 end
+
+@info("Decapodes Defined")
 
 ice_dynamics_composition_diagram = @relation () begin
   dynamics(Γ,n)
@@ -67,11 +71,10 @@ orient!(s′)
 s = EmbeddedDeltaDualComplex1D{Bool, Float64, Point2D}(s′)
 subdivide_duals!(s, Circumcenter())
 
+@info("Spaces Defined")
+
 beta = 1/18
-#R₀ = 60_000 * sqrt(0.125)
 R₀ = 1
-#H = 2_000 * sqrt(0.125)
-#H₀ = 2_000 * sqrt(0.125)
 H₀ = 1
 
 n = 3
@@ -83,9 +86,11 @@ flwa = 1e-16
 A = fill(1e-16 * 5e7, ne(s))
 
 Gamma = 2.0/(n+2) * flwa * (ρ * g)^n
-t0 = (beta/Gamma) * (7.0/4.0)^3 * (R₀^4 / H₀^7)
 
 t₀ = (1/(18*Gamma))*(7/4)^3 * ((R₀^4)/(H₀^7))
+
+@info("Constants Defined")
+
 # Written in radial coordinates:
 function height_at_p(r,t)
   t₀ = (1 / (18 * Gamma))*((7/4)^3) * (R₀^4 / H₀^7)
@@ -97,15 +102,12 @@ function height_at_p(r,t)
   hterm * rterm
 end
 
-height_at_p(0.0, 0.0)
-height_at_p(0.5, 0.0)
-height_at_p(1.0, 0.0)
-height_at_p(2.0, 0.0)
+# height_at_p(0.0, 0.0)
+# height_at_p(0.5, 0.0)
+# height_at_p(1.0, 0.0)
+# height_at_p(2.0, 0.0)
 
 h₀ = map(x -> height_at_p(x[1], 0), point(s′))
-
-f,a,o = lines(map(x -> x[1], s[:point]), map(x -> height_at_p(x[1], 0), s[:point]))
-lines!(a,     map(x -> x[1], s[:point]), map(x -> height_at_p(x[1], 300*1000), s[:point]))
 
 u₀ = construct(PhysicsState, [VectorForm(h₀)], Float64[], [:dynamics_h])
 constants_and_parameters = (
@@ -157,25 +159,16 @@ function generate(sd, my_symbol; hodge=GeometricHodge())
 end
 
 sim = eval(gensim(ice_dynamics1D, dimension=1))
-# sim = gensim(ice_dynamics1D, dimension=1)
 fₘ = sim(s, generate)
 
-tₑ = 1e-8
-prob = ODEProblem(fₘ, u₀, (0, tₑ), constants_and_parameters)
-@info("Precompiling")
-soln = solve(prob, Tsit5())
-@show soln.retcode
-
-tₑ = 300 * 1000
-prob = ODEProblem(fₘ, u₀, (0, tₑ), constants_and_parameters)
-@info("Solving")
-soln = solve(prob, Tsit5())
-@show soln.retcode
-@info("Done")
-
-        # Initial
-f,a,o = lines(map(x -> x[1], s[:point]), findnode(soln(0), :dynamics_h))
-        # Numeric
-        lines!(a, map(x -> x[1], s[:point]), findnode(soln(tₑ), :dynamics_h))
-        # Analytic
-        lines!(a, map(x -> x[1], s[:point]), map(x -> height_at_p(x[1], tₑ), s[:point]))
+# function f()
+#     tₑ = 300 * 1000
+#     prob = ODEProblem(fₘ, u₀, (0, tₑ), constants_and_parameters)
+#     @info("Solving")
+#     soln = solve(prob, Tsit5())
+#     @show soln.retcode
+#     @info("Done")
+#     return soln.u
+# end
+#
+# f()
