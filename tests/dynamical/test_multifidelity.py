@@ -22,6 +22,8 @@ class BaseShortColumn(pyro.nn.PyroModule):
     def __init__(self, cost: float = 1.):
         super().__init__()
         self.register_buffer("cost", torch.as_tensor(cost))
+        self.register_buffer("zero", torch.tensor(0.))
+        self.register_buffer("one", torch.tensor(1.))
 
     @pyro.nn.PyroSample
     def width(self):  # z1
