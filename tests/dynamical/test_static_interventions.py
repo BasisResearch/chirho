@@ -19,7 +19,7 @@ from chirho.interventional.ops import intervene
 
 from .dynamical_fixtures import (
     UnifiedFixtureDynamics,
-    check_trajectories_match,
+    check_states_match,
     check_trajectories_match_in_all_but_values,
 )
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # Points at which to measure the state of the system.
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(10.0)
-logging_times = torch.linspace(start_time + 1, end_time - 2, 5)
+logging_times = torch.linspace(start_time + 0.01, end_time - 2, 5)
 
 # Initial state of the system.
 init_state_values = State(
@@ -44,9 +44,6 @@ intervene_states = [
 
 # Define intervention times before all tspan values.
 intervene_times = (logging_times - 0.5).tolist()
-
-
-eps = 1e-3
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -66,13 +63,13 @@ def test_point_intervention_causes_difference(
     intervene_time,
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as intervened_dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -106,15 +103,29 @@ def test_point_intervention_causes_difference(
 
     assert torch.any(before) or torch.any(after), "trivial test case"
 
-    observational_trajectory_before_int = observational_trajectory[before]
-    intervened_trajectory_before_int = intervened_trajectory[before]
-    assert check_trajectories_match(
+    # TODO support dim != -1
+    name_to_dim = {"__time": -1}
+
+    before_idx = IndexSet(__time={i for i in range(len(before)) if before[i]})
+    after_idx = IndexSet(__time={i for i in range(len(after)) if after[i]})
+
+    observational_trajectory_before_int = gather(
+        observational_trajectory, before_idx, name_to_dim=name_to_dim
+    )
+    intervened_trajectory_before_int = gather(
+        intervened_trajectory, before_idx, name_to_dim=name_to_dim
+    )
+    assert after.all() or check_states_match(
         observational_trajectory_before_int, intervened_trajectory_before_int
     )
 
-    observational_trajectory_after_int = observational_trajectory[after]
-    intervened_trajectory_after_int = intervened_trajectory[after]
-    assert check_trajectories_match_in_all_but_values(
+    observational_trajectory_after_int = gather(
+        observational_trajectory, after_idx, name_to_dim=name_to_dim
+    )
+    intervened_trajectory_after_int = gather(
+        intervened_trajectory, after_idx, name_to_dim=name_to_dim
+    )
+    assert before.all() or check_trajectories_match_in_all_but_values(
         observational_trajectory_after_int, intervened_trajectory_after_int
     )
 
@@ -142,13 +153,13 @@ def test_nested_point_interventions_cause_difference(
     intervene_time2,
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as observational_dt:
         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as intervened_dt:
         with InterruptionEventLoop():
             with StaticIntervention(
@@ -209,7 +220,7 @@ def test_twinworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -227,10 +238,10 @@ def test_twinworld_point_intervention(
 
     with cf:
         cf_trajectory = dt.trajectory
-        for k in cf_trajectory.keys:
+        for k in cf_trajectory.keys():
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -244,7 +255,7 @@ def test_multiworld_point_intervention(
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with InterruptionEventLoop():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
@@ -262,10 +273,10 @@ def test_multiworld_point_intervention(
 
     with cf:
         cf_trajectory = dt.trajectory
-        for k in cf_trajectory.keys:
+        for k in cf_trajectory.keys():
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(getattr(cf_state, k))
-            assert cf.default_name in indices_of(getattr(cf_trajectory, k), event_dim=1)
+            assert cf.default_name in indices_of(cf_state[k])
+            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -278,7 +289,7 @@ def test_split_odeint_broadcast(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
     with LogTrajectory(
-        logging_times=logging_times,
+        times=logging_times,
     ) as dt:
         with TwinWorldCounterfactual() as cf:
             cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
@@ -286,8 +297,8 @@ def test_split_odeint_broadcast(
 
     with cf:
         trajectory = dt.trajectory
-        for k in trajectory.keys:
-            assert len(indices_of(getattr(trajectory, k), event_dim=1)) > 0
+        for k in trajectory.keys():
+            assert len(indices_of(trajectory[k], event_dim=1)) > 0
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
@@ -339,15 +350,15 @@ def test_twinworld_matches_output(
         assert not set(indices_of(cf_actual, event_dim=0))
         assert not set(indices_of(factual_actual, event_dim=0))
 
-    assert set(cf_state.keys) == set(cf_actual.keys) == set(cf_expected.keys)
-    assert set(cf_state.keys) == set(factual_actual.keys) == set(factual_expected.keys)
+    assert cf_state.keys() == cf_actual.keys() == cf_expected.keys()
+    assert cf_state.keys() == factual_actual.keys() == factual_expected.keys()
 
-    for k in cf_state.keys:
+    for k in cf_state.keys():
         assert torch.allclose(
-            getattr(cf_actual, k), getattr(cf_expected, k)
+            cf_actual[k], cf_expected[k]
         ), f"States differ in state trajectory of variable {k}, but should be identical."
 
-    for k in cf_state.keys:
+    for k in cf_state.keys():
         assert torch.allclose(
-            getattr(factual_actual, k), getattr(factual_expected, k)
+            factual_actual[k], factual_expected[k]
         ), f"States differ in state trajectory of variable {k}, but should be identical."

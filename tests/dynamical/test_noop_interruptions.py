@@ -24,8 +24,6 @@ init_state_values = State(
     S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0)
 )
 
-eps = 1e-3
-
 intervene_states = [
     State(S=torch.tensor(11.0)),
     State(I=torch.tensor(9.0)),
@@ -45,7 +43,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
 
     # Test with standard point interruptions within timespan.
     with InterruptionEventLoop():
-        with StaticInterruption(time=end_time / 2.0 + eps):
+        with StaticInterruption(time=end_time / 2.0):
             result_pint = simulate(
                 model, init_state, start_time, end_time, solver=TorchDiffEq()
             )
@@ -55,9 +53,9 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
     # Test with two standard point interruptions.
     with InterruptionEventLoop():
         with StaticInterruption(
-            time=end_time / 4.0 + eps
+            time=end_time / 4.0
         ):  # roughly 1/4 of the way through the timespan
-            with StaticInterruption(time=(end_time / 4.0) * 3 + eps):  # roughly 3/4
+            with StaticInterruption(time=(end_time / 4.0) * 3):  # roughly 3/4
                 result_double_pint1 = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )
@@ -66,8 +64,8 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
 
     # Test with two standard point interruptions, in a different order.
     with InterruptionEventLoop():
-        with StaticInterruption(time=(end_time / 4.0) * 3 + eps):  # roughly 3/4
-            with StaticInterruption(time=end_time / 4.0 + eps):  # roughly 1/3
+        with StaticInterruption(time=(end_time / 4.0) * 3):  # roughly 3/4
+            with StaticInterruption(time=end_time / 4.0):  # roughly 1/3
                 result_double_pint2 = simulate(
                     model, init_state, start_time, end_time, solver=TorchDiffEq()
                 )

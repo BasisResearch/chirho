@@ -1,15 +1,17 @@
-from typing import TypeVar, Union
+from typing import TypeVar
 
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
 
-from chirho.dynamical.ops import InPlaceDynamics, State, Trajectory
+from chirho.dynamical.ops import State
+
+pyro.settings.set(module_local_params=True)
 
 T = TypeVar("T")
 
 
-class UnifiedFixtureDynamics(InPlaceDynamics):
+class UnifiedFixtureDynamics(pyro.nn.PyroModule):
     def __init__(self, beta=None, gamma=None):
         super().__init__()
 
@@ -21,27 +23,28 @@ class UnifiedFixtureDynamics(InPlaceDynamics):
         if self.gamma is None:
             self.gamma = pyro.param("gamma", torch.tensor(0.7), constraints.positive)
 
-    def diff(self, dX: State[torch.Tensor], X: State[torch.Tensor]):
+    def forward(self, X: State[torch.Tensor]):
+        dX: State[torch.Tensor] = State()
         beta = self.beta * (
-            1.0 + 0.1 * torch.sin(0.1 * X.t)
+            1.0 + 0.1 * torch.sin(0.1 * X["t"])
         )  # beta oscilates slowly in time.
 
-        dX.S = -beta * X.S * X.I
-        dX.I = beta * X.S * X.I - self.gamma * X.I  # noqa
-        dX.R = self.gamma * X.I
+        dX["S"] = -beta * X["S"] * X["I"]
+        dX["I"] = beta * X["S"] * X["I"] - self.gamma * X["I"]  # noqa
+        dX["R"] = self.gamma * X["I"]
+        return dX
 
-    def _unit_measurement_error(self, name: str, x: torch.tensor):
+    def _unit_measurement_error(self, name: str, x: torch.Tensor):
         if x.ndim == 0:
             return pyro.sample(name, Normal(x, 1))
         else:
             return pyro.sample(name, Normal(x, 1).to_event(1))
 
+    @pyro.nn.pyro_method
     def observation(self, X: State[torch.Tensor]):
-        S_obs = self._unit_measurement_error("S_obs", X.S)
-        I_obs = self._unit_measurement_error("I_obs", X.I)
-        R_obs = self._unit_measurement_error("R_obs", X.R)
-
-        return {"S_obs": S_obs, "I_obs": I_obs, "R_obs": R_obs}
+        self._unit_measurement_error("S_obs", X["S"])
+        self._unit_measurement_error("I_obs", X["I"])
+        self._unit_measurement_error("R_obs", X["R"])
 
 
 def bayes_sir_model():
@@ -51,59 +54,30 @@ def bayes_sir_model():
     return sir
 
 
-def check_keys_match(
-    obj1: Union[Trajectory[T], State[T]], obj2: Union[Trajectory[T], State[T]]
-):
-    assert obj1.keys == obj2.keys, "Objects have different variables."
+def check_keys_match(obj1: State[T], obj2: State[T]):
+    assert set(obj1.keys()) == set(obj2.keys()), "Objects have different variables."
     return True
 
 
-def check_trajectory_length_match(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
-):
-    for k in traj1.keys:
-        assert len(getattr(traj2, k)) == len(
-            getattr(traj1, k)
-        ), f"Trajectories have different lengths for variable {k}."
-    return True
-
-
-def check_trajectories_match(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
-):
-    assert check_keys_match(traj1, traj2)
-
-    assert check_trajectory_length_match(traj1, traj2)
-
-    for k in traj1.keys:
-        assert torch.allclose(
-            getattr(traj2, k), getattr(traj1, k)
-        ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
-
-    return True
-
-
-def check_states_match(state1: State[torch.tensor], state2: State[torch.tensor]):
+def check_states_match(state1: State[torch.Tensor], state2: State[torch.Tensor]):
     assert check_keys_match(state1, state2)
 
-    for k in state1.keys:
+    for k in state1.keys():
         assert torch.allclose(
-            getattr(state1, k), getattr(state2, k)
+            state1[k], state2[k]
         ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
 
     return True
 
 
 def check_trajectories_match_in_all_but_values(
-    traj1: Trajectory[torch.tensor], traj2: Trajectory[torch.tensor]
+    traj1: State[torch.Tensor], traj2: State[torch.Tensor]
 ):
     assert check_keys_match(traj1, traj2)
 
-    assert check_trajectory_length_match(traj1, traj2)
-
-    for k in traj1.keys:
+    for k in traj1.keys():
         assert not torch.allclose(
-            getattr(traj2, k), getattr(traj1, k)
+            traj2[k], traj1[k]
         ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."
 
     return True
