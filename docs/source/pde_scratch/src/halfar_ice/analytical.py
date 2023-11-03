@@ -1,5 +1,23 @@
-from .utils import fillna
 import torch
+
+
+# TODO dispatch on rho type to use different log funcs (torch, numpy, fenics)
+def stable_gamma(rho, lA, gravity=9.81, n=3., logf=torch.log, expf=torch.exp):
+    ncoef = (2. / (n + 2.))
+    lpg = logf(rho * gravity)
+    lApgn = lA + n * lpg
+
+    return ncoef * expf(lApgn)
+
+
+def gamma(rho, A, gravity=9.81, n=3.):
+    ncoef = (2. / (n + 2.))
+
+    return ncoef * A * (rho * gravity) ** n
+
+
+def fillna(tensor):
+    return torch.where(torch.isnan(tensor), torch.zeros_like(tensor), tensor)
 
 
 def t0f(r0, h0, gamma=1.):

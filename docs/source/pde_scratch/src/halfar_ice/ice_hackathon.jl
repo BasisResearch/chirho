@@ -1,9 +1,10 @@
 import Pkg
 
+Pkg.add(name="Decapodes", rev="main")
+
 Pkg.add([
   "Catlab",
   "CombinatorialSpaces",
-  "Decapodes",
   "MLStyle",
   "MultiScaleArrays",
   "LinearAlgebra",
@@ -12,13 +13,15 @@ Pkg.add([
   "SparseArrays",
   "Statistics",
   "GLMakie",
-  "GeometryBasics"])
+  "GeometryBasics",
+  "ComponentArrays"])
 
 # AlgebraicJulia Dependencies
 using Catlab
 using Catlab.Graphics
 using CombinatorialSpaces
 using Decapodes
+using ComponentArrays
 
 # External Dependencies
 using MLStyle
@@ -109,13 +112,6 @@ end
 
 h₀ = map(x -> height_at_p(x[1], 0), point(s′))
 
-u₀ = construct(PhysicsState, [VectorForm(h₀)], Float64[], [:dynamics_h])
-constants_and_parameters = (
-  n = n,
-  stress_ρ = ρ,
-  stress_g = g,
-  stress_A = A)
-
 function generate(sd, my_symbol; hodge=GeometricHodge())
   e_vecs = map(edges(sd)) do e
     point(sd, sd[e, :∂v0]) - point(sd, sd[e, :∂v1])
@@ -161,14 +157,37 @@ end
 sim = eval(gensim(ice_dynamics1D, dimension=1))
 fₘ = sim(s, generate)
 
-# function f()
-#     tₑ = 300 * 1000
-#     prob = ODEProblem(fₘ, u₀, (0, tₑ), constants_and_parameters)
-#     @info("Solving")
-#     soln = solve(prob, Tsit5())
-#     @show soln.retcode
-#     @info("Done")
-#     return soln.u
-# end
-#
-# f()
+
+
+
+
+function f(flow_rate, ice_density, u_init_arr)
+  # # split out torch tensor of each variable
+  # flow_rate = concat_tensor[1]
+  # ice_density = concat_tensor[2]
+  # u_init_arr = concat_tensor[3:end]
+
+  n = 3
+  ρ = ice_density
+  g = 9.8101
+  A = fill(flow_rate, ne(s)) # `fill(a,b)` creates an b-shaped array of entirely a values
+  tₑ = 5e13
+
+  u₀ = ComponentArray(dynamics_h = u_init_arr)
+  
+  constants_and_parameters = (
+    n = n,
+    stress_ρ = ρ,
+    stress_g = g,
+    stress_A = A)
+  prob = ODEProblem(fₘ, u₀, (0, tₑ), constants_and_parameters)
+  @info("Solving")
+  soln = solve(prob, Tsit5())
+  @info("Done")
+
+  # Convert to matrix for juliatorch post-processing.
+  return reduce(hcat, [Vector(yn.dynamics_h) for yn in soln.u])
+end
+
+
+y = f(1e-16, 910., h₀)
