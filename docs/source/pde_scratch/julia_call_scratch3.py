@@ -5,6 +5,9 @@ import sys
 sys.path.insert(0, "/Users/azane/GitRepo/causal_pyro/docs/source/pde_scratch/src/halfar_ice")
 from analytical import stable_gamma, halfar_ice_analytical
 import matplotlib.pyplot as plt
+import pyro
+import pyro.distributions as dist
+import numpy as np
 
 jl = juliacall.Main.seval
 
@@ -25,7 +28,7 @@ function f(concat_tensor)
   ρ = ice_density
   g = 9.8101
   A = fill(flow_rate, ne(s)) # `fill(a,b)` creates an b-shaped array of entirely a values
-  tₑ = 5e13
+  tₑ = 1e11
 
   u₀ = ComponentArray(dynamics_h = u_init_arr)
   
@@ -44,28 +47,81 @@ function f(concat_tensor)
 end
 """)
 
-ice_density = tnsr(910.).double()
-flow_rate = tnsr(1e-16).double()
+true_ice_density = tnsr(910.).double()
+true_log_flow_rate = tnsr(1e-16).double().log()
+
+
+def prior():
+    log_flow_rate = pyro.sample("log_flow_rate", dist.Uniform(1e-20, 1e-15)).double().log()
+    ice_density = pyro.sample("ice_density", dist.Uniform(840, 930)).double()
+
+    return log_flow_rate, ice_density
+
+
+xx = torch.linspace(-2., 2., 512)
+
 
 u_init = halfar_ice_analytical(
     h0=tnsr(1.),
     r0=tnsr(1.),
-    gamma=stable_gamma(rho=ice_density, lA=flow_rate),
+    gamma=stable_gamma(lA=true_log_flow_rate, rho=true_ice_density),
     t=tnsr(0),
-    r=torch.linspace(-1.5, 1.5, 100)
+    r=xx
 ).double()
 
 
-def torch_f(x):
-    return JuliaFunction.apply(f, x)
+def true_depth_model(log_flow_rate, ice_density):
+
+    x = torch.cat((log_flow_rate.exp()[None], ice_density[None], u_init), dim=0)
+    return JuliaFunction.apply(f, x).T
 
 
-x_ = torch.cat((flow_rate[None], ice_density[None], u_init), dim=0)
-x_ = x_.detach().clone().requires_grad_(True)
-y = torch_f(x_)
+def model():
+    log_flow_rate, ice_density = prior()
+    depth = true_depth_model(log_flow_rate, ice_density)
 
-plt.figure()
-[plt.plot(sol_at_t) for sol_at_t in y.T.detach()]
+    # pyro.sample("depth", dist.Normal(depth, 1e-3), obs=tnsr(0.))
+
+    return depth
+
+
+def get_pointwise_between(preds):
+    ret = preds.quantile(0.5, dim=0), preds.quantile(0.95, dim=0), preds.quantile(0.05, dim=0)
+
+    if isinstance(preds, torch.Tensor):
+        return tuple(x.detach().numpy() for x in ret)
+    return ret
+
+
+def plot_preds(prior_preds):
+
+    # Get the pointwise mean, upper and lower quartiles for each predictive distribution.
+    prior_median, prior_upper, prior_lower = get_pointwise_between(prior_preds)
+
+    # Plot the prior and posterior predictive distributions.
+    # fig, ax = plt.subplots(dpi=500, figsize=(8, 2.8))
+
+    ax.plot(xx, prior_median, color='blue', linewidth=0.7, label="Prior Predictive", alpha=0.5)
+    ax.fill_between(xx, prior_lower, prior_upper, color='blue', alpha=0.1)
+
+    ax.set_ylabel("Height")
+    ax.set_xlabel("Radius")
+    ax.set_aspect('equal')
+    plt.tight_layout()
+    plt.legend(facecolor='lightgray', fontsize=7)
+
+
+# prior_samples = torch.tensor([prior() for _ in range(5000)])
+
+fig, ax = plt.subplots(dpi=500, figsize=(8, 2.8))
+# Make equal aspect ratio.
+ax.set_aspect('equal')
+plt.plot(xx, u_init, color='purple', linestyle='--')
+
+prior_preds = torch.stack([model()[-1] for _ in range(200)])
+
+plot_preds(prior_preds)
+
 plt.show()
 
 print()
