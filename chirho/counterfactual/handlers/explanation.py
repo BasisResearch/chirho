@@ -301,10 +301,8 @@ def ExplainCauses(
         yield
 
 
-@dataclasses.dataclass
-class Alignment(Generic[S, T]):
-    variables: Mapping[str, Set[str]]
-    functions: Mapping[str, Callable[[Mapping[str, S]], T]]
+# TODO work with Observation/Intervention types
+Alignment = Mapping[str, Tuple[Set[str], Callable[[Mapping[str, S]], T]]]
 
 
 def align_data(
@@ -314,17 +312,15 @@ def align_data(
 ) -> Tuple[Mapping[str, Observation[T]], Mapping[str, Intervention[T]]]:
 
     aligned_data = {
-        var_h: alignment.functions[var_h]({
-            var_l: data[var_l] for var_l in alignment.variables[var_h]
-        }) for var_h in alignment.variables.keys()
-        if alignment.variables[var_h] <= set(data.keys())
+        var_h: fn_h({var_l: data[var_l] for var_l in vars_l})
+        for var_h, (vars_l, fn_h) in alignment.items()
+        if vars_l <= set(data.keys())
     }
 
     aligned_actions = {
-        var_h: alignment.functions[var_h]({
-            var_l: actions[var_l] for var_l in alignment.variables[var_h]
-        }) for var_h in alignment.variables.keys()
-        if alignment.variables[var_h] <= set(actions.keys())
+        var_h: fn_h({var_l: actions[var_l] for var_l in vars_l})
+        for var_h, (vars_l, fn_h) in alignment.items()
+        if vars_l <= set(actions.keys())
     }
 
     return aligned_data, aligned_actions
@@ -336,6 +332,10 @@ class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     def __init__(self, alignment: Alignment[S, T]):
         self.alignment = alignment
         super().__init__()
+
+    def __enter__(self):
+        self._counter = {}
+        return super().__enter__()
 
     def _pyro_sample(self, msg: dict) -> None:
         ...  # TODO
@@ -350,6 +350,11 @@ def abstraction_distance(
     actions: Mapping[str, Intervention[S]] = {},
     loss: pyro.infer.elbo.ELBO = pyro.infer.Trace_ELBO(),
 ) -> Callable[P, torch.Tensor]:
+
+    vars_l: Set[str] = set()
+    for var_h, (vars_l_h, _) in alignment.items():
+        assert not vars_l_h & vars_l, f"alignment is not a partition: {var_h} contains duplicates {vars_l_h & vars_l}"
+        vars_l |= vars_l_h
 
     intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
     abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
