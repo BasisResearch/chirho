@@ -308,8 +308,12 @@ Alignment = Mapping[str, Tuple[Set[str], Callable[[Mapping[str, S]], T]]]
 def _validate_alignment(alignment: Alignment[S, T]) -> None:
     vars_l: Set[str] = set()
     for var_h, (vars_l_h, _) in alignment.items():
-        assert not vars_l_h & vars_l, f"alignment is not a partition: {var_h} contains duplicates {vars_l_h & vars_l}"
+        if vars_l_h & vars_l:
+            raise ValueError(f"alignment is not a partition: {var_h} contains duplicates {vars_l_h & vars_l}")
         vars_l |= vars_l_h
+
+    if vars_l & set(alignment.keys()):
+        raise NotImplementedError(f"name reuse across alignment not yet supported: {vars_l & set(alignment.keys())}")
 
 
 def align_data(
