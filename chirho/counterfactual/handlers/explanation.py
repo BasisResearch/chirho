@@ -1,8 +1,8 @@
 import collections.abc
 import contextlib
-import dataclasses
 import functools
 import itertools
+import typing
 from typing import Callable, Dict, Generic, Iterable, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar, Union
 
 import pyro
@@ -305,11 +305,20 @@ def ExplainCauses(
 Alignment = Mapping[str, Tuple[Set[str], Callable[[Mapping[str, S]], T]]]
 
 
+def _validate_alignment(alignment: Alignment[S, T]) -> None:
+    vars_l: Set[str] = set()
+    for var_h, (vars_l_h, _) in alignment.items():
+        assert not vars_l_h & vars_l, f"alignment is not a partition: {var_h} contains duplicates {vars_l_h & vars_l}"
+        vars_l |= vars_l_h
+
+
 def align_data(
     alignment: Alignment[S, T],
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
 ) -> Tuple[Mapping[str, Observation[T]], Mapping[str, Intervention[T]]]:
+
+    _validate_alignment(alignment)
 
     aligned_data = {
         var_h: fn_h({var_l: data[var_l] for var_l in vars_l})
@@ -328,36 +337,43 @@ def align_data(
 
 class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     alignment: Alignment[S, T]
+
+    # internal state
     _vars_l2h: Mapping[str, str]
+    _counter: Dict[str, Dict[str, Optional[S]]]
 
     def __init__(self, alignment: Alignment[S, T]):
+        _validate_alignment(alignment)
         self.alignment = alignment
         self._vars_l2h = {var_l: var_h for var_h, (vars_l, _) in alignment.items() for var_l in vars_l}
         super().__init__()
 
     def __enter__(self):
-        self._counter: Dict[str, Dict[str, S]] = collections.defaultdict(dict)
+        self._counter = collections.defaultdict(dict)
         return super().__enter__()
 
     def _place_placeholder(self, msg: dict) -> None:
-        if msg["name"] not in self._vars_l2h:
+        if msg["name"] not in self._vars_l2h or pyro.poutine.util.site_is_subsample(msg):
             return
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
         if name_l not in self._counter[name_h]:
-            self._counter[name_h][name_l] = msg["type"]
+            self._counter[name_h][name_l] = None
             msg["placeholder"] = True
 
     def _replace_placeholder(self, msg: dict) -> None:
-        if msg["name"] not in self._vars_l2h:
+        if msg["name"] not in self._vars_l2h or pyro.poutine.util.site_is_subsample(msg):
             return
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
         if msg.pop("placeholder", False):
+            assert self._counter[name_h][name_l] is None and msg["value"] is not None
             self._counter[name_h][name_l] = msg["value"]
-            if self.alignment[name_h][0] == self._counter[name_h]:
-                pyro.deterministic(name_h, self.alignment[name_h][1](self._counter[name_h]))
+            vars_l_h, fn_h = self.alignment[name_h]
+            if vars_l_h == set(self._counter[name_h].keys()):
+                pyro.deterministic(name_h, fn_h(typing.cast(Mapping[str, S], self._counter[name_h])))
 
+    # same logic for all of these operations...
     def _pyro_sample(self, msg: dict) -> None: self._place_placeholder(msg)
     def _pyro_post_sample(self, msg: dict) -> None: self._replace_placeholder(msg)
 
@@ -366,6 +382,12 @@ class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
 
     def _pyro_observe(self, msg: dict) -> None: self._place_placeholder(msg)
     def _pyro_post_observe(self, msg: dict) -> None: self._replace_placeholder(msg)
+
+    def _pyro_split(self, msg: dict) -> None: self._place_placeholder(msg)
+    def _pyro_post_split(self, msg: dict) -> None: self._replace_placeholder(msg)
+
+    def _pyro_preempt(self, msg: dict) -> None: self._place_placeholder(msg)
+    def _pyro_post_preempt(self, msg: dict) -> None: self._replace_placeholder(msg)
 
 
 def abstraction_distance(
@@ -377,11 +399,6 @@ def abstraction_distance(
     actions: Mapping[str, Intervention[S]] = {},
     loss: pyro.infer.elbo.ELBO = pyro.infer.Trace_ELBO(),
 ) -> Callable[P, torch.Tensor]:
-
-    vars_l: Set[str] = set()
-    for var_h, (vars_l_h, _) in alignment.items():
-        assert not vars_l_h & vars_l, f"alignment is not a partition: {var_h} contains duplicates {vars_l_h & vars_l}"
-        vars_l |= vars_l_h
 
     intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
     abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
