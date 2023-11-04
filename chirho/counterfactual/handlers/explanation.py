@@ -401,7 +401,7 @@ def abstraction_distance(
     *,
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
-    loss: pyro.infer.elbo.ELBO = pyro.infer.Trace_ELBO(),
+    loss: Callable[[Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
 ) -> Callable[P, torch.Tensor]:
 
     intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
