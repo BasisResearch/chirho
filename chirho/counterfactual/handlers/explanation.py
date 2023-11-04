@@ -328,17 +328,44 @@ def align_data(
 
 class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     alignment: Alignment[S, T]
+    _vars_l2h: Mapping[str, str]
 
     def __init__(self, alignment: Alignment[S, T]):
         self.alignment = alignment
+        self._vars_l2h = {var_l: var_h for var_h, (vars_l, _) in alignment.items() for var_l in vars_l}
         super().__init__()
 
     def __enter__(self):
-        self._counter = {}
+        self._counter: Dict[str, Dict[str, S]] = collections.defaultdict(dict)
         return super().__enter__()
 
-    def _pyro_sample(self, msg: dict) -> None:
-        ...  # TODO
+    def _place_placeholder(self, msg: dict) -> None:
+        if msg["name"] not in self._vars_l2h:
+            return
+
+        name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
+        if name_l not in self._counter[name_h]:
+            self._counter[name_h][name_l] = msg["type"]
+            msg["placeholder"] = True
+
+    def _replace_placeholder(self, msg: dict) -> None:
+        if msg["name"] not in self._vars_l2h:
+            return
+
+        name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
+        if msg.pop("placeholder", False):
+            self._counter[name_h][name_l] = msg["value"]
+            if self.alignment[name_h][0] == self._counter[name_h]:
+                pyro.deterministic(name_h, self.alignment[name_h][1](self._counter[name_h]))
+
+    def _pyro_sample(self, msg: dict) -> None: self._place_placeholder(msg)
+    def _pyro_post_sample(self, msg: dict) -> None: self._replace_placeholder(msg)
+
+    def _pyro_intervene(self, msg: dict) -> None: self._place_placeholder(msg)
+    def _pyro_post_intervene(self, msg: dict) -> None: self._replace_placeholder(msg)
+
+    def _pyro_observe(self, msg: dict) -> None: self._place_placeholder(msg)
+    def _pyro_post_observe(self, msg: dict) -> None: self._replace_placeholder(msg)
 
 
 def abstraction_distance(
@@ -360,6 +387,6 @@ def abstraction_distance(
     abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
 
     abstracted_data, abstracted_actions = align_data(alignment, data=data, actions=actions)
-    intervened_model_h: Callable[P, T] = do(actions=abstracted_actions)(condition(data=abstracted_data)(model_h))
+    intervened_model_h: Callable[P, T] = condition(data=abstracted_data)(do(actions=abstracted_actions)(model_h))
 
-    return MultiWorldCounterfactual()(loss(intervened_model_h, abstracted_model_l))
+    return loss(intervened_model_h, abstracted_model_l)
