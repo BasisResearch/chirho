@@ -404,6 +404,18 @@ def abstraction_distance(
     loss: Callable[[Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
 ) -> Callable[P, torch.Tensor]:
 
+    # When abstraction_distance is minimized,
+    # the following diagram should commute:
+    #
+    #         intervene
+    # model_l --------> intervened_model_l
+    #   |                        |
+    # AlignModel            AlignModel
+    #   |                        |
+    #   |     intervene o        |
+    #   v      align_data        v
+    # model_h --------> intervened_model_h
+
     intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
     abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
 
