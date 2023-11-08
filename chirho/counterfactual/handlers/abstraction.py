@@ -237,7 +237,7 @@ def abstraction_distance(
     """
     if len(data) > 0:
         raise NotImplementedError(
-            "abstraction_distance does not yet support conditioning"
+            f"abstraction_distance does not yet support conditioning, but got {data}"
         )
 
     # path 1: intervene, then abstract
