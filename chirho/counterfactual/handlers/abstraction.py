@@ -102,29 +102,38 @@ class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
         if msg["name"] not in self._vars_l2h or pyro.poutine.util.site_is_subsample(
             msg
         ):
+            # marginalized low-level variables are not needed for high-level computation
             return
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
         if name_l not in self._values_l[name_h]:
-            self._values_l[name_h][
-                name_l
-            ] = None  # stick a None here until this site is done
-            msg[
-                "placeholder"
-            ] = True  # prevent other sites with this name from being used
+            # If this site is not a marginalized low-level variable, then it must be logged
+            #   so that it can be used to compute the high-level value.
+            # This is complicated by the fact that some operations introduce others
+            #   with the same name, e.g. observe introduces an internal sample site.
+            # To ensure that the final value for a given name is used,
+            #   we set a temporary null placeholder value in self._values_l for this name,
+            #   and add a flag marking this site as the outermost site with this name.
+            self._values_l[name_h][name_l] = None
+            msg["_is_outermost_lowlvl"] = True
 
     def _replace_placeholder(self, msg: dict) -> None:
         if msg["name"] not in self._vars_l2h or pyro.poutine.util.site_is_subsample(
             msg
         ):
+            # marginalized low-level variables are not needed for high-level computation
             return
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
-        if msg.pop("placeholder", False):
+        if msg.pop("_is_outermost_lowlvl", False):
+            # replace the None in self._values with the final value for this site
             assert self._values_l[name_h][name_l] is None and msg["value"] is not None
-            self._values_l[name_h][name_l] = msg[
-                "value"
-            ]  # replace the None with the final value
+            self._values_l[name_h][name_l] = msg["value"]
+
+            # As soon as the last low-level value for a high-level variable is captured,
+            #   compute the high-level value and register it as a deterministic site.
+            # This guarantees that the high-level value is computed in the correct context,
+            #   and that it is only computed once per low-level model execution.
             vars_l_h, fn_h = self.alignment[name_h]
             if vars_l_h == set(self._values_l[name_h].keys()):
                 # TODO should this be a pyro.sample instead, to capture event_dim?
