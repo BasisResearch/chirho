@@ -210,7 +210,6 @@ def abstraction_distance(
     When abstraction_distance is minimized, the following diagram should commute
     (but only for the given values of ``alignment``, ``data`` and ``actions``)::
 
-        ```
                 intervene
         model_l --------> intervened_model_l
           |                        |
@@ -219,7 +218,6 @@ def abstraction_distance(
           |     intervene o        |
           v    abstract_query      v
         model_h --------> intervened_model_h
-        ```
 
     .. warning:: This currently only supports purely interventional queries,
         not observational or counterfactual queries which require normalization.
