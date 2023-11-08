@@ -97,7 +97,7 @@ class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
 
     # internal state
     _vars_l2h: Mapping[str, str]
-    _values_l: Dict[str, Dict[str, Optional[S]]]
+    _values_l: Mapping[str, Dict[str, Optional[S]]]
 
     def __init__(self, alignment: Alignment[S, T]):
         _validate_alignment(alignment)
