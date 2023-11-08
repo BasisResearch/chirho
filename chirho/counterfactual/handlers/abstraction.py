@@ -221,12 +221,12 @@ def abstraction_distance(
           v    abstract_query      v
         model_h --------> intervened_model_h
 
-    .. warning:: This function assumes that there are no variable names that appear in both models.
-      Instead, ``alignment`` explicitly maps some low-level variables to some high-level variables,
-      and any other variables remaining in both models are implicitly marginalized out.
-      This condition is not currently checked, so violations will result in silently incorrect behavior.
+    .. warning:: :func:`abstraction_distance` assumes that no variable names are shared across both models.
+        Instead, ``alignment`` explicitly maps some low-level variables to some different high-level variables,
+        and any other variables remaining in both models are implicitly marginalized out in the loss.
+        This condition is not currently checked, so violations will result in silently incorrect behavior.
 
-    .. note:: This currently only supports purely interventional queries,
+    .. warning:: :func:`abstraction_distance` currently only supports purely interventional queries,
         not observational or counterfactual queries which require normalization.
 
     :param alignment: a mapping from low-level variables (variables of ``model_l``)
