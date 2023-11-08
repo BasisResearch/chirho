@@ -399,9 +399,9 @@ def abstraction_distance(
     model_h: Callable[P, T],
     alignment: Alignment[S, T],
     *,
+    loss: Callable[[Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
-    loss: Callable[[Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
 ) -> Callable[P, torch.Tensor]:
 
     # When abstraction_distance is minimized,
