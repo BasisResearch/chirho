@@ -147,9 +147,13 @@ class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
             #   compute the high-level value and register it as a deterministic site.
             # This guarantees that the high-level value is computed in the correct context,
             #   and that it is only computed once per low-level model execution.
+            # TODO should this create a pyro.sample site instead, to capture event_dim?
             vars_l_h, fn_h = self.alignment[name_h]
             if vars_l_h == set(self._values_l[name_h].keys()):
-                # TODO should this be a pyro.sample instead, to capture event_dim?
+                # runtime validation to offset the unfortunate typing.cast below
+                assert all(
+                    vl is not None for vl in self._values_l[name_h].values()
+                ), f"missing low-level values for {name_h}: {self._values_l[name_h]}"
                 pyro.deterministic(
                     name_h, fn_h(typing.cast(Mapping[str, S], self._values_l[name_h]))
                 )
