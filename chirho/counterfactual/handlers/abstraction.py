@@ -208,7 +208,7 @@ def abstraction_distance(
 ) -> Callable[P, torch.Tensor]:
     """
     When abstraction_distance is minimized, the following diagram should commute
-    (but only for the given values of ``alignment``, ``data`` and ``actions)::
+    (but only for the given values of ``alignment``, ``data`` and ``actions``)::
 
         ```
                 intervene
