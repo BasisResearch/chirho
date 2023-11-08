@@ -247,7 +247,9 @@ def abstraction_distance(
             yield
 
     intervened_model_l: _Model[P, S] = query_l()(model_l)
-    abstracted_model_l: _Model[P, T] = Abstraction(alignment)(intervened_model_l)
+    abstracted_intervened_model_l: _Model[P, T] = Abstraction(alignment)(
+        intervened_model_l
+    )
 
     # path 2: abstract, then intervene
     @contextlib.contextmanager
@@ -263,4 +265,4 @@ def abstraction_distance(
     # TODO expose PyTorch parameters of models and alignment correctly in loss
     # TODO normalize abstracted_model_l before loss computation
     # TODO also necessary to normalize intervened_model_h before loss computation?
-    return loss(intervened_model_h, abstracted_model_l)
+    return loss(intervened_model_h, abstracted_intervened_model_l)
