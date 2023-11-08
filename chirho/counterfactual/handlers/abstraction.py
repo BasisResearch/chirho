@@ -1,4 +1,5 @@
 import collections.abc
+import contextlib
 import typing
 from typing import (
     Callable,
@@ -235,21 +236,29 @@ def abstraction_distance(
     :return: a loss function quantifying the causal abstraction distance between the models
     """
     if len(data) > 0:
-        raise NotImplementedError("abstraction_distance does not yet support conditioning")
+        raise NotImplementedError(
+            "abstraction_distance does not yet support conditioning"
+        )
 
     # path 1: intervene, then abstract
-    intervened_model_l: _Model[P, S] = condition(data=data)(
-        do(actions=actions)(model_l)
-    )
+    @contextlib.contextmanager
+    def query_l():
+        with condition(data=data), do(actions=actions):
+            yield
+
+    intervened_model_l: _Model[P, S] = query_l()(model_l)
     abstracted_model_l: _Model[P, T] = Abstraction(alignment)(intervened_model_l)
 
     # path 2: abstract, then intervene
-    abstracted_data, abstracted_actions = abstract_data(
-        alignment, data=data, actions=actions
-    )
-    intervened_model_h: _Model[P, T] = condition(data=abstracted_data)(
-        do(actions=abstracted_actions)(model_h)
-    )
+    @contextlib.contextmanager
+    def query_h():
+        abstracted_data, abstracted_actions = abstract_data(
+            alignment, data=data, actions=actions
+        )
+        with condition(data=abstracted_data), do(actions=abstracted_actions):
+            yield
+
+    intervened_model_h: _Model[P, T] = query_h()(model_h)
 
     # TODO normalize abstracted_model_l before loss computation
     # TODO also necessary to normalize intervened_model_h before loss computation?
