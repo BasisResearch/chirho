@@ -161,9 +161,11 @@ class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
 
     # same logic for all of these operations...
     def _pyro_sample(self, msg: dict) -> None:
+        # TODO is _place_placeholder compatible with do() on sample() sites?
         self._place_placeholder(msg)
 
     def _pyro_post_sample(self, msg: dict) -> None:
+        # TODO is _replace_placeholder compatible with do() on sample() sites?
         self._replace_placeholder(msg)
 
     def _pyro_intervene(self, msg: dict) -> None:
