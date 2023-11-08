@@ -395,12 +395,16 @@ class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     def _pyro_post_preempt(self, msg: dict) -> None: self._replace_placeholder(msg)
 
 
+# TODO find a better encoding of this effect type
+_Model = Callable[P, Optional[T]]
+
+
 def abstraction_distance(
-    model_l: Callable[P, S],
-    model_h: Callable[P, T],
+    model_l: _Model[P, S],
+    model_h: _Model[P, T],
     alignment: Alignment[S, T],
     *,
-    loss: Callable[[Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
+    loss: Callable[[_Model[P, T], _Model[P, T]], Callable[P, torch.Tensor]] = pyro.infer.Trace_ELBO(),
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
 ) -> Callable[P, torch.Tensor]:
@@ -417,11 +421,11 @@ def abstraction_distance(
     #   v      align_data        v
     # model_h --------> intervened_model_h
 
-    intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
-    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(intervened_model_l)
+    intervened_model_l: _Model[P, S] = condition(data=data)(do(actions=actions)(model_l))
+    abstracted_model_l: _Model[P, T] = AbstractModel(alignment)(intervened_model_l)
 
     abstracted_data, abstracted_actions = abstract_data(alignment, data=data, actions=actions)
-    intervened_model_h: Callable[P, T] = condition(data=abstracted_data)(do(actions=abstracted_actions)(model_h))
+    intervened_model_h: _Model[P, T] = condition(data=abstracted_data)(do(actions=abstracted_actions)(model_h))
 
     # TODO posterior inference for abstracted_model_l before loss?
     return loss(intervened_model_h, abstracted_model_l)
