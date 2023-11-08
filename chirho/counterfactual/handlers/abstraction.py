@@ -242,5 +242,6 @@ def abstraction_distance(
         do(actions=abstracted_actions)(model_h)
     )
 
-    # TODO need to normalize abstracted_model_l before loss?
+    # TODO normalize abstracted_model_l before loss computation
+    # TODO also necessary to normalize intervened_model_h before loss computation?
     return loss(intervened_model_h, abstracted_model_l)
