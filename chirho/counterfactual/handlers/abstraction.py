@@ -159,7 +159,7 @@ class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
                     name_h, fn_h(typing.cast(Mapping[str, S], self._values_l[name_h]))
                 )
 
-    # same logic for all of these operations...
+    # same logic for all of these operations, except maybe sample()...
     def _pyro_sample(self, msg: dict) -> None:
         # TODO is _place_placeholder compatible with do() on sample() sites?
         self._place_placeholder(msg)
