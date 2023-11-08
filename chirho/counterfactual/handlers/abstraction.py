@@ -196,9 +196,9 @@ _Model = Callable[P, Optional[T]]
 
 
 def abstraction_distance(
-    model_l: _Model[P, S],
-    model_h: _Model[P, T],
     alignment: Alignment[S, T],
+    model_l: _Model[P, S],
+    model_h: Optional[_Model[P, T]] = None,
     *,
     loss: Callable[
         [_Model[P, T], _Model[P, T]], Callable[P, torch.Tensor]
@@ -224,12 +224,12 @@ def abstraction_distance(
     .. warning:: This currently only supports purely interventional queries,
         not observational or counterfactual queries which require normalization.
 
-    :param model_l: a low-level model whose variables are a superset
-      of the low-level variables that appear in ``alignment``
-    :param model_h: a high-level model whose variables are a superset
-      of the high-level variables that appear in ``alignment``
     :param alignment: a mapping from low-level variables (variables of ``model_l``)
       to high-level variables (variables of ``model_h``)
+    :param model_l: a low-level model whose variables are a superset
+      of the low-level variables that appear in ``alignment``
+    :param model_h: an optional high-level model whose variables are a superset
+      of the high-level variables that appear in ``alignment``
     :param loss: a functional that takes two high-level models and returns a loss function
     :param data: low-level observations (if any)
     :param actions: low-level interventions (if any)
@@ -237,7 +237,12 @@ def abstraction_distance(
     """
     if len(data) > 0:
         raise NotImplementedError(
-            f"abstraction_distance does not yet support conditioning, but got {data}"
+            f"abstraction_distance() does not yet support conditioning, but got {data}"
+        )
+
+    if model_h is None:
+        raise NotImplementedError(
+            "Abstraction() and abstraction_distance() do not yet support interventions on induced high-level variables"
         )
 
     # path 1: intervene, then abstract
@@ -260,7 +265,9 @@ def abstraction_distance(
         with condition(data=abstracted_data), do(actions=abstracted_actions):
             yield
 
-    abstracted_model_l_approx: _Model[P, T] = model_h  # use model_h as an approximation
+    abstracted_model_l_approx: _Model[P, T] = (
+        model_h if model_h is not None else Abstraction(alignment)(model_l)
+    )
     intervened_model_h: _Model[P, T] = query_h()(abstracted_model_l_approx)
 
     # TODO expose PyTorch parameters of models and alignment correctly in loss
