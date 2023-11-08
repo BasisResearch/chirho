@@ -260,9 +260,10 @@ def abstraction_distance(
         with condition(data=abstracted_data), do(actions=abstracted_actions):
             yield
 
-    intervened_model_h: _Model[P, T] = query_h()(model_h)
+    abstracted_model_l_approx: _Model[P, T] = model_h  # use model_h as an approximation
+    intervened_model_h: _Model[P, T] = query_h()(abstracted_model_l_approx)
 
     # TODO expose PyTorch parameters of models and alignment correctly in loss
-    # TODO normalize abstracted_model_l before loss computation
+    # TODO normalize abstracted_intervened_model_l before loss computation
     # TODO also necessary to normalize intervened_model_h before loss computation?
     return loss(intervened_model_h, abstracted_intervened_model_l)
