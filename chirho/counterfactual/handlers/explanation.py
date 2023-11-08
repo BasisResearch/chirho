@@ -316,7 +316,7 @@ def _validate_alignment(alignment: Alignment[S, T]) -> None:
         raise NotImplementedError(f"name reuse across alignment not yet supported: {vars_l & set(alignment.keys())}")
 
 
-def align_data(
+def abstract_data(
     alignment: Alignment[S, T],
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
@@ -339,12 +339,12 @@ def align_data(
     return aligned_data, aligned_actions
 
 
-class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
+class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     alignment: Alignment[S, T]
 
     # internal state
     _vars_l2h: Mapping[str, str]
-    _counter: Dict[str, Dict[str, Optional[S]]]
+    _values_l: Dict[str, Dict[str, Optional[S]]]
 
     def __init__(self, alignment: Alignment[S, T]):
         _validate_alignment(alignment)
@@ -352,8 +352,8 @@ class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
         self._vars_l2h = {var_l: var_h for var_h, (vars_l, _) in alignment.items() for var_l in vars_l}
         super().__init__()
 
-    def __enter__(self):
-        self._counter = collections.defaultdict(dict)
+    def __enter__(self) -> "AbstractModel[S, T]":
+        self._values_l = collections.defaultdict(dict)
         return super().__enter__()
 
     def _place_placeholder(self, msg: dict) -> None:
@@ -361,9 +361,9 @@ class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
             return
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
-        if name_l not in self._counter[name_h]:
-            self._counter[name_h][name_l] = None
-            msg["placeholder"] = True
+        if name_l not in self._values_l[name_h]:
+            self._values_l[name_h][name_l] = None  # stick a None here until this site is done
+            msg["placeholder"] = True  # prevent other sites with this name from being used
 
     def _replace_placeholder(self, msg: dict) -> None:
         if msg["name"] not in self._vars_l2h or pyro.poutine.util.site_is_subsample(msg):
@@ -371,11 +371,12 @@ class AlignModel(Generic[S, T], pyro.poutine.messenger.Messenger):
 
         name_l, name_h = msg["name"], self._vars_l2h[msg["name"]]
         if msg.pop("placeholder", False):
-            assert self._counter[name_h][name_l] is None and msg["value"] is not None
-            self._counter[name_h][name_l] = msg["value"]
+            assert self._values_l[name_h][name_l] is None and msg["value"] is not None
+            self._values_l[name_h][name_l] = msg["value"]  # replace the None with the final value
             vars_l_h, fn_h = self.alignment[name_h]
-            if vars_l_h == set(self._counter[name_h].keys()):
-                pyro.deterministic(name_h, fn_h(typing.cast(Mapping[str, S], self._counter[name_h])))
+            if vars_l_h == set(self._values_l[name_h].keys()):
+                # TODO should this be a pyro.sample instead, to capture event_dim?
+                pyro.deterministic(name_h, fn_h(typing.cast(Mapping[str, S], self._values_l[name_h])))
 
     # same logic for all of these operations...
     def _pyro_sample(self, msg: dict) -> None: self._place_placeholder(msg)
@@ -417,9 +418,10 @@ def abstraction_distance(
     # model_h --------> intervened_model_h
 
     intervened_model_l: Callable[P, S] = condition(data=data)(do(actions=actions)(model_l))
-    abstracted_model_l: Callable[P, T] = AlignModel(alignment)(intervened_model_l)
+    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(intervened_model_l)
 
-    abstracted_data, abstracted_actions = align_data(alignment, data=data, actions=actions)
+    abstracted_data, abstracted_actions = abstract_data(alignment, data=data, actions=actions)
     intervened_model_h: Callable[P, T] = condition(data=abstracted_data)(do(actions=abstracted_actions)(model_h))
 
+    # TODO posterior inference for abstracted_model_l before loss?
     return loss(intervened_model_h, abstracted_model_l)
