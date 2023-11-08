@@ -42,7 +42,7 @@ def _validate_alignment(alignment: Alignment[S, T]) -> None:
 
     if vars_l & set(alignment.keys()):
         raise NotImplementedError(
-            f"name reuse across alignment not yet supported: {vars_l & set(alignment.keys())}"
+            f"name reuse across levels not yet supported: {vars_l & set(alignment.keys())}"
         )
 
 
@@ -73,6 +73,12 @@ def abstract_data(
 
 
 class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
+    """
+    A :class:`pyro.poutine.messenger.Messenger` that applies an :class:`Alignment`
+    to a low-level model to produce a joint distribution on high-level model variables.
+
+    .. warning:: This does **not** enable interventions on the high-level variables directly.
+    """
     alignment: Alignment[S, T]
 
     # internal state
