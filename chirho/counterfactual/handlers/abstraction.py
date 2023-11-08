@@ -28,7 +28,9 @@ T = TypeVar("T")
 
 
 # TODO separate Observation and Intervention types?
-_AlignmentFn = Callable[[Mapping[str, Union[S, Intervention[S], Observation[S]]]], T]
+_AlignmentFn = Callable[
+    [Mapping[str, Union[None, S, Intervention[S], Observation[S]]]], T
+]
 Alignment = Mapping[str, Tuple[Set[str], _AlignmentFn[S, T]]]
 
 
@@ -60,7 +62,7 @@ def _validate_alignment(
         )
 
 
-def abstract_data(
+def abstract_query(
     alignment: Alignment[S, T],
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
@@ -72,21 +74,19 @@ def abstract_data(
     _validate_alignment(alignment, data=data, actions=actions)
 
     aligned_data = {
-        var_h: fn_h({var_l: data[var_l] for var_l in vars_l})
+        var_h: fn_h({var_l: data.get(var_l, None) for var_l in vars_l})
         for var_h, (vars_l, fn_h) in alignment.items()
-        if vars_l <= set(data.keys())
     }
 
     aligned_actions = {
-        var_h: fn_h({var_l: actions[var_l] for var_l in vars_l})
+        var_h: fn_h({var_l: actions.get(var_l, None) for var_l in vars_l})
         for var_h, (vars_l, fn_h) in alignment.items()
-        if vars_l <= set(actions.keys())
     }
 
     return aligned_data, aligned_actions
 
 
-class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
+class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     """
     A :class:`pyro.poutine.messenger.Messenger` that applies an :class:`Alignment`
     to a low-level model to produce a joint distribution on high-level model variables.
@@ -108,7 +108,7 @@ class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
         }
         super().__init__()
 
-    def __enter__(self) -> "Abstraction[S, T]":
+    def __enter__(self) -> "AbstractModel[S, T]":
         self._values_l = collections.defaultdict(dict)
         return super().__enter__()
 
@@ -214,10 +214,10 @@ def abstraction_distance(
                 intervene
         model_l --------> intervened_model_l
           |                        |
-        Abstraction              Abstraction
+        AbstractModel            AbstractModel
           |                        |
           |     intervene o        |
-          v    abstract_data       v
+          v    abstract_query      v
         model_h --------> intervened_model_h
         ```
 
@@ -252,21 +252,21 @@ def abstraction_distance(
             yield
 
     intervened_model_l: _Model[P, S] = query_l()(model_l)
-    abstracted_intervened_model_l: _Model[P, T] = Abstraction(alignment)(
+    abstracted_intervened_model_l: _Model[P, T] = AbstractModel(alignment)(
         intervened_model_l
     )
 
     # path 2: abstract, then intervene
     @contextlib.contextmanager
     def query_h():
-        abstracted_data, abstracted_actions = abstract_data(
+        abstracted_data, abstracted_actions = abstract_query(
             alignment, data=data, actions=actions
         )
         with condition(data=abstracted_data), do(actions=abstracted_actions):
             yield
 
     abstracted_model_l_approx: _Model[P, T] = (
-        model_h if model_h is not None else Abstraction(alignment)(model_l)
+        model_h if model_h is not None else AbstractModel(alignment)(model_l)
     )
     intervened_model_h: _Model[P, T] = query_h()(abstracted_model_l_approx)
 
