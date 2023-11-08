@@ -31,7 +31,12 @@ _AlignmentFn = Callable[[Mapping[str, Union[S, Intervention[S], Observation[S]]]
 Alignment = Mapping[str, Tuple[Set[str], _AlignmentFn[S, T]]]
 
 
-def _validate_alignment(alignment: Alignment[S, T]) -> None:
+def _validate_alignment(
+    alignment: Alignment[S, T],
+    *,
+    data: Optional[Mapping[str, Observation[S]]] = None,
+    actions: Optional[Mapping[str, Intervention[S]]] = None,
+) -> None:
     vars_l: Set[str] = set()
     for var_h, (vars_l_h, _) in alignment.items():
         if vars_l_h & vars_l:
@@ -45,6 +50,14 @@ def _validate_alignment(alignment: Alignment[S, T]) -> None:
             f"name reuse across levels not yet supported: {vars_l & set(alignment.keys())}"
         )
 
+    if data is not None and not set(data.keys()) <= vars_l:
+        raise ValueError(f"Unaligned observed variables: {set(data.keys()) - vars_l}")
+
+    if actions is not None and not set(actions.keys()) <= vars_l:
+        raise ValueError(
+            f"Unaligned intervened variables: {set(actions.keys()) - vars_l}"
+        )
+
 
 def abstract_data(
     alignment: Alignment[S, T],
@@ -55,7 +68,7 @@ def abstract_data(
     Apply an :class:`Alignment` to a set of low-level observations and interventions
     to produce a set of high-level observations and interventions.
     """
-    _validate_alignment(alignment)
+    _validate_alignment(alignment, data=data, actions=actions)
 
     aligned_data = {
         var_h: fn_h({var_l: data[var_l] for var_l in vars_l})
