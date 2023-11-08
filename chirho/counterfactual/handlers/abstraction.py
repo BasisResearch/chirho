@@ -220,13 +220,16 @@ def abstraction_distance(
         model_h --------> intervened_model_h
         ```
 
-    :param model_l: a low-level model
-    :param model_h: a high-level model
-    :param alignment: a mapping from low-level variables to high-level variables
-    :param loss: a loss functional that takes two models and returns a loss function
+    :param model_l: a low-level model whose variables are a superset
+      of the low-level variables that appear in ``alignment``
+    :param model_h: a high-level model whose variables are a superset
+      of the high-level variables that appear in ``alignment``
+    :param alignment: a mapping from low-level variables (variables of ``model_l``)
+      to high-level variables (variables of ``model_h``)
+    :param loss: a functional that takes two high-level models and returns a loss function
     :param data: low-level observations (if any)
     :param actions: low-level interventions (if any)
-    :return: a loss function
+    :return: a loss function quantifying the causal abstraction distance between the models
     """
 
     # path 1: intervene, then abstract
