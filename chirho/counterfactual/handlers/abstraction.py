@@ -79,6 +79,7 @@ class Abstraction(Generic[S, T], pyro.poutine.messenger.Messenger):
 
     .. warning:: This does **not** enable interventions on the high-level variables directly.
     """
+
     alignment: Alignment[S, T]
 
     # internal state
