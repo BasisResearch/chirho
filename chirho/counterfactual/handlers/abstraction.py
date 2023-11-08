@@ -220,6 +220,9 @@ def abstraction_distance(
         model_h --------> intervened_model_h
         ```
 
+    .. warning:: This currently only supports purely interventional queries,
+        not observational or counterfactual queries which require normalization.
+
     :param model_l: a low-level model whose variables are a superset
       of the low-level variables that appear in ``alignment``
     :param model_h: a high-level model whose variables are a superset
@@ -231,6 +234,8 @@ def abstraction_distance(
     :param actions: low-level interventions (if any)
     :return: a loss function quantifying the causal abstraction distance between the models
     """
+    if len(data) > 0:
+        raise NotImplementedError("abstraction_distance does not yet support conditioning")
 
     # path 1: intervene, then abstract
     intervened_model_l: _Model[P, S] = condition(data=data)(
