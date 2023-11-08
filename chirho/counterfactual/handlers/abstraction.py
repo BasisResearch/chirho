@@ -51,6 +51,10 @@ def abstract_data(
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
 ) -> Tuple[Mapping[str, Observation[T]], Mapping[str, Intervention[T]]]:
+    """
+    Apply an :class:`Alignment` to a set of low-level observations and interventions
+    to produce a set of high-level observations and interventions.
+    """
     _validate_alignment(alignment)
 
     aligned_data = {
@@ -168,23 +172,36 @@ def abstraction_distance(
     data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
 ) -> Callable[P, torch.Tensor]:
-    # When abstraction_distance is minimized,
-    # the following diagram should commute:
-    #
-    #         intervene
-    # model_l --------> intervened_model_l
-    #   |                        |
-    # AlignModel            AlignModel
-    #   |                        |
-    #   |     intervene o        |
-    #   v      align_data        v
-    # model_h --------> intervened_model_h
+    """
+    When abstraction_distance is minimized, the following diagram should commute::
 
+        ```
+                intervene
+        model_l --------> intervened_model_l
+          |                        |
+        Abstraction              Abstraction
+          |                        |
+          |     intervene o        |
+          v    abstract_data       v
+        model_h --------> intervened_model_h
+        ```
+
+    :param model_l: a low-level model
+    :param model_h: a high-level model
+    :param alignment: a mapping from low-level variables to high-level variables
+    :param loss: a loss functional that takes two models and returns a loss function
+    :param data: low-level observations (if any)
+    :param actions: low-level interventions (if any)
+    :return: a loss function
+    """
+
+    # path 1: intervene, then abstract
     intervened_model_l: _Model[P, S] = condition(data=data)(
         do(actions=actions)(model_l)
     )
     abstracted_model_l: _Model[P, T] = Abstraction(alignment)(intervened_model_l)
 
+    # path 2: abstract, then intervene
     abstracted_data, abstracted_actions = abstract_data(
         alignment, data=data, actions=actions
     )
@@ -192,5 +209,5 @@ def abstraction_distance(
         do(actions=abstracted_actions)(model_h)
     )
 
-    # TODO posterior inference for abstracted_model_l before loss?
+    # TODO need to normalize abstracted_model_l before loss?
     return loss(intervened_model_h, abstracted_model_l)
