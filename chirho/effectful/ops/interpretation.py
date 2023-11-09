@@ -37,34 +37,31 @@ def register_(
 
 
 @typing.overload
-def register(
-    __op: Operation[P, T],
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
+def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     ...
 
 
 @typing.overload
 def register(
-    __op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
+    op: Operation[P, T], intp: Optional[Interpretation[T, V]],
 ) -> Callable[[Callable[Q, V]], Callable[Q, V]]:
     ...
 
 
 @typing.overload
 def register(
-    __op: Operation[P, T],
+    op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
     interpret_op: Callable[Q, V],
 ) -> Callable[Q, V]:
     ...
 
 
-def register(__op, intp=None, interpret_op=None):
+def register(op, intp=None, interpret_op=None):
     if interpret_op is None:
-        return lambda interpret_op: register(__op, intp, interpret_op)
+        return lambda interpret_op: register(op, intp, interpret_op)
     else:
-        return register_(__op, intp, interpret_op)
+        return register_(op, intp, interpret_op)
 
 
 @contextlib.contextmanager
