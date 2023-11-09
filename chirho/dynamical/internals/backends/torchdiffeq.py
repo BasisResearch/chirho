@@ -12,8 +12,9 @@ from chirho.dynamical.handlers.interruption import (
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import (
-    check_dynamics,
+    SolverRuntimeCheckHandler,
     get_next_interruptions_dynamic,
+    get_solver_runtime_check_handler,
     simulate_point,
     simulate_trajectory,
 )
@@ -24,20 +25,18 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@check_dynamics.register(TorchDiffEq)
-def torchdiffeq_check_dynamics(
+class TorchDiffEqRuntimeCheckHandler(SolverRuntimeCheckHandler):
+    def _pyro_sample(self, msg):
+        raise ValueError(
+            "TorchDiffEq only supports ODE models, and thus does not allow `pyro.sample` calls."
+        )
+
+
+@get_solver_runtime_check_handler.register(TorchDiffEq)
+def get_torchdiffeq_runtime_check_handler(
     solver: TorchDiffEq,
-    dynamics: Dynamics[torch.Tensor],
-    state: State[torch.Tensor],
-    time: torch.Tensor,
-) -> bool:
-    var_order = _var_order(state.key())  # arbitrary, but fixed
-    state_tuple = tuple(getattr(state, v) for v in var_order)
-    # Check if the derivative is the same when called twice.
-    result1 = _deriv(dynamics, var_order, time, state_tuple)
-    result2 = _deriv(dynamics, var_order, time, state_tuple)
-    # If the derivative is not the same for two succesive calls, return False
-    return result1 == result2
+) -> TorchDiffEqRuntimeCheckHandler:
+    return TorchDiffEqRuntimeCheckHandler()
 
 
 # noinspection PyMethodParameters

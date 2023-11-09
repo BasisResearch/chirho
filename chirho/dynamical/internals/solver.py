@@ -31,6 +31,20 @@ class Solver(pyro.poutine.messenger.Messenger):
         msg["stop"] = True
 
 
+class SolverRuntimeCheckHandler(pyro.poutine.messenger.Messenger):
+    pass
+
+
+@functools.singledispatch
+def get_solver_runtime_check_handler(solver: Solver) -> SolverRuntimeCheckHandler:
+    """
+    Get the runtime check handler for the solver.
+    """
+    raise NotImplementedError(
+        f"get_solver_runtime_check_handler not implemented for type {type(solver)}"
+    )
+
+
 @pyro.poutine.runtime.effectful(type="get_solver")
 def get_solver() -> Solver:
     """
@@ -176,7 +190,7 @@ def get_next_interruptions_dynamic(
 @functools.singledispatch
 def check_dynamics(
     solver: Solver,
-    dynamics: InPlaceDynamics[T],
+    dynamics: Dynamics[T],
     state: State[T],
     time: R,
 ) -> bool:
