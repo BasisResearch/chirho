@@ -39,9 +39,7 @@ def times_n(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
     ) -> int:
         return value_or_fn(op.default)(result, *args) * n
 
-    return define(Interpretation)(
-        {op: bind_result(functools.partial(_op_times_n, n, op)) for op in ops}
-    )
+    return {op: bind_result(functools.partial(_op_times_n, n, op)) for op in ops}
 
 
 OPERATION_CASES = (

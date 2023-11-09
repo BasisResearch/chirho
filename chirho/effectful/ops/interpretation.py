@@ -89,11 +89,19 @@ def register(
     ...
 
 
-@define(Operation)
 def register(__op, intp=None, interpret_op=None):
     if interpret_op is None:
         return lambda interpret_op: register(__op, intp, interpret_op)
+    else:
+        return register_(__op, intp, interpret_op)
 
+
+@define(Operation)
+def register_(
+    __op: Operation[P, T],
+    intp: Optional[Interpretation[T, V]],
+    interpret_op: Callable[Q, V],
+) -> Callable[Q, V]:
     if intp is None:
         setattr(
             __op,
