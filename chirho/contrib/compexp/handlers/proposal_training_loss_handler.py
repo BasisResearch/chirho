@@ -12,20 +12,25 @@ class ProposalTrainingLossHandler(ExpectationHandler, _GuideRegistrationMixin):
 
     def __init__(self, num_samples: int, lr: float,
                  adjust_grads_: Callable[[torch.nn.Parameter, ...], None] = None,
-                 callback: Optional[Callable[[str, int], None]] = None,):
+                 callback: Optional[Callable[[str, int], None]] = None,
+                 allow_explicit_guide_optimization=False):
         super().__init__()
         self.num_samples = num_samples
         self.lr = lr
         self.adjust_grads_ = adjust_grads_
         self.callback = callback
+        self.allow_explicit_guide_optimization = allow_explicit_guide_optimization
 
         self._lazy_optimizers_elbos = dict()
 
-    def optimize_guides(*args, **kwargs):
-        raise UserWarning("It doesn't make sense to optimize_guides here because this handler"
-                          " does that during estimation. If you would like to burnin guide "
-                          " optimization before estimation, simply call the estimator a number of"
-                          " times and throw out the results.")
+    def optimize_guides(self, *args, **kwargs):
+        if not self.allow_explicit_guide_optimization:
+            raise UserWarning("It doesn't make sense to optimize_guides here because this handler"
+                              " does that during estimation. If you would like to burnin guide "
+                              " optimization before estimation, simply call the estimator a number of"
+                              " times and throw out the results.")
+        else:
+            return super().optimize_guides(*args, **kwargs)
 
     def _lazily_init_optimizer(self, ea: ExpectationAtom):
         k = ea.name

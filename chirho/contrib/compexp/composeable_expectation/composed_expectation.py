@@ -180,17 +180,17 @@ class ComposedExpectation:
 
         return self.__op_self(torch.neg)
 
-    def __inner_call(self, p: ModelType) -> TT:
+    def _inner_call(self, p: ModelType) -> TT:
         return self.op(*[child(p) for child in self.children])
 
     def __call__(self, p: ModelType) -> TT:
         if self.handler is None:
-            return self.__inner_call(p)
+            return self._inner_call(p)
         else:
             with pyro.poutine.messenger.block_messengers(
                     lambda m: isinstance(m, ExpectationHandler) and m is not self.handler):
                 with self.handler:
-                    return self.__inner_call(p)
+                    return self._inner_call(p)
 
     def __repr__(self):
         if self.op is torch.add:

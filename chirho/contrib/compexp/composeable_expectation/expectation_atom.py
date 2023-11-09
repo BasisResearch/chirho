@@ -76,7 +76,7 @@ class ExpectationAtom(ComposedExpectation):
         else:
             return super().__truediv__(other)
 
-    def __call__(self, p: ModelType) -> TT:
+    def _inner_call(self, p: ModelType) -> TT:
         """
         Overrides the non-atomic call to actually estimate the value of this expectation atom.
         """
