@@ -37,21 +37,21 @@ def product(
     (intp2,) = intps
 
     block_outer = {
-        op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp[op])
+        op: shallow_interpreter({fwd: reflect})(intp[op])
         for op in intp.keys()
     }
 
     block_inner = {
-        op: shallow_interpreter({fwd: lambda _, v: reflect(v)})(intp2[op])
+        op: shallow_interpreter({fwd: reflect})(intp2[op])
         if op in intp2
-        else lambda res, *args, **kwargs: reflect(res)
+        else lambda *args, **kwargs: reflect(None)
         for op in set(intp2.keys()) | set(intp.keys())
     }
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return {
         op: bind_and_push_prompts(
-            {reflect: interpreter(block_outer)(define(Operation)(op).default)},
+            {reflect: interpreter(block_outer)(op)},
         )(interpreter(block_inner)(intp2[op]))
         for op in intp2.keys()
     }

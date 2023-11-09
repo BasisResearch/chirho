@@ -17,16 +17,16 @@ class _BaseOperation(Generic[P, T]):
             f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
         )
 
-    def default(self, __result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
-        return __result if __result is not None else self._body(*args, **kwargs)
+    def default(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        return self._body(*args, **kwargs)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         if self is runtime.get_runtime:
-            intp = getattr(runtime.get_runtime, "default")(None, *args, **kwargs).interpretation
-            return operation.apply.default(None, intp, self, *args, **kwargs)
+            intp = getattr(runtime.get_runtime, "default")(*args, **kwargs).interpretation
+            return operation.apply.default(intp, self, *args, **kwargs)
         elif self is operation.apply:
             intp = runtime.get_interpretation()
-            return operation.apply.default(None, intp, self, *args, **kwargs)
+            return operation.apply.default(intp, self, *args, **kwargs)
         else:
             intp = runtime.get_interpretation()
             return operation.apply(intp, self, *args, **kwargs)

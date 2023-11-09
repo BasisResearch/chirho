@@ -1,5 +1,5 @@
 import typing
-from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Protocol, Type, TypeVar
+from typing import Callable, Mapping, ParamSpec, Protocol, Type, TypeVar
 
 from ._utils import weak_memoize
 
@@ -14,12 +14,12 @@ class Operation(Protocol[P, T]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
-    def default(self, __result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+    def default(self, *args: P.args, **kwargs: P.kwargs) -> T:
         ...
 
 
 def apply(
-    interpretation: Mapping[Operation[P, T], Callable[Concatenate[Optional[S], Q], S]],
+    interpretation: Mapping[Operation[P, T], Callable[Q, S]],
     op: Operation[P, T],
     *args: Q.args,
     **kwargs: Q.kwargs
@@ -29,7 +29,7 @@ def apply(
         interpret = interpretation[op]
     except KeyError:
         interpret = op.default
-    return interpret(None, *args, **kwargs)
+    return interpret(*args, **kwargs)
 
 
 @typing.overload
