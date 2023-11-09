@@ -51,10 +51,24 @@ def shallow_interpreter(intp: Interpretation):
         yield intp
 
 
+@define(Operation)
+def get_result() -> Optional[T]:
+    return None
+
+
+def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
+
+    @functools.wraps(fn)
+    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return fn(get_result(), *args, **kwargs)
+
+    return _wrapper
+
+
 @typing.overload
 def register(
     __op: Operation[P, T],
-) -> Callable[[Callable[Concatenate[Optional[T], P], T]], Callable[Concatenate[Optional[T], P], T]]:
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
     ...
 
 
@@ -62,7 +76,7 @@ def register(
 def register(
     __op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
-) -> Callable[[Callable[Concatenate[Optional[V], Q], V]], Callable[Concatenate[Optional[V], Q], V]]:
+) -> Callable[[Callable[Q, V]], Callable[Q, V]]:
     ...
 
 
@@ -70,8 +84,8 @@ def register(
 def register(
     __op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
-    interpret_op: Callable[Concatenate[Optional[V], Q], V],
-) -> Callable[Concatenate[Optional[V], Q], V]:
+    interpret_op: Callable[Q, V],
+) -> Callable[Q, V]:
     ...
 
 
@@ -84,11 +98,7 @@ def register(__op, intp=None, interpret_op=None):
         setattr(
             __op,
             "default",
-            functools.wraps(__op.default)(
-                lambda result, *args, **kwargs: interpret_op(*args, **kwargs)
-                if result is None
-                else result
-            ),
+            interpret_op,  # functools.wraps(__op.default)(interpret_op),
         )
         return interpret_op
     elif isinstance(intp, collections.abc.MutableMapping):

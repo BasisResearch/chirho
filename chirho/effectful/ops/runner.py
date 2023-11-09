@@ -2,7 +2,7 @@ import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.handler import bind_and_push_prompts, fwd
-from chirho.effectful.ops.interpretation import Interpretation, interpreter, shallow_interpreter
+from chirho.effectful.ops.interpretation import Interpretation, bind_result, interpreter, shallow_interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -44,7 +44,7 @@ def product(
     block_inner = {
         op: shallow_interpreter({fwd: reflect})(intp2[op])
         if op in intp2
-        else lambda *args, **kwargs: reflect(None)
+        else bind_result(lambda v, *args, **kwargs: reflect(v))
         for op in set(intp2.keys()) | set(intp.keys())
     }
 

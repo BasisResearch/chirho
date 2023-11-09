@@ -1,8 +1,8 @@
 import contextlib
 import functools
-from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, TypeVar
+from typing import Callable, Mapping, Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.interpretation import Interpretation, interpreter, shallow_interpreter
+from chirho.effectful.ops.interpretation import Interpretation, get_result, interpreter, shallow_interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -10,20 +10,6 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
-
-
-@define(Operation)
-def get_result() -> Optional[T]:
-    return None
-
-
-def result_passing(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
-
-    @functools.wraps(fn)
-    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        return fn(get_result(), *args, **kwargs)
-
-    return _wrapper
 
 
 LocalState = tuple[tuple, dict]
@@ -45,23 +31,24 @@ def bind_and_push_prompts(
 
         return _wrapper
 
-    def _set_local_state(fn: Callable[[Optional[T]], T]) -> Callable[[Optional[T]], T]:
-
-        @functools.wraps(fn)
-        def _wrapper(res: Optional[T]) -> T:
-            return shallow_interpreter({get_result: lambda: res})(fn)(res)
-
-        return _wrapper
-
     def _bind_local_state(
         unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
     ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
         return {
-            p: _set_local_state(functools.partial(
+            p: _set_result_state(functools.partial(
                 lambda k, _: k(*get_local_state()[0], **get_local_state()[1]),
                 unbound_conts[p],
             )) for p in unbound_conts.keys()
         }
+
+    def _set_result_state(fn: Callable[[Optional[V]], V]) -> Callable[[Optional[V]], V]:
+
+        @functools.wraps(fn)
+        def _wrapper(res: Optional[V]) -> V:
+            # get_result()  # clear result state - TODO is this necessary?
+            return shallow_interpreter({get_result: lambda: res})(fn)(res)
+
+        return _wrapper
 
     def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
         return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))

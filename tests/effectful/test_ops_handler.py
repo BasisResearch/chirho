@@ -6,9 +6,10 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from chirho.effectful.ops.handler import compose, fwd, handler
-from chirho.effectful.ops.interpretation import Interpretation, interpreter
+from chirho.effectful.ops.interpretation import Interpretation, bind_result, interpreter
 from chirho.effectful.ops.operation import Operation, define
 from chirho.effectful.ops.runner import product, reflect
+from chirho.effectful.ops._utils import value_or_fn
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +34,15 @@ def times_plus_1(x: int, y: int) -> int:
 
 
 def block(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return {op: lambda v, *args, **kwargs: reflect(v) for op in ops}
+    return {op: bind_result(lambda v, *args, **kwargs: reflect(v)) for op in ops}
 
 
 def defaults(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return {op: op.default for op in ops}
+    return {op: bind_result(value_or_fn(op.default)) for op in ops}
 
 
 def times_n_handler(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
-    return {op: lambda v, *args, **kwargs: fwd(v) * n for op in ops}
+    return {op: bind_result(lambda v, *args, **kwargs: fwd(v) * n) for op in ops}
 
 
 OPERATION_CASES = (
@@ -57,7 +58,7 @@ def test_affine_continuation_compose(op, args):
     def f():
         return op(*args)
 
-    h_twice = define(Interpretation)({op: lambda v, *a, **k: fwd(fwd(v))})
+    h_twice = define(Interpretation)({op: bind_result(lambda v, *a, **k: fwd(fwd(v)))})
 
     assert interpreter(defaults(op))(f)() == \
         interpreter(compose(defaults(op), h_twice))(f)()
@@ -68,7 +69,7 @@ def test_affine_continuation_product(op, args):
     def f():
         return op(*args)
 
-    h_twice = define(Interpretation)({op: lambda v, *a, **k: reflect(reflect(v))})
+    h_twice = define(Interpretation)({op: bind_result(lambda v, *a, **k: reflect(reflect(v)))})
 
     assert interpreter(defaults(op))(f)() == \
         interpreter(product(defaults(op), h_twice))(f)()
