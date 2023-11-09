@@ -17,7 +17,7 @@ LocalState = tuple[Optional[T], tuple, dict]
 
 
 @weak_memoize
-def prompt_local_state(
+def get_prompt_local_state(
     prompt: Operation[[Optional[T]], T]
 ) -> Operation[[], LocalState[T]]:
 
@@ -28,43 +28,64 @@ def prompt_local_state(
     return _default
 
 
-def bind_and_push_prompts(
-    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
+@define(Operation)
+def get_result() -> Optional[T]:
+    return None
 
-    def _init_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
+
+def result_passing(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
+
+    @functools.wraps(fn)
+    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return fn(get_result(), *args, **kwargs)
+
+    return _wrapper
+
+
+def args_from_state(
+    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
+) -> Mapping[Operation[[Optional[S]], S], Callable[[Optional[T]], T]]:
+
+    def wrap(
+        get_local_state: Operation[[], LocalState[T]],
+        fn: Callable[P, T]
+    ) -> Callable[[Optional[T]], T]:
 
         @functools.wraps(fn)
-        def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
-            init_states = {prompt_local_state(p): lambda: (None, a, ks) for p in unbound_conts.keys()}
-            return interpreter(init_states)(fn)(*a, **ks)
+        def _wrapped_fn(res: Optional[T]) -> T:
+            args, kwargs = get_local_state()[1:]
+            return fn(*args, **kwargs)
 
-        return _wrapper
+        return _wrapped_fn
+
+    return {
+        p: wrap(get_prompt_local_state(p), unbound_conts[p])
+        for p in unbound_conts.keys()
+    }
+
+
+def destination_passing(
+    conts: Mapping[Operation[[Optional[S]], S], Callable[[Optional[T]], T]],
+    fn: Callable[P, T],
+) -> Callable[P, T]:
 
     def _update_local_state(
         prompt: Operation[[Optional[S]], S], fn: Callable[[Optional[V]], V]
     ) -> Callable[[Optional[V]], V]:
 
-        get_local_state: Operation[[], LocalState[S]] = prompt_local_state(prompt)
+        get_local_state: Operation[[], LocalState[S]] = get_prompt_local_state(prompt)
 
         @functools.wraps(fn)
         def _wrapper(__res: Optional[V]) -> V:
-            updated_state = (__res,) + get_local_state()[1:]
+            updated_state = (__res,)
             return interpreter({get_local_state: lambda: updated_state})(fn)(__res)
 
         return _wrapper
 
-    def _bind_local_state(
-        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
-    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
-        return {
-            p: _update_local_state(p, functools.partial(
-                lambda p, k, _: k(*prompt_local_state(p)()[1], **prompt_local_state(p)()[2]),
-                p, unbound_conts[p],
-            )) for p in unbound_conts.keys()
-        }
-
-    def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
-        return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))
-
-    return _decorator
+    bound_conts = {
+        p: _update_local_state(p, functools.partial(
+            lambda p, k, _: k(*get_prompt_local_state(p)()[1], **get_prompt_local_state(p)()[2]),
+            p, conts[p],
+        )) for p in conts.keys()
+    }
+    return shallow_interpreter(bound_conts)(_init_local_state(fn))

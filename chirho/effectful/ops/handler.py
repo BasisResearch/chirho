@@ -12,49 +12,58 @@ T = TypeVar("T")
 V = TypeVar("V")
 
 
-LocalState = tuple[Optional[T], tuple, dict]
+@define(Operation)
+def get_result() -> Optional[T]:
+    return None
+
+
+def result_passing(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
+
+    @functools.wraps(fn)
+    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return fn(get_result(), *args, **kwargs)
+
+    return _wrapper
+
+
+LocalState = tuple[tuple, dict]
 
 
 def bind_and_push_prompts(
-    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[[Optional[T], Optional[S]], T]],
-) -> Callable[[Callable[Concatenate[Optional[T], P], T]], Callable[Concatenate[Optional[T], P], T]]:
+    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
 
     @define(Operation)
-    def get_local_state() -> LocalState[T]:
+    def get_local_state() -> LocalState:
         raise ValueError("No args stored")
 
-    def _init_local_state(
-        fn: Callable[Concatenate[Optional[V], Q], V]
-    ) -> Callable[Concatenate[Optional[V], Q], V]:
+    def _init_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
 
         @functools.wraps(fn)
-        def _wrapper(__res: Optional[V], *a: Q.args, **ks: Q.kwargs) -> V:
-            return interpreter({get_local_state: lambda _: (__res, a, ks)})(fn)(__res, *a, **ks)
+        def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
+            return interpreter({get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
 
         return _wrapper
 
-    def _update_local_state(
-        fn: Callable[[Optional[T], Optional[T]], T]
-    ) -> Callable[[Optional[T], Optional[T]], T]:
+    def _set_local_state(fn: Callable[[Optional[T]], T]) -> Callable[[Optional[T]], T]:
 
         @functools.wraps(fn)
-        def _wrapper(r: Optional[T], __res: Optional[T]) -> T:
-            updated_state = (__res,) + get_local_state()[1:]
-            return interpreter({get_local_state: lambda _: updated_state})(fn)(r, __res)
+        def _wrapper(res: Optional[T]) -> T:
+            return shallow_interpreter({get_result: lambda: res})(fn)(res)
 
         return _wrapper
 
     def _bind_local_state(
-        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Concatenate[Optional[T], Q], T]],
-    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T], Optional[T]], T]]:
+        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
+    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
         return {
-            p: _update_local_state(functools.partial(
-                lambda k, _, __: k(get_local_state()[0], *get_local_state()[1], **get_local_state()[2]),
+            p: _set_local_state(functools.partial(
+                lambda k, _: k(*get_local_state()[0], **get_local_state()[1]),
                 unbound_conts[p],
             )) for p in unbound_conts.keys()
         }
 
-    def _decorator(fn: Callable[Concatenate[Optional[V], Q], V]):
+    def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
         return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))
 
     return _decorator
