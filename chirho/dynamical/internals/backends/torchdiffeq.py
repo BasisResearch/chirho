@@ -39,7 +39,6 @@ def get_torchdiffeq_runtime_check_handler(
     return TorchDiffEqRuntimeCheckHandler()
 
 
-# noinspection PyMethodParameters
 def _deriv(
     dynamics: Dynamics[torch.Tensor],
     var_order: Tuple[str, ...],
