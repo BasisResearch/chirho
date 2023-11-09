@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Callable, Mapping, Optional, ParamSpec, TypeVar
+from typing import Callable, Mapping, Optional, ParamSpec, Tuple, TypeVar
 
 from chirho.effectful.ops.interpretation import Interpretation, get_result, interpreter, shallow_interpreter
 from chirho.effectful.ops.operation import Operation, define
@@ -12,7 +12,7 @@ T = TypeVar("T")
 V = TypeVar("V")
 
 
-LocalState = tuple[tuple, dict]
+LocalState = Tuple[Tuple, Mapping]
 
 
 def bind_and_push_prompts(
