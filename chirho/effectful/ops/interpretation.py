@@ -131,31 +131,27 @@ def bind_and_push_prompts(
     LocalState = Tuple[Tuple, Mapping]
 
     @define(Operation)
-    def get_local_state() -> LocalState:
+    def _get_local_state() -> LocalState:
         raise ValueError("No args stored")
 
-    def _init_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
+    def _set_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
 
         @functools.wraps(fn)
         def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
-            return interpreter({get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
+            return interpreter({_get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
 
         return _wrapper
 
-    def _bind_local_state(
-        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
-    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
-        return {
+    def _bind_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
+        bound_conts = {
             p: _set_result(functools.partial(
-                lambda k, _: k(*get_local_state()[0], **get_local_state()[1]),
+                lambda k, _: k(*_get_local_state()[0], **_get_local_state()[1]),
                 unbound_conts[p],
             )) for p in unbound_conts.keys()
         }
+        return shallow_interpreter(bound_conts)(_set_local_state(fn))
 
-    def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
-        return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))
-
-    return _decorator
+    return _bind_local_state
 
 
 # bootstrap
