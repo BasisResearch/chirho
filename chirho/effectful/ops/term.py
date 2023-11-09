@@ -30,7 +30,7 @@ def evaluate(term: Term[T]) -> T:
 
 def LazyInterpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
     return {
-        op: functools.partial(lambda op, _, *args, **kwargs: define(Term)(op, args, kwargs), op)
+        op: functools.partial(lambda op, *args, **kwargs: define(Term)(op, args, kwargs), op)
         for op in ops
     }
 
