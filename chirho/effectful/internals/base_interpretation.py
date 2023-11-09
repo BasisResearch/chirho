@@ -1,4 +1,4 @@
-from typing import Callable, ClassVar, Concatenate, Dict, Generic, Iterable, Optional, ParamSpec, TypeVar
+from typing import Callable, ClassVar, Concatenate, Dict, Generic, Iterable, ParamSpec, TypeVar
 
 import functools
 
@@ -31,7 +31,7 @@ class _StatefulInterpretation(Generic[S, T, V]):
     def __setitem__(
         cls,
         __op: Operation[P, T],
-        __interpret_op: Callable[Concatenate[S, Optional[V], Q], V],
+        __interpret_op: Callable[Concatenate[S, Q], V],
     ) -> None:
         cls._op_intps[__op] = __interpret_op
 
@@ -41,7 +41,7 @@ class _StatefulInterpretation(Generic[S, T, V]):
 
     def __getitem__(
         self, __op: Operation[P, T]
-    ) -> Callable[Concatenate[Optional[V], Q], V]:
+    ) -> Callable[Q, V]:
         return functools.partial(self._op_intps[__op], self.state)
 
     @classmethod
