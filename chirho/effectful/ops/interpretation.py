@@ -2,7 +2,7 @@ import collections.abc
 import contextlib
 import functools
 import typing
-from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar
+from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Tuple, TypeVar
 
 from chirho.effectful.ops.operation import Operation, define
 
@@ -15,54 +15,6 @@ T = TypeVar("T")
 V = TypeVar("V")
 
 Interpretation = collections.abc.Mapping[Operation[..., T], Callable[..., V]]
-
-
-@contextlib.contextmanager
-def interpreter(intp: Interpretation, *, unset: bool = True):
-    from .runtime import get_interpretation, swap_interpretation
-
-    old_intp = get_interpretation()
-    try:
-        new_intp = {
-            op: intp[op] if op in intp else old_intp[op]
-            for op in set(intp.keys()) | set(old_intp.keys())
-        }
-        old_intp = swap_interpretation(new_intp)
-        yield intp
-    finally:
-        if unset:
-            _ = swap_interpretation(old_intp)
-        else:
-            if len(list(old_intp.keys())) == 0 and len(list(intp.keys())) > 0:
-                raise RuntimeError(f"Dangling interpretation on stack: {intp}")
-
-
-@contextlib.contextmanager
-def shallow_interpreter(intp: Interpretation):
-    from .runtime import get_interpretation
-
-    # destructive update: calling any op in intp should remove intp from active
-    active_intp = get_interpretation()
-    prev_intp = {
-        op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
-    }
-
-    with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
-        yield intp
-
-
-@define(Operation)
-def get_result() -> Optional[T]:
-    return None
-
-
-def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
-
-    @functools.wraps(fn)
-    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        return fn(get_result(), *args, **kwargs)
-
-    return _wrapper
 
 
 @define(Operation)
@@ -113,6 +65,97 @@ def register(__op, intp=None, interpret_op=None):
         return lambda interpret_op: register(__op, intp, interpret_op)
     else:
         return register_(__op, intp, interpret_op)
+
+
+@contextlib.contextmanager
+def interpreter(intp: Interpretation, *, unset: bool = True):
+    from .runtime import get_interpretation, swap_interpretation
+
+    old_intp = get_interpretation()
+    try:
+        new_intp = {
+            op: intp[op] if op in intp else old_intp[op]
+            for op in set(intp.keys()) | set(old_intp.keys())
+        }
+        old_intp = swap_interpretation(new_intp)
+        yield intp
+    finally:
+        if unset:
+            _ = swap_interpretation(old_intp)
+        else:
+            if len(list(old_intp.keys())) == 0 and len(list(intp.keys())) > 0:
+                raise RuntimeError(f"Dangling interpretation on stack: {intp}")
+
+
+@contextlib.contextmanager
+def shallow_interpreter(intp: Interpretation):
+    from .runtime import get_interpretation
+
+    # destructive update: calling any op in intp should remove intp from active
+    active_intp = get_interpretation()
+    prev_intp = {
+        op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
+    }
+
+    with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
+        yield intp
+
+
+@define(Operation)
+def _get_result() -> Optional[T]:
+    return None
+
+
+def _set_result(fn: Callable[[Optional[T]], T]) -> Callable[[Optional[T]], T]:
+
+    @functools.wraps(fn)
+    def _wrapper(res: Optional[T]) -> T:
+        return shallow_interpreter({_get_result: lambda: res})(fn)(res)
+
+    return _wrapper
+
+
+def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
+
+    @functools.wraps(fn)
+    def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
+        return interpreter({_get_result: _get_result.default})(fn)(_get_result(), *args, **kwargs)
+
+    return _wrapper
+
+
+def bind_and_push_prompts(
+    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
+) -> Callable[[Callable[P, T]], Callable[P, T]]:
+
+    LocalState = Tuple[Tuple, Mapping]
+
+    @define(Operation)
+    def get_local_state() -> LocalState:
+        raise ValueError("No args stored")
+
+    def _init_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
+
+        @functools.wraps(fn)
+        def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
+            return interpreter({get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
+
+        return _wrapper
+
+    def _bind_local_state(
+        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
+    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
+        return {
+            p: _set_result(functools.partial(
+                lambda k, _: k(*get_local_state()[0], **get_local_state()[1]),
+                unbound_conts[p],
+            )) for p in unbound_conts.keys()
+        }
+
+    def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
+        return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))
+
+    return _decorator
 
 
 # bootstrap

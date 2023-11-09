@@ -1,8 +1,7 @@
 import contextlib
-import functools
-from typing import Callable, Mapping, Optional, ParamSpec, Tuple, TypeVar
+from typing import Mapping, Optional, ParamSpec, Tuple, TypeVar
 
-from chirho.effectful.ops.interpretation import Interpretation, get_result, interpreter, shallow_interpreter
+from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -10,50 +9,6 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
-
-
-LocalState = Tuple[Tuple, Mapping]
-
-
-def bind_and_push_prompts(
-    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
-) -> Callable[[Callable[P, T]], Callable[P, T]]:
-
-    @define(Operation)
-    def get_local_state() -> LocalState:
-        raise ValueError("No args stored")
-
-    def _init_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
-
-        @functools.wraps(fn)
-        def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
-            return interpreter({get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
-
-        return _wrapper
-
-    def _bind_local_state(
-        unbound_conts: Mapping[Operation[[Optional[V]], V], Callable[Q, T]],
-    ) -> Mapping[Operation[[Optional[V]], V], Callable[[Optional[T]], T]]:
-        return {
-            p: _set_result_state(functools.partial(
-                lambda k, _: k(*get_local_state()[0], **get_local_state()[1]),
-                unbound_conts[p],
-            )) for p in unbound_conts.keys()
-        }
-
-    def _set_result_state(fn: Callable[[Optional[V]], V]) -> Callable[[Optional[V]], V]:
-
-        @functools.wraps(fn)
-        def _wrapper(res: Optional[V]) -> V:
-            # TODO how to ensure result state gets reset on each new application?
-            return interpreter({get_result: lambda: res})(fn)(res)
-
-        return _wrapper
-
-    def _decorator(fn: Callable[Q, V]) -> Callable[Q, V]:
-        return shallow_interpreter(_bind_local_state(unbound_conts))(_init_local_state(fn))
-
-    return _decorator
 
 
 @define(Operation)
