@@ -45,8 +45,8 @@ def bind_and_push_prompts(
 
         @functools.wraps(fn)
         def _wrapper(res: Optional[V]) -> V:
-            # get_result()  # clear result state - TODO is this necessary?
-            return shallow_interpreter({get_result: lambda: res})(fn)(res)
+            # TODO how to ensure result state gets reset on each new application?
+            return interpreter({get_result: lambda: res})(fn)(res)
 
         return _wrapper
 
