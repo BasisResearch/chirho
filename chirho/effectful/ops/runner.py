@@ -36,12 +36,12 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    block_outer = {
+    intp_ = {
         op: shallow_interpreter({fwd: reflect})(intp[op])
         for op in intp.keys()
     }
 
-    block_inner = {
+    intp2_ = {
         op: shallow_interpreter({fwd: reflect})(intp2[op])
         if op in intp2
         else bind_result(lambda v, *args, **kwargs: reflect(v))
@@ -50,9 +50,9 @@ def product(
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return {
-        op: bind_and_push_prompts(
-            {reflect: interpreter(block_outer)(op)},
-        )(interpreter(block_inner)(intp2[op]))
+        op: bind_and_push_prompts({reflect: interpreter(intp_)(op)})(
+            interpreter(intp2_)(intp2[op])
+        )
         for op in intp2.keys()
     }
 

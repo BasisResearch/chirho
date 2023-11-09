@@ -1,5 +1,5 @@
 import contextlib
-from typing import Mapping, Optional, ParamSpec, Tuple, TypeVar
+from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, interpreter
 from chirho.effectful.ops.operation import Operation, define
