@@ -65,6 +65,25 @@ def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
     return _wrapper
 
 
+@define(Operation)
+def register_(
+    __op: Operation[P, T],
+    intp: Optional[Interpretation[T, V]],
+    interpret_op: Callable[Q, V],
+) -> Callable[Q, V]:
+    if intp is None:
+        setattr(
+            __op,
+            "default",
+            interpret_op,  # functools.wraps(__op.default)(interpret_op),
+        )
+        return interpret_op
+    elif isinstance(intp, collections.abc.MutableMapping):
+        intp.__setitem__(__op, interpret_op)
+        return interpret_op
+    raise NotImplementedError(f"Cannot register {__op} in {intp}")
+
+
 @typing.overload
 def register(
     __op: Operation[P, T],
@@ -94,25 +113,6 @@ def register(__op, intp=None, interpret_op=None):
         return lambda interpret_op: register(__op, intp, interpret_op)
     else:
         return register_(__op, intp, interpret_op)
-
-
-@define(Operation)
-def register_(
-    __op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
-    interpret_op: Callable[Q, V],
-) -> Callable[Q, V]:
-    if intp is None:
-        setattr(
-            __op,
-            "default",
-            interpret_op,  # functools.wraps(__op.default)(interpret_op),
-        )
-        return interpret_op
-    elif isinstance(intp, collections.abc.MutableMapping):
-        intp.__setitem__(__op, interpret_op)
-        return interpret_op
-    raise NotImplementedError(f"Cannot register {__op} in {intp}")
 
 
 # bootstrap
