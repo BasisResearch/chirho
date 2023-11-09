@@ -1,4 +1,3 @@
-import functools
 import typing
 from typing import Callable, Mapping, ParamSpec, Protocol, Type, TypeVar
 
