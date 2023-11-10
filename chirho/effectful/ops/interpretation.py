@@ -17,25 +17,6 @@ V = TypeVar("V")
 Interpretation = collections.abc.Mapping[Operation[..., T], Callable[..., V]]
 
 
-@define(Operation)
-def register_(
-    __op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
-    interpret_op: Callable[Q, V],
-) -> Callable[Q, V]:
-    if intp is None:
-        setattr(
-            __op,
-            "default",
-            interpret_op,  # functools.wraps(__op.default)(interpret_op),
-        )
-        return interpret_op
-    elif isinstance(intp, collections.abc.MutableMapping):
-        intp.__setitem__(__op, interpret_op)
-        return interpret_op
-    raise NotImplementedError(f"Cannot register {__op} in {intp}")
-
-
 @typing.overload
 def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     ...
@@ -60,8 +41,18 @@ def register(
 def register(op, intp=None, interpret_op=None):
     if interpret_op is None:
         return lambda interpret_op: register(op, intp, interpret_op)
-    else:
-        return register_(op, intp, interpret_op)
+
+    if intp is None:
+        setattr(
+            op,
+            "default",
+            interpret_op,  # functools.wraps(__op.default)(interpret_op),
+        )
+        return interpret_op
+    elif isinstance(intp, collections.abc.MutableMapping):
+        intp.__setitem__(op, interpret_op)
+        return interpret_op
+    raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
 @contextlib.contextmanager
