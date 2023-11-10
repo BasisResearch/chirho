@@ -21,10 +21,9 @@ def full_ana_exp_risk(theta, Q, Sigma):
     :return: The analytical expectation of r(theta, z) wrt p(z).
     """
 
-    assert torch.isclose(torch.linalg.det(Sigma), tnsr(1.)), f"The determinant of Sigma must be 1," \
-                                                             f"but it was {torch.linalg.det(Sigma)}."
+    assert torch.isclose(torch.linalg.det(Sigma), tnsr(1., dtype=Sigma.dtype)),\
+        f"The determinant of Sigma must be 1, but it was {torch.linalg.det(Sigma)}."
 
-    theta = tnsr(theta)
     Q_inv = torch.linalg.inv(Q)
     Sigma_inv = torch.linalg.inv(Sigma)
     Sigma_star_inv = Q_inv + Sigma_inv
