@@ -66,13 +66,13 @@ def runner(
 ):
     from .runtime import get_interpretation
 
-    curr_intp = get_interpretation()
+    curr_intp, next_intp = get_interpretation(), intp
 
     if handler_prompt is not None:
         assert prompt is not handler_prompt, \
             f"runner prompt and handler prompt must be distinct, but got {handler_prompt}"
         curr_intp = handler_prompt_to_runner_prompt(curr_intp, handler_prompt, prompt)
-        intp = handler_prompt_to_runner_prompt(intp, handler_prompt, prompt)
+        next_intp = handler_prompt_to_runner_prompt(next_intp, handler_prompt, prompt)
 
-    with interpreter(product(curr_intp, intp, prompt=prompt)):
+    with interpreter(product(curr_intp, next_intp, prompt=prompt)):
         yield intp
