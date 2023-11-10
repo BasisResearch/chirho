@@ -43,11 +43,7 @@ def register(op, intp=None, interpret_op=None):
         return lambda interpret_op: register(op, intp, interpret_op)
 
     if intp is None:
-        setattr(
-            op,
-            "default",
-            interpret_op,  # functools.wraps(__op.default)(interpret_op),
-        )
+        setattr(op, "default", interpret_op)
         return interpret_op
     elif isinstance(intp, collections.abc.MutableMapping):
         intp.__setitem__(op, interpret_op)
