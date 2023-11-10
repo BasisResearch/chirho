@@ -29,18 +29,13 @@ def product(
     elif len(intps) > 1:  # associativity
         return product(intp, product(*intps, prompt=prompt), prompt=prompt)
 
-    # cases:
-    # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
-    # 2. op in intp but not intp2: don't expose in user code
-    # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
-
     reflect_intp_ops = {
         op: bind_result(lambda v, *_, **__: prompt(v))
         for op in set(intp.keys()) - set(intp2.keys())
     }
 
-    # on reflect, jump to the outer interpretation and interpret it using itself
+    # on prompt, jump to the outer interpretation and interpret it using itself
     return {
         op: bind_and_push_prompts({prompt: interpreter(intp)(op)})(
             interpreter(reflect_intp_ops)(interpreter(intp2)(intp2[op]))
