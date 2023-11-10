@@ -2,7 +2,7 @@ import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
 from chirho.effectful.ops.handler import fwd
-from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, bind_result, interpreter, shallow_interpreter
+from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, bind_result, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -51,8 +51,8 @@ def product(
 def handler_prompt_to_runner_prompt(
     intp: Interpretation[S, T], handler_prompt: Prompt[T], runner_prompt: Prompt[T],
 ) -> Interpretation[S, T]:
-    return {
-        op: shallow_interpreter({handler_prompt: runner_prompt})(intp[op])
+    return {  # TODO shallow_interpreter?
+        op: interpreter({handler_prompt: runner_prompt})(intp[op])
         for op in intp.keys()
     }
 
