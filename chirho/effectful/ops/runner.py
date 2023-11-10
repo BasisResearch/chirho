@@ -1,7 +1,6 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.handler import fwd
 from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, bind_result, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
