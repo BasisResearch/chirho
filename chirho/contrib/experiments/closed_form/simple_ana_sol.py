@@ -2,7 +2,7 @@ import torch
 
 
 # Define a function to compute the analytic solution for r given q, c, and n.
-def compute_analytic_r(q, c, n):
+def compute_ana_rstar(q, c, n):
     """
     Derived through this ChatGPT session:
       https://chat.openai.com/share/a5ca8fa1-8866-4640-be7d-391ba491e13b
@@ -17,7 +17,7 @@ def compute_analytic_r(q, c, n):
     return r
 
 
-def compute_analytic_c(q, r, n):
+def compute_ana_c(q, rstar, n):
     """
     A sort of inverse of the above. This specifies an r and then returns a risk scaling factor such that the maximizing
      solution r is the specified r.
@@ -27,7 +27,6 @@ def compute_analytic_c(q, r, n):
     """
 
     q2p1 = 2 * (q + 1)
-    exponential_term = - r ** 2 / q2p1
+    exponential_term = - rstar ** 2 / q2p1
     k = torch.sqrt((1 / (1 / q + 1)) ** n)
     return q2p1 / (k * torch.exp(exponential_term))
-

@@ -13,7 +13,7 @@ def full_ana_obj(theta, Sigma, Q, c):
     :return: The objective function value for the general/full case.
     """
 
-    exp_risk = full_ana_exp_risk(theta, Sigma, Q)
+    exp_risk = full_ana_exp_risk(theta, Sigma=Sigma, Q=Q)
     cost = theta @ theta
 
     return - (cost + c * exp_risk)
