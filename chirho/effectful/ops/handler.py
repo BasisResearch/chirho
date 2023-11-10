@@ -10,6 +10,8 @@ S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
 
+Prompt = Operation[[Optional[T]], T]
+
 
 @define(Operation)
 def fwd(__result: Optional[T]) -> T:
@@ -20,27 +22,27 @@ def fwd(__result: Optional[T]) -> T:
 def compose(
     intp: Interpretation[S, T],
     *intps: Interpretation[S, T],
-    fwd: Operation[[Optional[T]], T] = fwd
+    prompt: Prompt[T] = fwd,
 ) -> Interpretation[S, T]:
-    if len(intps) == 0:
-        return intp  # unit
-    elif len(intps) > 1:
-        return compose(intp, compose(*intps, fwd=fwd), fwd=fwd)  # associativity
+    if len(intps) == 0:  # unit
+        return intp
+    elif len(intps) > 1:  # associativity
+        return compose(intp, compose(*intps, prompt=prompt), prompt=prompt)
 
     (intp2,) = intps
     return dict(
         [(op, intp[op]) for op in set(intp.keys()) - set(intp2.keys())]
         + [(op, intp2[op]) for op in set(intp2.keys()) - set(intp.keys())]
         + [
-            (op, bind_and_push_prompts({fwd: intp[op]})(intp2[op]))
+            (op, bind_and_push_prompts({prompt: intp[op]})(intp2[op]))
             for op in set(intp.keys()) & set(intp2.keys())
         ]
     )
 
 
 @contextlib.contextmanager
-def handler(intp: Interpretation[S, T], *, fwd: Operation[[Optional[T]], T] = fwd):
+def handler(intp: Interpretation[S, T], *, prompt: Prompt[T] = fwd):
     from .runtime import get_interpretation
 
-    with interpreter(compose(get_interpretation(), intp, fwd=fwd)):
+    with interpreter(compose(get_interpretation(), intp, prompt=prompt)):
         yield intp

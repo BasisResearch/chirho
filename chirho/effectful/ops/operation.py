@@ -1,5 +1,5 @@
 import typing
-from typing import Callable, Mapping, ParamSpec, Protocol, Type, TypeVar
+from typing import Callable, Mapping, ParamSpec, Protocol, Type, TypeGuard, TypeVar
 
 from ._utils import weak_memoize
 
@@ -28,7 +28,7 @@ def define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
         if typing.get_origin(m) not in (m, None):
             return define(typing.get_origin(m))
 
-    def _is_op_type(m: Type[S] | Callable[P, S]) -> typing.TypeGuard[Type[Operation[..., S]]]:
+    def _is_op_type(m: Type[S] | Callable[P, S]) -> TypeGuard[Type[Operation[..., S]]]:
         return typing.get_origin(m) is Operation or m is Operation
 
     if _is_op_type(m):

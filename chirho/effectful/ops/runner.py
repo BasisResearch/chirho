@@ -10,6 +10,8 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 
+Prompt = Operation[[Optional[T]], T]
+
 
 @define(Operation)
 def reflect(__result: Optional[T]) -> T:
@@ -20,15 +22,12 @@ def reflect(__result: Optional[T]) -> T:
 def product(
     intp: Interpretation[S, T],
     *intps: Interpretation[S, T],
-    reflect: Operation[[Optional[T]], T] = reflect,
-    fwd: Operation[[Optional[T]], T] = fwd,
+    prompt: Prompt[T] = reflect,
 ) -> Interpretation[S, T]:
-    if len(intps) == 0:
-        return intp  # unit
+    if len(intps) == 0:  # unit
+        return intp
     elif len(intps) > 1:  # associativity
-        return product(
-            intp, product(*intps, reflect=reflect, fwd=fwd), reflect=reflect, fwd=fwd
-        )
+        return product(intp, product(*intps, prompt=prompt), prompt=prompt)
 
     # cases:
     # 1. op in intp2 but not intp: handle from scratch when encountered in latent context
@@ -36,24 +35,25 @@ def product(
     # 3. op in both intp and intp2: use intp[op] under intp and intp2[op] under intp2 as continuations
     (intp2,) = intps
 
-    intp_ = {
-        op: shallow_interpreter({fwd: reflect})(intp[op])
-        for op in intp.keys()
-    }
-
-    intp2_ = {
-        op: shallow_interpreter({fwd: reflect})(intp2[op])
-        if op in intp2
-        else bind_result(lambda v, *args, **kwargs: reflect(v))
-        for op in set(intp2.keys()) | set(intp.keys())
+    reflect_intp_ops = {
+        op: bind_result(lambda v, *_, **__: prompt(v))
+        for op in set(intp.keys()) - set(intp2.keys())
     }
 
     # on reflect, jump to the outer interpretation and interpret it using itself
     return {
-        op: bind_and_push_prompts({reflect: interpreter(intp_)(op)})(
-            interpreter(intp2_)(intp2[op])
-        )
-        for op in intp2.keys()
+        op: bind_and_push_prompts({prompt: interpreter(intp)(op)})(
+            interpreter(reflect_intp_ops)(interpreter(intp2)(intp2[op]))
+        ) for op in intp2.keys()
+    }
+
+
+def handler_prompt_to_runner_prompt(
+    intp: Interpretation[S, T], handler_prompt: Prompt[T], runner_prompt: Prompt[T],
+) -> Interpretation[S, T]:
+    return {
+        op: shallow_interpreter({handler_prompt: runner_prompt})(intp[op])
+        for op in intp.keys()
     }
 
 
@@ -61,10 +61,14 @@ def product(
 def runner(
     intp: Interpretation[S, T],
     *,
-    reflect: Operation[[Optional[T]], T] = reflect,
-    fwd: Operation[[Optional[T]], T] = fwd,
+    prompt: Prompt[T] = reflect,
+    handler_prompt: Prompt[T] = fwd,
 ):
     from .runtime import get_interpretation
 
-    with interpreter(product(get_interpretation(), intp, reflect=reflect, fwd=fwd)):
+    assert prompt is not handler_prompt, "runner prompt and handler prompt must be distinct"
+    curr_intp = handler_prompt_to_runner_prompt(get_interpretation(), handler_prompt, prompt)
+    next_intp = handler_prompt_to_runner_prompt(intp, handler_prompt, prompt)
+
+    with interpreter(product(curr_intp, next_intp, prompt=prompt)):
         yield intp

@@ -10,16 +10,15 @@ T_co = TypeVar("T_co", covariant=True)
 
 
 class _BaseOperation(Generic[P, T_co]):
-    def __init__(self, __body: Callable[P, T_co]):
-        self._body = __body
+    default: Callable[P, T_co]
+
+    def __init__(self, __default: Callable[P, T_co]):
+        self.default = __default
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}({getattr(self._body, '__name__', self._body)})"
+            f"{self.__class__.__name__}({getattr(self.default, '__name__', self.default)})"
         )
-
-    def default(self, *args: P.args, **kwargs: P.kwargs) -> T_co:
-        return self._body(*args, **kwargs)
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T_co:
         if self is runtime.get_runtime:
