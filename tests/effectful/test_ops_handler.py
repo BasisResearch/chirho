@@ -8,7 +8,6 @@ import pytest
 from chirho.effectful.ops.handler import compose, fwd, handler
 from chirho.effectful.ops.interpretation import Interpretation, bind_result, interpreter
 from chirho.effectful.ops.operation import Operation, define
-from chirho.effectful.ops.runner import product, reflect
 from chirho.effectful.ops._utils import value_or_fn
 
 logger = logging.getLogger(__name__)
@@ -31,10 +30,6 @@ def plus_2(x: int) -> int:
 @define(Operation)
 def times_plus_1(x: int, y: int) -> int:
     return x * y + 1
-
-
-def block(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return {op: bind_result(lambda v, *args, **kwargs: reflect(v)) for op in ops}
 
 
 def defaults(*ops: Operation[..., int]) -> Interpretation[int, int]:
@@ -62,17 +57,6 @@ def test_affine_continuation_compose(op, args):
 
     assert interpreter(defaults(op))(f)() == \
         interpreter(compose(defaults(op), h_twice))(f)()
-
-
-@pytest.mark.parametrize("op,args", OPERATION_CASES)
-def test_affine_continuation_product(op, args):
-    def f():
-        return op(*args)
-
-    h_twice = define(Interpretation)({op: bind_result(lambda v, *a, **k: reflect(reflect(v)))})
-
-    assert interpreter(defaults(op))(f)() == \
-        interpreter(product(defaults(op), h_twice))(f)()
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)
@@ -150,20 +134,3 @@ def test_stop_without_fwd(op, args, n, depth):
         stack.enter_context(handler(defaults(op)))
 
         assert f() == expected
-
-
-@pytest.mark.parametrize("op,args", OPERATION_CASES)
-@pytest.mark.parametrize("n1", N_CASES)
-@pytest.mark.parametrize("n2", N_CASES)
-def test_product_block_associative(op, args, n1, n2):
-    def f():
-        return op(*args)
-
-    h0 = defaults(op)
-    h1 = compose(block(op), times_n_handler(n1, op))
-    h2 = compose(block(op), times_n_handler(n2, op))
-
-    intp1 = product(h0, product(h1, h2))
-    intp2 = product(product(h0, h1), h2)
-
-    assert interpreter(intp1)(f)() == interpreter(intp2)(f)()
