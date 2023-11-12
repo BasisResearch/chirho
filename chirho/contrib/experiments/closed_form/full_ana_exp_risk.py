@@ -29,6 +29,7 @@ def full_ana_exp_risk(theta, Q, Sigma):
     Sigma_star_inv = Q_inv + Sigma_inv
     Sigma_star = torch.linalg.inv(Sigma_star_inv)
     mu_star = Sigma_star @ (Q_inv @ theta)
-    exponent = -0.5 * (theta.T @ (Q_inv @ theta)) + 0.5 * (mu_star.T @ (Sigma_star_inv @ mu_star))
+    theta, mu_star = torch.atleast_2d(theta, mu_star)
+    exponent = -0.5 * ((theta @ Q_inv) @ theta.mT) + 0.5 * ((mu_star @ Sigma_star_inv) @ mu_star.mT)
     det_Sigma_star = torch.linalg.det(Sigma_star)
     return torch.exp(exponent) * torch.sqrt(torch.abs(det_Sigma_star))

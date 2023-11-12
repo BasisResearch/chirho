@@ -62,6 +62,7 @@ class ComposedExpectation:
         ce = None
 
         if not self.requires_grad:
+            # FIXME this needs to be the same shape as params
             ce = Constant(tt(0.0))
 
         return ce
