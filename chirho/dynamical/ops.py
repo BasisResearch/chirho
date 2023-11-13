@@ -33,10 +33,16 @@ def simulate(
     from chirho.dynamical.internals.solver import (
         Solver,
         get_solver,
-        simulate_to_interruption,
+        simulate_point,
     )
 
-    solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_to_interruption(
-        solver_, dynamics, initial_state, start_time, end_time, **kwargs
-    )
+    if solver is None:
+        return simulate_point(
+            get_solver(), dynamics, initial_state, start_time, end_time, **kwargs
+        )
+    else:
+        assert isinstance(solver, Solver)
+        with solver:
+            return simulate_point(
+                solver, dynamics, initial_state, start_time, end_time, **kwargs
+            )

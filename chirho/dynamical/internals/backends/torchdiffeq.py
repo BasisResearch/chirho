@@ -1,6 +1,7 @@
 import functools
-from typing import Callable, List, Tuple, TypeVar
+from typing import Callable, List, Optional, Tuple, TypeVar
 
+import pyro
 import torch
 import torchdiffeq
 
@@ -8,7 +9,7 @@ from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import (
     Interruption,
-    get_next_interruptions,
+    get_solver,
     simulate_point,
     simulate_trajectory,
 )
@@ -130,7 +131,8 @@ def _batched_odeint(
 
 
 @simulate_point.register(TorchDiffEq)
-def torchdiffeq_ode_simulate(
+@pyro.poutine.runtime.effectful(type="simulate_point")
+def torchdiffeq_simulate(
     solver: TorchDiffEq,
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
@@ -154,7 +156,8 @@ def torchdiffeq_ode_simulate(
 
 
 @simulate_trajectory.register(TorchDiffEq)
-def torchdiffeq_ode_simulate_trajectory(
+@pyro.poutine.runtime.effectful(type="simulate_trajectory")
+def torchdiffeq_simulate_trajectory(
     solver: TorchDiffEq,
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
@@ -165,8 +168,7 @@ def torchdiffeq_ode_simulate_trajectory(
     )
 
 
-@get_next_interruptions.register(TorchDiffEq)
-def torchdiffeq_get_next_interruptions(
+def _torchdiffeq_get_next_interruptions(
     solver: TorchDiffEq,
     dynamics: Dynamics[torch.Tensor],
     start_state: State[torch.Tensor],
@@ -220,6 +222,28 @@ def torchdiffeq_get_next_interruptions(
         tuple(triggered_events),
         event_time,
     )
+
+
+def torchdiffeq_simulate_to_interruption(
+    interruptions: List[Interruption],
+    dynamics: Dynamics[torch.Tensor],
+    initial_state: State[torch.Tensor],
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
+    **kwargs,
+) -> Tuple[State[torch.Tensor], torch.Tensor, Optional[Interruption]]:
+
+    if not interruptions:
+        from chirho.dynamical.handlers.interruption import StaticInterruption
+        interruptions.append(StaticInterruption(end_time))
+
+    solver = get_solver()
+    (next_interruption,), interruption_time = _torchdiffeq_get_next_interruptions(
+        solver, dynamics, initial_state, start_time, interruptions
+    )
+
+    value = simulate_point(solver, dynamics, initial_state, start_time, interruption_time)
+    return value, interruption_time, next_interruption
 
 
 def torchdiffeq_combined_event_f(

@@ -110,16 +110,3 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
-
-
-@functools.singledispatch
-def get_next_interruptions(
-    solver: Solver,
-    dynamics: Dynamics[T],
-    start_state: State[T],
-    start_time: R,
-    interruptions: List[Interruption],
-) -> Tuple[Tuple[Interruption, ...], R]:
-    raise NotImplementedError(
-        f"get_next_interruptions not implemented for type {type(dynamics)}"
-    )
