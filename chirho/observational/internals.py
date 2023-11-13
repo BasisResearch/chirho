@@ -45,7 +45,7 @@ def _observe_distribution(
 @observe.register(dict)
 def _observe_dict(
     rv: Mapping[K, T],
-    obs: Optional[Mapping[K, AtomicObservation[T]]] = None,
+    obs: Optional[AtomicObservation[Mapping[K, T]]] = None,
     *,
     name: Optional[str] = None,
     **kwargs,
