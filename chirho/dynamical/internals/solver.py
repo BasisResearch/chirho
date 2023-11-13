@@ -59,9 +59,7 @@ def simulate_point(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError(
-        f"simulate_point not implemented for solver of type {type(get_solver())}"
-    )
+    raise NotImplementedError("No default behavior for simulate_point")
 
 
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
@@ -74,9 +72,7 @@ def simulate_trajectory(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError(
-        f"simulate_trajectory not implemented for solver of type {type(get_solver())}"
-    )
+    raise NotImplementedError("No default behavior for simulate_trajectory")
 
 
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
