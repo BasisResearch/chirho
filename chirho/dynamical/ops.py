@@ -10,7 +10,10 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-State = Dict[str, T]
+if typing.TYPE_CHECKING:
+    State = Dict[str, T]
+else:
+    State = dict
 
 Dynamics = Callable[[State[T]], State[T]]
 
