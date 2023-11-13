@@ -70,7 +70,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     state,
                     start_time,
                     end_time,
-                    **msg["kwargs"]
+                    **msg["kwargs"],
                 )
 
                 if next_interruption is not None:
