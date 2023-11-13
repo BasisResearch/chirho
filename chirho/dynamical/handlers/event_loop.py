@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import heapq
 import math
+import typing
 import warnings
 from typing import Generic, List, TypeVar
 
@@ -22,6 +23,7 @@ T = TypeVar("T")
 
 
 class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
+    @typing.final
     @staticmethod
     def _pyro_simulate(msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
