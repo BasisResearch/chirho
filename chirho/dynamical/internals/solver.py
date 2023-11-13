@@ -27,9 +27,7 @@ def get_solver() -> Solver:
     """
     Get the current solver from the context.
     """
-    raise NotImplementedError(
-        "Solver not found in context, no default behavior for simulate"
-    )
+    raise NotImplementedError("No default behavior for simulate")
 
 
 class Interruption(ShallowMessenger):
