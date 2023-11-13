@@ -248,9 +248,8 @@ def scatter(
     raise NotImplementedError
 
 
-@scatter.register(dict)
 @pyro.poutine.runtime.effectful(type="scatter_n")
-def _scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
+def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
     """
     Scatters a dictionary of disjoint masked values into a single value
     using repeated calls to :func:``scatter``.
@@ -296,9 +295,8 @@ def cond(fst, snd, case: Optional[T] = None, **kwargs):
     raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
-@cond.register(dict)
 @pyro.poutine.runtime.effectful(type="cond_n")
-def _cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
+def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     result: Optional[T] = None

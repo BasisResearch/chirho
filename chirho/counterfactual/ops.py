@@ -3,7 +3,7 @@ from typing import Optional, Tuple, TypeVar
 
 import pyro
 
-from chirho.indexed.ops import IndexSet, cond, scatter
+from chirho.indexed.ops import IndexSet, cond_n, scatter_n
 from chirho.interventional.ops import Intervention, intervene
 
 S = TypeVar("S")
@@ -37,7 +37,7 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     for i, act in enumerate(acts):
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    return scatter(act_values, event_dim=kwargs.get("event_dim", 0))
+    return scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))
 
 
 @pyro.poutine.runtime.effectful(type="preempt")
@@ -69,4 +69,4 @@ def preempt(
     for i, act in enumerate(acts):
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    return cond(act_values, case, event_dim=kwargs.get("event_dim", 0))
+    return cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))
