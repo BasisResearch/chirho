@@ -15,19 +15,7 @@ T = TypeVar("T")
 
 
 class Solver(pyro.poutine.messenger.Messenger):
-    def _pyro_get_solver(self, msg) -> None:
-        # Overwrite the solver in the message with the enclosing solver when used as a context manager.
-        msg["value"] = self
-        msg["done"] = True
-        msg["stop"] = True
-
-
-@pyro.poutine.runtime.effectful(type="get_solver")
-def get_solver() -> Solver:
-    """
-    Get the current solver from the context.
-    """
-    raise NotImplementedError("No default behavior for simulate")
+    pass
 
 
 class Interruption(ShallowMessenger):
