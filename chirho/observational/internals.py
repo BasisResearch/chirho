@@ -1,4 +1,4 @@
-from typing import Optional, TypeVar
+from typing import Mapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -6,6 +6,7 @@ import torch
 
 from chirho.observational.ops import AtomicObservation, observe
 
+K = TypeVar("K")
 T = TypeVar("T")
 
 
@@ -39,6 +40,25 @@ def _observe_distribution(
         raise NotImplementedError("Dependent observations are not yet supported")
 
     return pyro.sample(name, rv, obs=obs, **kwargs)
+
+
+@observe.register(dict)
+def _observe_dict(
+    rv: Mapping[K, T],
+    obs: Optional[Mapping[K, AtomicObservation[T]]] = None,
+    *,
+    name: Optional[str] = None,
+    **kwargs,
+) -> Mapping[K, T]:
+    if callable(obs):
+        obs = obs(rv)
+        if obs is not rv and obs is not None:
+            raise NotImplementedError("Dependent observations are not yet supported")
+
+    if obs is rv or obs is None:
+        return rv
+
+    return {k: observe(rv[k], obs[k], name=f"{name}__{k}", **kwargs) for k in rv.keys()}
 
 
 class ObserveNameMessenger(pyro.poutine.messenger.Messenger):

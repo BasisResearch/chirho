@@ -1,6 +1,6 @@
 import numbers
 import typing
-from typing import Callable, Dict, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -10,9 +10,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class State(Generic[T], Dict[str, T]):
-    pass
-
+State = Dict[str, T]
 
 Dynamics = Callable[[State[T]], State[T]]
 
