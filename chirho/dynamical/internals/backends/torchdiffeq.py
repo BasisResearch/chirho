@@ -4,9 +4,8 @@ from typing import Callable, List, Optional, Tuple, TypeVar
 import torch
 import torchdiffeq
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
-from chirho.dynamical.internals.solver import Interruption, get_solver, simulate_point
+from chirho.dynamical.internals.solver import Interruption, simulate_point
 from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
@@ -157,7 +156,6 @@ def torchdiffeq_simulate_trajectory(
 
 
 def _torchdiffeq_get_next_interruptions(
-    solver: TorchDiffEq,
     dynamics: Dynamics[torch.Tensor],
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
@@ -175,7 +173,7 @@ def _torchdiffeq_get_next_interruptions(
         tuple(start_state[v] for v in var_order),
         start_time,
         event_fn=combined_event_f,
-        **solver.odeint_kwargs,
+        **kwargs,
     )
 
     # event_state has both the first and final state of the interrupted simulation. We just want the last.
@@ -225,12 +223,13 @@ def torchdiffeq_simulate_to_interruption(
 
         interruptions.append(StaticInterruption(end_time))
 
-    solver = get_solver()
     (next_interruption,), interruption_time = _torchdiffeq_get_next_interruptions(
-        solver, dynamics, initial_state, start_time, interruptions
+        dynamics, initial_state, start_time, interruptions, **kwargs
     )
 
-    value = simulate_point(dynamics, initial_state, start_time, interruption_time)
+    value = simulate_point(
+        dynamics, initial_state, start_time, interruption_time, **kwargs
+    )
     return value, interruption_time, next_interruption
 
 
