@@ -1,5 +1,4 @@
 import numbers
-import typing
 from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
 import pyro
@@ -30,11 +29,7 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import (
-        Solver,
-        get_solver,
-        simulate_point,
-    )
+    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
 
     if solver is None:
         return simulate_point(

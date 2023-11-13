@@ -96,7 +96,13 @@ def simulate_to_interruption(
     :returns: the final state
     """
     if len(interruption_stack) == 0:
-        return simulate_point(get_solver(), dynamics, start_state, start_time, end_time, **kwargs), end_time, None
+        return (
+            simulate_point(
+                get_solver(), dynamics, start_state, start_time, end_time, **kwargs
+            ),
+            end_time,
+            None,
+        )
 
     raise NotImplementedError("No default behavior for simulate_to_interruption")
 

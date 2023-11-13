@@ -57,5 +57,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             self.trajectory: State[T] = append(self.trajectory, new_part)
 
         final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
-        msg["value"] = _squeeze_time_dim(gather(trajectory, final_idx, name_to_dim=name_to_dim))
+        msg["value"] = _squeeze_time_dim(
+            gather(trajectory, final_idx, name_to_dim=name_to_dim)
+        )
         msg["done"] = True

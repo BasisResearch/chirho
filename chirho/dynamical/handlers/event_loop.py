@@ -22,7 +22,6 @@ T = TypeVar("T")
 
 
 class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
-
     @staticmethod
     def _pyro_simulate(msg) -> None:
         dynamics, state, start_time, end_time = msg["args"]
@@ -87,7 +86,10 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
 
     @staticmethod
     def _pyro_simulate_to_interruption(msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import torchdiffeq_simulate_to_interruption
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_simulate_to_interruption,
+        )
+
         interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
         msg["value"] = torchdiffeq_simulate_to_interruption(
             interruptions, dynamics, initial_state, start_time, end_time

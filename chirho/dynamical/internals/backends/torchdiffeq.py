@@ -232,9 +232,9 @@ def torchdiffeq_simulate_to_interruption(
     end_time: torch.Tensor,
     **kwargs,
 ) -> Tuple[State[torch.Tensor], torch.Tensor, Optional[Interruption]]:
-
     if not interruptions:
         from chirho.dynamical.handlers.interruption import StaticInterruption
+
         interruptions.append(StaticInterruption(end_time))
 
     solver = get_solver()
@@ -242,7 +242,9 @@ def torchdiffeq_simulate_to_interruption(
         solver, dynamics, initial_state, start_time, interruptions
     )
 
-    value = simulate_point(solver, dynamics, initial_state, start_time, interruption_time)
+    value = simulate_point(
+        solver, dynamics, initial_state, start_time, interruption_time
+    )
     return value, interruption_time, next_interruption
 
 
