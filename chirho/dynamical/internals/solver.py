@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import numbers
-from typing import List, Tuple, TypeVar, Union
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -83,19 +83,22 @@ def simulate_trajectory(
 # Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
-    solver: Solver,
+    interruption_stack: List[Interruption],
     dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
     **kwargs,
-) -> State[T]:
+) -> Tuple[State[T], R, Optional[Interruption]]:
     """
     Simulate a dynamical system until the next interruption.
 
     :returns: the final state
     """
-    return simulate_point(solver, dynamics, start_state, start_time, end_time, **kwargs)
+    if len(interruption_stack) == 0:
+        return simulate_point(get_solver(), dynamics, start_state, start_time, end_time, **kwargs), end_time, None
+
+    raise NotImplementedError("No default behavior for simulate_to_interruption")
 
 
 @pyro.poutine.runtime.effectful(type="apply_interruptions")
