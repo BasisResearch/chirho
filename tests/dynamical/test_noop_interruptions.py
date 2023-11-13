@@ -20,15 +20,15 @@ logger = logging.getLogger(__name__)
 start_time = torch.tensor(1.0)
 end_time = torch.tensor(4.0)
 # Initial state of the system.
-init_state_values = State(
+init_state_values = dict(
     S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0)
 )
 
 intervene_states = [
-    State(S=torch.tensor(11.0)),
-    State(I=torch.tensor(9.0)),
-    State(S=torch.tensor(10.0), R=torch.tensor(5.0)),
-    State(S=torch.tensor(20.0), I=torch.tensor(11.0), R=torch.tensor(4.0)),
+    dict(S=torch.tensor(11.0)),
+    dict(I=torch.tensor(9.0)),
+    dict(S=torch.tensor(10.0), R=torch.tensor(5.0)),
+    dict(S=torch.tensor(20.0), I=torch.tensor(11.0), R=torch.tensor(4.0)),
 ]
 
 

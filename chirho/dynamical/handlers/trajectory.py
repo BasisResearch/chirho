@@ -24,7 +24,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def __enter__(self) -> "LogTrajectory[T]":
-        self.trajectory: State[T] = State()
+        self.trajectory: State[T] = dict()
         return super().__enter__()
 
     def _pyro_simulate_to_interruption(self, msg) -> None:

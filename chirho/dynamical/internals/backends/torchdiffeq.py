@@ -29,7 +29,7 @@ def _deriv(
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
 ) -> Tuple[torch.Tensor, ...]:
-    env: State[torch.Tensor] = State()
+    env: State[torch.Tensor] = dict()
     for var, value in zip(var_order, state):
         env[var] = value
 
@@ -84,7 +84,7 @@ def _torchdiffeq_ode_simulate_inner(
             torch.cat((s, s[..., -1].unsqueeze(time_dim)), dim=time_dim) for s in solns
         )
 
-    trajectory: State[torch.Tensor] = State()
+    trajectory: State[torch.Tensor] = dict()
     for var, soln in zip(var_order, solns):
         trajectory[var] = soln
 
@@ -264,7 +264,7 @@ def torchdiffeq_dynamic_interruption_flattened_event_f(
     def event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
         # Torchdiffeq operates over flattened state tensors, so we need to unflatten the state to pass it the
         #  user-provided event function of time and State.
-        state: State[torch.Tensor] = State(
+        state: State[torch.Tensor] = dict(
             **{k: v for k, v in zip(var_order, flat_state)}
         )
         return di.event_f(t, state)

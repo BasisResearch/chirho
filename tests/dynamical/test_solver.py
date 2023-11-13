@@ -15,7 +15,7 @@ pyro.settings.set(module_local_params=True)
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
+init_state = dict(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(4.0)
 

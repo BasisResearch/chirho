@@ -13,7 +13,7 @@ from chirho.dynamical.handlers import (
     StaticIntervention,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops import simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 
@@ -31,15 +31,15 @@ end_time = torch.tensor(10.0)
 logging_times = torch.linspace(start_time + 0.01, end_time - 2, 5)
 
 # Initial state of the system.
-init_state_values = State(
+init_state_values = dict(
     S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0)
 )
 
 # Large interventions that will make a difference.
 intervene_states = [
-    State(I=torch.tensor(50.0)),
-    State(S=torch.tensor(50.0), R=torch.tensor(50.0)),
-    State(S=torch.tensor(50.0), I=torch.tensor(50.0), R=torch.tensor(50.0)),
+    dict(I=torch.tensor(50.0)),
+    dict(S=torch.tensor(50.0), R=torch.tensor(50.0)),
+    dict(S=torch.tensor(50.0), I=torch.tensor(50.0), R=torch.tensor(50.0)),
 ]
 
 # Define intervention times before all tspan values.

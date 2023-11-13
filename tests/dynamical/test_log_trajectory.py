@@ -19,7 +19,7 @@ pyro.settings.set(module_local_params=True)
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
+init_state = dict(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(4.0)
 logging_times = torch.tensor([1.0, 2.0, 3.0])
@@ -72,13 +72,13 @@ def test_logging_with_colliding_interruption():
 
 
 def test_trajectory_methods():
-    trajectory = State(S=torch.tensor([1.0, 2.0, 3.0]))
+    trajectory = dict(S=torch.tensor([1.0, 2.0, 3.0]))
     assert trajectory.keys() == frozenset({"S"})
 
 
 def test_append():
-    trajectory1 = State(S=torch.tensor([1.0, 2.0, 3.0]))
-    trajectory2 = State(S=torch.tensor([4.0, 5.0, 6.0]))
+    trajectory1 = dict(S=torch.tensor([1.0, 2.0, 3.0]))
+    trajectory2 = dict(S=torch.tensor([4.0, 5.0, 6.0]))
     trajectory = append(trajectory1, trajectory2)
     assert torch.allclose(
         trajectory["S"], torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])

@@ -29,7 +29,7 @@ def _append_trajectory(traj1: State[T], traj2: State[T]) -> State[T]:
             f"Trajectories must have the same keys to be appended, but got {traj1.keys()} and {traj2.keys()}."
         )
 
-    result: State[T] = State()
+    result: State[T] = dict()
     for k in traj1.keys():
         result[k] = append(traj1[k], traj2[k])
     return result
@@ -50,7 +50,7 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
 
 
 def _squeeze_time_dim(traj: State[torch.Tensor]) -> State[torch.Tensor]:
-    return State(**{k: traj[k].squeeze(-1) for k in traj.keys()})
+    return dict(**{k: traj[k].squeeze(-1) for k in traj.keys()})
 
 
 class ShallowMessenger(pyro.poutine.messenger.Messenger):
