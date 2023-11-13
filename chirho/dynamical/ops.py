@@ -12,10 +12,10 @@ T = TypeVar("T")
 
 if typing.TYPE_CHECKING:
     State = Dict[str, T]
+    Dynamics = Callable[[State[T]], State[T]]
 else:
     State = dict
-
-Dynamics = Callable[[State[T]], State[T]]
+    Dynamics = Callable[[Dict[str, T]], Dict[str, T]]
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
