@@ -1,18 +1,12 @@
 import functools
 from typing import Callable, List, Optional, Tuple, TypeVar
 
-import pyro
 import torch
 import torchdiffeq
 
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
-from chirho.dynamical.internals.solver import (
-    Interruption,
-    get_solver,
-    simulate_point,
-    simulate_trajectory,
-)
+from chirho.dynamical.internals.solver import Interruption, get_solver, simulate_point
 from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
@@ -130,18 +124,16 @@ def _batched_odeint(
     return yt if event_fn is None else (event_t, yt)
 
 
-@simulate_point.register(TorchDiffEq)
-@pyro.poutine.runtime.effectful(type="simulate_point")
-def torchdiffeq_simulate(
-    solver: TorchDiffEq,
+def torchdiffeq_simulate_point(
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
+    **kwargs,
 ) -> State[torch.Tensor]:
     timespan = torch.stack((start_time, end_time))
     trajectory = _torchdiffeq_ode_simulate_inner(
-        dynamics, initial_state, timespan, **solver.odeint_kwargs
+        dynamics, initial_state, timespan, **kwargs
     )
 
     # TODO support dim != -1
@@ -155,17 +147,13 @@ def torchdiffeq_simulate(
     return final_state
 
 
-@simulate_trajectory.register(TorchDiffEq)
-@pyro.poutine.runtime.effectful(type="simulate_trajectory")
 def torchdiffeq_simulate_trajectory(
-    solver: TorchDiffEq,
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     timespan: torch.Tensor,
+    **kwargs,
 ) -> State[torch.Tensor]:
-    return _torchdiffeq_ode_simulate_inner(
-        dynamics, initial_state, timespan, **solver.odeint_kwargs
-    )
+    return _torchdiffeq_ode_simulate_inner(dynamics, initial_state, timespan, **kwargs)
 
 
 def _torchdiffeq_get_next_interruptions(
@@ -242,9 +230,7 @@ def torchdiffeq_simulate_to_interruption(
         solver, dynamics, initial_state, start_time, interruptions
     )
 
-    value = simulate_point(
-        solver, dynamics, initial_state, start_time, interruption_time
-    )
+    value = simulate_point(dynamics, initial_state, start_time, interruption_time)
     return value, interruption_time, next_interruption
 
 

@@ -4,7 +4,7 @@ import pyro
 import torch
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, append
-from chirho.dynamical.internals.solver import get_solver, simulate_trajectory
+from chirho.dynamical.internals.solver import simulate_trajectory
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
@@ -29,7 +29,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
     def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
-        _, dynamics, initial_state, start_time, end_time = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
         filtered_timespan = self.times[
             (self.times >= start_time) & (self.times <= end_time)
@@ -40,10 +40,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         with pyro.poutine.messenger.block_messengers(lambda m: m is self):
             trajectory = simulate_trajectory(
-                get_solver(),
-                dynamics,
-                initial_state,
-                timespan,
+                dynamics, initial_state, timespan, **msg["kwargs"]
             )
 
         # TODO support dim != -1

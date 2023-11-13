@@ -1,3 +1,4 @@
+import contextlib
 import numbers
 from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
@@ -23,21 +24,13 @@ def simulate(
     start_time: R,
     end_time: R,
     *,
-    solver: Optional[S] = None,
+    solver: Optional[pyro.poutine.messenger.Messenger] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
+    from chirho.dynamical.internals.solver import simulate_point
 
-    if solver is None:
-        return simulate_point(
-            get_solver(), dynamics, initial_state, start_time, end_time, **kwargs
-        )
-    else:
-        assert isinstance(solver, Solver)
-        with solver:
-            return simulate_point(
-                solver, dynamics, initial_state, start_time, end_time, **kwargs
-            )
+    with contextlib.nullcontext() if solver is None else solver:
+        return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)

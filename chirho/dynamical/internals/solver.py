@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import functools
 import numbers
 from typing import List, Optional, Tuple, TypeVar, Union
 
@@ -49,9 +48,8 @@ def get_new_interruptions() -> List[Interruption]:
     return []
 
 
-@functools.singledispatch
+@pyro.poutine.runtime.effectful(type="simulate_point")
 def simulate_point(
-    solver: Solver,
     dynamics: Dynamics[T],
     initial_state: State[T],
     start_time: R,
@@ -62,13 +60,12 @@ def simulate_point(
     Simulate a dynamical system.
     """
     raise NotImplementedError(
-        f"simulate not implemented for solver of type {type(solver)}"
+        f"simulate_point not implemented for solver of type {type(get_solver())}"
     )
 
 
-@functools.singledispatch
+@pyro.poutine.runtime.effectful(type="simulate_trajectory")
 def simulate_trajectory(
-    solver: Solver,
     dynamics: Dynamics[T],
     initial_state: State[T],
     timespan: R,
@@ -78,11 +75,10 @@ def simulate_trajectory(
     Simulate a dynamical system.
     """
     raise NotImplementedError(
-        f"simulate_trajectory not implemented for solver of type {type(solver)}"
+        f"simulate_trajectory not implemented for solver of type {type(get_solver())}"
     )
 
 
-# Separating out the effectful operation from the non-effectful dispatch on the default implementation
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     interruption_stack: List[Interruption],
@@ -99,9 +95,7 @@ def simulate_to_interruption(
     """
     if len(interruption_stack) == 0:
         return (
-            simulate_point(
-                get_solver(), dynamics, start_state, start_time, end_time, **kwargs
-            ),
+            simulate_point(dynamics, start_state, start_time, end_time, **kwargs),
             end_time,
             None,
         )
