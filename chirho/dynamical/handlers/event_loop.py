@@ -35,7 +35,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
             Prioritized(float(end_time), StaticInterruption(end_time)),
         )
 
-        with msg["kwargs"].get("solver", contextlib.nullcontext()):
+        with msg["kwargs"].pop("solver", contextlib.nullcontext()):
             while start_time < end_time:
                 for h in get_new_interruptions():
                     if isinstance(h, StaticInterruption) and h.time >= end_time:
@@ -70,6 +70,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
                     state,
                     start_time,
                     end_time,
+                    **msg["kwargs"]
                 )
 
                 if next_interruption is not None:
