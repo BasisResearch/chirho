@@ -1,6 +1,7 @@
+import dataclasses
 import functools
 import typing
-from typing import Any, Callable, Dict, FrozenSet, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, FrozenSet, Generic, Optional, Tuple, TypeVar
 
 import pyro
 import torch
@@ -93,3 +94,9 @@ class ShallowMessenger(pyro.poutine.messenger.Messenger):
     def _postprocess_message(self, msg: Dict[str, Any]) -> None:
         if hasattr(self, f"_pyro_post_{msg['type']}"):
             raise NotImplementedError("ShallowHandler does not support postprocessing")
+
+
+@dataclasses.dataclass(order=True)
+class Prioritized(Generic[T]):
+    priority: float
+    item: T = dataclasses.field(compare=False)
