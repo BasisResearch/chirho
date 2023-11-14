@@ -1,3 +1,4 @@
+import contextlib
 import numbers
 import sys
 import typing
@@ -31,19 +32,13 @@ def simulate(
     start_time: R,
     end_time: R,
     *,
-    solver: Optional[S] = None,
+    solver: Optional[pyro.poutine.messenger.Messenger] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import (
-        Solver,
-        get_solver,
-        simulate_to_interruption,
-    )
+    from chirho.dynamical.internals.solver import simulate_point
 
-    solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_to_interruption(
-        solver_, dynamics, initial_state, start_time, end_time, **kwargs
-    )
+    with contextlib.nullcontext() if solver is None else solver:
+        return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
