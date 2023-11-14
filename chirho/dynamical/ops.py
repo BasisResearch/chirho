@@ -1,4 +1,5 @@
 import numbers
+import sys
 import typing
 from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
@@ -10,8 +11,14 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class State(Generic[T], Dict[str, T]):
-    pass
+if typing.TYPE_CHECKING:
+    State = Dict[str, T]
+elif sys.version_info >= (3, 9):
+    State = dict
+else:
+
+    class State(Generic[T], Dict[str, T]):
+        pass
 
 
 Dynamics = Callable[[State[T]], State[T]]
