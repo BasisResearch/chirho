@@ -15,7 +15,8 @@ T = TypeVar("T")
 
 
 class Solver(pyro.poutine.messenger.Messenger):
-    pass
+    def __init__(self, runtime_check: bool = False):
+        self.runtime_check = runtime_check
 
 
 class Interruption(ShallowMessenger):
@@ -24,20 +25,6 @@ class Interruption(ShallowMessenger):
             msg["value"] = []
         assert isinstance(msg["value"], list)
         msg["value"].append(self)
-
-
-class SolverRuntimeCheckHandler(pyro.poutine.messenger.Messenger):
-    pass
-
-
-@functools.singledispatch
-def get_solver_runtime_check_handler(solver: Solver) -> SolverRuntimeCheckHandler:
-    """
-    Get the runtime check handler for the solver.
-    """
-    raise NotImplementedError(
-        f"get_solver_runtime_check_handler not implemented for type {type(solver)}"
-    )
 
 
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
