@@ -14,7 +14,7 @@ T = TypeVar("T")
 if typing.TYPE_CHECKING:
     State = Dict[str, T]
 elif sys.version_info >= (3, 9):
-    State = dict[str, T]
+    State = dict
 else:
 
     class State(Generic[T], Dict[str, T]):
