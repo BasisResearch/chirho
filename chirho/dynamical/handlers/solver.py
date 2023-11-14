@@ -14,3 +14,47 @@ class TorchDiffEq(Solver):
             "options": options,
         }
         super().__init__()
+
+    def _pyro_simulate_point(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_simulate_point,
+        )
+
+        dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["kwargs"].update(self.odeint_kwargs)
+
+        msg["value"] = torchdiffeq_simulate_point(
+            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
+        )
+        msg["done"] = True
+
+    def _pyro_simulate_trajectory(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_simulate_trajectory,
+        )
+
+        dynamics, initial_state, timespan = msg["args"]
+        msg["kwargs"].update(self.odeint_kwargs)
+
+        msg["value"] = torchdiffeq_simulate_trajectory(
+            dynamics, initial_state, timespan, **msg["kwargs"]
+        )
+        msg["done"] = True
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_simulate_to_interruption,
+        )
+
+        interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["kwargs"].update(self.odeint_kwargs)
+
+        msg["value"] = torchdiffeq_simulate_to_interruption(
+            interruptions,
+            dynamics,
+            initial_state,
+            start_time,
+            end_time,
+            **msg["kwargs"]
+        )
+        msg["done"] = True
