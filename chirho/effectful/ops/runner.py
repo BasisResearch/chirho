@@ -1,15 +1,13 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.effectful.ops.interpretation import Interpretation, bind_and_push_prompts, bind_result, interpreter
+from chirho.effectful.ops.interpretation import Interpretation, Prompt, bind_prompts, bind_result, interpreter
 from chirho.effectful.ops.operation import Operation, define
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
-
-Prompt = Operation[[Optional[T]], T]
 
 
 @define(Operation)
@@ -36,7 +34,7 @@ def product(
 
     # on prompt, jump to the outer interpretation and interpret it using itself
     return {
-        op: bind_and_push_prompts({prompt: interpreter(intp)(op)})(
+        op: bind_prompts({prompt: interpreter(intp)(op)})(
             interpreter(reflect_intp_ops)(interpreter(intp2)(intp2[op]))
         ) for op in intp2.keys()
     }

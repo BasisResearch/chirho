@@ -90,11 +90,13 @@ def _get_result() -> Optional[T]:
     return None
 
 
-def _set_result(fn: Callable[[Optional[T]], T]) -> Callable[[Optional[T]], T]:
+def _set_result(
+    fn: Callable[Concatenate[Optional[T], P], T]
+) -> Callable[Concatenate[Optional[T], P], T]:
 
     @functools.wraps(fn)
-    def _wrapper(res: Optional[T]) -> T:
-        return shallow_interpreter({_get_result: lambda: res})(fn)(res)
+    def _wrapper(res: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+        return shallow_interpreter({_get_result: lambda: res})(fn)(res, *args, **kwargs)
 
     return _wrapper
 
@@ -108,8 +110,11 @@ def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
     return _wrapper
 
 
-def bind_and_push_prompts(
-    unbound_conts: Mapping[Operation[[Optional[S]], S], Callable[P, T]],
+Prompt = Operation[[Optional[T]], T]
+
+
+def bind_prompts(
+    unbound_conts: Mapping[Prompt[S], Callable[P, T]],
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
 
     LocalState = Tuple[Tuple, Mapping]
