@@ -32,7 +32,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         dynamics, initial_state, start_time, end_time = msg["args"]
 
         filtered_timespan = self.times[
-            (self.times >= start_time) & (self.times <= end_time)
+            (self.times > start_time) & (self.times <= end_time)
         ]
         timespan = torch.concat(
             (start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1))
