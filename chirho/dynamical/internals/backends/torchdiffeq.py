@@ -165,6 +165,7 @@ def _torchdiffeq_get_next_interruptions(
     # special case: static interruptions
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
+    assert len(interruptions) > 0, "should have at least one interruption here"
     if all(isinstance(i, StaticInterruption) for i in interruptions):
         next_static_interruption = min(interruptions, key=lambda i: i.time)
         return (next_static_interruption,), next_static_interruption.time
