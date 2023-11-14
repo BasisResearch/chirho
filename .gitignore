@@ -79,6 +79,8 @@ venv/
 
 # VSCode
 /.vscode
+*.code-workspace
+
 
 # Automatically generated files
 docs/source/lightning_logs
