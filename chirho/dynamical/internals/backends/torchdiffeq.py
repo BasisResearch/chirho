@@ -5,7 +5,11 @@ import torch
 import torchdiffeq
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
-from chirho.dynamical.internals.solver import Interruption, SolverRuntimeCheckHandler, simulate_point
+from chirho.dynamical.internals.solver import (
+    Interruption,
+    SolverRuntimeCheckHandler,
+    simulate_point,
+)
 from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 

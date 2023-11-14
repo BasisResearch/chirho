@@ -39,7 +39,7 @@ def get_solver_runtime_check_handler(solver: Solver) -> SolverRuntimeCheckHandle
         f"get_solver_runtime_check_handler not implemented for type {type(solver)}"
     )
 
- 
+
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
 def get_new_interruptions() -> List[Interruption]:
     """
