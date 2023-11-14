@@ -22,10 +22,10 @@ class DependentInterruption(Generic[T], Interruption):
 
 
 class StaticInterruption(Generic[T], DependentInterruption[T]):
-    time: R
+    time: torch.Tensor
 
     def __init__(self, time: R):
-        self.time = time
+        self.time = torch.as_tensor(time)
         super().__init__()
 
     def event_f(self, time: R, state: State[T]) -> R:
@@ -61,7 +61,7 @@ class _InterventionMixin(Generic[T]):
 
 class _PointObservationMixin(Generic[T]):
     observation: Observation[State[T]]
-    time: R
+    time: torch.Tensor
 
     def _pyro_apply_interruptions(self, msg) -> None:
         dynamics = msg["args"][0]

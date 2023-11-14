@@ -162,6 +162,13 @@ def _torchdiffeq_get_next_interruptions(
     interruptions: List[Interruption],
     **kwargs,
 ) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
+    # special case: static interruptions
+    from chirho.dynamical.handlers.interruption import StaticInterruption
+
+    if all(isinstance(i, StaticInterruption) for i in interruptions):
+        next_static_interruption = min(interruptions, key=lambda i: i.time)
+        return (next_static_interruption,), next_static_interruption.time
+
     var_order = _var_order(frozenset(start_state.keys()))  # arbitrary, but fixed
 
     # Create the event function combining all dynamic events and the terminal (next) static interruption.
