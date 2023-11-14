@@ -1,4 +1,6 @@
+import contextlib
 import numbers
+import sys
 import typing
 from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
@@ -10,8 +12,14 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class State(Generic[T], Dict[str, T]):
-    pass
+if typing.TYPE_CHECKING:
+    State = Dict[str, T]
+elif sys.version_info >= (3, 9):
+    State = dict
+else:
+
+    class State(Generic[T], Dict[str, T]):
+        pass
 
 
 Dynamics = Callable[[State[T]], State[T]]
@@ -24,15 +32,13 @@ def simulate(
     start_time: R,
     end_time: R,
     *,
-    solver: Optional[S] = None,
+    solver: Optional[pyro.poutine.messenger.Messenger] = None,
     **kwargs,
 ) -> State[T]:
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import Solver, get_solver, simulate_point
+    from chirho.dynamical.internals.solver import simulate_point
 
-    solver_: Solver = get_solver() if solver is None else typing.cast(Solver, solver)
-    return simulate_point(
-        solver_, dynamics, initial_state, start_time, end_time, **kwargs
-    )
+    with contextlib.nullcontext() if solver is None else solver:
+        return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)

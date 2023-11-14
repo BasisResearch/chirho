@@ -4,7 +4,7 @@ import pyro
 import torch
 
 from chirho.indexed.handlers import DependentMaskMessenger, add_indices
-from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter
+from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter_n
 
 T = TypeVar("T")
 
@@ -100,7 +100,7 @@ class SingleStageCut(DependentMaskMessenger):
                 event_dim=msg["fn"].event_dim,
             )
 
-            msg["value"] = scatter(
+            msg["value"] = scatter_n(
                 {
                     IndexSet(**{self.name: {0}}): value_one,
                     IndexSet(**{self.name: {1}}): value_one.detach(),

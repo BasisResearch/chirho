@@ -22,13 +22,13 @@ end_time = torch.tensor(4.0)
 
 def test_no_backend_error():
     sir = bayes_sir_model()
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         simulate(sir, init_state, start_time, end_time)
 
 
 def test_no_backend_SEL_error():
     sir = bayes_sir_model()
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         with InterruptionEventLoop():
             simulate(sir, init_state, start_time, end_time)
 

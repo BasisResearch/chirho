@@ -16,6 +16,7 @@ from chirho.indexed.ops import (
     union,
 )
 
+K = TypeVar("K")
 T = TypeVar("T")
 
 
@@ -59,6 +60,16 @@ def _gather_tensor(
             torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
         )
     return result
+
+
+@gather.register(dict)
+def _gather_state(
+    value: Dict[K, T], indices: IndexSet, *, event_dim: int = 0, **kwargs
+) -> Dict[K, T]:
+    return {
+        k: gather(value[k], indices, event_dim=event_dim, **kwargs)
+        for k in value.keys()
+    }
 
 
 @scatter.register
@@ -178,6 +189,13 @@ def _indices_of_distribution(
 ) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
+
+
+@indices_of.register(dict)
+def _indices_of_state(value: Dict[K, T], *, event_dim: int = 0, **kwargs) -> IndexSet:
+    return union(
+        *(indices_of(value[k], event_dim=event_dim, **kwargs) for k in value.keys())
+    )
 
 
 @cond.register(int)
