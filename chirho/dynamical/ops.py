@@ -1,6 +1,7 @@
 import numbers
+import sys
 import typing
-from typing import Callable, Dict, Optional, TypeVar, Union
+from typing import Callable, Dict, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -12,10 +13,15 @@ T = TypeVar("T")
 
 if typing.TYPE_CHECKING:
     State = Dict[str, T]
-    Dynamics = Callable[[State[T]], State[T]]
+elif sys.version_info >= (3, 9):
+    State = dict[str, T]
 else:
-    State = dict
-    Dynamics = Callable[[Dict[str, T]], Dict[str, T]]
+
+    class State(Generic[T], Dict[str, T]):
+        pass
+
+
+Dynamics = Callable[[State[T]], State[T]]
 
 
 @pyro.poutine.runtime.effectful(type="simulate")
