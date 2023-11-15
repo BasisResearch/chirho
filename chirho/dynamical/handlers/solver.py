@@ -48,7 +48,6 @@ class TorchDiffEq(Solver):
 
         interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
-        
         msg["value"] = torchdiffeq_simulate_to_interruption(
             interruptions,
             dynamics,
