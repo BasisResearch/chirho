@@ -110,7 +110,7 @@ def check_dynamics(
     pass
 
 
-DYNAMICS_VALIDATION_ENABLED = False
+DYNAMICS_VALIDATION_ENABLED: bool = False
 
 
 @pyro.settings.register("validate_dynamics", __name__, "DYNAMICS_VALIDATION_ENABLED")
