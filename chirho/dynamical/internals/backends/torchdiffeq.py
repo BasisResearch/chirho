@@ -14,7 +14,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class TorchDiffEqRuntimeCheckHandler(pyro.poutine.messenger.Messenger):
+class RuntimeCheck(pyro.poutine.messenger.Messenger):
     def _pyro_sample(self, msg):
         raise ValueError(
             "TorchDiffEq only supports ODE models, and thus does not allow `pyro.sample` calls."
