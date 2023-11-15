@@ -94,3 +94,25 @@ def apply_interruptions(
     """
     # Default is to do nothing.
     return dynamics, start_state
+
+
+@pyro.poutine.runtime.effectful(type="check_dynamics")
+def check_dynamics(
+    dynamics: Dynamics[T],
+    initial_state: State[T],
+    start_time: R,
+    end_time: R,
+    **kwargs,
+) -> None:
+    """
+    Validate a dynamical system.
+    """
+    pass
+
+
+DYNAMICS_VALIDATION_ENABLED: bool = False
+
+
+@pyro.settings.register("validate_dynamics", __name__, "DYNAMICS_VALIDATION_ENABLED")
+def _check_validate_dynamics_flag(value: bool) -> None:
+    assert isinstance(value, bool)

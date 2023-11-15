@@ -38,7 +38,9 @@ def simulate(
     """
     Simulate a dynamical system.
     """
-    from chirho.dynamical.internals.solver import simulate_point
+    from chirho.dynamical.internals.solver import check_dynamics, simulate_point
 
     with contextlib.nullcontext() if solver is None else solver:
+        if pyro.settings.get("validate_dynamics"):
+            check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
         return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
