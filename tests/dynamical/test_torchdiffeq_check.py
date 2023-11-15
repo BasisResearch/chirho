@@ -4,8 +4,9 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.solver import RuntimeCheckTorchDiffEq
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.internals.solver import validate_dynamics
+from chirho.dynamical.ops import State
 
 pyro.settings.set(module_local_params=True)
 
@@ -26,21 +27,20 @@ def invalid_diff(state: State) -> State:
     return State(S=(state["S"] + x))
 
 
-def test_runtime_check_handler():
-    result = simulate(
-        valid_diff,
-        init_state,
-        start_time,
-        end_time,
-        solver=RuntimeCheckTorchDiffEq(),
-    )
-    assert result is not None
-
-    with pytest.raises(ValueError):
-        simulate(
-            invalid_diff,
+def test_validate_dynamics_torchdiffeq():
+    with TorchDiffEq():
+        validate_dynamics(
+            valid_diff,
             init_state,
             start_time,
             end_time,
-            solver=RuntimeCheckTorchDiffEq(),
         )
+
+    with pytest.raises(ValueError):
+        with TorchDiffEq():
+            validate_dynamics(
+                invalid_diff,
+                init_state,
+                start_time,
+                end_time,
+            )

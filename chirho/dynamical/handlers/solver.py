@@ -58,22 +58,10 @@ class TorchDiffEq(Solver):
         )
         msg["done"] = True
 
+    def _pyro_validate_dynamics(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_validate_dynamics,
+        )
 
-class RuntimeCheckTorchDiffEq(TorchDiffEq):
-    def _pyro_simulate_point(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
-
-        with RuntimeCheck():
-            super()._pyro_simulate_point(msg)
-
-    def _pyro_simulate_trajectory(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
-
-        with RuntimeCheck():
-            super()._pyro_simulate_trajectory(msg)
-
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
-
-        with RuntimeCheck():
-            super()._pyro_simulate_to_interruption(msg)
+        torchdiffeq_validate_dynamics(*msg["args"], **msg["kwargs"])
+        msg["done"] = True

@@ -14,11 +14,22 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class RuntimeCheck(pyro.poutine.messenger.Messenger):
+class TorchdiffeqRuntimeCheck(pyro.poutine.messenger.Messenger):
     def _pyro_sample(self, msg):
         raise ValueError(
             "TorchDiffEq only supports ODE models, and thus does not allow `pyro.sample` calls."
         )
+
+
+def torchdiffeq_validate_dynamics(
+    dynamics: Dynamics[torch.Tensor],
+    initial_state: State[torch.Tensor],
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
+    **kwargs,
+) -> None:
+    with TorchdiffeqRuntimeCheck():
+        dynamics(initial_state)
 
 
 def _deriv(
