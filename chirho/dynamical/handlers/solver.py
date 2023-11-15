@@ -1,5 +1,3 @@
-import contextlib
-
 from chirho.dynamical.internals.solver import Solver
 
 
@@ -15,51 +13,71 @@ class TorchDiffEq(Solver):
             "method": method,
             "options": options,
         }
-        super().__init__(**kwargs)
+        super().__init__()
 
     def _pyro_simulate_point(self, msg) -> None:
         from chirho.dynamical.internals.backends.torchdiffeq import (
-            TorchDiffEqRuntimeCheckHandler,
             torchdiffeq_simulate_point,
         )
 
         dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
-        with contextlib.nullcontext() if self.runtime_check is None else TorchDiffEqRuntimeCheckHandler():
-            msg["value"] = torchdiffeq_simulate_point(
-                dynamics, initial_state, start_time, end_time, **msg["kwargs"]
-            )
+        msg["value"] = torchdiffeq_simulate_point(
+            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
+        )
         msg["done"] = True
 
     def _pyro_simulate_trajectory(self, msg) -> None:
         from chirho.dynamical.internals.backends.torchdiffeq import (
-            TorchDiffEqRuntimeCheckHandler,
             torchdiffeq_simulate_trajectory,
         )
 
         dynamics, initial_state, timespan = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
-        with contextlib.nullcontext() if self.runtime_check is None else TorchDiffEqRuntimeCheckHandler():
-            msg["value"] = torchdiffeq_simulate_trajectory(
-                dynamics, initial_state, timespan, **msg["kwargs"]
-            )
+        msg["value"] = torchdiffeq_simulate_trajectory(
+            dynamics, initial_state, timespan, **msg["kwargs"]
+        )
         msg["done"] = True
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
         from chirho.dynamical.internals.backends.torchdiffeq import (
-            TorchDiffEqRuntimeCheckHandler,
             torchdiffeq_simulate_to_interruption,
         )
 
         interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
-        with contextlib.nullcontext() if self.runtime_check is None else TorchDiffEqRuntimeCheckHandler():
-            msg["value"] = torchdiffeq_simulate_to_interruption(
-                interruptions,
-                dynamics,
-                initial_state,
-                start_time,
-                end_time,
-                **msg["kwargs"]
-            )
+        msg["value"] = torchdiffeq_simulate_to_interruption(
+            interruptions,
+            dynamics,
+            initial_state,
+            start_time,
+            end_time,
+            **msg["kwargs"]
+        )
         msg["done"] = True
+
+
+class RuntimeCheckTorchDiffEq(TorchDiffEq):
+    def _pyro_simulate_point(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            TorchDiffEqRuntimeCheckHandler,
+        )
+
+        with TorchDiffEqRuntimeCheckHandler():
+            super()._pyro_simulate_point(msg)
+
+    def _pyro_simulate_trajectory(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            TorchDiffEqRuntimeCheckHandler,
+        )
+
+        with TorchDiffEqRuntimeCheckHandler():
+            super()._pyro_simulate_trajectory(msg)
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            TorchDiffEqRuntimeCheckHandler,
+        )
+
+        with TorchDiffEqRuntimeCheckHandler():
+            super()._pyro_simulate_to_interruption(msg)

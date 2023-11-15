@@ -4,7 +4,7 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.handlers.solver import RuntimeCheckTorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
 pyro.settings.set(module_local_params=True)
@@ -32,7 +32,7 @@ def test_runtime_check_handler():
         init_state,
         start_time,
         end_time,
-        solver=TorchDiffEq(runtime_check=True),
+        solver=RuntimeCheckTorchDiffEq(),
     )
     assert result is not None
 
@@ -42,5 +42,5 @@ def test_runtime_check_handler():
             init_state,
             start_time,
             end_time,
-            solver=TorchDiffEq(runtime_check=True),
+            solver=RuntimeCheckTorchDiffEq(),
         )

@@ -15,8 +15,7 @@ T = TypeVar("T")
 
 
 class Solver(pyro.poutine.messenger.Messenger):
-    def __init__(self, runtime_check: bool = False):
-        self.runtime_check = runtime_check
+    pass
 
 
 class Interruption(ShallowMessenger):
