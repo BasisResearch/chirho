@@ -48,7 +48,6 @@ class TorchDiffEq(Solver):
 
         interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
-
         msg["value"] = torchdiffeq_simulate_to_interruption(
             interruptions,
             dynamics,
@@ -56,5 +55,18 @@ class TorchDiffEq(Solver):
             start_time,
             end_time,
             **msg["kwargs"]
+        )
+        msg["done"] = True
+
+    def _pyro_check_dynamics(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdiffeq import (
+            torchdiffeq_check_dynamics,
+        )
+
+        dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["kwargs"].update(self.odeint_kwargs)
+
+        torchdiffeq_check_dynamics(
+            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
         )
         msg["done"] = True
