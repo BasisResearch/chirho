@@ -59,25 +59,19 @@ class TorchDiffEq(Solver):
 
 class RuntimeCheckTorchDiffEq(TorchDiffEq):
     def _pyro_simulate_point(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import (
-            RuntimeCheck,
-        )
+        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
 
         with RuntimeCheck():
             super()._pyro_simulate_point(msg)
 
     def _pyro_simulate_trajectory(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import (
-            RuntimeCheck,
-        )
+        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
 
         with RuntimeCheck():
             super()._pyro_simulate_trajectory(msg)
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
-        from chirho.dynamical.internals.backends.torchdiffeq import (
-            RuntimeCheck,
-        )
+        from chirho.dynamical.internals.backends.torchdiffeq import RuntimeCheck
 
         with RuntimeCheck():
             super()._pyro_simulate_to_interruption(msg)
