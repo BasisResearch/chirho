@@ -21,7 +21,7 @@ class TorchdiffeqRuntimeCheck(pyro.poutine.messenger.Messenger):
         )
 
 
-def torchdiffeq_validate_dynamics(
+def torchdiffeq_check_dynamics(
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,

@@ -14,9 +14,9 @@ from chirho.dynamical.internals._utils import Prioritized
 from chirho.dynamical.internals.solver import (
     Interruption,
     apply_interruptions,
+    check_dynamics,
     get_new_interruptions,
     simulate_to_interruption,
-    validate_dynamics,
 )
 
 S = TypeVar("S")
@@ -30,7 +30,7 @@ class InterruptionEventLoop(Generic[T], pyro.poutine.messenger.Messenger):
         dynamics, state, start_time, end_time = msg["args"]
 
         if pyro.settings.get("validate_dynamics"):
-            validate_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
+            check_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
 
         # local state
         all_interruptions: List[Prioritized] = []

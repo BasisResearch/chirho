@@ -1,5 +1,3 @@
-import pyro
-
 from chirho.dynamical.internals.solver import Solver
 
 
@@ -60,15 +58,15 @@ class TorchDiffEq(Solver):
         )
         msg["done"] = True
 
-    def _pyro_validate_dynamics(self, msg) -> None:
+    def _pyro_check_dynamics(self, msg) -> None:
         from chirho.dynamical.internals.backends.torchdiffeq import (
-            torchdiffeq_validate_dynamics,
+            torchdiffeq_check_dynamics,
         )
 
         dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
 
-        torchdiffeq_validate_dynamics(
+        torchdiffeq_check_dynamics(
             dynamics, initial_state, start_time, end_time, **msg["kwargs"]
         )
         msg["done"] = True
