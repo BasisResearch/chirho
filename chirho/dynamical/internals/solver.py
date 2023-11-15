@@ -108,3 +108,11 @@ def validate_dynamics(
     Validate a dynamical system.
     """
     pass
+
+
+@pyro.settings.register("validate_dynamics", __name__, "VALIDATE_DYNAMICS")
+def _check_validate_dynamics_flag(value: bool) -> None:
+    assert isinstance(value, bool)
+
+
+pyro.settings.set("validate_dynamics", False)

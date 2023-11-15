@@ -1,3 +1,5 @@
+import pyro
+
 from chirho.dynamical.internals.solver import Solver
 
 
