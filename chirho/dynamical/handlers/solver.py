@@ -63,5 +63,10 @@ class TorchDiffEq(Solver):
             torchdiffeq_validate_dynamics,
         )
 
-        torchdiffeq_validate_dynamics(*msg["args"], **msg["kwargs"])
+        dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["kwargs"].update(self.odeint_kwargs)
+
+        torchdiffeq_validate_dynamics(
+            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
+        )
         msg["done"] = True
