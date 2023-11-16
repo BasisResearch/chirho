@@ -23,6 +23,8 @@ EXTRAS_REQUIRE = [
     "tensorboard",
 ]
 
+DYNAMICAL_REQUIRE = ["torchdiffeq"]
+
 setup(
     name="chirho",
     version=VERSION,
@@ -37,12 +39,14 @@ setup(
     },
     install_requires=[
         # if you add any additional libraries, please also
-        # add them to `docs/requirements.txt`
+        # add them to `docs/source/requirements.txt`
         "pyro-ppl>=1.8.5",
     ],
     extras_require={
+        "dynamical": DYNAMICAL_REQUIRE,
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE + [
+        "test": EXTRAS_REQUIRE
+        + [
             "pytest",
             "pytest-cov",
             "pytest-xdist",

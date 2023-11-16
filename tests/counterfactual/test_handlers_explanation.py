@@ -3,13 +3,13 @@ import pyro.distributions as dist
 import pyro.infer
 import pytest
 import torch
-from scipy.stats import spearmanr
 
 from chirho.counterfactual.handlers.counterfactual import (
     MultiWorldCounterfactual,
     Preemptions,
 )
 from chirho.counterfactual.handlers.explanation import (
+    ExplainCauses,
     SearchForCause,
     consequent_differs,
     random_intervention,
@@ -18,6 +18,7 @@ from chirho.counterfactual.handlers.explanation import (
 )
 from chirho.counterfactual.ops import preempt, split
 from chirho.indexed.ops import IndexSet, gather, indices_of
+from chirho.interventional.ops import intervene
 from chirho.observational.handlers.condition import Factors, condition
 
 
@@ -177,7 +178,7 @@ def test_undo_split_with_interaction():
 
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_differs(plate_size, event_shape):
     factors = {
         "consequent": consequent_differs(
@@ -220,17 +221,55 @@ def test_consequent_differs(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
 
 
+SUPPORT_CASES = [
+    pyro.distributions.constraints.real,
+    pyro.distributions.constraints.boolean,
+    pyro.distributions.constraints.positive,
+    pyro.distributions.constraints.interval(0, 10),
+    pyro.distributions.constraints.interval(-5, 5),
+    pyro.distributions.constraints.integer_interval(0, 2),
+    pyro.distributions.constraints.integer_interval(0, 100),
+]
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_uniform_proposal(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    uniform = uniform_proposal(support, event_shape=event_shape)
+    samples = uniform.sample((10,))
+    assert torch.all(support.check(samples))
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_random_intervention(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    obs_value = torch.randn(event_shape)
+    intervention = random_intervention(support, "samples")
+
+    with pyro.plate("draws", 10):
+        samples = intervene(obs_value, intervention)
+
+    assert torch.all(support.check(samples))
+
+
 def stones_bayesian_model():
-    prob_sally_throws = pyro.sample("prob_sally_throws", dist.Beta(1, 1))
-    prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
-    prob_sally_hits = pyro.sample("prob_sally_hits", dist.Beta(1, 1))
-    prob_bill_hits = pyro.sample("prob_bill_hits", dist.Beta(1, 1))
-    prob_bottle_shatters_if_sally = pyro.sample(
-        "prob_bottle_shatters_if_sally", dist.Beta(1, 1)
-    )
-    prob_bottle_shatters_if_bill = pyro.sample(
-        "prob_bottle_shatters_if_bill", dist.Beta(1, 1)
-    )
+    with pyro.poutine.mask(mask=False):
+        prob_sally_throws = pyro.sample("prob_sally_throws", dist.Beta(1, 1))
+        prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
+        prob_sally_hits = pyro.sample("prob_sally_hits", dist.Beta(1, 1))
+        prob_bill_hits = pyro.sample("prob_bill_hits", dist.Beta(1, 1))
+        prob_bottle_shatters_if_sally = pyro.sample(
+            "prob_bottle_shatters_if_sally", dist.Beta(1, 1)
+        )
+        prob_bottle_shatters_if_bill = pyro.sample(
+            "prob_bottle_shatters_if_bill", dist.Beta(1, 1)
+        )
 
     sally_throws = pyro.sample("sally_throws", dist.Bernoulli(prob_sally_throws))
     bill_throws = pyro.sample("bill_throws", dist.Bernoulli(prob_bill_throws))
@@ -384,78 +423,87 @@ def test_SearchForCause_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 
-support_real = pyro.distributions.constraints.real
-support_boolean = pyro.distributions.constraints.boolean
-support_positive = pyro.distributions.constraints.positive
-support_interval = pyro.distributions.constraints.interval(0, 10)
-support_integer_interval = pyro.distributions.constraints.integer_interval(0, 2)
-indep_constraint = pyro.distributions.constraints.independent(
-    pyro.distributions.constraints.real, reinterpreted_batch_ndims=1
-)
+def test_ExplainCauses():
+    observations = {
+        "prob_sally_throws": 1.0,
+        "prob_bill_throws": 1.0,
+        "prob_sally_hits": 1.0,
+        "prob_bill_hits": 1.0,
+        "prob_bottle_shatters_if_sally": 1.0,
+        "prob_bottle_shatters_if_bill": 1.0,
+    }
 
+    observations_conditioning = condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    )
 
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
-@pytest.mark.parametrize("edges", [(0, 2), (0, 100), (0, 250)])
-def test_uniform_proposal(support, edges):
-    # plug the edges into interval constraints
-    if support is support_integer_interval:
-        support = pyro.distributions.constraints.integer_interval(*edges)
-    elif support is support_interval:
-        support = pyro.distributions.constraints.interval(*edges)
+    antecedents = {"sally_throws": 0.0}
+    witnesses = ["bill_throws", "bill_hits"]
+    consequents = ["bottle_shatters"]
 
-    # test all but the indep_constraint
-    if support is not indep_constraint:
-        uniform = uniform_proposal(support)
-        with pyro.plate("samples", 50):
-            samples = pyro.sample("samples", uniform)
+    with MultiWorldCounterfactual() as mwc:
+        with ExplainCauses(
+            antecedents=antecedents,
+            witnesses=witnesses,
+            consequents=consequents,
+            antecedent_bias=0.1,
+        ):
+            with observations_conditioning:
+                with pyro.plate("sample", 200):
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
 
-        # with positive constraint, zeros are possible, but
-        # they don't pass `support.check`. Considered harmless.
-        if support is support_positive:
-            samples = samples[samples != 0]
+    tr.trace.compute_log_prob()
+    tr = tr.trace.nodes
 
-        assert torch.all(support.check(samples))
-
-    else:  # testing the idependence constraint requires a bit more work
-        dist_indep = uniform_proposal(
-            indep_constraint, event_shape=torch.Size([2, 1000])
+    with mwc:
+        log_probs = (
+            gather(
+                tr["__consequent_bottle_shatters"]["log_prob"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
         )
-        with pyro.plate("data", 2):
-            samples_indep = pyro.sample("samples_indep", dist_indep.expand([2]))
 
-        batch_1 = samples_indep[0].squeeze().tolist()
-        batch_2 = samples_indep[1].squeeze().tolist()
-        assert abs(spearmanr(batch_1, batch_2).correlation) < 0.2
+        st_obs = (
+            gather(
+                tr["sally_throws"]["value"],
+                IndexSet(**{i: {0} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
 
+        st_int = (
+            gather(
+                tr["sally_throws"]["value"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
 
-@pytest.mark.parametrize(
-    "support",
-    [
-        support_real,
-        support_boolean,
-        support_positive,
-        support_interval,
-        support_integer_interval,
-        indep_constraint,
-    ],
-)
-def test_random_intervention(support):
-    intervention = random_intervention(support, "samples")
+        bh_int = (
+            gather(
+                tr["bill_hits"]["value"],
+                IndexSet(**{i: {1} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
 
-    with pyro.plate("draws", 1000):
-        samples = intervention(torch.ones(10))
+        st_ant = tr["__antecedent_sally_throws"]["value"].squeeze().tolist()
 
-    if support is support_positive:
-        samples = samples[samples != 0]
+        assert all(lp == -1e8 or lp == 0.0 for lp in log_probs)
 
-    assert torch.all(support.check(samples))
+        for step in range(200):
+            bottle_will_shatter = (
+                st_obs[step] != st_int[step] and st_ant == 0.0
+            ) or bh_int[step] == 1.0
+            if bottle_will_shatter:
+                assert log_probs[step] == -1e8
