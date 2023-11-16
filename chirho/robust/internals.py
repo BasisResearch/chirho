@@ -101,6 +101,12 @@ def log_likelihood_fn(flat_theta: torch.tensor, X: Dict[str, torch.Tensor]):
     return log_prob_at_datapoints
 
 
+def stochastic_variational_log_likelihood_fn(
+    flat_theta: torch.tensor, X: Dict[str, torch.Tensor]
+):
+    pass
+
+
 # For continous latents, vectorized importance weights
 # https://docs.pyro.ai/en/stable/inference_algos.html#pyro.infer.importance.vectorized_importance_weights
 
