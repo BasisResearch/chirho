@@ -86,4 +86,4 @@ docs/preconvert
 docs/build
 site/
 out
-docs/source/GSM4150378_sciPlex3_A549_MCF7_K562_screen_UMI.count.matrix.gz
+*.matrix.gz
