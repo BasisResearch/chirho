@@ -93,7 +93,7 @@ def _flat_conjugate_gradient_solve(
     Returns:
         torch.Tensor: Solution x* for equation Ax = b.
 
-    Notes: This code is copied from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
+    Notes: This code is adapted from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
     """
     if cg_iters is None:
         cg_iters = b.numel()
@@ -101,27 +101,30 @@ def _flat_conjugate_gradient_solve(
     p = b.clone()
     r = b.clone()
     x = torch.zeros_like(b)
+    z = f_Ax(p)
     rdotr = torch.dot(r, r)
+    v = rdotr / torch.dot(p, z)
+    newrdotr = rdotr
+    mu = newrdotr / rdotr
 
-    import pdb; pdb.set_trace()
+    zeros_x = torch.zeros_like(x)
+    zeros_r = torch.zeros_like(r)
 
     for _ in range(cg_iters):
-        z = f_Ax(p)
-        import pdb; pdb.set_trace()
-        v = rdotr / torch.dot(p, z)
-        x += v * p
-        r -= v * z
-        newrdotr = torch.dot(r, r)
-        mu = newrdotr / rdotr
-        p = r + mu * p
-        import pdb; pdb.set_trace()
+        not_converged = rdotr > residual_tol
 
-        # Still executes loop but effectively stops update (can't break loop since we're using vmap)
-        # rdotr = torch.where(rdotr < residual_tol, rdotr, newrdotr)
+        z = torch.where(not_converged, f_Ax(p), z)
+        v = torch.where(not_converged, rdotr / torch.dot(p, z), v)
+        x += torch.where(not_converged, v * p, zeros_x)
+        r -= torch.where(not_converged, v * z, zeros_r)
+        newrdotr = torch.where(not_converged, torch.dot(r, r), newrdotr)
+        mu = torch.where(not_converged, newrdotr / rdotr, mu)
+        p = torch.where(not_converged, r + mu * p, p)
+        rdotr = torch.where(not_converged, newrdotr, rdotr)
+
         # rdotr = newrdotr
         # if rdotr < residual_tol:
         #     break
-    import pdb; pdb.set_trace()
     return x
 
 
@@ -179,10 +182,6 @@ def make_empirical_fisher_vp(
         (_, vnew) = torch.func.jvp(bound_batched_func_log_prob, (log_prob_params,), (v,))
         (_, vjp_fn) = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)
         result: Mapping[str, torch.Tensor] = vjp_fn(vnew / vnew.shape[0])[0]
-        import pdb; pdb.set_trace()
-        # result is batched over datapoints (via vmap), so we must sum out the batch dimension 0?
-        # return {k: torch.sum(v, dim=0) for k, v in result.items()}
-        assert result.keys() == v.keys() and all(result[k].shape == v[k].shape for k in result.keys())
         return result
 
     return _empirical_fisher_vp
@@ -247,8 +246,9 @@ def test_nmc_log_likelihood():
     class SimpleModel(pyro.nn.PyroModule):
         def forward(self):
             a = pyro.sample("a", dist.Normal(0, 1))
-            b = pyro.sample("b", dist.Normal(0, 1))
-            return pyro.sample("y", dist.Normal(a + b, 1))
+            with pyro.plate("data", 3, dim=-1):
+                b = pyro.sample("b", dist.Normal(0, 1))
+                return pyro.sample("y", dist.Normal(a + b, 1))
 
     class SimpleGuide(torch.nn.Module):
         def __init__(self):
@@ -258,17 +258,19 @@ def test_nmc_log_likelihood():
 
         def forward(self):
             a = pyro.sample("a", dist.Normal(self.loc_a, 1.))
-            b = pyro.sample("b", dist.Normal(self.loc_b, 1.))
+            with pyro.plate("data", 3, dim=-1):
+                b = pyro.sample("b", dist.Normal(self.loc_b, 1.))
+                return {"a": a, "b": b}
 
     model = SimpleModel()
     guide = SimpleGuide()
 
     # Create guide on latents a and b
-    num_samples_outer = 100
+    num_samples_outer = 10
     data = pyro.infer.Predictive(model, guide=guide, num_samples=num_samples_outer, return_sites=["y"], parallel=True)()
 
     # Create log likelihood function
-    log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=10000, max_plate_nesting=1)
+    log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=100, max_plate_nesting=1)
 
     v = {k: torch.ones_like(v) for k, v in log_prob.named_parameters()}
 
@@ -277,5 +279,13 @@ def test_nmc_log_likelihood():
 
     flatten_v, unflatten_v = make_flatten_unflatten(v)
     assert unflatten_v(flatten_v(v)) == v
-    fivp = make_empirical_inverse_fisher_vp(log_prob, data, cg_iters = 1)
+    fivp = make_empirical_inverse_fisher_vp(log_prob, data, cg_iters = 10)
     print(v, fivp(v))
+
+    d2 = pyro.infer.Predictive(model, num_samples=30, return_sites=["y"], parallel=True)()
+    log_prob_params, func_log_prob = make_functional_call(log_prob)
+
+    def eif(d: Point[torch.Tensor]) -> Mapping[str, torch.Tensor]:
+        return fivp(torch.func.grad(lambda params: func_log_prob(params, d))(log_prob_params))
+
+    print(torch.vmap(eif)(d2))
