@@ -1,15 +1,17 @@
-import inspect
 import collections
 import functools
+import inspect
 from typing import Callable, Dict, Optional, Tuple, TypeVar
-import torch
 
+import torch
 
 T = TypeVar("T")
 
 
 @functools.singledispatch
-def make_flatten_unflatten(v) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
+def make_flatten_unflatten(
+    v,
+) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
     raise NotImplementedError
 
 
@@ -34,13 +36,11 @@ def _make_flatten_unflatten_tuple(v: Tuple[torch.Tensor, ...]):
 
 @make_flatten_unflatten.register(dict)
 def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
-
     def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
         r"""
         Flatten a dictionary of tensors into a single vector.
         """
         return torch.cat([v.flatten() for k, v in d.items()])
-
 
     def unflatten(x: torch.Tensor) -> Dict[str, torch.Tensor]:
         r"""
@@ -69,7 +69,11 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
 
 
 def _flat_conjugate_gradient_solve(
-    f_Ax: Callable[[torch.Tensor], torch.Tensor], b: torch.Tensor, *, cg_iters: Optional[int] = None, residual_tol: float = 1e-10
+    f_Ax: Callable[[torch.Tensor], torch.Tensor],
+    b: torch.Tensor,
+    *,
+    cg_iters: Optional[int] = None,
+    residual_tol: float = 1e-10
 ) -> torch.Tensor:
     r"""Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
 

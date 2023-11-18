@@ -12,7 +12,7 @@ from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from torch.func import functional_call
 from functools import partial
-from utils import conjugate_gradient_solve
+from chirho.robust.utils import conjugate_gradient_solve
 
 pyro.settings.set(module_local_params=True)
 
@@ -40,6 +40,7 @@ def make_empirical_fisher_vp(
 
     def _empirical_fisher_vp(v: T) -> T:
         params = dict(log_prob.named_parameters())
+        # TODO: I think vnew = RHS[1]
         vnew = torch.func.jvp(partial(torch.func.functional_call, log_prob), params, v)
         (_, vjp_fn) = torch.func.vjp(partial(torch.func.functional_call, log_prob), params)
         return vjp_fn(vnew)
@@ -71,21 +72,39 @@ class NMCLogLikelihood(torch.nn.Module):
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
+    
+    def _vectorized_log_prob(self, single_datapoint: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        masked_guide = pyro.poutine.mask(mask=False)(self.guide) # Mask all sites in guide
+        masked_model = UnmaskNamedSites(names=set(single_datapoint.keys()))(condition(data=single_datapoint)(self.model))
+        log_weights = pyro.infer.importance.vectorized_importance_weights(masked_model, masked_guide, *args, num_samples=self.num_samples, max_plate_nesting=1, **kwargs)[0]
+        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+    
+    def vectorized_log_prob(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        num_monte_carlo_outer = data[next(iter(data))].shape[0]
+        log_prob_func = torch.func.vmap(
+            torch.func.functionalize(pyro.validation_enabled(False)(partial(torch.func.functional_call, self._vectorized_log_prob))),
+            in_dims=(None, 0),
+            randomness='different'
+        )
+        # log_prob_func = torch.func.vmap(
+        #     pyro.validation_enabled(False)(self._vectorized_log_prob),
+        #     in_dims=(0,),
+        #     randomness='different'
+        # )
+        import pdb; pdb.set_trace()
+        pyro.validation_enabled(False)(self._vectorized_log_prob)
+        # return log_prob_func(dict(self.named_parameters()), data)[0] / (num_monte_carlo_outer ** 0.5)
+        return log_prob_func(data)[0] / (num_monte_carlo_outer ** 0.5)
 
     def forward(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        num_monte_carlo_outer = data[next(iter(data))].shape[0]
-        # if num_monte_inner is None:
-        #     # Optimal scaling for inner expectation: 
-        #     # see https://arxiv.org/pdf/1709.06181.pdf
-        #     num_monte_inner = num_monte_carlo_outer ** 2    
-        
+        num_monte_carlo_outer = data[next(iter(data))].shape[0]        
         log_weights = []
         for i in range(num_monte_carlo_outer):
             log_weights_i = []
             for j in range(self.num_samples):
                 masked_guide = pyro.poutine.mask(mask=False)(self.guide) # Mask all sites in guide
                 masked_model = UnmaskNamedSites(names=set(data.keys()))(condition(data={k: v[i] for k, v in data.items()})(self.model))
-                log_weight_ij = pyro.infer.Trace_ELBO().differentiable_loss(masked_model, masked_guide, *args, **kwargs)
+                log_weight_ij = -1. * pyro.infer.Trace_ELBO().differentiable_loss(masked_model, masked_guide, *args, **kwargs) # -1 since negative elbo here
                 log_weights_i.append(log_weight_ij)
             log_weight_i = torch.logsumexp(torch.stack(log_weights_i), dim=0) - math.log(self.num_samples)
             log_weights.append(log_weight_i)

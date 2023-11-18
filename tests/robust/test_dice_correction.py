@@ -1,13 +1,14 @@
-import pyro
-import math
 import collections
+import math
 from functools import partial
-import pyro.distributions as dist
-import torch
 from typing import Callable, Dict, List, Optional
 
+import pyro
+import pyro.distributions as dist
+import torch
+
 from chirho.robust import one_step_correction
-from chirho.robust.functionals import dice_correction, average_treatment_effect
+from chirho.robust.functionals import average_treatment_effect, dice_correction
 from chirho.robust.utils import _flatten_dict, _unflatten_dict
 
 
