@@ -1,51 +1,214 @@
+import functools
 import math
-import collections
+from typing import (
+    Callable,
+    Concatenate,
+    Container,
+    Dict,
+    Mapping,
+    Optional,
+    ParamSpec,
+    Tuple,
+    TypeVar,
+)
+
 import pyro
-from typing import Container, ParamSpec, Callable, Tuple, TypeVar, Optional, Dict, List, Protocol
 import torch
-from pyro.infer import Predictive
-from pyro.infer import Trace_ELBO
-from pyro.infer.elbo import ELBOModule
-from pyro.infer.importance import vectorized_importance_weights
-from pyro.poutine import block, replay, trace, mask
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
-from torch.func import functional_call
-from functools import partial
-from chirho.robust.utils import conjugate_gradient_solve
 
 pyro.settings.set(module_local_params=True)
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
-T = TypeVar("T") # This will be a torch.Tensor usually
+T = TypeVar("T")  # This will be a torch.Tensor usually
 
 Point = dict[str, T]
 Guide = Callable[P, Optional[T | Point[T]]]
 
 
-def make_empirical_inverse_fisher_vp(
-    log_prob: torch.nn.Module,
-    **solver_kwargs,
-) -> Callable:
+@functools.singledispatch
+def make_flatten_unflatten(
+    v,
+) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
+    raise NotImplementedError
 
-    fvp = make_empirical_fisher_vp(log_prob)
-    return lambda v: conjugate_gradient_solve(fvp, v, **solver_kwargs)
+
+@make_flatten_unflatten.register(tuple)
+def _make_flatten_unflatten_tuple(v: Tuple[torch.Tensor, ...]):
+    sizes = [x.size() for x in v]
+
+    def flatten(xs: Tuple[torch.Tensor, ...]) -> torch.Tensor:
+        return torch.cat([x.reshape(-1) for x in xs], dim=0)
+
+    def unflatten(x: torch.Tensor) -> Tuple[torch.Tensor, ...]:
+        tensors = []
+        i = 0
+        for size in sizes:
+            num_elements = torch.prod(torch.tensor(size))
+            tensors.append(x[i : i + num_elements].view(size))
+            i += num_elements
+        return tuple(tensors)
+
+    return flatten, unflatten
+
+
+@make_flatten_unflatten.register(dict)
+def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
+    def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
+        r"""
+        Flatten a dictionary of tensors into a single vector.
+        """
+        return torch.cat([v.flatten() for k, v in d.items()])
+
+    def unflatten(x: torch.Tensor) -> Dict[str, torch.Tensor]:
+        r"""
+        Unflatten a vector into a dictionary of tensors.
+        """
+        return dict(
+            zip(
+                d.keys(),
+                [
+                    v_flat.reshape(v.shape)
+                    for v, v_flat in zip(
+                        d.values(), torch.split(x, [v.numel() for k, v in d.items()])
+                    )
+                ],
+            )
+        )
+
+    return flatten, unflatten
+
+
+def _flat_conjugate_gradient_solve(
+    f_Ax: Callable[[torch.Tensor], torch.Tensor],
+    b: torch.Tensor,
+    *,
+    cg_iters: Optional[int] = None,
+    residual_tol: float = 1e-10,
+) -> torch.Tensor:
+    r"""Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
+
+    Args:
+        f_Ax (callable): A function to compute matrix vector product.
+        b (torch.Tensor): Right hand side of the equation to solve.
+        cg_iters (int): Number of iterations to run conjugate gradient
+            algorithm.
+        residual_tol (float): Tolerence for convergence.
+
+    Returns:
+        torch.Tensor: Solution x* for equation Ax = b.
+
+    Notes: This code is adapted from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
+    """
+    if cg_iters is None:
+        cg_iters = b.numel()
+
+    p = b.clone()
+    r = b.clone()
+    x = torch.zeros_like(b)
+    z = f_Ax(p)
+    rdotr = torch.dot(r, r)
+    v = rdotr / torch.dot(p, z)
+    newrdotr = rdotr
+    mu = newrdotr / rdotr
+
+    zeros_x = torch.zeros_like(x)
+    zeros_r = torch.zeros_like(r)
+
+    for _ in range(cg_iters):
+        not_converged = rdotr > residual_tol
+
+        z = torch.where(not_converged, f_Ax(p), z)
+        v = torch.where(not_converged, rdotr / torch.dot(p, z), v)
+        x += torch.where(not_converged, v * p, zeros_x)
+        r -= torch.where(not_converged, v * z, zeros_r)
+        newrdotr = torch.where(not_converged, torch.dot(r, r), newrdotr)
+        mu = torch.where(not_converged, newrdotr / rdotr, mu)
+        p = torch.where(not_converged, r + mu * p, p)
+        rdotr = torch.where(not_converged, newrdotr, rdotr)
+
+        # rdotr = newrdotr
+        # if rdotr < residual_tol:
+        #     break
+    return x
+
+
+def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
+    flatten, unflatten = make_flatten_unflatten(b)
+
+    def f_Ax_flat(v: torch.Tensor) -> torch.Tensor:
+        v_unflattened = unflatten(v)
+        result_unflattened = f_Ax(v_unflattened)
+        return flatten(result_unflattened)
+
+    return unflatten(_flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs))
+
+
+def make_functional_call(
+    mod: Callable[P, T]
+) -> Tuple[
+    Mapping[str, torch.Tensor], Callable[Concatenate[Mapping[str, torch.Tensor], P], T]
+]:
+    assert isinstance(mod, torch.nn.Module)
+    return dict(mod.named_parameters()), torch.func.functionalize(
+        pyro.validation_enabled(False)(
+            functools.partial(torch.func.functional_call, mod)
+        )
+    )
+
+
+def make_bound_batched_func_log_prob(
+    log_prob: Callable[[T], torch.Tensor], data: T
+) -> Tuple[
+    Mapping[str, torch.Tensor], Callable[[Mapping[str, torch.Tensor]], torch.Tensor]
+]:
+    assert isinstance(log_prob, torch.nn.Module)
+    log_prob_params_and_fn = make_functional_call(log_prob)
+    log_prob_params: Mapping[str, torch.Tensor] = log_prob_params_and_fn[0]
+    func_log_prob: Callable[
+        [Mapping[str, torch.Tensor], T], torch.Tensor
+    ] = log_prob_params_and_fn[1]
+
+    batched_func_log_prob: Callable[
+        [Mapping[str, torch.Tensor], T], torch.Tensor
+    ] = torch.vmap(func_log_prob, in_dims=(None, 0), randomness="different")
+
+    def bound_batched_func_log_prob(params: Mapping[str, torch.Tensor]) -> torch.Tensor:
+        return batched_func_log_prob(params, data)
+
+    return log_prob_params, bound_batched_func_log_prob
 
 
 def make_empirical_fisher_vp(
-    log_prob: torch.nn.Module,
-) -> Callable:
+    log_prob: Callable[[T], torch.Tensor], data: T
+) -> Callable[[Mapping[str, torch.Tensor]], Mapping[str, torch.Tensor]]:
+    log_prob_params, bound_batched_func_log_prob = make_bound_batched_func_log_prob(
+        log_prob, data
+    )
 
-    def _empirical_fisher_vp(v: T) -> T:
-        params = dict(log_prob.named_parameters())
-        # TODO: I think vnew = RHS[1]
-        vnew = torch.func.jvp(partial(torch.func.functional_call, log_prob), params, v)
-        (_, vjp_fn) = torch.func.vjp(partial(torch.func.functional_call, log_prob), params)
-        return vjp_fn(vnew)
+    def _empirical_fisher_vp(
+        v: Mapping[str, torch.Tensor]
+    ) -> Mapping[str, torch.Tensor]:
+        (_, vnew) = torch.func.jvp(
+            bound_batched_func_log_prob, (log_prob_params,), (v,)
+        )
+        (_, vjp_fn) = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)
+        result: Mapping[str, torch.Tensor] = vjp_fn(vnew / vnew.shape[0])[0]
+        return result
 
     return _empirical_fisher_vp
+
+
+def make_empirical_inverse_fisher_vp(
+    log_prob: Callable[[T], torch.Tensor],
+    data: T,
+    **solver_kwargs,
+) -> Callable[[Mapping[str, torch.Tensor]], Mapping[str, torch.Tensor]]:
+    assert isinstance(log_prob, torch.nn.Module)
+    fvp = make_empirical_fisher_vp(log_prob, data)
+    return functools.partial(conjugate_gradient_solve, fvp, **solver_kwargs)
 
 
 class UnmaskNamedSites(DependentMaskMessenger):
@@ -55,144 +218,41 @@ class UnmaskNamedSites(DependentMaskMessenger):
         self.names = names
 
     def get_mask(
-        self, dist: pyro.distributions.Distribution, value: Optional[torch.Tensor], device: torch.device, name: str
+        self,
+        dist: pyro.distributions.Distribution,
+        value: Optional[torch.Tensor],
+        device: torch.device,
+        name: str,
     ) -> torch.Tensor:
         return torch.tensor(name in self.names, device=device)
 
 
-class NMCLogLikelihood(torch.nn.Module):
-
+class NMCLogPredictiveLikelihood(torch.nn.Module):
     def __init__(
         self,
-        model: pyro.nn.PyroModule,
-        guide: pyro.nn.PyroModule,
-        num_samples: int,
+        model: torch.nn.Module,
+        guide: torch.nn.Module,
+        *,
+        num_samples: int = 1,
+        max_plate_nesting: int = 1,
     ):
         super().__init__()
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
-    
-    def _vectorized_log_prob(self, single_datapoint: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        masked_guide = pyro.poutine.mask(mask=False)(self.guide) # Mask all sites in guide
-        masked_model = UnmaskNamedSites(names=set(single_datapoint.keys()))(condition(data=single_datapoint)(self.model))
-        log_weights = pyro.infer.importance.vectorized_importance_weights(masked_model, masked_guide, *args, num_samples=self.num_samples, max_plate_nesting=1, **kwargs)[0]
-        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
-    
-    def vectorized_log_prob(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        num_monte_carlo_outer = data[next(iter(data))].shape[0]
-        log_prob_func = torch.func.vmap(
-            torch.func.functionalize(pyro.validation_enabled(False)(partial(torch.func.functional_call, self._vectorized_log_prob))),
-            in_dims=(None, 0),
-            randomness='different'
+        self.max_plate_nesting = max_plate_nesting
+
+    def forward(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
+        masked_guide = pyro.poutine.mask(mask=False)(self.guide)
+        masked_model = UnmaskNamedSites(names=set(data.keys()))(
+            condition(data=data)(self.model)
         )
-        # log_prob_func = torch.func.vmap(
-        #     pyro.validation_enabled(False)(self._vectorized_log_prob),
-        #     in_dims=(0,),
-        #     randomness='different'
-        # )
-        import pdb; pdb.set_trace()
-        pyro.validation_enabled(False)(self._vectorized_log_prob)
-        # return log_prob_func(dict(self.named_parameters()), data)[0] / (num_monte_carlo_outer ** 0.5)
-        return log_prob_func(data)[0] / (num_monte_carlo_outer ** 0.5)
-
-    def forward(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        num_monte_carlo_outer = data[next(iter(data))].shape[0]        
-        log_weights = []
-        for i in range(num_monte_carlo_outer):
-            log_weights_i = []
-            for j in range(self.num_samples):
-                masked_guide = pyro.poutine.mask(mask=False)(self.guide) # Mask all sites in guide
-                masked_model = UnmaskNamedSites(names=set(data.keys()))(condition(data={k: v[i] for k, v in data.items()})(self.model))
-                log_weight_ij = -1. * pyro.infer.Trace_ELBO().differentiable_loss(masked_model, masked_guide, *args, **kwargs) # -1 since negative elbo here
-                log_weights_i.append(log_weight_ij)
-            log_weight_i = torch.logsumexp(torch.stack(log_weights_i), dim=0) - math.log(self.num_samples)
-            log_weights.append(log_weight_i)
-
-        log_weights = torch.stack(log_weights)
-        assert log_weights.shape == (num_monte_carlo_outer,)
-        return log_weights / (num_monte_carlo_outer ** 0.5)
-
-
-class NMCLogLikelihoodSingle(NMCLogLikelihood):
-    def forward(self, data: Point[torch.Tensor], *args, **kwargs) -> torch.Tensor:
-        masked_guide = pyro.poutine.mask(mask=False)(self.guide) # Mask all sites in guide
-        masked_model = UnmaskNamedSites(names=set(data.keys()))(condition(data=data)(self.model))
-        log_weights = pyro.infer.importance.vectorized_importance_weights(masked_model, masked_guide, *args, num_samples=self.num_samples, max_plate_nesting=1, **kwargs)[0]
-        return torch.logsumexp(log_weights * self.guide.zzz.w, dim=0) - math.log(self.num_samples)
-
-
-class DummyAutoNormal(pyro.infer.autoguide.AutoNormal):
-
-    def __getattr__(self, name):
-        # PyroParams trigger pyro.param statements.
-        if "_pyro_params" in self.__dict__:
-            _pyro_params = self.__dict__["_pyro_params"]
-            if name in _pyro_params:
-                constraint, event_dim = _pyro_params[name]
-                unconstrained_value = getattr(self, name + "_unconstrained")
-                import weakref
-                constrained_value = torch.distributions.transform_to(constraint)(unconstrained_value)
-                constrained_value.unconstrained = weakref.ref(unconstrained_value)
-                return constrained_value
-        return super().__getattr__(name)
-
-
-if __name__ == "__main__":
-    import pyro
-    import pyro.distributions as dist
-
-    # Create simple pyro model
-    class SimpleModel(pyro.nn.PyroModule):
-        def forward(self):
-            a = pyro.sample("a", dist.Normal(0, 1))
-            b = pyro.sample("b", dist.Normal(0, 1))
-            return pyro.sample("y", dist.Normal(a + b, 1))
-
-    model = SimpleModel()
-
-    # Create guide on latents a and b
-    num_monte_carlo_outer = 100
-    guide = DummyAutoNormal(block(model, hide=["y"]))
-    zzz = pyro.nn.PyroModule()
-    zzz.w = pyro.nn.PyroParam(torch.rand(10), dist.constraints.positive)
-    guide()
-    guide.zzz = zzz
-    print(dict(guide.named_parameters()))
-    data = Predictive(model, guide=guide, num_samples=num_monte_carlo_outer, return_sites=["y"])()
-
-    # Create log likelihood function
-    log_prob = NMCLogLikelihoodSingle(model, guide, num_samples=10)
-
-    log_prob_func = torch.func.vmap(
-        torch.func.functionalize(pyro.validation_enabled(False)(partial(torch.func.functional_call, log_prob))),
-        # pyro.validation_enabled(False)(partial(torch.func.functional_call, log_prob)),
-        in_dims=(None, 0),
-        randomness='different'
-    )
-
-    print(log_prob_func(dict(log_prob.named_parameters()), data)[0])
-
-    # func
-    grad_log_prob = torch.func.vjp(log_prob_func, dict(log_prob.named_parameters()), data)[1]
-    print(grad_log_prob(torch.ones(num_monte_carlo_outer))[0])
-
-    # autograd.functional
-    param_dict = collections.OrderedDict(log_prob.named_parameters())
-    print(dict(zip(param_dict.keys(), torch.autograd.functional.vjp(
-        lambda *params: log_prob_func(dict(zip(param_dict.keys(), params)), data),
-        tuple(param_dict.values()),
-        torch.ones(num_monte_carlo_outer)
-    )[1])))
-
-    # print(torch.autograd.grad(partial(torch.func.functional_call, log_prob)(dict(log_prob.named_parameters()), data), tuple(log_prob.parameters())))
-    # fvp = make_empirical_fisher_vp(log_prob) 
-
-    # v = tuple(torch.ones_like(p) for p in guide.parameters())
-
-    # print(v, fvp(v))
-    
-
-
-
-
+        log_weights = pyro.infer.importance.vectorized_importance_weights(
+            masked_model,
+            masked_guide,
+            *args,
+            num_samples=self.num_samples,
+            max_plate_nesting=self.max_plate_nesting,
+            **kwargs,
+        )[0]
+        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
