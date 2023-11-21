@@ -1,14 +1,16 @@
 from typing import Mapping
+
 import pyro
 import pyro.distributions as dist
 import torch
+
 from chirho.observational.handlers import condition
 from chirho.robust.internals import (
     NMCLogPredictiveLikelihood,
+    Point,
     make_empirical_inverse_fisher_vp,
     make_flatten_unflatten,
     make_functional_call,
-    Point,
 )
 
 pyro.settings.set(module_local_params=True)

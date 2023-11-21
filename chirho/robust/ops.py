@@ -1,15 +1,8 @@
 import functools
-from typing import (
-    Any,
-    Callable,
-    Concatenate,
-    Mapping,
-    Optional,
-    ParamSpec,
-    TypeVar,
-)
+from typing import Any, Callable, Concatenate, Mapping, Optional, ParamSpec, TypeVar
 
 import torch
+
 from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
@@ -29,7 +22,6 @@ def influence_fn(
     functional: Optional[Functional[P, S]] = None,
     **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
-
     from chirho.robust.internals import linearize, make_functional_call
 
     linearized = linearize(model, guide, **linearize_kwargs)
@@ -45,9 +37,7 @@ def influence_fn(
     def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
         param_eif = linearized(point, *args, **kwargs)
         return torch.func.jvp(
-            lambda p: func_target(p, *args, **kwargs),
-            (target_params,),
-            (param_eif,)
+            lambda p: func_target(p, *args, **kwargs), (target_params,), (param_eif,)
         )[1]
 
     return _fn

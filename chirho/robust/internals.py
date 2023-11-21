@@ -14,9 +14,10 @@ from typing import (
 
 import pyro
 import torch
+
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
-from chirho.robust.ops import Model, Point, ParamDict
+from chirho.robust.ops import Model, ParamDict, Point
 
 pyro.settings.set(module_local_params=True)
 
@@ -24,6 +25,7 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
+
 
 @functools.singledispatch
 def make_flatten_unflatten(
@@ -148,10 +150,12 @@ def make_functional_call(
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
     assert isinstance(mod, torch.nn.Module)
     param_dict: ParamDict = dict(mod.named_parameters())
-    mod_func: Callable[Concatenate[ParamDict, P], T] = functools.partial(torch.func.functional_call, mod)
-    functionalized_mod_func: Callable[Concatenate[ParamDict, P], T] = torch.func.functionalize(
-        pyro.validation_enabled(False)(mod_func)
+    mod_func: Callable[Concatenate[ParamDict, P], T] = functools.partial(
+        torch.func.functional_call, mod
     )
+    functionalized_mod_func: Callable[
+        Concatenate[ParamDict, P], T
+    ] = torch.func.functionalize(pyro.validation_enabled(False)(mod_func))
     return param_dict, functionalized_mod_func
 
 
@@ -160,21 +164,20 @@ def make_empirical_fisher_vp(
     log_prob_params: ParamDict,
     data: Point[T],
     *args: P.args,
-    **kwargs: P.kwargs
+    **kwargs: P.kwargs,
 ) -> Callable[[ParamDict], ParamDict]:
-
-    batched_func_log_prob: Callable[
-        [ParamDict, Point[T]], torch.Tensor
-    ] = torch.vmap(
+    batched_func_log_prob: Callable[[ParamDict, Point[T]], torch.Tensor] = torch.vmap(
         lambda p, data: func_log_prob(p, data, *args, **kwargs),
         in_dims=(None, 0),
-        randomness="different"
+        randomness="different",
     )
 
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
         return batched_func_log_prob(params, data)
 
-    jvp_fn = functools.partial(torch.func.jvp, bound_batched_func_log_prob, (log_prob_params,))
+    jvp_fn = functools.partial(
+        torch.func.jvp, bound_batched_func_log_prob, (log_prob_params,)
+    )
     vjp_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
@@ -201,7 +204,6 @@ class UnmaskNamedSites(DependentMaskMessenger):
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
-
     def __init__(
         self,
         model: torch.nn.Module,
@@ -216,7 +218,9 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
 
-    def forward(self, data: Point[T], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
+    def forward(
+        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
+    ) -> torch.Tensor:
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
         masked_model = UnmaskNamedSites(names=set(data.keys()))(
             condition(data=data)(self.model)
@@ -242,11 +246,10 @@ def linearize(
     cg_iters: Optional[int] = None,
     cg_tol: float = 1e-10,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
-
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
     if num_samples_inner is None:
-        num_samples_inner = num_samples_outer ** 2
+        num_samples_inner = num_samples_outer**2
 
     predictive = pyro.infer.Predictive(
         model,
@@ -256,21 +259,22 @@ def linearize(
     )
 
     log_prob = NMCLogPredictiveLikelihood(
-        model,
-        guide,
-        num_samples=num_samples_inner,
-        max_plate_nesting=max_plate_nesting
+        model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
-    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=cg_iters, cg_tol=cg_tol)
+    cg_solver = functools.partial(
+        conjugate_gradient_solve, cg_iters=cg_iters, cg_tol=cg_tol
+    )
 
     @functools.wraps(score_fn)
     def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = predictive(*args, **kwargs)
-        fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data, *args, **kwargs)
+        fvp = make_empirical_fisher_vp(
+            func_log_prob, log_prob_params, data, *args, **kwargs
+        )
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
         return cg_solver(fvp, point_score)
 
