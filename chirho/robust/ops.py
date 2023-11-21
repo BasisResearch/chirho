@@ -30,6 +30,7 @@ def influence_fn(
         return linearized
 
     target = functional(model, guide)
+    # TODO check that target_params == model_params | guide_params
     assert isinstance(target, torch.nn.Module)
     target_params, func_target = make_functional_call(target)
 

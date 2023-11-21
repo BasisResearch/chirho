@@ -1,78 +1,76 @@
-from typing import Mapping
+from typing import ParamSpec, TypeVar
 
 import pyro
 import pyro.distributions as dist
+import pytest
 import torch
 
-from chirho.observational.handlers import condition
-from chirho.robust.internals import (
-    NMCLogPredictiveLikelihood,
-    Point,
-    make_empirical_inverse_fisher_vp,
-    make_flatten_unflatten,
-    make_functional_call,
-)
+from chirho.robust.ops import influence_fn
 
 pyro.settings.set(module_local_params=True)
 
+P = ParamSpec("P")
+Q = ParamSpec("Q")
+S = TypeVar("S")
+T = TypeVar("T")
 
-def test_nmc_log_likelihood():
-    # Create simple pyro model
-    class SimpleModel(pyro.nn.PyroModule):
-        def forward(self):
-            a = pyro.sample("a", dist.Normal(0, 1))
-            with pyro.plate("data", 3, dim=-1):
-                b = pyro.sample("b", dist.Normal(0, 1))
-                return pyro.sample("y", dist.Normal(a + b, 1))
 
-    class SimpleGuide(torch.nn.Module):
-        def __init__(self):
-            super().__init__()
-            self.loc_a = torch.nn.Parameter(torch.rand(()))
-            self.loc_b = torch.nn.Parameter(torch.rand(()))
+class SimpleModel(pyro.nn.PyroModule):
+    def forward(self):
+        a = pyro.sample("a", dist.Normal(0, 1))
+        with pyro.plate("data", 3, dim=-1):
+            b = pyro.sample("b", dist.Normal(a, 1))
+            return pyro.sample("y", dist.Normal(a + b, 1))
 
-        def forward(self):
-            a = pyro.sample("a", dist.Normal(self.loc_a, 1.0))
-            with pyro.plate("data", 3, dim=-1):
-                b = pyro.sample("b", dist.Normal(self.loc_b, 1.0))
-                return {"a": a, "b": b}
 
-    model = SimpleModel()
-    guide = SimpleGuide()
+class SimpleGuide(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loc_a = torch.nn.Parameter(torch.rand(()))
+        self.loc_b = torch.nn.Parameter(torch.rand((3,)))
 
-    # Create guide on latents a and b
-    num_samples_outer = 10000
-    data = pyro.infer.Predictive(
+    def forward(self):
+        a = pyro.sample("a", dist.Normal(self.loc_a, 1.0))
+        with pyro.plate("data", 3, dim=-1):
+            b = pyro.sample("b", dist.Normal(self.loc_b, 1.0))
+            return {"a": a, "b": b}
+
+
+@pytest.mark.parametrize("model,guide", [(SimpleModel(), SimpleGuide())])
+def test_nmc_influence_smoke(model, guide):
+    num_samples_outer = 100
+    param_eif = influence_fn(
         model,
-        guide=guide,
-        num_samples=num_samples_outer,
-        return_sites=["y"],
-        parallel=True,
-    )()
-
-    # Create log likelihood function
-    log_prob = NMCLogPredictiveLikelihood(
-        model, guide, num_samples=1, max_plate_nesting=1
+        guide,
+        max_plate_nesting=1,
+        num_samples_outer=num_samples_outer,
     )
 
-    v = {k: torch.ones_like(v) for k, v in log_prob.named_parameters()}
+    with torch.no_grad():
+        test_datum = {
+            k: v[0]
+            for k, v in pyro.infer.Predictive(
+                model, num_samples=2, return_sites=["y"], parallel=True
+            )().items()
+        }
 
-    # fvp = make_empirical_fisher_vp(log_prob, data)
-    # print(v, fvp(v))
+    print(test_datum, param_eif(test_datum))
 
-    flatten_v, unflatten_v = make_flatten_unflatten(v)
-    assert unflatten_v(flatten_v(v)) == v
-    fivp = make_empirical_inverse_fisher_vp(log_prob, data, cg_iters=10)
-    print(v, fivp(v))
 
-    d2 = pyro.infer.Predictive(
-        model, num_samples=30, return_sites=["y"], parallel=True
-    )()
-    log_prob_params, func_log_prob = make_functional_call(log_prob)
+@pytest.mark.parametrize("model,guide", [(SimpleModel(), SimpleGuide())])
+def test_nmc_influence_vmap_smoke(model, guide):
+    num_samples_outer = 100
+    param_eif = influence_fn(
+        model,
+        guide,
+        max_plate_nesting=1,
+        num_samples_outer=num_samples_outer,
+    )
 
-    def eif(d: Point[torch.Tensor]) -> Mapping[str, torch.Tensor]:
-        return fivp(
-            torch.func.grad(lambda params: func_log_prob(params, d))(log_prob_params)
-        )
+    with torch.no_grad():
+        test_data = pyro.infer.Predictive(
+            model, num_samples=4, return_sites=["y"], parallel=True
+        )()
 
-    print(torch.vmap(eif)(d2))
+    batch_param_eif = torch.vmap(param_eif, randomness="different")
+    print(test_data, batch_param_eif(test_data))
