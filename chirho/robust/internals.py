@@ -14,10 +14,9 @@ from typing import (
 
 import pyro
 import torch
-
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
-from chirho.robust.ops import Model, ParamDict, Point
+from chirho.robust.ops import Model, Point, ParamDict
 
 pyro.settings.set(module_local_params=True)
 
@@ -32,25 +31,6 @@ def make_flatten_unflatten(
     v,
 ) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
     raise NotImplementedError
-
-
-@make_flatten_unflatten.register(tuple)
-def _make_flatten_unflatten_tuple(v: Tuple[torch.Tensor, ...]):
-    sizes = [x.size() for x in v]
-
-    def flatten(xs: Tuple[torch.Tensor, ...]) -> torch.Tensor:
-        return torch.cat([x.reshape(-1) for x in xs], dim=0)
-
-    def unflatten(x: torch.Tensor) -> Tuple[torch.Tensor, ...]:
-        tensors = []
-        i = 0
-        for size in sizes:
-            num_elements = torch.prod(torch.tensor(size))
-            tensors.append(x[i : i + num_elements].view(size))
-            i += num_elements
-        return tuple(tensors)
-
-    return flatten, unflatten
 
 
 @make_flatten_unflatten.register(dict)
@@ -138,7 +118,7 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
     flatten, unflatten = make_flatten_unflatten(b)
 
     def f_Ax_flat(v: torch.Tensor) -> torch.Tensor:
-        v_unflattened = unflatten(v)
+        v_unflattened: T = unflatten(v)
         result_unflattened = f_Ax(v_unflattened)
         return flatten(result_unflattened)
 
@@ -150,12 +130,10 @@ def make_functional_call(
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
     assert isinstance(mod, torch.nn.Module)
     param_dict: ParamDict = dict(mod.named_parameters())
-    mod_func: Callable[Concatenate[ParamDict, P], T] = functools.partial(
-        torch.func.functional_call, mod
+    mod_func: Callable[Concatenate[ParamDict, P], T] = functools.partial(torch.func.functional_call, mod)
+    functionalized_mod_func: Callable[Concatenate[ParamDict, P], T] = torch.func.functionalize(
+        pyro.validation_enabled(False)(mod_func)
     )
-    functionalized_mod_func: Callable[
-        Concatenate[ParamDict, P], T
-    ] = torch.func.functionalize(pyro.validation_enabled(False)(mod_func))
     return param_dict, functionalized_mod_func
 
 
@@ -164,20 +142,21 @@ def make_empirical_fisher_vp(
     log_prob_params: ParamDict,
     data: Point[T],
     *args: P.args,
-    **kwargs: P.kwargs,
+    **kwargs: P.kwargs
 ) -> Callable[[ParamDict], ParamDict]:
-    batched_func_log_prob: Callable[[ParamDict, Point[T]], torch.Tensor] = torch.vmap(
+
+    batched_func_log_prob: Callable[
+        [ParamDict, Point[T]], torch.Tensor
+    ] = torch.vmap(
         lambda p, data: func_log_prob(p, data, *args, **kwargs),
         in_dims=(None, 0),
-        randomness="different",
+        randomness="different"
     )
 
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
         return batched_func_log_prob(params, data)
 
-    jvp_fn = functools.partial(
-        torch.func.jvp, bound_batched_func_log_prob, (log_prob_params,)
-    )
+    jvp_fn = functools.partial(torch.func.jvp, bound_batched_func_log_prob, (log_prob_params,))
     vjp_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
@@ -197,13 +176,14 @@ class UnmaskNamedSites(DependentMaskMessenger):
         self,
         dist: pyro.distributions.Distribution,
         value: Optional[torch.Tensor],
-        device: torch.device,
-        name: str,
+        device: torch.device = torch.device("cpu"),
+        name: Optional[str] = None,
     ) -> torch.Tensor:
-        return torch.tensor(name in self.names, device=device)
+        return torch.tensor(name is None or name in self.names, device=device)
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -218,9 +198,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
 
-    def forward(
-        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
-    ) -> torch.Tensor:
+    def forward(self, data: Point[T], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
         masked_model = UnmaskNamedSites(names=set(data.keys()))(
             condition(data=data)(self.model)
@@ -246,10 +224,11 @@ def linearize(
     cg_iters: Optional[int] = None,
     cg_tol: float = 1e-10,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
+
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
     if num_samples_inner is None:
-        num_samples_inner = num_samples_outer**2
+        num_samples_inner = num_samples_outer ** 2
 
     predictive = pyro.infer.Predictive(
         model,
@@ -259,22 +238,21 @@ def linearize(
     )
 
     log_prob = NMCLogPredictiveLikelihood(
-        model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
+        model,
+        guide,
+        num_samples=num_samples_inner,
+        max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
-    cg_solver = functools.partial(
-        conjugate_gradient_solve, cg_iters=cg_iters, cg_tol=cg_tol
-    )
+    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=cg_iters, cg_tol=cg_tol)
 
     @functools.wraps(score_fn)
     def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = predictive(*args, **kwargs)
-        fvp = make_empirical_fisher_vp(
-            func_log_prob, log_prob_params, data, *args, **kwargs
-        )
+        fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data, *args, **kwargs)
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
         return cg_solver(fvp, point_score)
 
