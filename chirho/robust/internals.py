@@ -1,6 +1,7 @@
 import functools
 import math
 from typing import (
+    Any,
     Callable,
     Concatenate,
     Container,
@@ -191,10 +192,8 @@ def make_empirical_fisher_vp(
     def _empirical_fisher_vp(
         v: Mapping[str, torch.Tensor]
     ) -> Mapping[str, torch.Tensor]:
-        (_, vnew) = torch.func.jvp(
-            bound_batched_func_log_prob, (log_prob_params,), (v,)
-        )
-        (_, vjp_fn) = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)
+        vnew = torch.func.jvp(bound_batched_func_log_prob, (log_prob_params,), (v,))[1]
+        vjp_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
         result: Mapping[str, torch.Tensor] = vjp_fn(vnew / vnew.shape[0])[0]
         return result
 
@@ -256,3 +255,75 @@ class NMCLogPredictiveLikelihood(torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+
+
+def linearize(
+    model: Callable[P, Any],
+    guide: Callable[P, Any],
+    *,
+    max_plate_nesting: int,
+    num_samples_outer: int,
+    num_samples_inner: Optional[int] = None,
+    cg_iters: Optional[int] = None,
+    cg_tol: float = 1e-10,
+) -> Callable[Concatenate[Point[T], P], Mapping[str, torch.Tensor]]:
+
+    assert isinstance(model, torch.nn.Module)
+    assert isinstance(guide, torch.nn.Module)
+    if num_samples_inner is None:
+        num_samples_inner = num_samples_outer ** 2
+
+    predictive = pyro.infer.Predictive(
+        model,
+        guide=guide,
+        num_samples=num_samples_outer,
+        parallel=True,
+    )
+
+    log_prob = NMCLogPredictiveLikelihood(
+        model,
+        guide,
+        num_samples=num_samples_inner,
+        max_plate_nesting=max_plate_nesting
+    )
+    log_prob_params, log_prob_func = make_functional_call(log_prob)
+    score_fn = torch.func.grad(log_prob_func)
+
+    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=cg_iters, cg_tol=cg_tol)
+
+    @functools.wraps(score_fn)
+    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> Mapping[str, torch.Tensor]:
+        data = predictive(*args, **kwargs)
+        fvp = make_empirical_fisher_vp(log_prob, data)
+        point_score = score_fn(log_prob_params, point, *args, **kwargs)
+        return cg_solver(fvp, point_score)
+
+    return _fn
+
+
+def influence_fn(
+    model: Callable[P, Any],
+    guide: Callable[P, Any],
+    functional: Optional[Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]] = None,
+    **linearize_kwargs
+) -> Callable[Concatenate[Point[T], P], S]:
+
+    linearized = linearize(model, guide, **linearize_kwargs)
+
+    if functional is None:
+        return linearized
+
+    target = functional(model, guide)
+    assert isinstance(target, torch.nn.Module)
+    target_params, func_target = make_functional_call(target)
+
+    @functools.wraps(target)
+    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
+        param_eif = linearized(point, *args, **kwargs)
+        return torch.func.jvp(
+            lambda p: func_target(p, *args, **kwargs),
+            (target_params,),
+            (param_eif,)
+        )[1]
+
+    return _fn
