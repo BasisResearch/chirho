@@ -16,7 +16,7 @@ import pyro
 import torch
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
-from chirho.robust.ops import Model, Point, ParamDict, make_functional_call
+from chirho.robust.ops import Model, Point, ParamDict
 
 pyro.settings.set(module_local_params=True)
 
@@ -141,6 +141,18 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
         return flatten(result_unflattened)
 
     return unflatten(_flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs))
+
+
+def make_functional_call(
+    mod: Callable[P, T]
+) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
+    assert isinstance(mod, torch.nn.Module)
+    param_dict: ParamDict = dict(mod.named_parameters())
+    mod_func: Callable[Concatenate[ParamDict, P], T] = functools.partial(torch.func.functional_call, mod)
+    functionalized_mod_func: Callable[Concatenate[ParamDict, P], T] = torch.func.functionalize(
+        pyro.validation_enabled(False)(mod_func)
+    )
+    return param_dict, functionalized_mod_func
 
 
 def make_empirical_fisher_vp(
