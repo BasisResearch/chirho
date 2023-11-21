@@ -1,13 +1,11 @@
 import functools
 import math
 from typing import (
-    Any,
     Callable,
     Concatenate,
     Container,
     Dict,
     Generic,
-    Mapping,
     Optional,
     ParamSpec,
     Tuple,
@@ -18,20 +16,14 @@ import pyro
 import torch
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
-from chirho.observational.ops import Observation
+from chirho.robust.ops import Model, Point, ParamDict, make_functional_call
 
 pyro.settings.set(module_local_params=True)
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
-T = TypeVar("T")  # This will be a torch.Tensor usually
-
-Model = Callable[P, Any]
-Point = Mapping[str, Observation[T]]
-Functional = Callable[[Model[P], Model[P]], Callable[P, S]]
-ParamDict = Mapping[str, torch.Tensor]
-
+T = TypeVar("T")
 
 @functools.singledispatch
 def make_flatten_unflatten(
@@ -149,18 +141,6 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
         return flatten(result_unflattened)
 
     return unflatten(_flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs))
-
-
-def make_functional_call(
-    mod: Callable[P, T]
-) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
-    assert isinstance(mod, torch.nn.Module)
-    param_dict: ParamDict = dict(mod.named_parameters())
-    return param_dict, torch.func.functionalize(
-        pyro.validation_enabled(False)(
-            functools.partial(torch.func.functional_call, mod)
-        )
-    )
 
 
 def make_empirical_fisher_vp(
@@ -281,33 +261,5 @@ def linearize(
         fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data, *args, **kwargs)
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
         return cg_solver(fvp, point_score)
-
-    return _fn
-
-
-def influence_fn(
-    model: Model[P],
-    guide: Model[P],
-    functional: Optional[Functional[P, S]] = None,
-    **linearize_kwargs
-) -> Callable[Concatenate[Point[T], P], S]:
-
-    linearized = linearize(model, guide, **linearize_kwargs)
-
-    if functional is None:
-        return linearized
-
-    target = functional(model, guide)
-    assert isinstance(target, torch.nn.Module)
-    target_params, func_target = make_functional_call(target)
-
-    @functools.wraps(target)
-    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
-        param_eif = linearized(point, *args, **kwargs)
-        return torch.func.jvp(
-            lambda p: func_target(p, *args, **kwargs),
-            (target_params,),
-            (param_eif,)
-        )[1]
 
     return _fn
