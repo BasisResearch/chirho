@@ -1,4 +1,4 @@
-from typing import ParamSpec, TypeVar
+from typing import Callable, List, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -36,41 +36,78 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-@pytest.mark.parametrize("model,guide", [(SimpleModel(), SimpleGuide())])
-def test_nmc_influence_smoke(model, guide):
-    num_samples_outer = 100
+TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
+    (SimpleModel(), SimpleGuide(), {"y"}, 1),
+]
+
+
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize(
+    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
+)
+@pytest.mark.parametrize("cg_iters", [None, 1, 10])
+def test_nmc_param_influence_smoke(
+    model,
+    guide,
+    obs_names,
+    max_plate_nesting,
+    num_samples_outer,
+    num_samples_inner,
+    cg_iters,
+):
     param_eif = influence_fn(
         model,
         guide,
-        max_plate_nesting=1,
+        max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
     )
 
     with torch.no_grad():
         test_datum = {
             k: v[0]
             for k, v in pyro.infer.Predictive(
-                model, num_samples=2, return_sites=["y"], parallel=True
+                model, num_samples=2, return_sites=obs_names, parallel=True
             )().items()
         }
 
-    print(test_datum, param_eif(test_datum))
+    test_datum_eif: Mapping[str, torch.Tensor] = param_eif(test_datum)
+    for k, v in test_datum_eif.items():
+        assert not torch.isnan(v).any()
+        assert not torch.isinf(v).any()
 
 
-@pytest.mark.parametrize("model,guide", [(SimpleModel(), SimpleGuide())])
-def test_nmc_influence_vmap_smoke(model, guide):
-    num_samples_outer = 100
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize(
+    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
+)
+@pytest.mark.parametrize("cg_iters", [None, 1, 10])
+def test_nmc_param_influence_vmap_smoke(
+    model,
+    guide,
+    obs_names,
+    max_plate_nesting,
+    num_samples_outer,
+    num_samples_inner,
+    cg_iters,
+):
     param_eif = influence_fn(
         model,
         guide,
-        max_plate_nesting=1,
+        max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
     )
 
     with torch.no_grad():
         test_data = pyro.infer.Predictive(
-            model, num_samples=4, return_sites=["y"], parallel=True
+            model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
     batch_param_eif = torch.vmap(param_eif, randomness="different")
-    print(test_data, batch_param_eif(test_data))
+    test_data_eif: Mapping[str, torch.Tensor] = batch_param_eif(test_data)
+    for k, v in test_data_eif.items():
+        assert not torch.isnan(v).any()
+        assert not torch.isinf(v).any()
