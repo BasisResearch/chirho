@@ -34,6 +34,23 @@ def make_flatten_unflatten(
     raise NotImplementedError
 
 
+@make_flatten_unflatten.register(torch.Tensor)
+def _make_flatten_unflatten_tensor(v: torch.Tensor):
+    def flatten(v: torch.Tensor) -> torch.Tensor:
+        r"""
+        Flatten a tensor into a single vector.
+        """
+        return v.flatten()
+
+    def unflatten(x: torch.Tensor) -> torch.Tensor:
+        r"""
+        Unflatten a vector into a tensor.
+        """
+        return x.reshape(v.shape)
+
+    return flatten, unflatten
+
+
 @make_flatten_unflatten.register(dict)
 def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
     def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
