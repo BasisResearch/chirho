@@ -1,12 +1,16 @@
 import functools
-from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Concatenate, Optional, ParamSpec, TypeVar
 
 import pyro
 import torch
 
 from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
-from chirho.robust.internals.utils import make_flatten_unflatten, make_functional_call
-from chirho.robust.ops import Model, ParamDict, Point
+from chirho.robust.internals.utils import (
+    ParamDict,
+    make_flatten_unflatten,
+    make_functional_call,
+)
+from chirho.robust.ops import Point
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -106,8 +110,8 @@ def make_empirical_fisher_vp(
 
 
 def linearize(
-    model: Model[P],
-    guide: Model[P],
+    model: Callable[P, Any],
+    guide: Callable[P, Any],
     *,
     num_samples_outer: int,
     num_samples_inner: Optional[int] = None,

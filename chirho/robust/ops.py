@@ -10,15 +10,13 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 
-Model = Callable[P, Any]
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Model[P], Model[P]], Callable[P, S]]
-ParamDict = Mapping[str, torch.Tensor]
+Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
 
 
 def influence_fn(
-    model: Model[P],
-    guide: Model[P],
+    model: Callable[P, Any],
+    guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
     **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
@@ -29,6 +27,8 @@ def influence_fn(
     linearized = linearize(model, guide, **linearize_kwargs)
 
     if functional is None:
+        assert isinstance(model, torch.nn.Module)
+        assert isinstance(guide, torch.nn.Module)
         target = PredictiveFunctional(model, guide)
     else:
         target = functional(model, guide)

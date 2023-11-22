@@ -1,6 +1,6 @@
 import contextlib
 import math
-from typing import Container, Generic, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Container, Generic, Optional, ParamSpec, TypeVar
 
 import pyro
 import torch
@@ -8,7 +8,7 @@ import torch
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
-from chirho.robust.ops import Model, Point
+from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
 
@@ -35,22 +35,20 @@ class UnmaskNamedSites(DependentMaskMessenger):
 
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
-    model: Model[P]
-    guide: Model[P]
+    model: Callable[P, Any]
+    guide: Callable[P, Any]
     num_samples: int
     max_plate_nesting: Optional[int]
 
     def __init__(
         self,
-        model: Model[P],
-        guide: Model[P],
+        model: torch.nn.Module,
+        guide: torch.nn.Module,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
     ):
         super().__init__()
-        assert isinstance(model, torch.nn.Module)
-        assert isinstance(guide, torch.nn.Module)
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
@@ -98,8 +96,8 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
-    model: Model[P]
-    guide: Model[P]
+    model: Callable[P, Any]
+    guide: Callable[P, Any]
     num_samples: int
     max_plate_nesting: Optional[int]
 

@@ -1,17 +1,8 @@
 import functools
-from typing import (
-    Callable,
-    Concatenate,
-    Dict,
-    ParamSpec,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, Callable, Concatenate, Dict, Mapping, ParamSpec, Tuple, TypeVar
 
 import pyro
 import torch
-
-from chirho.robust.ops import Model, ParamDict
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -70,6 +61,9 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
     return flatten, unflatten
 
 
+ParamDict = Mapping[str, torch.Tensor]
+
+
 def make_functional_call(
     mod: Callable[P, T]
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
@@ -88,7 +82,7 @@ def make_functional_call(
 @pyro.validation_enabled(False)
 @torch.no_grad()
 def guess_max_plate_nesting(
-    model: Model[P], guide: Model[P], *args: P.args, **kwargs: P.kwargs
+    model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs
 ) -> int:
     elbo = pyro.infer.Trace_ELBO()
     elbo._guess_max_plate_nesting(model, guide, args, kwargs)
