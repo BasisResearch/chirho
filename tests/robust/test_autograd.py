@@ -5,7 +5,7 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.robust.ops import influence_fn
+from chirho.robust.internals import linearize
 
 pyro.settings.set(module_local_params=True)
 
@@ -67,7 +67,7 @@ def test_nmc_param_influence_smoke(
 ):
     model(), guide()  # initialize
 
-    param_eif = influence_fn(
+    param_eif = linearize(
         model,
         guide,
         max_plate_nesting=max_plate_nesting,
@@ -107,7 +107,7 @@ def test_nmc_param_influence_vmap_smoke(
 ):
     model(), guide()  # initialize
 
-    param_eif = influence_fn(
+    param_eif = linearize(
         model,
         guide,
         max_plate_nesting=max_plate_nesting,
