@@ -51,5 +51,5 @@ jobs:
       - name: Test
         shell: bash
         run: |
-          pytest tests/ -s -n auto --cov=chirho/ --cov-report=term-missing ${@-}
+          MKL_NUM_THREADS=1 pytest tests/ -s -n auto --cov=chirho/ --cov-report=term-missing ${@-}
           cd docs && make html

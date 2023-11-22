@@ -9,7 +9,7 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import Preemptions
 from chirho.counterfactual.handlers.selection import get_factual_indices
-from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter
+from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter_n
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import Factors
@@ -43,7 +43,7 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-        return scatter(
+        return scatter_n(
             {
                 IndexSet(
                     **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}

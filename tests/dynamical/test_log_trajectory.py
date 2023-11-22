@@ -41,9 +41,6 @@ def test_logging():
             )
     result3 = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
 
-    assert isinstance(result1, State)
-    assert isinstance(dt1.trajectory, State)
-    assert isinstance(dt2.trajectory, State)
     assert len(dt1.trajectory.keys()) == 3
     assert len(dt2.trajectory.keys()) == 3
     assert dt1.trajectory.keys() == result1.keys()

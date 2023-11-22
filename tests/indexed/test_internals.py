@@ -11,11 +11,13 @@ from chirho.indexed.internals import add_indices
 from chirho.indexed.ops import (
     IndexSet,
     cond,
+    cond_n,
     gather,
     get_index_plates,
     indexset_as_mask,
     indices_of,
     scatter,
+    scatter_n,
     union,
 )
 
@@ -386,7 +388,7 @@ def test_persistent_index_state(enum_shape, plate_shape, batch_shape, event_shap
             )
 
     with index_state:
-        actual = scatter(
+        actual = scatter_n(
             {ind1: value1, ind2: value2}, result=result, event_dim=event_dim
         )
 
@@ -450,7 +452,7 @@ def test_cond_tensor_associate(enum_shape, batch_shape, plate_shape, event_shape
                 IndexSet(**{name: set(range(max(3, (batch_shape + plate_shape)[dim])))})
             )
 
-        actual_full = cond(
+        actual_full = cond_n(
             {ind1: value1, ind2: value2, ind3: value3}, case, event_dim=event_dim
         )
 
