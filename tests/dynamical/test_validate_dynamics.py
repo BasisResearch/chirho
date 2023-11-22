@@ -5,9 +5,9 @@ import pytest
 import torch
 
 from chirho.dynamical.handlers.event_loop import InterruptionEventLoop
-from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals.solver import check_dynamics
 from chirho.dynamical.ops import State, simulate
+from .dynamical_fixtures import SOLVERS
 
 pyro.settings.set(module_local_params=True)
 
@@ -28,8 +28,9 @@ def invalid_diff(state: State) -> State:
     return State(S=(state["S"]))
 
 
-def test_validate_dynamics_torchdiffeq():
-    with TorchDiffEq():
+@pytest.mark.parametrize("solver", SOLVERS)
+def test_validate_dynamics_torchdiffeq(solver):
+    with solver():
         check_dynamics(
             valid_diff,
             init_state,
@@ -38,7 +39,7 @@ def test_validate_dynamics_torchdiffeq():
         )
 
     with pytest.raises(ValueError):
-        with TorchDiffEq():
+        with solver():
             check_dynamics(
                 invalid_diff,
                 init_state,
@@ -47,9 +48,10 @@ def test_validate_dynamics_torchdiffeq():
             )
 
 
-def test_validate_dynamics_setting_torchdiffeq():
+@pytest.mark.parametrize("solver", SOLVERS)
+def test_validate_dynamics_setting_torchdiffeq(solver):
     with pyro.settings.context(validate_dynamics=False):
-        with InterruptionEventLoop(), TorchDiffEq():
+        with InterruptionEventLoop(), solver():
             simulate(
                 invalid_diff,
                 init_state,
@@ -59,7 +61,7 @@ def test_validate_dynamics_setting_torchdiffeq():
 
     with pyro.settings.context(validate_dynamics=True):
         with pytest.raises(ValueError):
-            with InterruptionEventLoop(), TorchDiffEq():
+            with InterruptionEventLoop(), solver():
                 simulate(
                     invalid_diff,
                     init_state,

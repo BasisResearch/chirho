@@ -6,10 +6,14 @@ from pyro.distributions import Normal, Uniform, constraints
 
 from chirho.dynamical.ops import State
 
+from chirho.dynamical.handlers.solver import TorchDiffEq, DiffEqDotJL
+
 pyro.settings.set(module_local_params=True)
 
 T = TypeVar("T")
 
+
+SOLVERS = (TorchDiffEq, DiffEqDotJL)
 
 class UnifiedFixtureDynamics(pyro.nn.PyroModule):
     def __init__(self, beta=None, gamma=None):

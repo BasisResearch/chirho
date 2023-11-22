@@ -13,11 +13,10 @@ from chirho.dynamical.handlers import (
     InterruptionEventLoop,
     LogTrajectory,
 )
-from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
-from .dynamical_fixtures import UnifiedFixtureDynamics
+from .dynamical_fixtures import UnifiedFixtureDynamics, SOLVERS
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_nested_dynamic_intervention_causes_change(
     model,
     init_state,
@@ -77,6 +77,7 @@ def test_nested_dynamic_intervention_causes_change(
     logging_times,
     trigger_states,
     intervene_states,
+    solver
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -93,7 +94,7 @@ def test_nested_dynamic_intervention_causes_change(
                     intervention=is2,
                 ):
                     simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=solver()
                     )
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
@@ -169,6 +170,7 @@ def test_nested_dynamic_intervention_causes_change(
 @pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize("trigger_state", [trigger_state1])
 @pytest.mark.parametrize("intervene_state", [intervene_state1])
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_dynamic_intervention_causes_change(
     model,
     init_state,
@@ -177,6 +179,7 @@ def test_dynamic_intervention_causes_change(
     logging_times,
     trigger_state,
     intervene_state,
+    solver
 ):
     with LogTrajectory(
         times=logging_times,
@@ -186,7 +189,7 @@ def test_dynamic_intervention_causes_change(
                 event_f=get_state_reached_event_f(trigger_state),
                 intervention=intervene_state,
             ):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                simulate(model, init_state, start_time, end_time, solver=solver())
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
@@ -237,6 +240,7 @@ def test_dynamic_intervention_causes_change(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_split_twinworld_dynamic_intervention(
     model,
     init_state,
@@ -245,6 +249,7 @@ def test_split_twinworld_dynamic_intervention(
     logging_times,
     trigger_states,
     intervene_states,
+    solver
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -268,7 +273,7 @@ def test_split_twinworld_dynamic_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
+                            solver=solver(),
                         )
 
     with cf:
@@ -291,8 +296,9 @@ def test_split_twinworld_dynamic_intervention(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_split_multiworld_dynamic_intervention(
-    model, init_state, start_time, end_time, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states, solver
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -316,7 +322,7 @@ def test_split_multiworld_dynamic_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
+                            solver=solver(),
                         )
 
     with cf:
@@ -339,8 +345,9 @@ def test_split_multiworld_dynamic_intervention(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_split_twinworld_dynamic_matches_output(
-    model, init_state, start_time, end_time, trigger_states, intervene_states
+    model, init_state, start_time, end_time, trigger_states, intervene_states, solver
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -356,7 +363,7 @@ def test_split_twinworld_dynamic_matches_output(
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_result = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=solver()
                     )
 
     with InterruptionEventLoop():
@@ -369,12 +376,12 @@ def test_split_twinworld_dynamic_matches_output(
                 intervention=is2,
             ):
                 cf_expected = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    model, init_state, start_time, end_time, solver=solver()
                 )
 
     with InterruptionEventLoop():
         factual_expected = simulate(
-            model, init_state, start_time, end_time, solver=TorchDiffEq()
+            model, init_state, start_time, end_time, solver=solver()
         )
 
     with cf:
@@ -409,7 +416,8 @@ def test_split_twinworld_dynamic_matches_output(
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
 
-def test_grad_of_dynamic_intervention_event_f_params():
+@pytest.mark.parametrize("solver", SOLVERS)
+def test_grad_of_dynamic_intervention_event_f_params(solver):
     def model(X: State[torch.Tensor]):
         dX = State()
         dX["x"] = tt(1.0)
@@ -432,7 +440,7 @@ def test_grad_of_dynamic_intervention_event_f_params():
     # noinspection DuplicatedCode
     with InterruptionEventLoop():
         with dynamic_intervention:
-            result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
+            result = simulate(model, s0, start_time, end_time, solver=solver())
 
     (dxdparam,) = torch.autograd.grad(
         outputs=(result["x"],), inputs=(param,), create_graph=True
@@ -444,6 +452,10 @@ def test_grad_of_dynamic_intervention_event_f_params():
         outputs=(result["z"],), inputs=(param,), create_graph=True
     )
     assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
+
+
+def test_grad_of_event_f_params_diffeqjulia_only():
+    raise NotImplementedError
 
 
 def test_grad_of_event_f_params_torchdiffeq_only():

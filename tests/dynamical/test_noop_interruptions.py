@@ -9,10 +9,9 @@ from chirho.dynamical.handlers import (
     StaticInterruption,
     StaticIntervention,
 )
-from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match
+from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match, SOLVERS
 
 logger = logging.getLogger(__name__)
 
@@ -36,16 +35,17 @@ intervene_states = [
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
-def test_noop_point_interruptions(model, init_state, start_time, end_time):
+@pytest.mark.parametrize("solver", SOLVERS)
+def test_noop_point_interruptions(model, init_state, start_time, end_time, solver):
     observational_execution_result = simulate(
-        model, init_state, start_time, end_time, solver=TorchDiffEq()
+        model, init_state, start_time, end_time, solver=solver()
     )
 
     # Test with standard point interruptions within timespan.
     with InterruptionEventLoop():
         with StaticInterruption(time=end_time / 2.0):
             result_pint = simulate(
-                model, init_state, start_time, end_time, solver=TorchDiffEq()
+                model, init_state, start_time, end_time, solver=solver()
             )
 
     assert check_states_match(observational_execution_result, result_pint)
@@ -57,7 +57,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
         ):  # roughly 1/4 of the way through the timespan
             with StaticInterruption(time=(end_time / 4.0) * 3):  # roughly 3/4
                 result_double_pint1 = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    model, init_state, start_time, end_time, solver=solver()
                 )
 
     assert check_states_match(observational_execution_result, result_double_pint1)
@@ -67,7 +67,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
         with StaticInterruption(time=(end_time / 4.0) * 3):  # roughly 3/4
             with StaticInterruption(time=end_time / 4.0):  # roughly 1/3
                 result_double_pint2 = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    model, init_state, start_time, end_time, solver=solver()
                 )
 
     assert check_states_match(observational_execution_result, result_double_pint2)
@@ -80,8 +80,9 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("intervene_state", intervene_states)
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_noop_point_interventions(
-    model, init_state, start_time, end_time, intervene_state
+    model, init_state, start_time, end_time, intervene_state, solver
 ):
     """
     Test whether point interruptions that don't intervene match the unhandled ("observatonal") default simulation.
@@ -91,7 +92,7 @@ def test_noop_point_interventions(
     post_measurement_intervention_time = end_time + 1.0
 
     observational_execution_result = simulate(
-        model, init_state, start_time, end_time, solver=TorchDiffEq()
+        model, init_state, start_time, end_time, solver=solver()
     )
 
     # Test a single point intervention.
@@ -103,7 +104,7 @@ def test_noop_point_interventions(
                 time=post_measurement_intervention_time, intervention=intervene_state
             ):
                 result_single_pi = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
+                    model, init_state, start_time, end_time, solver=solver()
                 )
 
     assert check_states_match(observational_execution_result, result_single_pi)
@@ -121,7 +122,7 @@ def test_noop_point_interventions(
                     intervention=intervene_state,
                 ):
                     result_double_pi1 = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=solver()
                     )
 
     assert check_states_match(observational_execution_result, result_double_pi1)
@@ -140,7 +141,7 @@ def test_noop_point_interventions(
                     intervention=intervene_state,
                 ):
                     result_double_pi2 = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
+                        model, init_state, start_time, end_time, solver=solver()
                     )
 
     assert check_states_match(observational_execution_result, result_double_pi2)
@@ -150,15 +151,16 @@ def test_noop_point_interventions(
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
-def test_point_interruption_at_start(model, init_state, start_time, end_time):
+@pytest.mark.parametrize("solver", SOLVERS)
+def test_point_interruption_at_start(model, init_state, start_time, end_time, solver):
     observational_execution_result = simulate(
-        model, init_state, start_time, end_time, solver=TorchDiffEq()
+        model, init_state, start_time, end_time, solver=solver()
     )
 
     with InterruptionEventLoop():
         with StaticInterruption(time=1.0):
             result_pint = simulate(
-                model, init_state, start_time, end_time, solver=TorchDiffEq()
+                model, init_state, start_time, end_time, solver=solver()
             )
 
     assert check_states_match(observational_execution_result, result_pint)
@@ -169,11 +171,12 @@ def test_point_interruption_at_start(model, init_state, start_time, end_time):
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("intervene_state", intervene_states)
+@pytest.mark.parametrize("solver", SOLVERS)
 def test_noop_dynamic_interruption(
-    model, init_state, start_time, end_time, intervene_state
+    model, init_state, start_time, end_time, intervene_state, solver
 ):
     observational_execution_result = simulate(
-        model, init_state, start_time, end_time, solver=TorchDiffEq()
+        model, init_state, start_time, end_time, solver=solver()
     )
 
     with InterruptionEventLoop():
@@ -182,7 +185,7 @@ def test_noop_dynamic_interruption(
             event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
         ):
             result_dint = simulate(
-                model, init_state, start_time, end_time, solver=TorchDiffEq()
+                model, init_state, start_time, end_time, solver=solver()
             )
 
     assert check_states_match(observational_execution_result, result_dint)
