@@ -14,9 +14,7 @@ from typing import (
 import pyro
 import torch
 
-from chirho.robust.ops import ParamDict
-
-pyro.settings.set(module_local_params=True)
+from chirho.robust.ops import Model, ParamDict
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -150,3 +148,14 @@ def make_functional_call(
             return torch.func.functional_call(mod, params, args, dict(**kwargs))
 
     return param_dict, mod_func
+
+
+@pyro.poutine.block()
+@pyro.validation_enabled(False)
+@torch.no_grad()
+def guess_max_plate_nesting(
+    model: Model[P], guide: Model[P], *args: P.args, **kwargs: P.kwargs
+) -> int:
+    elbo = pyro.infer.Trace_ELBO()
+    elbo._guess_max_plate_nesting(model, guide, args, kwargs)
+    return elbo.max_plate_nesting

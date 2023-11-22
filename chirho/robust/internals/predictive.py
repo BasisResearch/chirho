@@ -7,6 +7,7 @@ import torch
 
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
+from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Model, Point
 
 pyro.settings.set(module_local_params=True)
@@ -15,17 +16,6 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-@pyro.poutine.block()
-@pyro.validation_enabled(False)
-@torch.no_grad()
-def _guess_max_plate_nesting(
-    model: Model[P], guide: Model[P], *args: P.args, **kwargs: P.kwargs
-) -> int:
-    elbo = pyro.infer.Trace_ELBO()
-    elbo._guess_max_plate_nesting(model, guide, args, kwargs)
-    return elbo.max_plate_nesting
 
 
 class UnmaskNamedSites(DependentMaskMessenger):
@@ -68,7 +58,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
         if self.max_plate_nesting is None:
-            self.max_plate_nesting = _guess_max_plate_nesting(
+            self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
             )
 
@@ -131,7 +121,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
         if self.max_plate_nesting is None:
-            self.max_plate_nesting = _guess_max_plate_nesting(
+            self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
             )
 

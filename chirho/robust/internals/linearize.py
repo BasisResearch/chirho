@@ -8,8 +8,6 @@ from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
 from chirho.robust.internals.utils import conjugate_gradient_solve, make_functional_call
 from chirho.robust.ops import Model, ParamDict, Point
 
-pyro.settings.set(module_local_params=True)
-
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
