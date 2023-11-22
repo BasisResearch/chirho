@@ -38,7 +38,7 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
+MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
     (SimpleModel(), SimpleGuide(), {"y"}, 1),
     (SimpleModel(), SimpleGuide(), {"y"}, None),
     pytest.param(
@@ -62,7 +62,7 @@ TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
 ]
 
 
-@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
 @pytest.mark.parametrize(
     "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
 )
@@ -108,7 +108,7 @@ def test_nmc_predictive_influence_smoke(
         assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
 
 
-@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
 @pytest.mark.parametrize(
     "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
 )

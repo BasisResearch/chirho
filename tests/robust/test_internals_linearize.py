@@ -1,3 +1,4 @@
+import functools
 from typing import Callable, List, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar
 
 import pyro
@@ -5,7 +6,7 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.robust.internals.linearize import linearize
+from chirho.robust.internals.linearize import conjugate_gradient_solve, linearize
 
 pyro.settings.set(module_local_params=True)
 
@@ -13,6 +14,47 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
+
+
+@pytest.mark.parametrize("ndim", [1, 2, 3, 10])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_cg_solve(ndim: int, dtype: torch.dtype):
+    cg_iters = None
+    residual_tol = 1e-10
+
+    A = torch.eye(ndim, dtype=dtype) + 0.1 * torch.rand(ndim, ndim, dtype=dtype)
+    expected_x = torch.randn(ndim, dtype=dtype)
+    b = A @ expected_x
+
+    actual_x = conjugate_gradient_solve(
+        lambda v: A @ v, b, cg_iters=cg_iters, residual_tol=residual_tol
+    )
+    assert torch.sum((actual_x - expected_x) ** 2) < 1e-4
+
+
+@pytest.mark.parametrize("ndim", [1, 2, 3, 10])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.parametrize("num_particles", [1, 4])
+def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
+    cg_iters = None
+    residual_tol = 1e-10
+
+    A = torch.eye(ndim, dtype=dtype) + 0.1 * torch.rand(ndim, ndim, dtype=dtype)
+    expected_x = torch.randn(num_particles, ndim, dtype=dtype)
+    b = torch.einsum("ij,nj->ni", A, expected_x)
+    assert b.shape == (num_particles, ndim)
+
+    batch_solve = torch.vmap(
+        functools.partial(
+            conjugate_gradient_solve,
+            lambda v: A @ v,
+            cg_iters=cg_iters,
+            residual_tol=residual_tol,
+        ),
+    )
+    actual_x = batch_solve(b)
+
+    assert torch.all(torch.sum((actual_x - expected_x) ** 2, dim=1) < 1e-4)
 
 
 class SimpleModel(pyro.nn.PyroModule):
@@ -36,7 +78,7 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
+MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
     (SimpleModel(), SimpleGuide(), {"y"}, 1),
     (SimpleModel(), SimpleGuide(), {"y"}, None),
     pytest.param(
@@ -60,7 +102,7 @@ TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
 ]
 
 
-@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
 @pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 def test_nmc_param_influence_smoke(
@@ -99,7 +141,7 @@ def test_nmc_param_influence_smoke(
         assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
 
 
-@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
 @pytest.mark.parametrize(
     "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
 )
