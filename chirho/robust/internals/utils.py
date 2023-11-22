@@ -1,11 +1,8 @@
 import functools
 from typing import (
-    Any,
     Callable,
     Concatenate,
     Dict,
-    Mapping,
-    Optional,
     ParamSpec,
     Tuple,
     TypeVar,
@@ -71,69 +68,6 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
         )
 
     return flatten, unflatten
-
-
-def _flat_conjugate_gradient_solve(
-    f_Ax: Callable[[torch.Tensor], torch.Tensor],
-    b: torch.Tensor,
-    *,
-    cg_iters: Optional[int] = None,
-    residual_tol: float = 1e-10,
-) -> torch.Tensor:
-    r"""Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
-
-    Args:
-        f_Ax (callable): A function to compute matrix vector product.
-        b (torch.Tensor): Right hand side of the equation to solve.
-        cg_iters (int): Number of iterations to run conjugate gradient
-            algorithm.
-        residual_tol (float): Tolerence for convergence.
-
-    Returns:
-        torch.Tensor: Solution x* for equation Ax = b.
-
-    Notes: This code is adapted from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
-    """
-    if cg_iters is None:
-        cg_iters = b.numel()
-
-    p = b.clone()
-    r = b.clone()
-    x = torch.zeros_like(b)
-    z = f_Ax(p)
-    rdotr = torch.dot(r, r)
-    v = rdotr / torch.dot(p, z)
-    newrdotr = rdotr
-    mu = newrdotr / rdotr
-
-    zeros_xr = torch.zeros_like(x)
-
-    for _ in range(cg_iters):
-        not_converged = rdotr > residual_tol
-        z = torch.where(not_converged, f_Ax(p), z)
-        v = torch.where(not_converged, rdotr / torch.dot(p, z), v)
-        x += torch.where(not_converged, v * p, zeros_xr)
-        r -= torch.where(not_converged, v * z, zeros_xr)
-        newrdotr = torch.where(not_converged, torch.dot(r, r), newrdotr)
-        mu = torch.where(not_converged, newrdotr / rdotr, mu)
-        p = torch.where(not_converged, r + mu * p, p)
-        rdotr = torch.where(not_converged, newrdotr, rdotr)
-
-        # rdotr = newrdotr
-        # if rdotr < residual_tol:
-        #     break
-    return x
-
-
-def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
-    flatten, unflatten = make_flatten_unflatten(b)
-
-    def f_Ax_flat(v: torch.Tensor) -> torch.Tensor:
-        v_unflattened: T = unflatten(v)
-        result_unflattened = f_Ax(v_unflattened)
-        return flatten(result_unflattened)
-
-    return unflatten(_flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs))
 
 
 def make_functional_call(
