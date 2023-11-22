@@ -41,6 +41,7 @@ Table of Contents
    observational
    indexed
    dynamical
+   robust
 
 .. toctree::
    :maxdepth: 2
