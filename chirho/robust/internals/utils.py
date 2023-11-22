@@ -9,6 +9,8 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 
+ParamDict = Mapping[str, torch.Tensor]
+
 
 @functools.singledispatch
 def make_flatten_unflatten(
@@ -59,9 +61,6 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
         )
 
     return flatten, unflatten
-
-
-ParamDict = Mapping[str, torch.Tensor]
 
 
 def make_functional_call(
