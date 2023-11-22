@@ -90,15 +90,6 @@ MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
             reason="torch.func autograd doesnt work with PyroParam"
         ),
     ),
-    pytest.param(
-        (m := SimpleModel()),
-        pyro.infer.autoguide.AutoDelta(m),
-        {"y"},
-        1,
-        marks=pytest.mark.xfail(
-            reason="torch.func autograd doesnt work with PyroParam"
-        ),
-    ),
 ]
 
 
