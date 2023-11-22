@@ -9,7 +9,7 @@ import torch
 
 from chirho.robust import one_step_correction
 from chirho.robust.functionals import average_treatment_effect, dice_correction
-from chirho.robust.utils import _flatten_dict, _unflatten_dict
+from chirho.robust.internals.utils import _flatten_dict, _unflatten_dict
 
 
 class HighDimLinearModel(pyro.nn.PyroModule):

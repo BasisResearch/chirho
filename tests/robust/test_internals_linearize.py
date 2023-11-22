@@ -6,7 +6,8 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.robust.internals import PredictiveFunctional, linearize
+from chirho.robust.internals.linearize import linearize
+from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import influence_fn
 
 pyro.settings.set(module_local_params=True)

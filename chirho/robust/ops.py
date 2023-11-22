@@ -22,13 +22,13 @@ def influence_fn(
     functional: Optional[Functional[P, S]] = None,
     **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
-    from chirho.robust.internals import linearize, make_functional_call
+    from chirho.robust.internals.linearize import linearize
+    from chirho.robust.internals.predictive import PredictiveFunctional
+    from chirho.robust.internals.utils import make_functional_call
 
     linearized = linearize(model, guide, **linearize_kwargs)
 
     if functional is None:
-        from chirho.robust.internals import PredictiveFunctional
-
         target = PredictiveFunctional(model, guide)
     else:
         target = functional(model, guide)
