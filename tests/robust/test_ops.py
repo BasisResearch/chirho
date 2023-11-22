@@ -1,3 +1,4 @@
+import functools
 from typing import Callable, List, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar
 
 import pyro
@@ -5,7 +6,8 @@ import pyro.distributions as dist
 import pytest
 import torch
 
-from chirho.robust.internals.linearize import linearize
+from chirho.robust.internals.predictive import PredictiveFunctional
+from chirho.robust.ops import influence_fn
 
 pyro.settings.set(module_local_params=True)
 
@@ -61,9 +63,12 @@ TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
-@pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
+@pytest.mark.parametrize(
+    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
+)
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
-def test_nmc_param_influence_smoke(
+@pytest.mark.parametrize("num_predictive_samples", [1, 5])
+def test_nmc_predictive_influence_smoke(
     model,
     guide,
     obs_names,
@@ -71,12 +76,16 @@ def test_nmc_param_influence_smoke(
     num_samples_outer,
     num_samples_inner,
     cg_iters,
+    num_predictive_samples,
 ):
     model(), guide()  # initialize
 
-    param_eif = linearize(
+    predictive_eif = influence_fn(
         model,
         guide,
+        functional=functools.partial(
+            PredictiveFunctional, num_samples=num_predictive_samples
+        ),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
@@ -91,7 +100,7 @@ def test_nmc_param_influence_smoke(
             )().items()
         }
 
-    test_datum_eif: Mapping[str, torch.Tensor] = param_eif(test_datum)
+    test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif(test_datum)
     assert len(test_datum_eif) > 0
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -104,7 +113,8 @@ def test_nmc_param_influence_smoke(
     "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
 )
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
-def test_nmc_param_influence_vmap_smoke(
+@pytest.mark.parametrize("num_predictive_samples", [1, 5])
+def test_nmc_predictive_influence_vmap_smoke(
     model,
     guide,
     obs_names,
@@ -112,12 +122,16 @@ def test_nmc_param_influence_vmap_smoke(
     num_samples_outer,
     num_samples_inner,
     cg_iters,
+    num_predictive_samples,
 ):
     model(), guide()  # initialize
 
-    param_eif = linearize(
+    predictive_eif = influence_fn(
         model,
         guide,
+        functional=functools.partial(
+            PredictiveFunctional, num_samples=num_predictive_samples
+        ),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
@@ -129,8 +143,8 @@ def test_nmc_param_influence_vmap_smoke(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
-    batch_param_eif = torch.vmap(param_eif, randomness="different")
-    test_data_eif: Mapping[str, torch.Tensor] = batch_param_eif(test_data)
+    batch_predictive_eif = torch.vmap(predictive_eif, randomness="different")
+    test_data_eif: Mapping[str, torch.Tensor] = batch_predictive_eif(test_data)
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
