@@ -27,9 +27,12 @@ def influence_fn(
     linearized = linearize(model, guide, **linearize_kwargs)
 
     if functional is None:
-        return linearized
+        from chirho.robust.internals import PredictiveFunctional
 
-    target = functional(model, guide)
+        target = PredictiveFunctional(model, guide)
+    else:
+        target = functional(model, guide)
+
     # TODO check that target_params == model_params | guide_params
     assert isinstance(target, torch.nn.Module)
     target_params, func_target = make_functional_call(target)

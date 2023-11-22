@@ -1,11 +1,14 @@
+import contextlib
 import functools
 import math
 from typing import (
+    Any,
     Callable,
     Concatenate,
     Container,
     Dict,
     Generic,
+    Mapping,
     Optional,
     ParamSpec,
     Tuple,
@@ -211,6 +214,11 @@ def _guess_max_plate_nesting(
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
+    model: Model[P]
+    guide: Model[P]
+    num_samples: int
+    max_plate_nesting: Optional[int]
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -246,6 +254,69 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+
+
+class PredictiveFunctional(Generic[P, T], torch.nn.Module):
+    model: Model[P]
+    guide: Model[P]
+    num_samples: int
+    max_plate_nesting: Optional[int]
+
+    def __init__(
+        self,
+        model: Model[P],
+        guide: Model[P],
+        *,
+        num_samples: int = 1,
+        max_plate_nesting: Optional[int] = None,
+    ):
+        super().__init__()
+        assert isinstance(model, torch.nn.Module)
+        assert isinstance(guide, torch.nn.Module)
+        self.model = model
+        self.guide = guide
+        self.num_samples = num_samples
+        self.max_plate_nesting = max_plate_nesting
+
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
+        if self.max_plate_nesting is None:
+            self.max_plate_nesting = _guess_max_plate_nesting(
+                self.model, self.guide, *args, **kwargs
+            )
+
+        particles_plate = (
+            contextlib.nullcontext()
+            if self.num_samples == 1
+            else pyro.plate(
+                "__predictive_particles",
+                self.num_samples,
+                dim=-self.max_plate_nesting - 1,
+            )
+        )
+
+        with pyro.poutine.trace() as guide_tr, particles_plate:
+            self.guide(*args, **kwargs)
+
+        block_guide_sample_sites = pyro.poutine.block(
+            hide=[
+                name
+                for name, node in guide_tr.trace.nodes.items()
+                if node["type"] == "sample"
+                and not pyro.poutine.util.site_is_subsample(node)
+            ]
+        )
+
+        with pyro.poutine.trace() as model_tr:
+            with block_guide_sample_sites:
+                with pyro.poutine.replay(trace=guide_tr.trace), particles_plate:
+                    self.model(*args, **kwargs)
+
+        return {
+            name: node["value"]
+            for name, node in model_tr.trace.nodes.items()
+            if node["type"] == "sample"
+            and not pyro.poutine.util.site_is_subsample(node)
+        }
 
 
 def linearize(
