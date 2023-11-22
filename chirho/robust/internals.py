@@ -182,6 +182,17 @@ class UnmaskNamedSites(DependentMaskMessenger):
         return torch.tensor(name is None or name in self.names, device=device)
 
 
+@pyro.poutine.block()
+@pyro.validation_enabled(False)
+@torch.no_grad()
+def _guess_max_plate_nesting(
+    model: Model[P], guide: Model[P], *args: P.args, **kwargs: P.kwargs
+) -> int:
+    elbo = pyro.infer.Trace_ELBO()
+    elbo._guess_max_plate_nesting(model, guide, args, kwargs)
+    return elbo.max_plate_nesting
+
+
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     def __init__(
         self,
@@ -189,7 +200,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         guide: torch.nn.Module,
         *,
         num_samples: int = 1,
-        max_plate_nesting: int = 1,
+        max_plate_nesting: Optional[int] = None,
     ):
         super().__init__()
         self.model = model
@@ -200,6 +211,11 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
+        if self.max_plate_nesting is None:
+            self.max_plate_nesting = _guess_max_plate_nesting(
+                self.model, self.guide, *args, **kwargs
+            )
+
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
         masked_model = UnmaskNamedSites(names=set(data.keys()))(
             condition(data=data)(self.model)
@@ -219,9 +235,9 @@ def linearize(
     model: Model[P],
     guide: Model[P],
     *,
-    max_plate_nesting: int,
     num_samples_outer: int,
     num_samples_inner: Optional[int] = None,
+    max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:

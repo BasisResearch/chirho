@@ -30,14 +30,24 @@ class SimpleGuide(torch.nn.Module):
         self.loc_b = torch.nn.Parameter(torch.rand((3,)))
 
     def forward(self):
-        a = pyro.sample("a", dist.Normal(self.loc_a, 1.0))
+        a = pyro.sample("a", dist.Normal(self.loc_a, 1))
         with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("b", dist.Normal(self.loc_b, 1.0))
+            b = pyro.sample("b", dist.Normal(self.loc_b, 1))
             return {"a": a, "b": b}
 
 
 TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
     (SimpleModel(), SimpleGuide(), {"y"}, 1),
+    (SimpleModel(), SimpleGuide(), {"y"}, None),
+    pytest.param(
+        (m := SimpleModel()),
+        pyro.infer.autoguide.AutoNormal(m),
+        {"y"},
+        1,
+        marks=pytest.mark.xfail(
+            reason="torch.func autograd doesnt work with PyroParam"
+        ),
+    ),
 ]
 
 
@@ -55,6 +65,8 @@ def test_nmc_param_influence_smoke(
     num_samples_inner,
     cg_iters,
 ):
+    model(), guide()  # initialize
+
     param_eif = influence_fn(
         model,
         guide,
@@ -74,8 +86,9 @@ def test_nmc_param_influence_smoke(
 
     test_datum_eif: Mapping[str, torch.Tensor] = param_eif(test_datum)
     for k, v in test_datum_eif.items():
-        assert not torch.isnan(v).any()
-        assert not torch.isinf(v).any()
+        assert not torch.isnan(v).any(), f"eif for {k} had nans"
+        assert not torch.isinf(v).any(), f"eif for {k} had infs"
+        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", TEST_CASES)
@@ -92,6 +105,8 @@ def test_nmc_param_influence_vmap_smoke(
     num_samples_inner,
     cg_iters,
 ):
+    model(), guide()  # initialize
+
     param_eif = influence_fn(
         model,
         guide,
@@ -109,5 +124,6 @@ def test_nmc_param_influence_vmap_smoke(
     batch_param_eif = torch.vmap(param_eif, randomness="different")
     test_data_eif: Mapping[str, torch.Tensor] = batch_param_eif(test_data)
     for k, v in test_data_eif.items():
-        assert not torch.isnan(v).any()
-        assert not torch.isinf(v).any()
+        assert not torch.isnan(v).any(), f"eif for {k} had nans"
+        assert not torch.isinf(v).any(), f"eif for {k} had infs"
+        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
