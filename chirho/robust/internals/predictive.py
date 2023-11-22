@@ -18,7 +18,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class UnmaskNamedSites(DependentMaskMessenger):
+class _UnmaskNamedSites(DependentMaskMessenger):
     names: Container[str]
 
     def __init__(self, names: Container[str]):
@@ -124,7 +124,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             )
 
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
-        masked_model = UnmaskNamedSites(names=set(data.keys()))(
+        masked_model = _UnmaskNamedSites(names=set(data.keys()))(
             condition(data=data)(self.model)
         )
         log_weights = pyro.infer.importance.vectorized_importance_weights(
