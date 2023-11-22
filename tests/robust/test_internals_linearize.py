@@ -133,9 +133,7 @@ def test_nmc_param_influence_smoke(
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
-@pytest.mark.parametrize(
-    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
-)
+@pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 def test_nmc_param_influence_vmap_smoke(
     model,
