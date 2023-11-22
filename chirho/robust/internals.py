@@ -174,13 +174,13 @@ def make_empirical_fisher_vp(
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
         return batched_func_log_prob(params, data)
 
-    jvp_fn = functools.partial(
-        torch.func.jvp, bound_batched_func_log_prob, (log_prob_params,)
-    )
+    def jvp_fn(v: ParamDict) -> torch.Tensor:
+        return torch.func.jvp(bound_batched_func_log_prob, (log_prob_params,), (v,))[1]
+
     vjp_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
-        jvp_log_prob_v = jvp_fn((v,))[1]
+        jvp_log_prob_v = jvp_fn(v)
         return vjp_fn(jvp_log_prob_v / jvp_log_prob_v.shape[0])[0]
 
     return _empirical_fisher_vp
