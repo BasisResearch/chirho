@@ -230,10 +230,12 @@ def abstraction_distance(
     .. warning:: :func:`abstraction_distance` assumes that no variable names are shared across both models.
         Instead, ``alignment`` explicitly maps some low-level variables to some different high-level variables,
         and any other variables remaining in both models are implicitly marginalized out in the loss.
-        This condition is not currently checked, so violations will result in silently incorrect behavior.
+        **This condition is not currently checked, so violations will result in silently incorrect behavior.**
 
     .. warning:: :func:`abstraction_distance` currently only supports purely interventional queries,
-        not observational or counterfactual queries which require normalization.
+        not observational or counterfactual queries which require posterior inference as an intermediate step.
+        (Extending the implementation to these cases would be straightforward, especially when using
+        variational inference to approximate the posteriors, but would involve additional bookkeeping).
 
     :param alignment: a mapping from low-level variables (variables of ``model_l``)
       to high-level variables (variables of ``model_h``)
