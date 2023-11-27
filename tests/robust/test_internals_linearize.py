@@ -1,10 +1,11 @@
 import functools
-from typing import Callable, List, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar
+from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
 
 import pyro
 import pyro.distributions as dist
 import pytest
 import torch
+from typing_extensions import ParamSpec
 
 from chirho.robust.internals.linearize import conjugate_gradient_solve, linearize
 

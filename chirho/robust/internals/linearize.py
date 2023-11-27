@@ -1,8 +1,9 @@
 import functools
-from typing import Any, Callable, Concatenate, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 import pyro
 import torch
+from typing_extensions import Concatenate, ParamSpec
 
 from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
 from chirho.robust.internals.utils import (
@@ -37,7 +38,8 @@ def _flat_conjugate_gradient_solve(
     Returns:
         torch.Tensor: Solution x* for equation Ax = b.
 
-    Notes: This code is adapted from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
+    Notes: This code is adapted from
+      https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
     """
     if cg_iters is None:
         cg_iters = b.numel()

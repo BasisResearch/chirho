@@ -1,8 +1,9 @@
 import functools
-from typing import Any, Callable, Concatenate, Dict, Mapping, ParamSpec, Tuple, TypeVar
+from typing import Any, Callable, Dict, Mapping, Tuple, TypeVar
 
 import pyro
 import torch
+from typing_extensions import Concatenate, ParamSpec
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")

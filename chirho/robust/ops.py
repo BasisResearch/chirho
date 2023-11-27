@@ -1,7 +1,8 @@
 import functools
-from typing import Any, Callable, Concatenate, Mapping, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Mapping, Optional, TypeVar
 
 import torch
+from typing_extensions import Concatenate, ParamSpec
 
 from chirho.observational.ops import Observation
 
@@ -24,7 +25,7 @@ def influence_fn(
     from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized = linearize(model, guide, **linearize_kwargs)
+    linearized: Callable = linearize(model, guide, **linearize_kwargs)
 
     if functional is None:
         assert isinstance(model, torch.nn.Module)
