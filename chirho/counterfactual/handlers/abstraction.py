@@ -264,6 +264,10 @@ def abstraction_distance(
     # path 2: abstract, then intervene
     @contextlib.contextmanager
     def query_h():
+        # note that calling abstract_query here instead of once in the main body
+        #   of abstraction_distance forces re-computation of the abstracted query
+        #   on each call to the returned loss, which is necessary when alignment
+        #   includes free parameters that are being optimized along with model_h.
         abstracted_data, abstracted_actions = abstract_query(
             alignment, data=data, actions=actions
         )
