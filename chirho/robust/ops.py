@@ -25,7 +25,7 @@ def influence_fn(
     from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized: Callable = linearize(model, guide, **linearize_kwargs)
+    linearized = linearize(model, guide, **linearize_kwargs)
 
     if functional is None:
         assert isinstance(model, torch.nn.Module)
