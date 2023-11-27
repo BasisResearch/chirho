@@ -209,7 +209,12 @@ def abstraction_distance(
     actions: Mapping[str, Intervention[S]] = {},
 ) -> Callable[P, torch.Tensor]:
     """
-    When abstraction_distance is minimized, the following diagram should commute
+    Defines the causal abstraction distance between a low-level model and a high-level model
+    according to a given :class:`Alignment` and higher-order loss function ``loss`` .
+    When ``loss`` is an :class:`pyro.infer.elbo.ELBO` instance, this returns an ELBO estimator
+    that uses the abstracted, intervened low-level model as a guide for the intervened high-level model.
+
+    Conceptually, when abstraction_distance is minimized, the following diagram should commute
     (but only for the given values of ``alignment``, ``data`` and ``actions``)::
 
                 intervene
