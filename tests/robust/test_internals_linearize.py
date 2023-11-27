@@ -78,12 +78,16 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
-    (SimpleModel(), SimpleGuide(), {"y"}, 1),
-    (SimpleModel(), SimpleGuide(), {"y"}, None),
+ModelTestCase = Tuple[
+    Callable[[], Callable], Callable[[Callable], Callable], Set[str], Optional[int]
+]
+
+MODEL_TEST_CASES: List[ModelTestCase] = [
+    (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),
+    (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
-        (m := SimpleModel()),
-        pyro.infer.autoguide.AutoNormal(m),
+        SimpleModel,
+        pyro.infer.autoguide.AutoNormal,
         {"y"},
         1,
         marks=pytest.mark.xfail(
@@ -105,6 +109,9 @@ def test_nmc_param_influence_smoke(
     num_samples_inner,
     cg_iters,
 ):
+    model = model()
+    guide = guide(model)
+
     model(), guide()  # initialize
 
     param_eif = linearize(
@@ -144,6 +151,9 @@ def test_nmc_param_influence_vmap_smoke(
     num_samples_inner,
     cg_iters,
 ):
+    model = model()
+    guide = guide(model)
+
     model(), guide()  # initialize
 
     param_eif = linearize(

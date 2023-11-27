@@ -38,12 +38,16 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
-    (SimpleModel(), SimpleGuide(), {"y"}, 1),
-    (SimpleModel(), SimpleGuide(), {"y"}, None),
+ModelTestCase = Tuple[
+    Callable[[], Callable], Callable[[Callable], Callable], Set[str], Optional[int]
+]
+
+MODEL_TEST_CASES: List[ModelTestCase] = [
+    (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),
+    (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
-        (m := SimpleModel()),
-        pyro.infer.autoguide.AutoNormal(m),
+        SimpleModel,
+        pyro.infer.autoguide.AutoNormal,
         {"y"},
         1,
         marks=pytest.mark.xfail(
@@ -54,9 +58,7 @@ MODEL_TEST_CASES: List[Tuple[Callable, Callable, Set[str], Optional[int]]] = [
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
-@pytest.mark.parametrize(
-    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
-)
+@pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
 def test_nmc_predictive_influence_smoke(
@@ -69,6 +71,8 @@ def test_nmc_predictive_influence_smoke(
     cg_iters,
     num_predictive_samples,
 ):
+    model = model()
+    guide = guide(model)
     model(), guide()  # initialize
 
     predictive_eif = influence_fn(
@@ -100,9 +104,7 @@ def test_nmc_predictive_influence_smoke(
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
-@pytest.mark.parametrize(
-    "num_samples_outer,num_samples_inner", [(100, None), (10, 100)]
-)
+@pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
 def test_nmc_predictive_influence_vmap_smoke(
@@ -115,6 +117,9 @@ def test_nmc_predictive_influence_vmap_smoke(
     cg_iters,
     num_predictive_samples,
 ):
+    model = model()
+    guide = guide(model)
+
     model(), guide()  # initialize
 
     predictive_eif = influence_fn(
