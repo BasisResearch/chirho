@@ -1,9 +1,10 @@
 import contextlib
 import math
-from typing import Any, Callable, Container, Generic, Optional, ParamSpec, TypeVar
+from typing import Any, Callable, Container, Generic, Optional, TypeVar
 
 import pyro
 import torch
+from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
