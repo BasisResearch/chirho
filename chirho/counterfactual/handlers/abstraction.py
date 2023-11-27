@@ -214,8 +214,9 @@ def abstraction_distance(
     When ``loss`` is an :class:`pyro.infer.elbo.ELBO` instance, this returns an ELBO estimator
     that uses the abstracted, intervened low-level model as a guide for the intervened high-level model.
 
-    Conceptually, when abstraction_distance is minimized, the following diagram should commute
-    (but only for the given values of ``alignment``, ``data`` and ``actions``)::
+    Conceptually, we may think of ``model_h`` as an approximate abstraction of ``model_l``
+    in the sense that, when ``abstraction_distance(alignment, model_l, model_h)`` is minimized,
+    the following diagram should commute for the given ``alignment``, ``data`` and ``actions``::
 
                 intervene
         model_l --------> intervened_model_l
@@ -274,6 +275,7 @@ def abstraction_distance(
         with condition(data=abstracted_data), do(actions=abstracted_actions):
             yield
 
+    # model_h is given, rather than being the result of AbstractModel applied to model_l
     intervened_model_h: _Model[P, T] = query_h()(model_h)
 
     # TODO expose any PyTorch parameters of models and alignment correctly in loss
