@@ -1,17 +1,18 @@
-import pyro
 import math
+from typing import TypeVar
+
+import pyro
 import pyro.distributions as dist
 import pytest
 import torch
 from pyro.infer.predictive import Predictive
 
+from chirho.robust.internals.linearize import make_empirical_fisher_vp
 from chirho.robust.internals.utils import ParamDict
 from chirho.robust.ops import Point
-from chirho.robust.internals.linearize import make_empirical_fisher_vp
 
 pyro.settings.set(module_local_params=True)
 
-from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -34,29 +35,6 @@ def gaussian_log_prob(params: ParamDict, data_point: Point[T], cov_mat) -> T:
         return dist.MultivariateNormal(
             loc=params["loc"], covariance_matrix=cov_mat
         ).log_prob(data_point["x"])
-
-
-# def make_functional_call(
-#     mod: Callable[P, T]
-# ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
-#     assert isinstance(mod, torch.nn.Module)
-#     param_dict: ParamDict = dict(mod.named_parameters())
-
-#     @torch.func.functionalize
-#     def mod_func(params: ParamDict, *args: P.args, **kwargs: P.kwargs) -> T:
-#         with pyro.validation_enabled(False):
-#             return torch.func.functional_call(mod, params, args, dict(**kwargs))
-
-#     return param_dict, mod_func
-
-
-# def make_empirical_fisher_vp(
-#     func_log_prob: Callable[Concatenate[ParamDict, Point[T], P], torch.Tensor],
-#     log_prob_params: ParamDict,
-#     data: Point[T],
-#     *args: P.args,
-#     **kwargs: P.kwargs,
-# )
 
 
 @pytest.mark.parametrize(
