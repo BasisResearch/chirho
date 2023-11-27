@@ -220,10 +220,10 @@ def abstraction_distance(
 
                 intervene
         model_l --------> intervened_model_l
-          |                        |
+          .                        |
         AbstractModel            AbstractModel
-          |                        |
-          |     intervene o        |
+          .                        |
+          .     intervene o        |
           v    abstract_query      v
         model_h --------> intervened_model_h
 
