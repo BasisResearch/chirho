@@ -81,10 +81,10 @@ def _intervene_callable(
             return intervene(obs(*args, **kwargs), act(*args, **kwargs), **call_kwargs)
 
         return _intervene_callable_wrapper
-    return DoMessenger(actions=act)(obs)
+    return Interventions(actions=act)(obs)
 
 
-class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
+class Interventions(Generic[T], pyro.poutine.messenger.Messenger):
     """
     Intervene on values in a probabilistic program.
 
@@ -116,4 +116,4 @@ class DoMessenger(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
 
-do = pyro.poutine.handlers._make_handler(DoMessenger)[1]
+do = pyro.poutine.handlers._make_handler(Interventions)[1]
