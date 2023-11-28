@@ -1,18 +1,11 @@
-import torch
 import chirho.contrib.experiments.closed_form as cfe
-from chirho.contrib.experiments.decision_optimizer import DecisionOptimizer
 import pyro.distributions as dist
 from torch import tensor as tnsr
-from torch import Tensor as Tnsr
-import matplotlib.pyplot as plt
-from scipy.stats import multivariate_normal
 import numpy as np
 from scipy.optimize import minimize
 import chirho.contrib.compexp as ep
 import pyro
-from typing import Callable, List, Tuple, Optional
 from collections import OrderedDict
-from pyro.infer.autoguide.initialization import init_to_value
 
 
 def opt_ana_with_scipy(problem: cfe.CostRiskProblem):

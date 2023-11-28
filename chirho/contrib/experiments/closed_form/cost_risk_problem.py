@@ -74,6 +74,9 @@ class CostRiskProblem:
         # Place to cache the optimization trajectory of the analytic optimizer.
         self.ana_opt_traj: Optional[np.ndarray] = None
 
+        # Place to cache the early stopping tolerance.
+        self.early_stop_tol: Optional[float] = None
+
     @property
     def n(self):
         return self.Sigma.shape[0]
