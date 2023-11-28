@@ -13,6 +13,8 @@ from ray import tune
 from ray.air import session
 from ray.tune.schedulers import ASHAScheduler
 import warnings
+import os
+import pickle
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -150,18 +152,26 @@ def do_loop(
         theta.grad.zero_()
         losses.append(_loss(problem, traj[-1]))
 
-        if hparams.ray:
-            session.report(dict(
-                loss=losses[-1],
-            ))
-
         # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
         #  from some preceding scores.
         recent = less_recent = 1000
+
+        # Short detour to report to ray.
+        if hparams.ray:
+            report = dict(
+                recent_loss_mean=np.mean(losses[-recent:]),
+                loss=losses[-1],
+                lr=lrs[-1],
+                grad_est=grad_ests[-1],
+                theta=traj[-1]
+            )
+            session.report(report)
+
         if len(traj) > (recent + less_recent) and sgd_convergence_check(
                 losses, problem, recent=recent, less_recent=less_recent):
             break
-    print()
+    if not hparams.ray:
+        print()  # to clear the \r with an \n
 
     if not hparams.ray:
         return OptimizerFnRet(np.array(traj)[:-1], np.array(losses)[:-1], np.array(grad_ests), np.array(lrs))
@@ -278,9 +288,11 @@ def meta_optimize_design(
         tune_kwargs: Dict
 ):
 
+    # Get the folder that raytune will be writing to.
+
     hparam_space = dict(
-        lr=tune.loguniform(1e-5, 1e-1),
-        clip=tune.loguniform(1e-3, 1e1),
+        lr=tune.loguniform(1e-4, 1e-1),
+        clip=tune.loguniform(1e-2, 1e1),
         # FIXME this is actually 1 - decay at max steps. TODO Rename.
         decay_at_max_steps=tune.uniform(0.1, 1.),
     )
@@ -293,10 +305,10 @@ def meta_optimize_design(
         return optimize_fn(problem, hparams)
 
     scheduler = ASHAScheduler(
-        metric="loss",
+        metric="recent_loss_mean",
         mode="min",
         max_t=hparam_consts['num_steps'] + 1,
-        grace_period=hparam_consts['num_steps'] // 10,
+        grace_period=500,
         stop_last_trials=False)
 
     result = tune.run(
@@ -305,5 +317,13 @@ def meta_optimize_design(
         scheduler=scheduler,
         **tune_kwargs
     )
+
+    # Instead of above, pickle and save problem to result.experiment_path.
+    # Between this and the session reports, this is all that is needed to fully reconstruct the problem
+    #  and the optimization loop.
+    problem.alg = optimize_fn.__name__
+    problem.hparam_consts = hparam_consts
+    with open(os.path.join(result.experiment_path, 'cost_risk_problem.pkl'), 'wb') as f:
+        pickle.dump(problem, f)
 
     return result
