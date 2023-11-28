@@ -1,5 +1,5 @@
 import numbers
-from typing import Callable, Generic, TypeVar, Union
+from typing import Callable, Generic, Tuple, TypeVar, Union
 
 import pyro
 import pyro.contrib.autoname
@@ -7,7 +7,7 @@ import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
 from chirho.dynamical.internals.solver import Interruption
-from chirho.dynamical.ops import State
+from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import cond
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
@@ -17,8 +17,13 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class DependentInterruption(Generic[T], Interruption):
-    event_f: Callable[[R, State[T]], R]
+class DependentInterruption(Generic[T], Interruption[T]):
+    event_fn: Callable[[R, State[T]], R]
+
+    def apply_fn(
+        self, dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        return dynamics, state
 
 
 class StaticInterruption(Generic[T], DependentInterruption[T]):
@@ -28,7 +33,7 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
         self.time = torch.as_tensor(time)
         super().__init__()
 
-    def event_f(self, time: R, state: State[T]) -> R:
+    def event_fn(self, time: R, state: State[T]) -> R:
         return cond(0.0, self.time - time, case=time < self.time)
 
 
@@ -39,40 +44,17 @@ class DynamicInterruption(Generic[T], DependentInterruption[T]):
         element of the state exceeds some threshold, etc. It takes both the current time and current state.
     """
 
-    event_f: Callable[[R, State[T]], R]
+    event_fn: Callable[[R, State[T]], R]
 
-    def __init__(self, event_f: Callable[[R, State[T]], R]):
-        self.event_f = event_f
+    def __init__(self, event_fn: Callable[[R, State[T]], R]):
+        self.event_fn = event_fn
         super().__init__()
 
 
-class _InterventionMixin(Generic[T]):
-    """
-    We use this to provide the same functionality to both StaticIntervention and the DynamicIntervention,
-     while allowing DynamicIntervention to not inherit StaticInterruption functionality.
-    """
-
-    intervention: Intervention[State[T]]
-
-    def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics, initial_state = msg["args"]
-        msg["args"] = (dynamics, intervene(initial_state, self.intervention))
-
-
-class _PointObservationMixin(Generic[T]):
+class StaticObservation(Generic[T], StaticInterruption[T]):
     observation: Observation[State[T]]
     time: torch.Tensor
 
-    def _pyro_apply_interruptions(self, msg) -> None:
-        dynamics = msg["args"][0]
-        state: State[T] = msg["args"][1]
-        with pyro.contrib.autoname.scope(
-            prefix=f"t={torch.as_tensor(self.time).item()}"
-        ):
-            msg["value"] = (dynamics, observe(state, self.observation))
-
-
-class StaticObservation(Generic[T], StaticInterruption[T], _PointObservationMixin[T]):
     def __init__(
         self,
         time: R,
@@ -83,8 +65,16 @@ class StaticObservation(Generic[T], StaticInterruption[T], _PointObservationMixi
         # the observation occurs after the logging period.
         super().__init__(time)
 
+    def apply_fn(
+        self, dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        with pyro.contrib.autoname.scope(
+            prefix=f"t={torch.as_tensor(self.time).item()}"
+        ):
+            return dynamics, observe(state, self.observation)
 
-class StaticIntervention(Generic[T], StaticInterruption[T], _InterventionMixin[T]):
+
+class StaticIntervention(Generic[T], StaticInterruption[T]):
     """
     This effect handler interrupts a simulation at a given time, and
     applies an intervention to the state at that time.
@@ -93,12 +83,19 @@ class StaticIntervention(Generic[T], StaticInterruption[T], _InterventionMixin[T
     :param intervention: The instantaneous intervention applied to the state when the event is triggered.
     """
 
+    intervention: Intervention[State[T]]
+
     def __init__(self, time: R, intervention: Intervention[State[T]]):
         self.intervention = intervention
         super().__init__(time)
 
+    def apply_fn(
+        self, dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        return dynamics, intervene(state, self.intervention)
 
-class DynamicIntervention(Generic[T], DynamicInterruption[T], _InterventionMixin[T]):
+
+class DynamicIntervention(Generic[T], DynamicInterruption[T]):
     """
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time.
@@ -106,13 +103,20 @@ class DynamicIntervention(Generic[T], DynamicInterruption[T], _InterventionMixin
     :param intervention: The instantaneous intervention applied to the state when the event is triggered.
     """
 
+    intervention: Intervention[State[T]]
+
     def __init__(
         self,
-        event_f: Callable[[R, State[T]], R],
+        event_fn: Callable[[R, State[T]], R],
         intervention: Intervention[State[T]],
     ):
         self.intervention = intervention
-        super().__init__(event_f)
+        super().__init__(event_fn)
+
+    def apply_fn(
+        self, dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        return dynamics, intervene(state, self.intervention)
 
 
 class StaticBatchObservation(Generic[T], LogTrajectory[T]):
@@ -126,5 +130,5 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         self.observation = observation
         super().__init__(times)
 
-    def _pyro_post_simulate(self, msg) -> None:
+    def _pyro_post_simulate(self, msg: dict) -> None:
         self.trajectory = observe(self.trajectory, self.observation)
