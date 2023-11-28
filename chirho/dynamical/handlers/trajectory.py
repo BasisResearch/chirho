@@ -27,12 +27,9 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         self.trajectory: State[T] = State()
         return super().__enter__()
 
-    def _pyro_simulate_to_interruption(self, msg) -> None:
-        msg["done"] = True
-
-    def _pyro_post_simulate_to_interruption(self, msg) -> None:
+    def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
-        solver, dynamics, initial_state, start_time, end_time = msg["args"]
+        dynamics, initial_state, start_time, end_time = msg["args"]
 
         filtered_timespan = self.times[
             (self.times > start_time) & (self.times <= end_time)
@@ -41,12 +38,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             (start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1))
         )
 
-        trajectory = simulate_trajectory(
-            solver,
-            dynamics,
-            initial_state,
-            timespan,
-        )
+        with pyro.poutine.messenger.block_messengers(lambda m: m is self):
+            trajectory = simulate_trajectory(
+                dynamics, initial_state, timespan, **msg["kwargs"]
+            )
 
         # TODO support dim != -1
         idx_name = "__time"
@@ -59,5 +54,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             self.trajectory: State[T] = append(self.trajectory, new_part)
 
         final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
-        final_state = gather(trajectory, final_idx, name_to_dim=name_to_dim)
-        msg["value"] = _squeeze_time_dim(final_state)
+        msg["value"] = _squeeze_time_dim(
+            gather(trajectory, final_idx, name_to_dim=name_to_dim)
+        )
+        msg["done"] = True
