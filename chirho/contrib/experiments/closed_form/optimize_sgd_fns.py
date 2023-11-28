@@ -6,7 +6,7 @@ from torch import tensor as tnsr
 import numpy as np
 import chirho.contrib.compexp as ep
 import pyro
-from typing import List, Callable, Dict
+from typing import List, Callable, Dict, Optional
 from collections import OrderedDict
 from pyro.infer.autoguide.initialization import init_to_value
 from ray import tune
@@ -17,6 +17,10 @@ import os
 import pickle
 from copy import copy
 from pyro.util import set_rng_seed
+from chirho.contrib.experiments.grouped_asha import GroupedASHA
+from itertools import product
+
+MOD = 1
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -158,20 +162,20 @@ def do_loop(
         theta.grad.zero_()
         losses.append(_loss(problem, traj[-1]))
 
-        # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
-        #  from some preceding scores.
-        recent = less_recent = hparams.convergence_check_window
-
         # Short detour to report to ray.
-        if hparams.ray:
+        if hparams.ray and i % MOD == 0:
             report = dict(
-                recent_loss_mean=np.mean(losses[-recent:]),
+                recent_loss_mean=np.mean(losses[-MOD:]),
                 loss=losses[-1],
                 lr=lrs[-1],
                 grad_est=grad_ests[-1],
                 theta=traj[-1]
             )
             session.report(report)
+
+        # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
+        #  from some preceding scores.
+        recent = less_recent = hparams.convergence_check_window
 
         if len(traj) > (recent + less_recent) and sgd_convergence_check(
                 losses, problem, recent=recent, less_recent=less_recent):
@@ -335,12 +339,18 @@ def meta_optimize_design(
 
         return optimize_fn(problem, hparams)
 
-    scheduler = ASHAScheduler(
+    scheduler_kwargs = dict(
         metric="recent_loss_mean",
         mode="min",
+        grace_period=500 // MOD,
+        # Probs overkill to make sure it doesn't
         max_t=hparam_consts['num_steps'] + 1,
-        grace_period=500,
         stop_last_trials=False)
+
+    scheduler = GroupedASHA(
+        config=hparam_space,
+        **scheduler_kwargs
+    )
 
     result = tune.run(
         configgabble_optimize_fn,
