@@ -4,11 +4,10 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers import InterruptionEventLoop
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import bayes_sir_model, check_states_match
+from .dynamical_fixtures import bayes_sir_model
 
 pyro.settings.set(module_local_params=True)
 
@@ -26,28 +25,8 @@ def test_no_backend_error():
         simulate(sir, init_state, start_time, end_time)
 
 
-def test_no_backend_SEL_error():
-    sir = bayes_sir_model()
-    with pytest.raises(NotImplementedError):
-        with InterruptionEventLoop():
-            simulate(sir, init_state, start_time, end_time)
-
-
 def test_backend_arg():
     sir = bayes_sir_model()
-    with InterruptionEventLoop():
-        result = simulate(sir, init_state, start_time, end_time, solver=TorchDiffEq())
+    with TorchDiffEq():
+        result = simulate(sir, init_state, start_time, end_time)
     assert result is not None
-
-
-def test_backend_handler():
-    sir = bayes_sir_model()
-    with InterruptionEventLoop():
-        with TorchDiffEq():
-            result_handler = simulate(sir, init_state, start_time, end_time)
-
-        result_arg = simulate(
-            sir, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
-
-    assert check_states_match(result_handler, result_arg)

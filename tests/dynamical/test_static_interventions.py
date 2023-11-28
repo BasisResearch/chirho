@@ -7,11 +7,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import (
-    InterruptionEventLoop,
-    LogTrajectory,
-    StaticIntervention,
-)
+from chirho.dynamical.handlers import LogTrajectory, StaticIntervention
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of
@@ -62,16 +58,14 @@ def test_point_intervention_causes_difference(
     intervene_state,
     intervene_time,
 ):
-    with LogTrajectory(
-        times=logging_times,
-    ) as observational_dt:
-        simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+    with TorchDiffEq(), LogTrajectory(times=logging_times) as observational_dt:
+        simulate(model, init_state, start_time, end_time)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
         times=logging_times,
     ) as intervened_dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
                 if intervene_time < start_time:
                     with pytest.raises(
@@ -82,13 +76,10 @@ def test_point_intervention_causes_difference(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
                     return
                 else:
-                    simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    simulate(model, init_state, start_time, end_time)
 
     observational_trajectory = observational_dt.trajectory
     intervened_trajectory = intervened_dt.trajectory
@@ -152,16 +143,14 @@ def test_nested_point_interventions_cause_difference(
     intervene_state2,
     intervene_time2,
 ):
-    with LogTrajectory(
-        times=logging_times,
-    ) as observational_dt:
-        simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+    with TorchDiffEq(), LogTrajectory(times=logging_times) as observational_dt:
+        simulate(model, init_state, start_time, end_time)
 
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
         times=logging_times,
     ) as intervened_dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with StaticIntervention(
                 time=intervene_time1, intervention=intervene_state1
             ):
@@ -178,30 +167,18 @@ def test_nested_point_interventions_cause_difference(
                                 init_state,
                                 start_time,
                                 end_time,
-                                solver=TorchDiffEq(),
                             )
-                        return
-                    # AZ - We've decided to support this case and have interventions apply sequentially in the order
-                    #  they are handled.
-                    # elif torch.isclose(intervene_time1, intervene_time2):
-                    #     with pytest.raises(
-                    #         ValueError,
-                    #         match="Two point interruptions cannot occur at the same time.",
-                    #     ):
-                    #         simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
-                    #     return
                     else:
                         simulate(
                             model,
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
 
-    assert check_trajectories_match_in_all_but_values(
-        observational_dt.trajectory, intervened_dt.trajectory
-    )
+                        assert check_trajectories_match_in_all_but_values(
+                            observational_dt.trajectory, intervened_dt.trajectory
+                        )
 
     # Don't need to flip order b/c the argument permutation will effectively do this for us.
 
@@ -222,7 +199,7 @@ def test_twinworld_point_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
                 with StaticIntervention(
                     time=intervene_time + 0.5, intervention=intervene_state
@@ -233,7 +210,6 @@ def test_twinworld_point_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
 
     with cf:
@@ -257,7 +233,7 @@ def test_multiworld_point_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
                 with StaticIntervention(
                     time=intervene_time + 0.5, intervention=intervene_state
@@ -268,7 +244,6 @@ def test_multiworld_point_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
 
     with cf:
@@ -288,12 +263,10 @@ def test_multiworld_point_intervention(
 def test_split_odeint_broadcast(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
-    with LogTrajectory(
-        times=logging_times,
-    ) as dt:
+    with TorchDiffEq(), LogTrajectory(times=logging_times) as dt:
         with TwinWorldCounterfactual() as cf:
             cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
-            simulate(model, cf_init_state, start_time, end_time, solver=TorchDiffEq())
+            simulate(model, cf_init_state, start_time, end_time)
 
     with cf:
         trajectory = dt.trajectory
@@ -311,29 +284,23 @@ def test_twinworld_matches_output(
     model, init_state, start_time, end_time, intervene_state, intervene_time
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
-    with InterruptionEventLoop():
+    with TorchDiffEq():
         with StaticIntervention(time=intervene_time, intervention=intervene_state):
             with StaticIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
                 with TwinWorldCounterfactual() as cf:
-                    cf_state = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    cf_state = simulate(model, init_state, start_time, end_time)
 
-    with InterruptionEventLoop():
+    with TorchDiffEq():
         with StaticIntervention(time=intervene_time, intervention=intervene_state):
             with StaticIntervention(
                 time=intervene_time + 0.543, intervention=intervene_state
             ):
-                cf_expected = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                cf_expected = simulate(model, init_state, start_time, end_time)
 
-    with InterruptionEventLoop():
-        factual_expected = simulate(
-            model, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
+    with TorchDiffEq():
+        factual_expected = simulate(model, init_state, start_time, end_time)
 
     with cf:
         factual_indices = IndexSet(
