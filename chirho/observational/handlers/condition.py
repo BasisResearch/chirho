@@ -54,7 +54,7 @@ class Factors(Generic[T], pyro.poutine.messenger.Messenger):
         pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
 
 
-class ConditionMessenger(Generic[T], ObserveNameMessenger):
+class Observations(Generic[T], ObserveNameMessenger):
     """
     Condition on values in a probabilistic program.
 
@@ -106,4 +106,4 @@ class ConditionMessenger(Generic[T], ObserveNameMessenger):
                 self._current_site = None
 
 
-condition = pyro.poutine.handlers._make_handler(ConditionMessenger)[1]
+condition = pyro.poutine.handlers._make_handler(Observations)[1]
