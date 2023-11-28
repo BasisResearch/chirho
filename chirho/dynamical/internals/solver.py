@@ -5,7 +5,7 @@ import math
 import numbers
 import typing
 import warnings
-from typing import Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -77,8 +77,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                with next_interruption:
-                    dynamics, state = apply_interruptions(dynamics, state)
+                dynamics, state = next_interruption.apply_fn(dynamics, state)
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
@@ -91,7 +90,9 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         msg["done"] = True
 
 
-class Interruption(ShallowMessenger):
+class Interruption(Generic[T], ShallowMessenger):
+    apply_fn: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
+
     def _pyro_get_new_interruptions(self, msg) -> None:
         if msg["value"] is None:
             msg["value"] = []
@@ -156,17 +157,6 @@ def simulate_to_interruption(
         )
 
     raise NotImplementedError("No default behavior for simulate_to_interruption")
-
-
-@pyro.poutine.runtime.effectful(type="apply_interruptions")
-def apply_interruptions(
-    dynamics: Dynamics[T], start_state: State[T]
-) -> Tuple[Dynamics[T], State[T]]:
-    """
-    Apply the effects of an interruption to a dynamical system.
-    """
-    # Default is to do nothing.
-    return dynamics, start_state
 
 
 @pyro.poutine.runtime.effectful(type="check_dynamics")
