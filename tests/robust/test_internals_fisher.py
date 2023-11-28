@@ -1,40 +1,16 @@
-import math
-from typing import TypeVar
-
 import pyro
-import pyro.distributions as dist
 import pytest
 import torch
 from pyro.infer.predictive import Predictive
+import pyro.distributions as dist
+from .robust_fixtures import (
+    GaussianModel,
+    gaussian_log_prob,
+)
 
-from chirho.robust.internals.linearize import make_empirical_fisher_vp
-from chirho.robust.internals.utils import ParamDict
-from chirho.robust.ops import Point
+from chirho.robust.internals.linearize import make_empirical_fisher_vp, linearize
 
 pyro.settings.set(module_local_params=True)
-
-
-T = TypeVar("T")
-
-
-class GaussianModel(pyro.nn.PyroModule):
-    def __init__(self, cov_mat: torch.Tensor):
-        super().__init__()
-        self.register_buffer("cov_mat", cov_mat)
-
-    def forward(self, loc):
-        pyro.sample(
-            "x", dist.MultivariateNormal(loc=loc, covariance_matrix=self.cov_mat)
-        )
-
-
-# Note: this is separate from the GaussianModel above because of upstream obstacles in the interaction between
-# `pyro.nn.PyroModule` and `torch.func`. See https://github.com/BasisResearch/chirho/issues/393
-def gaussian_log_prob(params: ParamDict, data_point: Point[T], cov_mat) -> T:
-    with pyro.validation_enabled(False):
-        return dist.MultivariateNormal(
-            loc=params["loc"], covariance_matrix=cov_mat
-        ).log_prob(data_point["x"])
 
 
 @pytest.mark.parametrize(
@@ -56,7 +32,9 @@ def gaussian_log_prob(params: ParamDict, data_point: Point[T], cov_mat) -> T:
         torch.tensor([0.0, 0.0], requires_grad=False),
     ],
 )
-def test_empirical_fisher_vp(loc: torch.Tensor, cov_mat: torch.Tensor, v: torch.Tensor):
+def test_empirical_fisher_vp_against_analytical(
+    loc: torch.Tensor, cov_mat: torch.Tensor, v: torch.Tensor
+):
     func_log_prob = gaussian_log_prob
     log_prob_params = {"loc": loc}
     N_monte_carlo = 10000

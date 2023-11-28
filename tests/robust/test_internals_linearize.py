@@ -6,8 +6,18 @@ import pyro.distributions as dist
 import pytest
 import torch
 from typing_extensions import ParamSpec
+from pyro.infer.predictive import Predictive
 
 from chirho.robust.internals.linearize import conjugate_gradient_solve, linearize
+from .robust_fixtures import (
+    SimpleModel,
+    SimpleGuide,
+    DataConditionedModel,
+    KnownCovariateDistModel,
+    BenchmarkLinearModel,
+    closed_form_ate_correction,
+    MLEGuide,
+)
 
 pyro.settings.set(module_local_params=True)
 
@@ -56,27 +66,6 @@ def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     actual_x = batch_solve(b)
 
     assert torch.all(torch.sum((actual_x - expected_x) ** 2, dim=1) < 1e-4)
-
-
-class SimpleModel(pyro.nn.PyroModule):
-    def forward(self):
-        a = pyro.sample("a", dist.Normal(0, 1))
-        with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("b", dist.Normal(a, 1))
-            return pyro.sample("y", dist.Normal(a + b, 1))
-
-
-class SimpleGuide(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.loc_a = torch.nn.Parameter(torch.rand(()))
-        self.loc_b = torch.nn.Parameter(torch.rand((3,)))
-
-    def forward(self):
-        a = pyro.sample("a", dist.Normal(self.loc_a, 1))
-        with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("b", dist.Normal(self.loc_b, 1))
-            return {"a": a, "b": b}
 
 
 ModelTestCase = Tuple[
@@ -178,3 +167,62 @@ def test_nmc_param_influence_vmap_smoke(
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
         assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
+
+
+def test_linearize_against_analytic_ate():
+    p = 1
+    alpha = 1
+    beta = 1
+    N_train = 100
+    N_test = 100
+    link = lambda mu: dist.Normal(mu, 1.0)
+
+    # Generate data
+    benchmark_model = BenchmarkLinearModel(p, link, alpha, beta)
+    D_train = Predictive(
+        benchmark_model, num_samples=N_train, return_sites=["X", "A", "Y"]
+    )()
+    D_train = {k: v.squeeze(-1) for k, v in D_train.items()}
+    D_test = Predictive(
+        benchmark_model, num_samples=N_test, return_sites=["X", "A", "Y"]
+    )()
+    D_test_flat = {k: v.squeeze(-1) for k, v in D_test.items()}
+
+    model = KnownCovariateDistModel(p, link)
+    conditioned_model = DataConditionedModel(model)
+    guide_train = pyro.infer.autoguide.AutoDelta(conditioned_model)
+    elbo = pyro.infer.Trace_ELBO()(conditioned_model, guide_train)
+
+    # initialize parameters
+    elbo(D_train)
+
+    adam = torch.optim.Adam(elbo.parameters(), lr=0.03)
+
+    # Do gradient steps
+    for _ in range(2000):
+        adam.zero_grad()
+        loss = elbo(D_train)
+        loss.backward()
+        adam.step()
+
+    theta_hat = {
+        k: v.clone().detach().requires_grad_(True) for k, v in guide_train().items()
+    }
+    _, analytic_eif_at_test_pts = closed_form_ate_correction(D_test_flat, theta_hat)
+
+    mle_guide = MLEGuide(theta_hat)
+    param_eif = linearize(
+        model,
+        mle_guide,
+        num_samples_outer=10000,
+        num_samples_inner=1,
+        cg_iters=4,  # dimension of params = 4
+    )
+
+    batch_param_eif = torch.vmap(param_eif, randomness="different")
+    test_data_eif = batch_param_eif(D_test)
+    median_abs_error = torch.abs(
+        test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
+    ).median()
+    median_scale = torch.abs(analytic_eif_at_test_pts).median()
+    assert median_abs_error / median_scale < 0.25
