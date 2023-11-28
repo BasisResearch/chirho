@@ -15,6 +15,7 @@ from ray.tune.schedulers import ASHAScheduler
 import warnings
 import os
 import pickle
+from copy import copy
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -300,6 +301,7 @@ def meta_optimize_design(
     burnin_ = hparam_consts.pop('burnin')
 
     def configgabble_optimize_fn(config: Dict):
+        config = copy(config)  # Because pop modifies in place, which messes up ray.
         optimize_fn_name = config.pop('optimize_fn_name')
 
         if optimize_fn_name == opt_with_mc_sgd.__name__:
@@ -309,7 +311,7 @@ def meta_optimize_design(
             burnin = burnin_
             optimize_fn = opt_with_ss_tabi_sgd
         else:
-            raise NotImplementedError(f"Unknown optimize_fn {config['optimize_fn']}")
+            raise NotImplementedError(f"Unknown optimize_fn_name {optimize_fn_name}")
 
         hparams = Hyperparams(
             **config, **hparam_consts, ray=True, burnin=burnin
@@ -341,5 +343,14 @@ def meta_optimize_design(
     )
     with open(os.path.join(result.experiment_path, 'metadata.pkl'), 'wb') as f:
         pickle.dump(metadata, f)
+
+    # Also pickle the trial dataframes, cz that's easier to work with than all the serialized results that tensorboard
+    #  uses. result.trial_dataframes is a dict of dataframes.
+    with open(os.path.join(result.experiment_path, 'trial_dataframes.pkl'), 'wb') as f:
+        pickle.dump(result.trial_dataframes, f)
+
+    # Also pickle result.results_df, a dataframe summarizing each trial.
+    with open(os.path.join(result.experiment_path, 'results_df.pkl'), 'wb') as f:
+        pickle.dump(result.results_df, f)
 
     return result
