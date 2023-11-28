@@ -14,5 +14,6 @@ from .optimize_sgd_fns import (
     adjust_grads_,
     clip_norm_,
     Hyperparams,
-    OptimizerFnRet
+    OptimizerFnRet,
+    meta_optimize_design
 )

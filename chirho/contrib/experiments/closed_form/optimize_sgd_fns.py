@@ -12,6 +12,7 @@ from pyro.infer.autoguide.initialization import init_to_value
 from ray import tune
 from ray.air import session
 from ray.tune.schedulers import ASHAScheduler
+import warnings
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -62,7 +63,7 @@ def _loss(problem: cfe.CostRiskProblem, theta: np.ndarray) -> float:
 def clip_norm_(grad_est, clip):
     # suffix_ is torch convention for in-place operations.
     if isinstance(clip, float):
-        clip = torch.tensor(clip)
+        clip = torch.tensor(clip, dtype=grad_est.dtype)
     if clip <= 0.:
         raise ValueError(f"clip must be positive, got {clip}")
 
@@ -87,12 +88,13 @@ def get_decayed_lr(original_lr: float, decay_at_max_steps: float, max_steps: int
 
 class Hyperparams:
 
-    def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float):
+    def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float, ray: bool):
         self.lr = lr
         self.clip = clip
         self.num_steps = num_steps
         self.tabi_num_samples = tabi_num_samples
         self.decay_at_max_steps = decay_at_max_steps
+        self.ray = ray
 
     @property
     def mc_num_samples(self):
@@ -124,10 +126,11 @@ def do_loop(
     total_steps = hparams.num_steps + burnin
 
     for i in range(total_steps):
-        print(f"{pref} {i:05d}/{total_steps}", end="\r")
+        if not hparams.ray:
+            print(f"{pref} {i:05d}/{total_steps}", end="\r")
         grad_est = do.estimate_grad()
         if (~torch.isfinite(grad_est)).any():
-            print("non-finite est", grad_est)
+            warnings.warn("non-finite est in grad_est, skipping step")
             continue
         if i < burnin:
             continue
@@ -147,9 +150,10 @@ def do_loop(
         theta.grad.zero_()
         losses.append(_loss(problem, traj[-1]))
 
-        session.report(dict(
-            loss=losses[-1],
-        ))
+        if hparams.ray:
+            session.report(dict(
+                loss=losses[-1],
+            ))
 
         # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
         #  from some preceding scores.
@@ -159,7 +163,8 @@ def do_loop(
             break
     print()
 
-    return OptimizerFnRet(np.array(traj)[:-1], np.array(losses)[:-1], np.array(grad_ests), np.array(lrs))
+    if not hparams.ray:
+        return OptimizerFnRet(np.array(traj)[:-1], np.array(losses)[:-1], np.array(grad_ests), np.array(lrs))
 
 
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
@@ -282,7 +287,7 @@ def meta_optimize_design(
 
     def configgabble_optimize_fn(config: Dict):
         hparams = Hyperparams(
-            **config, **hparam_consts
+            **config, **hparam_consts, ray=True
         )
 
         return optimize_fn(problem, hparams)
@@ -291,6 +296,7 @@ def meta_optimize_design(
         metric="loss",
         mode="min",
         max_t=hparam_consts['num_steps'] + 1,
+        grace_period=hparam_consts['num_steps'] // 10,
         stop_last_trials=False)
 
     result = tune.run(
