@@ -83,17 +83,13 @@ def test_append():
 
 
 def test_start_end_time_collisions():
-    from chirho.dynamical.ops import State, simulate
-    from chirho.dynamical.handlers.solver import TorchDiffEq
-    from chirho.dynamical.handlers.trajectory import LogTrajectory
-
     def dynamics(s: State) -> State:
         return State(X=s["X"] * (1 - s["X"]))
-                     
-    init_state = State(X=torch.tensor(0.5))
-    start_time, end_time = torch.tensor(0.), torch.tensor(3.)
 
-    with TorchDiffEq(), LogTrajectory(times=torch.tensor([0., 1., 2., 3.])) as log:
+    init_state = State(X=torch.tensor(0.5))
+    start_time, end_time = torch.tensor(0.0), torch.tensor(3.0)
+
+    with TorchDiffEq(), LogTrajectory(times=torch.tensor([0.0, 1.0, 2.0, 3.0])) as log:
         simulate(dynamics, init_state, start_time, end_time)
 
     assert len(log.trajectory["X"]) == len(log.times) == 4  # fails bc len(X) == 2
