@@ -281,7 +281,6 @@ OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]
 
 
 def meta_optimize_design(
-        optimize_fn: OFN,
         problem: cfe.CostRiskProblem,
         # stuff not defined in hparam space will need be passed in here.
         hparam_consts: Dict,
@@ -295,17 +294,28 @@ def meta_optimize_design(
         clip=tune.loguniform(1e-2, 1e1),
         # FIXME this is actually 1 - decay at max steps. TODO Rename.
         decay_at_max_steps=tune.uniform(0.1, 1.),
+        optimize_fn_name=tune.grid_search([opt_with_mc_sgd.__name__, opt_with_ss_tabi_sgd.__name__])
     )
 
+    burnin_ = hparam_consts.pop('burnin')
+
     def configgabble_optimize_fn(config: Dict):
+        optimize_fn_name = config.pop('optimize_fn_name')
+
+        if optimize_fn_name == opt_with_mc_sgd.__name__:
+            burnin = 0  # No burnin for MC.
+            optimize_fn = opt_with_mc_sgd
+        elif optimize_fn_name == opt_with_ss_tabi_sgd.__name__:
+            burnin = burnin_
+            optimize_fn = opt_with_ss_tabi_sgd
+        else:
+            raise NotImplementedError(f"Unknown optimize_fn {config['optimize_fn']}")
+
         hparams = Hyperparams(
-            **config, **hparam_consts, ray=True
+            **config, **hparam_consts, ray=True, burnin=burnin
         )
 
         return optimize_fn(problem, hparams)
-
-    # Override name that raytune will use.
-    configgabble_optimize_fn.__name__ = f"{optimize_fn.__name__}_rt"
 
     scheduler = ASHAScheduler(
         metric="recent_loss_mean",
@@ -322,11 +332,14 @@ def meta_optimize_design(
     )
 
     # Instead of above, pickle and save problem to result.experiment_path.
-    # Between this and the session reports, this is all that is needed to fully reconstruct the problem
-    #  and the optimization loop.
-    problem.alg = optimize_fn.__name__
-    problem.hparam_consts = hparam_consts
     with open(os.path.join(result.experiment_path, 'cost_risk_problem.pkl'), 'wb') as f:
         pickle.dump(problem, f)
+
+    # Also save other metadata for the experiment.
+    metadata = dict(
+        hparam_consts=hparam_consts
+    )
+    with open(os.path.join(result.experiment_path, 'metadata.pkl'), 'wb') as f:
+        pickle.dump(metadata, f)
 
     return result

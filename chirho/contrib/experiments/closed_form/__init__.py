@@ -15,5 +15,6 @@ from .optimize_sgd_fns import (
     clip_norm_,
     Hyperparams,
     OptimizerFnRet,
-    meta_optimize_design
+    meta_optimize_design,
 )
+from .deserialize_from_ray import deserialize_from_ray
