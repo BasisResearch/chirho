@@ -19,6 +19,10 @@ from copy import copy
 from pyro.util import set_rng_seed
 from chirho.contrib.experiments.grouped_asha import GroupedASHA
 from itertools import product
+import pyro
+
+pyro.settings.set(module_local_params=True)
+
 
 MOD = 1
 
@@ -65,7 +69,7 @@ def sgd_convergence_check(sgd_losses: List[float], problem: cfe.CostRiskProblem,
 
 
 def _loss(problem: cfe.CostRiskProblem, theta: np.ndarray) -> float:
-    return problem.ana_loss(torch.tensor(theta)).item()
+    return problem.ana_loss(torch.tensor(theta)).detach().item()
 
 
 def clip_norm_(grad_est, clip):
@@ -97,7 +101,7 @@ def get_decayed_lr(original_lr: float, decay_at_max_steps: float, max_steps: int
 class Hyperparams:
 
     def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float,
-                 burnin: int, convergence_check_window: int, ray: bool):
+                 burnin: int, convergence_check_window: int, ray: bool, n: int):
         self.lr = lr
         self.clip = clip
         self.num_steps = num_steps
@@ -106,12 +110,14 @@ class Hyperparams:
         self.burnin = burnin
         self.convergence_check_window = convergence_check_window
         self.ray = ray
+        self.n = n
 
     @property
     def mc_num_samples(self):
         # *2 from the positive and negative components
         # *4 from the conservative estimate that each backward pass takes 3x as long as the 1x forward pass.
-        return self.tabi_num_samples * 2 * 4
+        # *n for the n different estimation problems TABI is responsible for.
+        return self.tabi_num_samples * 2 * 4 * self.n
 
 
 class OptimizerFnRet:
@@ -165,12 +171,16 @@ def do_loop(
         # Short detour to report to ray.
         if hparams.ray and i % MOD == 0:
             report = dict(
-                recent_loss_mean=np.mean(losses[-MOD:]),
+                recent_loss_mean=np.mean(losses[-500:]),
                 loss=losses[-1],
                 lr=lrs[-1],
                 grad_est=grad_ests[-1],
                 theta=traj[-1]
             )
+            # FIXME hack to maybe fix memory issues?
+            for k, v in report.items():
+                if isinstance(v, torch.Tensor):
+                    report[k] = v.detach().numpy()
             session.report(report)
 
         # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
@@ -299,7 +309,8 @@ def meta_optimize_design(
         clip=tune.loguniform(1e-2, 1e1),
         # FIXME this is actually 1 - decay at max steps. TODO Rename.
         decay_at_max_steps=tune.uniform(0.1, 1.),
-        optimize_fn_name=tune.grid_search([opt_with_mc_sgd.__name__, opt_with_ss_tabi_sgd.__name__])
+        optimize_fn_name=tune.grid_search([opt_with_mc_sgd.__name__, opt_with_ss_tabi_sgd.__name__]),
+        tabi_num_samples=tune.grid_search([1, 3])
     )
 
     # Extend the hparams space with the ranges for the problem settings.
@@ -309,6 +320,7 @@ def meta_optimize_design(
     burnin_ = hparam_consts.pop('burnin')
 
     def configgabble_optimize_fn(config: Dict):
+        pyro.clear_param_store()
         config = copy(config)  # Because pop modifies in place, which messes up ray.
         optimize_fn_name = config.pop('optimize_fn_name')
 
@@ -334,7 +346,7 @@ def meta_optimize_design(
 
         hparams = Hyperparams(
             # The only things left in config are hyperparam arguments.
-            **config, **hparam_consts, ray=True, burnin=burnin
+            **config, **hparam_consts, ray=True, burnin=burnin, n=n
         )
 
         return optimize_fn(problem, hparams)
@@ -374,5 +386,8 @@ def meta_optimize_design(
     # Also pickle result.results_df, a dataframe summarizing each trial.
     with open(os.path.join(result.experiment_path, 'results_df.pkl'), 'wb') as f:
         pickle.dump(result.results_df, f)
+
+    # Write the results_df to a csv in the same location.
+    result.results_df.to_csv(os.path.join(result.experiment_path, 'results_df.csv'))
 
     return result
