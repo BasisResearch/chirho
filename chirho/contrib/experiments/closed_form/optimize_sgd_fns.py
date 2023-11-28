@@ -16,6 +16,7 @@ import warnings
 import os
 import pickle
 from copy import copy
+from pyro.util import set_rng_seed
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -282,8 +283,7 @@ OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]
 
 
 def meta_optimize_design(
-        problem: cfe.CostRiskProblem,
-        # stuff not defined in hparam space will need be passed in here.
+        problem_setting_kwargs: Dict,  # everything for params plus a 'seed'
         hparam_consts: Dict,
         tune_kwargs: Dict
 ):
@@ -297,6 +297,10 @@ def meta_optimize_design(
         decay_at_max_steps=tune.uniform(0.1, 1.),
         optimize_fn_name=tune.grid_search([opt_with_mc_sgd.__name__, opt_with_ss_tabi_sgd.__name__])
     )
+
+    # Extend the hparams space with the ranges for the problem settings.
+    for k, v in problem_setting_kwargs.items():
+        hparam_space[k] = tune.grid_search(v)
 
     burnin_ = hparam_consts.pop('burnin')
 
@@ -313,7 +317,19 @@ def meta_optimize_design(
         else:
             raise NotImplementedError(f"Unknown optimize_fn_name {optimize_fn_name}")
 
+        q = config.pop('q')
+        n = config.pop('n')
+        rstar = config.pop('rstar')
+        theta0_rstar_delta = config.pop('theta0_rstar_delta')
+        seed = config.pop('seed')
+
+        set_rng_seed(seed)
+        problem = cfe.CostRiskProblem(
+            q=q, n=n, rstar=rstar, theta0_rstar_delta=theta0_rstar_delta
+        )
+
         hparams = Hyperparams(
+            # The only things left in config are hyperparam arguments.
             **config, **hparam_consts, ray=True, burnin=burnin
         )
 
@@ -333,11 +349,7 @@ def meta_optimize_design(
         **tune_kwargs
     )
 
-    # Instead of above, pickle and save problem to result.experiment_path.
-    with open(os.path.join(result.experiment_path, 'cost_risk_problem.pkl'), 'wb') as f:
-        pickle.dump(problem, f)
-
-    # Also save other metadata for the experiment.
+    # Save metadata for the experiment.
     metadata = dict(
         hparam_consts=hparam_consts
     )
