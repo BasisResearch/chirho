@@ -278,7 +278,7 @@ def torchdiffeq_combined_event_f(
         )
 
         return torch.stack(
-            torch.broadcast_tensors(*[di.event_f(t, state) for di in interruptions]),
+            torch.broadcast_tensors(*[di.event_fn(t, state) for di in interruptions]),
             dim=-1,
         )
 
