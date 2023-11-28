@@ -1,7 +1,16 @@
+from __future__ import annotations
+
+from typing import TypeVar
+
+import torch
+
 from chirho.dynamical.internals.solver import Solver
 
+S = TypeVar("S")
+T = TypeVar("T")
 
-class TorchDiffEq(Solver):
+
+class TorchDiffEq(Solver[torch.Tensor]):
     def __init__(self, rtol=1e-7, atol=1e-9, method=None, options=None):
         self.rtol = rtol
         self.atol = atol
@@ -54,7 +63,7 @@ class TorchDiffEq(Solver):
             initial_state,
             start_time,
             end_time,
-            **msg["kwargs"]
+            **msg["kwargs"],
         )
         msg["done"] = True
 

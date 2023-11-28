@@ -1,8 +1,7 @@
-import contextlib
 import numbers
 import sys
 import typing
-from typing import Callable, Dict, Generic, Optional, TypeVar, Union
+from typing import Callable, Dict, Generic, TypeVar, Union
 
 import pyro
 import torch
@@ -31,8 +30,6 @@ def simulate(
     initial_state: State[T],
     start_time: R,
     end_time: R,
-    *,
-    solver: Optional[pyro.poutine.messenger.Messenger] = None,
     **kwargs,
 ) -> State[T]:
     """
@@ -40,7 +37,6 @@ def simulate(
     """
     from chirho.dynamical.internals.solver import check_dynamics, simulate_point
 
-    with contextlib.nullcontext() if solver is None else solver:
-        if pyro.settings.get("validate_dynamics"):
-            check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
-        return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
+    if pyro.settings.get("validate_dynamics"):
+        check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
+    return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
