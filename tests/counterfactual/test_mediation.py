@@ -11,7 +11,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.interventional.handlers import DoMessenger, do
+from chirho.interventional.handlers import Interventions, do
 from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ def test_do_api(x_cf_value):
     model = make_mediation_model(*linear_fs())
 
     # These APIs should be equivalent
-    intervened_model_1 = DoMessenger({"X": x_cf_value})(model)
+    intervened_model_1 = Interventions({"X": x_cf_value})(model)
     intervened_model_2 = do(model, {"X": x_cf_value})
 
     W_1, X_1, Z_1, Y_1 = TwinWorldCounterfactual(-1)(intervened_model_1)()
