@@ -82,7 +82,7 @@ def test_append():
     ), "append() failed to append a trajectory"
 
 
-def test_mwe_fail():
+def test_start_end_time_collisions():
     from chirho.dynamical.ops import State, simulate
     from chirho.dynamical.handlers.solver import TorchDiffEq
     from chirho.dynamical.handlers.trajectory import LogTrajectory
@@ -93,7 +93,7 @@ def test_mwe_fail():
     init_state = State(X=torch.tensor(0.5))
     start_time, end_time = torch.tensor(0.), torch.tensor(3.)
 
-    with TorchDiffEq(), LogTrajectory(times=torch.tensor([0., 1., 2.])) as log:
+    with TorchDiffEq(), LogTrajectory(times=torch.tensor([0., 1., 2., 3.])) as log:
         simulate(dynamics, init_state, start_time, end_time)
 
-    assert len(log.trajectory["X"]) == len(log.times) == 3  # fails bc len(X) == 2
+    assert len(log.trajectory["X"]) == len(log.times) == 4  # fails bc len(X) == 2
