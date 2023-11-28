@@ -159,17 +159,6 @@ def simulate_to_interruption(
     raise NotImplementedError("No default behavior for simulate_to_interruption")
 
 
-@pyro.poutine.runtime.effectful(type="apply_interruptions")
-def apply_interruptions(
-    dynamics: Dynamics[T], start_state: State[T]
-) -> Tuple[Dynamics[T], State[T]]:
-    """
-    Apply the effects of an interruption to a dynamical system.
-    """
-    # Default is to do nothing.
-    return dynamics, start_state
-
-
 @pyro.poutine.runtime.effectful(type="check_dynamics")
 def check_dynamics(
     dynamics: Dynamics[T],
