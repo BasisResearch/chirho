@@ -90,12 +90,15 @@ def get_decayed_lr(original_lr: float, decay_at_max_steps: float, max_steps: int
 
 class Hyperparams:
 
-    def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float, ray: bool):
+    def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float,
+                 burnin: int, convergence_check_window: int, ray: bool):
         self.lr = lr
         self.clip = clip
         self.num_steps = num_steps
         self.tabi_num_samples = tabi_num_samples
         self.decay_at_max_steps = decay_at_max_steps
+        self.burnin = burnin
+        self.convergence_check_window = convergence_check_window
         self.ray = ray
 
     @property
@@ -118,12 +121,13 @@ def do_loop(
         problem: cfe.CostRiskProblem,
         do: DecisionOptimizer,
         theta: torch.Tensor,
-        hparams: Hyperparams,
-        burnin: int = 0) -> OptimizerFnRet:
+        hparams: Hyperparams) -> OptimizerFnRet:
     traj = [theta.detach().clone().numpy()]
     losses = [_loss(problem, traj[-1])]
     grad_ests = []
     lrs = []
+
+    burnin = hparams.burnin
 
     total_steps = hparams.num_steps + burnin
 
@@ -154,7 +158,7 @@ def do_loop(
 
         # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
         #  from some preceding scores.
-        recent = less_recent = 1000
+        recent = less_recent = hparams.convergence_check_window
 
         # Short detour to report to ray.
         if hparams.ray:
@@ -270,10 +274,6 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         hparams=hparams,
         do=do,
         theta=theta,
-        # Fine-tune the guides for 500 steps before proceeding. We initialize them to be very close to optimal
-        #  at the beginning, but this tuning aligns them with the gradient of the risk curve, whereas we initialize
-        #  them to be aligned with the risk curve itself.
-        burnin=500
     )
 
 
@@ -303,6 +303,9 @@ def meta_optimize_design(
         )
 
         return optimize_fn(problem, hparams)
+
+    # Override name that raytune will use.
+    configgabble_optimize_fn.__name__ = f"{optimize_fn.__name__}_rt"
 
     scheduler = ASHAScheduler(
         metric="recent_loss_mean",
