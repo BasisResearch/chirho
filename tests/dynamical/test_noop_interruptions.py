@@ -168,9 +168,7 @@ def test_noop_dynamic_interruption(
 
     with TorchDiffEq():
         tt = (end_time - start_time) / 2.0
-        with DynamicInterruption(
-            event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
-        ):
+        with DynamicInterruption(lambda t, _: torch.where(t < tt, tt - t, 0.0)):
             result_dint = simulate(model, init_state, start_time, end_time)
 
     assert check_states_match(observational_execution_result, result_dint)
