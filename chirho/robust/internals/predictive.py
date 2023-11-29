@@ -83,6 +83,8 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     num_samples: int
     max_plate_nesting: Optional[int]
 
+    _particle_plate_name: str
+
     def __init__(
         self,
         model: torch.nn.Module,
@@ -90,12 +92,14 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
+        particle_plate_name: str = "__predictive_particles",
     ):
         super().__init__()
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
+        self._particle_plate_name = particle_plate_name
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
         if self.max_plate_nesting is None:
@@ -145,7 +149,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     max_plate_nesting: Optional[int]
 
     _predictive_model: PredictiveFunctional[P, T]
-    _particle_plate_name: str = "__predictive_particles"
+    _particle_plate_name: str
 
     def __init__(
         self,
@@ -154,14 +158,20 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
+        particle_plate_name: str = "__predictive_particles",
     ):
         super().__init__()
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
+        self._particle_plate_name = particle_plate_name
         self._predictive_model = PredictiveFunctional(
-            self.model, self.guide, num_samples=1, max_plate_nesting=max_plate_nesting
+            self.model,
+            self.guide,
+            num_samples=1,
+            max_plate_nesting=max_plate_nesting,
+            particle_plate_name=self._particle_plate_name,
         )
 
     def forward(
