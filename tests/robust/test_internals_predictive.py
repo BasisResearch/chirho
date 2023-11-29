@@ -60,7 +60,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
 @pytest.mark.parametrize("num_samples", [10, 100])
-def test_nmc_log_prob_dice(
+def test_grad_nmc_log_prob(
     model,
     guide,
     obs_names,
@@ -68,7 +68,7 @@ def test_nmc_log_prob_dice(
     num_samples,
 ):
     model = model()
-    guide = guide(model)
+    guide = guide(pyro.poutine.block(hide=obs_names)(model))
 
     model(), guide()  # initialize
 
@@ -78,7 +78,6 @@ def test_nmc_log_prob_dice(
         num_samples=num_samples,
         max_plate_nesting=max_plate_nesting,
     )
-    log_prob_params, func_log_prob = make_functional_call(log_prob)
 
     with torch.no_grad():
         test_datum = {
@@ -93,11 +92,15 @@ def test_nmc_log_prob_dice(
     assert not torch.isinf(test_datum_log_prob)
     assert not torch.isclose(test_datum_log_prob, torch.zeros_like(test_datum_log_prob)).all()
 
+    log_prob_params, func_log_prob = make_functional_call(log_prob)
     grad_test_datum_log_prob = torch.func.grad(func_log_prob)(log_prob_params, test_datum)
+
+    # test_datum_log_prob.backward()
+    # grad_test_datum_log_prob = {k: v.grad for k, v in log_prob.named_parameters()}
+
     assert len(grad_test_datum_log_prob) > 0
     for k, v in grad_test_datum_log_prob.items():
-        assert not torch.isnan(v).any(), f"eif for {k} had nans"
-        assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
-
-
+        assert v is not None, f"grad for {k} was None"
+        assert not torch.isnan(v).any(), f"grad for {k} had nans"
+        assert not torch.isinf(v).any(), f"grad for {k} had infs"
+        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"grad for {k} was zero"

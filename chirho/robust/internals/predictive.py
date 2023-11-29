@@ -18,15 +18,17 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class DiceMultiFrameTensor(pyro.infer.util.MultiFrameTensor):
-    def sum_to(
-        self,
-        target_frames: Container[pyro.poutine.indep_messenger.CondIndepStackFrame],
-        event_dim: int = 0,
-    ) -> torch.Tensor:
-        log_q = super().sum_to(target_frames)
-        log_dice = log_q - log_q.detach()
-        return log_dice.expand(log_dice.shape + (1,) * event_dim)
+def dice_correction(
+    log_dice_weights: pyro.infer.util.MultiFrameTensor,
+    value: torch.Tensor,
+    *,
+    event_dim: int = 0,
+) -> torch.Tensor:
+    all_frames = set().union(*log_dice_weights.keys())
+    target_frames = {f for f in all_frames if value.shape[f.dim - event_dim] > 1}
+    log_q = torch.as_tensor(log_dice_weights.sum_to(target_frames), device=value.device)
+    log_weight = (log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)
+    return log_weight.exp() * value
 
 
 def _dice_importance_weights(
@@ -43,15 +45,16 @@ def _dice_importance_weights(
         any(f.name == particle_plate_name for f in fs) for fs in plate_stacks.values()
     )
 
-    log_dice = DiceMultiFrameTensor()
+    log_dice = pyro.infer.util.MultiFrameTensor()
     log_weights = torch.zeros_like(model_trace.log_prob_sum())
 
     for name, node in guide_trace.nodes.items():
         if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            log_prob = node["log_prob"]
             if not node["is_observed"] and not node["fn"].has_rsample:
-                log_dice.add((plate_stacks[name], node["log_prob"]))
+                log_dice.add((plate_stacks[name], log_prob))
 
-            node_weight = log_dice.sum_to(plate_stacks[name]) * node["log_prob"]
+            node_weight = dice_correction(log_dice, log_prob)
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
@@ -60,14 +63,15 @@ def _dice_importance_weights(
 
     for name, node in model_trace.nodes.items():
         if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            log_prob = node["log_prob"]
             if (
                 name not in guide_trace.nodes
                 and not node["is_observed"]
                 and not node["fn"].has_rsample
             ):
-                log_dice.add((plate_stacks[name], node["log_prob"]))
+                log_dice.add((plate_stacks[name], log_prob))
 
-            node_weight = log_dice.sum_to(plate_stacks[name]) * node["log_prob"]
+            node_weight = dice_correction(log_dice, log_prob)
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
@@ -125,7 +129,6 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
                 name
                 for name, node in guide_tr.trace.nodes.items()
                 if node["type"] == "sample"
-                and not pyro.poutine.util.site_is_subsample(node)
             ]
         )
 
