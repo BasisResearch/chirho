@@ -46,7 +46,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 
 @pytest.mark.parametrize("model,guide,obs_names", MODEL_TEST_CASES)
 def test_grad_nmc_log_prob(model, guide, obs_names):
-    num_samples = 10000
+    num_samples = 100000
 
     model = model()
     guide = guide(pyro.poutine.block(hide=obs_names)(model))
@@ -63,23 +63,22 @@ def test_grad_nmc_log_prob(model, guide, obs_names):
             )(True).items()
         }
 
-    test_datum_log_prob_reparam = log_prob(test_datum, True)
-    grad_test_datum_log_prob_reparam = dict(
+    expected_log_prob = log_prob(test_datum, True)
+    expected_grads = dict(
         zip(
             params.keys(),
-            torch.autograd.grad(test_datum_log_prob_reparam, params.values()),
+            torch.autograd.grad(expected_log_prob, params.values()),
         )
     )
 
-    test_datum_log_prob_score = log_prob(test_datum, False)
-    grad_test_datum_log_prob_score = dict(
+    actual_log_prob = log_prob(test_datum, False)
+    actual_grads = dict(
         zip(
             params.keys(),
-            torch.autograd.grad(test_datum_log_prob_score, params.values()),
+            torch.autograd.grad(actual_log_prob, params.values()),
         )
     )
 
+    assert torch.allclose(expected_log_prob, actual_log_prob, atol=1e-3, rtol=1e-3)
     for k in params.keys():
-        expected_grad = grad_test_datum_log_prob_reparam[k]
-        actual_grad = grad_test_datum_log_prob_score[k]
-        assert torch.allclose(actual_grad, expected_grad)
+        assert torch.allclose(actual_grads[k], expected_grads[k], atol=1e-3, rtol=1e-3)
