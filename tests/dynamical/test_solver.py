@@ -1,11 +1,16 @@
+import juliacall  # Must precede even indirect torch imports to prevent segfault.
+
 import logging
 
+import numpy as np
 import pyro
 import pytest
 import torch
 
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.internals.backends.diffeqdotjl import _diffeqdotjl_ode_simulate_inner
+from chirho.dynamical.internals.backends.torchdiffeq import _torchdiffeq_ode_simulate_inner
 
 from .dynamical_fixtures import bayes_sir_model
 
@@ -30,3 +35,24 @@ def test_backend_arg():
     with TorchDiffEq():
         result = simulate(sir, init_state, start_time, end_time)
     assert result is not None
+
+
+def test_inner_simulates_of_solvers_match():
+    sp0 = State(x=torch.tensor(10.), c=torch.tensor(0.1))
+    timespan = torch.linspace(0., 10., 10)
+
+    diffeqdotjl_res = _diffeqdotjl_ode_simulate_inner(
+        dynamics=lambda s: State(x=-s['x'] * s['c']),
+        initial_state_and_params=sp0,
+        timespan=timespan
+    )
+
+    torchdiffeq_res = _torchdiffeq_ode_simulate_inner(
+        dynamics=lambda s: State(x=-s['x'] * s['c']),
+        initial_state=sp0,
+        timespan=timespan
+    )
+
+    assert torch.allclose(diffeqdotjl_res['x'], torchdiffeq_res['x'])
+
+    # TODO gradcheck.

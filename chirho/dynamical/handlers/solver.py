@@ -79,3 +79,21 @@ class TorchDiffEq(Solver[torch.Tensor]):
             dynamics, initial_state, start_time, end_time, **msg["kwargs"]
         )
         msg["done"] = True
+
+
+class DiffEqDotJL(Solver[torch.Tensor]):
+
+    def __init__(self):
+        super().__init__()
+
+    def _pyro_simulate_point(self, msg) -> None:
+        raise NotImplementedError
+
+    def _pyro_simulate_trajectory(self, msg) -> None:
+        raise NotImplementedError
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        raise NotImplementedError
+
+    def _pyro_check_dynamics(self, msg) -> None:
+        raise NotImplementedError
