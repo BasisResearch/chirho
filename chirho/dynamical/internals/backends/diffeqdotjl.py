@@ -8,6 +8,7 @@ from diffeqpy import de
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
 from chirho.dynamical.ops import Dynamics, State as StateAndOrParams
+# TODO convert shaping stuff to use this so that twin worlds work.
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 from torch import Tensor as Tnsr
 from juliatorch import JuliaFunction
@@ -18,7 +19,7 @@ import numpy as np
 from typing import Union
 from functools import singledispatch
 
-# TODO a lot of this is shared with torchdiffeq and needs to be moved to utils etc.
+# TODO some of this is shared with torchdiffeq and needs to be moved to utils etc.
 
 
 def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
@@ -94,11 +95,7 @@ def assign_numpy_(v: np.ndarray, out: Union[np.ndarray, juliacall.ArrayValue]):
 
 def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
     var_order = get_var_order(state_ao_params)
-
-    try:
-        return cat(*[state_ao_params[v] for v in var_order])
-    except Exception as e:
-        raise  # TODO remove, for breakpoint.
+    return cat(*[state_ao_params[v] for v in var_order])
 
 
 def _unflatten_state(
@@ -231,4 +228,3 @@ def _diffeqdotjl_ode_simulate_inner(
 
     # Unflatten the trajectory.
     return _unflatten_state(flat_traj, initial_state, to_traj=True)
-

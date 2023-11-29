@@ -62,10 +62,7 @@ def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd):
     timespan = torch.linspace(0., 10., 10).double()
 
     def dynamics(s: State):
-        try:
-            return State(x=-(s['x'] * s['c']))
-        except Exception as e:
-            raise  # TODO remove this — for breakpoint
+        return State(x=-(s['x'] * s['c']))
 
     def wrapped_simulate_inner(c):
         sp0 = State(x=torch.tensor(10.).double(), c=c)
