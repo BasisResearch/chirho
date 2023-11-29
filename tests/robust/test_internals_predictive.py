@@ -17,6 +17,19 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+class ScalarModel(pyro.nn.PyroModule):
+    def __init__(self):
+        super().__init__()
+        self.loc_a = torch.nn.Parameter(torch.rand(()))
+
+    def forward(self, use_rsample: bool):
+        Normal = (
+            dist.Normal if use_rsample else dist.testing.fakes.NonreparameterizedNormal
+        )
+        a = pyro.sample("a", Normal(self.loc_a, 1))
+        return pyro.sample("y", Normal(a, 1))
+
+
 class SimpleModel(pyro.nn.PyroModule):
     def __init__(self):
         super().__init__()
@@ -40,6 +53,7 @@ ModelTestCase = Tuple[
 ]
 
 MODEL_TEST_CASES: List[ModelTestCase] = [
+    (ScalarModel, lambda _: lambda *args: None, {"y"}),
     (SimpleModel, lambda _: lambda *args: None, {"y"}),
 ]
 
