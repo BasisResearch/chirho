@@ -28,30 +28,37 @@ def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
 # Single dispatch cat thing that handles both tensors and numpy arrays.
 @singledispatch
 def cat(*vecs):
-    raise NotImplementedError
+    # Default implementation assumes we're dealing some underying julia thing that needs to be put back into an array.
+    # This will re-route to the numpy implementation.
+    # FIXME this causes infinite recursion — does recursive dispatching not work from within the default implementation?
+    # return cat(*np.atleast_1d(vecs))
+    return cat_numpy(*np.atleast_1d(vecs))
 
 
 @cat.register
-def _(*vecs: Tnsr):
-    return torch.cat(vecs)
+def cat_torch(*vecs: Tnsr):
+    return torch.cat([v.ravel() for v in vecs])
 
 
 @cat.register
-def _(*vecs: np.ndarray):
-    return np.concatenate(vecs)
+def cat_numpy(*vecs: np.ndarray):
+    return np.concatenate([v.ravel() for v in vecs])
 
 
 def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
     var_order = get_var_order(state_ao_params)
 
-    return cat(*[state_ao_params[v].ravel() for v in var_order])
+    try:
+        return cat(*[state_ao_params[v] for v in var_order])
+    except Exception as e:
+        raise  # TODO remove, for breakpoint.
 
 
 def _unflatten_state(
         flat_state_ao_params: Tnsr,
-        shaped_state_ao_params: StateAndOrParams[Tnsr],
+        shaped_state_ao_params: StateAndOrParams[Union[Tnsr, juliacall.VectorValue]],
         to_traj: bool = False
-) -> StateAndOrParams[Tnsr]:
+) -> StateAndOrParams[Union[Tnsr, np.ndarray]]:
 
     var_order = get_var_order(shaped_state_ao_params)
     state_ao_params = StateAndOrParams()
@@ -59,13 +66,32 @@ def _unflatten_state(
         shaped = shaped_state_ao_params[v]
         shape = shaped.shape
         if to_traj:
+            # If this is a trajectory of states, the dimension following the original shape's state will be time,
+            #  and because we know the rest of the shape we can auto-detect its size with -1.
             shape += (-1,)
-        state_ao_params[v] = flat_state_ao_params[:shaped.numel()].reshape(shape)
+        sv = flat_state_ao_params[:shaped.numel()].reshape(shape)
+
+        # FIXME ***** FIXME
+        # This has to be converted to a numpy array of non-array values because juliacall.ArrayValues don't support
+        #  math with each other. E.g. if the dynamics involve x * y where both are a juliacall.ArrayValue,
+        #  the operation with fail with an AttributeError on __mul__. Converting to numpy is only slightly better,
+        #  however, as vectorized math seem to work in this context UNLESS using Dual numbers,
+        #  in which case some vectorized math breaks. For example — at least when x and y are 0 dim arrays — x * y
+        #  works but -x, or -y does not, while -(x * y) does.
+
+        # E.g. jl("Float64[0., 1., 2.]") * jl("Float64[0., 1., 2.]") does not work,
+        #  while jl("Float64[0., 1., 2.]").to_numpy() * jl("Float64[0., 1., 2.]").to_numpy()
+        # FIXME ***** FIXME
+        if isinstance(sv, juliacall.ArrayValue):
+            sv = sv.to_numpy(copy=False)
+        assert isinstance(sv, np.ndarray) or isinstance(sv, Tnsr)
+
+        state_ao_params[v] = sv
         flat_state_ao_params = flat_state_ao_params[shaped.numel():]
     return state_ao_params
 
 
-def differentiate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr]):
+def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr]):
     """
     Non-explicitly (bad?), the initial_state must include parameters that inform dynamics. This is required
      for this backend because the solve function passed to Julia must be a pure wrt to parameters that
@@ -96,7 +122,7 @@ def _diffeqdotjl_ode_simulate_inner(
     timespan: Tnsr
 ) -> StateAndOrParams[torch.tensor]:
 
-    initial_state, torch_params = differentiate_state_and_params(dynamics, initial_state_and_params)
+    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
 
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
     def ode_f(flat_dstate, flat_state, flat_params, t):
@@ -115,7 +141,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.
-    # TODO make a PR to juliacall that handles this complexity there.
+    # TODO make a PR to juliatorch that handles this complexity there.
     flat_initial_state = _flatten_state_ao_params(initial_state)
     flat_torch_params = _flatten_state_ao_params(torch_params)
     outer_u0_t_p = torch.cat([flat_initial_state, timespan, flat_torch_params])

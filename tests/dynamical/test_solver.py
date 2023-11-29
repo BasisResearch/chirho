@@ -32,12 +32,12 @@ def test_no_backend_error():
 
 def test_backend_arg():
     sir = bayes_sir_model()
-    with TorchDiffEq():
+    with TorchDiffEq():  # TODO parameterize and use diffeqdotjl
         result = simulate(sir, init_state, start_time, end_time)
     assert result is not None
 
 
-def test_inner_simulates_of_solvers_match():
+def test_inner_simulates_of_solvers_match_forward():
     sp0 = State(x=torch.tensor(10.), c=torch.tensor(0.1))
     timespan = torch.linspace(0., 10., 10)
 
@@ -55,4 +55,25 @@ def test_inner_simulates_of_solvers_match():
 
     assert torch.allclose(diffeqdotjl_res['x'], torchdiffeq_res['x'])
 
-    # TODO gradcheck.
+
+@pytest.mark.parametrize("simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
+def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd):
+    c_ = torch.tensor(0.1, requires_grad=True)
+    timespan = torch.linspace(0., 10., 10)
+
+    def dynamics(s: State):
+        try:
+            # print(type(s['x']), type(s['c']))
+            return State(x=-(s['x'] * s['c']))
+        except Exception as e:
+            raise  # TODO remove this — for breakpoint
+
+    def wrapped_simulate_inner(c):
+        sp0 = State(x=torch.tensor(10.), c=c)
+        return simulate_inner_bknd(
+            dynamics=dynamics,
+            initial_state_and_params=sp0,
+            timespan=timespan
+        )['x']
+
+    torch.autograd.gradcheck(wrapped_simulate_inner, c_)
