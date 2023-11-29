@@ -1,6 +1,6 @@
 import contextlib
 import math
-from typing import Any, Callable, Container, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import torch
