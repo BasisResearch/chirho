@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Dict, TypeVar
+from typing import Callable, Dict, Optional, TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -14,7 +14,7 @@ pyro.settings.set(module_local_params=True)
 T = TypeVar("T")
 
 
-class SimpleModel(pyro.nn.PyroModule):
+class SimpleModel(PyroModule):
     def forward(self):
         a = pyro.sample("a", dist.Normal(0, 1))
         with pyro.plate("data", 3, dim=-1):
@@ -35,7 +35,7 @@ class SimpleGuide(torch.nn.Module):
             return {"a": a, "b": b}
 
 
-class GaussianModel(pyro.nn.PyroModule):
+class GaussianModel(PyroModule):
     def __init__(self, cov_mat: torch.Tensor):
         super().__init__()
         self.register_buffer("cov_mat", cov_mat)
@@ -65,7 +65,7 @@ class DataConditionedModel(PyroModule):
         super().__init__()
         self.model = model
 
-    def forward(self, D: Dict[str, torch.Tensor]):
+    def forward(self, D: Point[T]):
         with condition(data=D):
             # Assume first dimension corresponds to # of datapoints
             N = D[next(iter(D))].shape[0]
@@ -76,8 +76,10 @@ class HighDimLinearModel(pyro.nn.PyroModule):
     def __init__(
         self,
         p: int,
-        link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
-        prior_scale: float = None,
+        link_fn: Callable[torch.Tensor, dist.Distribution] = lambda mu: dist.Normal(
+            mu, 1.0
+        ),
+        prior_scale: Optional[float] = None,
     ):
         super().__init__()
         self.p = p
@@ -147,7 +149,7 @@ class BenchmarkLinearModel(HighDimLinearModel):
     def __init__(
         self,
         p: int,
-        link_fn: Callable,
+        link_fn: Callable[torch.Tensor, dist.Distribution],
         alpha: int,
         beta: int,
         treatment_weight: float = 0.0,
@@ -184,7 +186,7 @@ class BenchmarkLinearModel(HighDimLinearModel):
 
 
 class MLEGuide(torch.nn.Module):
-    def __init__(self, mle_est: Dict[str, torch.Tensor]):
+    def __init__(self, mle_est: ParamDict):
         super().__init__()
         self.names = list(mle_est.keys())
         for name, value in mle_est.items():
@@ -196,9 +198,7 @@ class MLEGuide(torch.nn.Module):
             pyro.sample(name, dist.Delta(value))
 
 
-def closed_form_ate_correction(
-    X_test: Dict[str, torch.Tensor], theta: Dict[str, torch.Tensor]
-):
+def closed_form_ate_correction(X_test: Point[T], theta: ParamDict):
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
