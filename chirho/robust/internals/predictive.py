@@ -20,11 +20,10 @@ T = TypeVar("T")
 
 
 class DiceMultiFrameTensor(pyro.infer.util.MultiFrameTensor):
-
     def sum_to(
         self,
         target_frames: Container[pyro.poutine.indep_messenger.CondIndepStackFrame],
-        event_dim: int = 0
+        event_dim: int = 0,
     ) -> torch.Tensor:
         log_q = super().sum_to(target_frames)
         log_dice = log_q - log_q.detach()
@@ -39,12 +38,13 @@ def _dice_importance_weights(
     *,
     particle_plate_name: str,
 ) -> torch.Tensor:
-
     model_trace.compute_log_prob()
     guide_trace.compute_log_prob()
     plate_stacks = pyro.infer.util.get_plate_stacks(model_trace)
     plate_stacks.update(pyro.infer.util.get_plate_stacks(guide_trace))
-    assert all(any(f.name == particle_plate_name for f in fs) for fs in plate_stacks.values())
+    assert all(
+        any(f.name == particle_plate_name for f in fs) for fs in plate_stacks.values()
+    )
 
     log_dice = DiceMultiFrameTensor()
     log_weights = torch.zeros_like(model_trace.log_prob_sum())
@@ -63,7 +63,11 @@ def _dice_importance_weights(
 
     for name, node in model_trace.nodes.items():
         if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
-            if name not in guide_trace.nodes and not node["is_observed"] and not node["fn"].has_rsample:
+            if (
+                name not in guide_trace.nodes
+                and not node["is_observed"]
+                and not node["fn"].has_rsample
+            ):
                 log_dice.add((plate_stacks[name], node["log_prob"]))
 
             node_weight = log_dice.sum_to(plate_stacks[name]) * node["log_prob"]
@@ -169,7 +173,9 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 self.model, self.guide, *args, **kwargs
             )
 
-        with pyro.plate(self.particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1):
+        with pyro.plate(
+            self.particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1
+        ):
             with pyro.poutine.trace() as guide_tr:
                 self.guide(*args, **kwargs)
 
@@ -178,5 +184,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                     with condition(data=data):
                         self._predictive_model(*args, **kwargs)
 
-        log_weights = _dice_importance_weights(model_tr.trace, guide_tr.trace, particle_plate_name=self.particle_plate_name)
+        log_weights = _dice_importance_weights(
+            model_tr.trace, guide_tr.trace, particle_plate_name=self.particle_plate_name
+        )
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
