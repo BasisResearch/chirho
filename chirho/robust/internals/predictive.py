@@ -1,6 +1,6 @@
 import contextlib
 import math
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, Set, TypeVar
 
 import pyro
 import torch
@@ -24,6 +24,7 @@ def dice_correction(
     *,
     event_dim: int = 0,
 ) -> torch.Tensor:
+    all_frames: Set[pyro.poutine.indep_messenger.CondIndepStackFrame]
     all_frames = set().union(*log_dice_weights.keys())
     target_frames = {f for f in all_frames if value.shape[f.dim - event_dim] > 1}
     log_q = torch.as_tensor(log_dice_weights.sum_to(target_frames), device=value.device)
