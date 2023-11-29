@@ -188,17 +188,13 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         with pyro.plate(
             self._particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1
         ):
-            with pyro.poutine.trace() as guide_tr:
-                self.guide(*args, **kwargs)
-
             with pyro.poutine.trace() as model_tr:
-                with pyro.poutine.replay(trace=guide_tr.trace):
-                    with condition(data=data):
-                        self._predictive_model(*args, **kwargs)
+                with condition(data=data):
+                    self._predictive_model(*args, **kwargs)
 
         log_weights = _dice_importance_weights(
             model_tr.trace,
-            guide_tr.trace,
+            pyro.poutine.Trace(),
             particle_plate_name=self._particle_plate_name,
         )
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)

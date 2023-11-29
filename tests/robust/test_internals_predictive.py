@@ -1,4 +1,4 @@
-import functools
+import collections
 from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
 
 import pyro
@@ -7,7 +7,10 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood, PredictiveFunctional
+from chirho.robust.internals.predictive import (
+    NMCLogPredictiveLikelihood,
+    PredictiveFunctional,
+)
 from chirho.robust.internals.utils import make_functional_call
 
 pyro.settings.set(module_local_params=True)
@@ -90,13 +93,14 @@ def test_grad_nmc_log_prob(
     test_datum_log_prob = log_prob(test_datum)
     assert not torch.isnan(test_datum_log_prob)
     assert not torch.isinf(test_datum_log_prob)
-    assert not torch.isclose(test_datum_log_prob, torch.zeros_like(test_datum_log_prob)).all()
+    assert not torch.isclose(
+        test_datum_log_prob, torch.zeros_like(test_datum_log_prob)
+    ).all()
 
-    log_prob_params, func_log_prob = make_functional_call(log_prob)
-    grad_test_datum_log_prob = torch.func.grad(func_log_prob)(log_prob_params, test_datum)
-
-    # test_datum_log_prob.backward()
-    # grad_test_datum_log_prob = {k: v.grad for k, v in log_prob.named_parameters()}
+    params = collections.OrderedDict(log_prob.named_parameters())
+    grad_test_datum_log_prob = dict(
+        zip(params.keys(), torch.autograd.grad(test_datum_log_prob, params.values()))
+    )
 
     assert len(grad_test_datum_log_prob) > 0
     for k, v in grad_test_datum_log_prob.items():
