@@ -19,20 +19,61 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class _UnmaskNamedSites(DependentMaskMessenger):
-    names: Container[str]
+class DiceMultiFrameTensor(pyro.infer.util.MultiFrameTensor):
 
-    def __init__(self, names: Container[str]):
-        self.names = names
-
-    def get_mask(
+    def sum_to(
         self,
-        dist: pyro.distributions.Distribution,
-        value: Optional[torch.Tensor],
-        device: torch.device = torch.device("cpu"),
-        name: Optional[str] = None,
+        target_frames: Container[pyro.poutine.indep_messenger.CondIndepStackFrame],
+        event_dim: int = 0
     ) -> torch.Tensor:
-        return torch.tensor(name is None or name in self.names, device=device)
+        log_q = super().sum_to(target_frames)
+        log_dice = log_q - log_q.detach()
+        return log_dice.expand(log_dice.shape + (1,) * event_dim)
+
+
+@torch.func.functionalize
+@pyro.validation_enabled(False)
+def _dice_importance_weights(
+    model_trace: pyro.poutine.Trace,
+    guide_trace: pyro.poutine.Trace,
+    *,
+    particle_plate_name: str,
+) -> torch.Tensor:
+
+    model_trace.compute_log_prob()
+    guide_trace.compute_log_prob()
+    plate_stacks = pyro.infer.util.get_plate_stacks(model_trace)
+    plate_stacks.update(pyro.infer.util.get_plate_stacks(guide_trace))
+    assert all(any(f.name == particle_plate_name for f in fs) for fs in plate_stacks.values())
+
+    log_dice = DiceMultiFrameTensor()
+    log_weights = torch.zeros_like(model_trace.log_prob_sum())
+
+    for name, node in guide_trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            if not node["is_observed"] and not node["fn"].has_rsample:
+                log_dice.add((plate_stacks[name], node["log_prob"]))
+
+            node_weight = log_dice.sum_to(plate_stacks[name]) * node["log_prob"]
+            for f in plate_stacks[name]:
+                if f.name != particle_plate_name:
+                    node_weight = node_weight.sum(dim=f.dim, keepdim=True)
+
+            log_weights = log_weights - node_weight.reshape(-1)
+
+    for name, node in model_trace.nodes.items():
+        if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
+            if name not in guide_trace.nodes and not node["is_observed"] and not node["fn"].has_rsample:
+                log_dice.add((plate_stacks[name], node["log_prob"]))
+
+            node_weight = log_dice.sum_to(plate_stacks[name]) * node["log_prob"]
+            for f in plate_stacks[name]:
+                if f.name != particle_plate_name:
+                    node_weight = node_weight.sum(dim=f.dim, keepdim=True)
+
+            log_weights = log_weights + node_weight.reshape(-1)
+
+    return log_weights
 
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
@@ -56,7 +97,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         self.max_plate_nesting = max_plate_nesting
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
-        if self.max_plate_nesting is None:
+        if self.max_plate_nesting is None and self.num_samples > 1:
             self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
             )
@@ -101,6 +142,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     guide: Callable[P, Any]
     num_samples: int
     max_plate_nesting: Optional[int]
+    particle_plate_name: str = "__predictive_particles"
 
     def __init__(
         self,
@@ -115,6 +157,9 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self.guide = guide
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
+        self._predictive_model = PredictiveFunctional(
+            self.model, self.guide, num_samples=1, max_plate_nesting=max_plate_nesting
+        )
 
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
@@ -124,16 +169,14 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 self.model, self.guide, *args, **kwargs
             )
 
-        masked_guide = pyro.poutine.mask(mask=False)(self.guide)
-        masked_model = _UnmaskNamedSites(names=set(data.keys()))(
-            condition(data=data)(self.model)
-        )
-        log_weights = pyro.infer.importance.vectorized_importance_weights(
-            masked_model,
-            masked_guide,
-            *args,
-            num_samples=self.num_samples,
-            max_plate_nesting=self.max_plate_nesting,
-            **kwargs,
-        )[0]
+        with pyro.plate(self.particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1):
+            with pyro.poutine.trace() as guide_tr:
+                self.guide(*args, **kwargs)
+
+            with pyro.poutine.trace() as model_tr:
+                with pyro.poutine.replay(trace=guide_tr.trace):
+                    with condition(data=data):
+                        self._predictive_model(*args, **kwargs)
+
+        log_weights = _dice_importance_weights(model_tr.trace, guide_tr.trace, particle_plate_name=self.particle_plate_name)
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
