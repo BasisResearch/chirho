@@ -9,6 +9,7 @@ from typing_extensions import ParamSpec
 
 from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import influence_fn
+from .robust_fixtures import SimpleModel, SimpleGuide
 
 pyro.settings.set(module_local_params=True)
 
@@ -16,27 +17,6 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-class SimpleModel(pyro.nn.PyroModule):
-    def forward(self):
-        a = pyro.sample("a", dist.Normal(0, 1))
-        with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("b", dist.Normal(a, 1))
-            return pyro.sample("y", dist.Normal(a + b, 1))
-
-
-class SimpleGuide(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.loc_a = torch.nn.Parameter(torch.rand(()))
-        self.loc_b = torch.nn.Parameter(torch.rand((3,)))
-
-    def forward(self):
-        a = pyro.sample("a", dist.Normal(self.loc_a, 1))
-        with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("b", dist.Normal(self.loc_b, 1))
-            return {"a": a, "b": b}
 
 
 ModelTestCase = Tuple[

@@ -184,7 +184,7 @@ class BenchmarkLinearModel(HighDimLinearModel):
 
 
 class MLEGuide(torch.nn.Module):
-    def __init__(self, mle_est):
+    def __init__(self, mle_est: Dict[str, torch.Tensor]):
         super().__init__()
         self.names = list(mle_est.keys())
         for name, value in mle_est.items():
@@ -196,7 +196,9 @@ class MLEGuide(torch.nn.Module):
             pyro.sample(name, dist.Delta(value))
 
 
-def closed_form_ate_correction(X_test, theta):
+def closed_form_ate_correction(
+    X_test: Dict[str, torch.Tensor], theta: Dict[str, torch.Tensor]
+):
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
