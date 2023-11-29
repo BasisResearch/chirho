@@ -46,6 +46,23 @@ class SimpleModel(pyro.nn.PyroModule):
             return pyro.sample("y", Normal(a + b, 1))
 
 
+class SimpleModel2(pyro.nn.PyroModule):
+    def __init__(self):
+        super().__init__()
+        self.loc_a = torch.nn.Parameter(torch.rand(()))
+        self.loc_b = torch.nn.Parameter(torch.rand((3,)))
+
+    def forward(self, use_rsample: bool):
+        Normal = (
+            dist.Normal if use_rsample else dist.testing.fakes.NonreparameterizedNormal
+        )
+        a = pyro.sample("a", dist.Normal(self.loc_a, 1))
+        with pyro.plate("data", 3, dim=-1):
+            b = pyro.sample("b", Normal(self.loc_b, 1))
+            return pyro.sample("y", Normal(a + b, 1))
+
+
+
 ModelTestCase = Tuple[
     Callable[[], Callable[[bool], Any]],
     Callable[[Callable[[bool], Any]], Callable[[bool], Any]],
@@ -55,12 +72,13 @@ ModelTestCase = Tuple[
 MODEL_TEST_CASES: List[ModelTestCase] = [
     (ScalarModel, lambda _: lambda *args: None, {"y"}),
     (SimpleModel, lambda _: lambda *args: None, {"y"}),
+    (SimpleModel2, lambda _: lambda *args: None, {"y"}),
 ]
 
 
 @pytest.mark.parametrize("model,guide,obs_names", MODEL_TEST_CASES)
 def test_grad_nmc_log_prob(model, guide, obs_names):
-    num_samples = 100000
+    num_samples = 1e6
 
     model = model()
     guide = guide(pyro.poutine.block(hide=obs_names)(model))

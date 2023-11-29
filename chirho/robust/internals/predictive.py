@@ -18,7 +18,22 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def dice_correction(
+class _DiceMultiFrameTensor(pyro.infer.util.MultiFrameTensor):
+
+    def sum_to(self, target_frames):
+        total = None
+        for frames, value in self.items():
+            for f in set(frames) - set(target_frames):
+                value = value.sum(f.dim, True)
+            for f in set(target_frames) - set(frames):
+                value = value / f.size  # only this correction is new
+            while value.shape and value.shape[0] == 1:
+                value = value.squeeze(0)
+            total = value if total is None else total + value
+        return 0.0 if total is None else total
+
+
+def dice_log_weight(
     log_dice_weights: pyro.infer.util.MultiFrameTensor,
     value: torch.Tensor,
     *,
@@ -29,6 +44,16 @@ def dice_correction(
     target_frames = {f for f in all_frames if value.shape[f.dim - event_dim] > 1}
     log_q = torch.as_tensor(log_dice_weights.sum_to(target_frames), device=value.device)
     log_weight = (log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)
+    return log_weight
+
+
+def dice_correction(
+    log_dice_weights: pyro.infer.util.MultiFrameTensor,
+    value: torch.Tensor,
+    *,
+    event_dim: int = 0,
+) -> torch.Tensor:
+    log_weight = dice_log_weight(log_dice_weights, value, event_dim=event_dim)
     return log_weight.exp() * value
 
 
@@ -46,7 +71,7 @@ def _dice_importance_weights(
         any(f.name == particle_plate_name for f in fs) for fs in plate_stacks.values()
     )
 
-    log_dice = pyro.infer.util.MultiFrameTensor()
+    log_dice = _DiceMultiFrameTensor()  # pyro.infer.util.MultiFrameTensor()
     log_weights = torch.zeros_like(model_trace.log_prob_sum())
 
     for name, node in guide_trace.nodes.items():
@@ -55,7 +80,7 @@ def _dice_importance_weights(
             if not node["is_observed"] and not node["fn"].has_rsample:
                 log_dice.add((plate_stacks[name], log_prob))
 
-            node_weight = dice_correction(log_dice, log_prob)
+            node_weight = dice_log_weight(log_dice, log_prob) + log_prob
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
@@ -72,7 +97,10 @@ def _dice_importance_weights(
             ):
                 log_dice.add((plate_stacks[name], log_prob))
 
-            node_weight = dice_correction(log_dice, log_prob)
+            if not node["is_observed"]:
+                continue  # DEBUG
+
+            node_weight = dice_log_weight(log_dice, log_prob) + log_prob
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
@@ -185,6 +213,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
             )
+            self._predictive_model.max_plate_nesting = self.max_plate_nesting
 
         with pyro.plate(
             self._particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1
