@@ -9,7 +9,8 @@ from typing_extensions import ParamSpec
 
 from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import influence_fn
-from .robust_fixtures import SimpleModel, SimpleGuide
+
+from .robust_fixtures import SimpleGuide, SimpleModel
 
 pyro.settings.set(module_local_params=True)
 

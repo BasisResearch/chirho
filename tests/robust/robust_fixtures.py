@@ -1,14 +1,14 @@
-from typing import Callable, Dict, TypeVar
 import math
-import torch
+from typing import Callable, Dict, TypeVar
+
 import pyro
 import pyro.distributions as dist
-from typing import Callable, Dict
+import torch
 from pyro.nn import PyroModule
-from chirho.robust.internals.utils import ParamDict
-from chirho.robust.ops import Point
 
 from chirho.observational.handlers import condition
+from chirho.robust.internals.utils import ParamDict
+from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
 T = TypeVar("T")
