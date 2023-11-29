@@ -38,8 +38,8 @@ def test_backend_arg():
 
 
 def test_inner_simulates_of_solvers_match_forward():
-    sp0 = State(x=torch.tensor(10.), c=torch.tensor(0.1))
-    timespan = torch.linspace(0., 10., 10)
+    sp0 = State(x=torch.tensor(10.).double(), c=torch.tensor(0.1).double())
+    timespan = torch.linspace(0., 10., 10).double()
 
     diffeqdotjl_res = _diffeqdotjl_ode_simulate_inner(
         dynamics=lambda s: State(x=-s['x'] * s['c']),
@@ -58,22 +58,21 @@ def test_inner_simulates_of_solvers_match_forward():
 
 @pytest.mark.parametrize("simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
 def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd):
-    c_ = torch.tensor(0.1, requires_grad=True)
-    timespan = torch.linspace(0., 10., 10)
+    c_ = torch.tensor(0.1, requires_grad=True, dtype=torch.float64)
+    timespan = torch.linspace(0., 10., 10).double()
 
     def dynamics(s: State):
         try:
-            # print(type(s['x']), type(s['c']))
             return State(x=-(s['x'] * s['c']))
         except Exception as e:
             raise  # TODO remove this — for breakpoint
 
     def wrapped_simulate_inner(c):
-        sp0 = State(x=torch.tensor(10.), c=c)
-        return simulate_inner_bknd(
-            dynamics=dynamics,
-            initial_state_and_params=sp0,
-            timespan=timespan
-        )['x']
+        sp0 = State(x=torch.tensor(10.).double(), c=c)
+        return simulate_inner_bknd(dynamics, sp0, timespan)['x']
 
     torch.autograd.gradcheck(wrapped_simulate_inner, c_)
+
+
+# TODO test whether float64 is properly required of initial state for diffeqpy backend.
+# TODO test whether float64 is properly required of returned dstate even if initial state passes float64 check.

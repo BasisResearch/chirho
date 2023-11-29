@@ -27,22 +27,69 @@ def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
 
 # Single dispatch cat thing that handles both tensors and numpy arrays.
 @singledispatch
-def cat(*vecs):
+def cat(*vs):
     # Default implementation assumes we're dealing some underying julia thing that needs to be put back into an array.
     # This will re-route to the numpy implementation.
     # FIXME this causes infinite recursion — does recursive dispatching not work from within the default implementation?
     # return cat(*np.atleast_1d(vecs))
-    return cat_numpy(*np.atleast_1d(vecs))
+    return cat_numpy(*np.atleast_1d(vs))
 
 
 @cat.register
-def cat_torch(*vecs: Tnsr):
-    return torch.cat([v.ravel() for v in vecs])
+def cat_torch(*vs: Tnsr):
+    return torch.cat([v.ravel() for v in vs])
 
 
 @cat.register
-def cat_numpy(*vecs: np.ndarray):
-    return np.concatenate([v.ravel() for v in vecs])
+def cat_numpy(*vs: np.ndarray):
+    return np.concatenate([v.ravel() for v in vs])
+
+
+@singledispatch
+def atleast_1d(*vs):
+    raise NotImplementedError
+
+
+@atleast_1d.register
+def atleast_1d_torch(*vs: Tnsr):
+    # Unlike np.atleast_1d, torch.atleast_1d sometimes returns a tuple of a single tensor
+    #  but not always. np.atleast_1d never returns a tuple of a single tensor.
+    ret = torch.atleast_1d(vs)
+    if len(vs) == 1 and isinstance(ret, tuple):
+        return ret[0]
+    return ret
+
+
+@atleast_1d.register
+def atleast_1d_numpy(*vs: np.ndarray):
+    return np.atleast_1d(vs)
+
+
+@singledispatch
+def assign_(v, out):  # _ suffix is torch convention for in place operation.
+    raise NotImplementedError
+
+
+@assign_.register
+def assign_torch_(v: Tnsr, out: Union[Tnsr, juliacall.ArrayValue]):
+    out[:] = v
+
+
+@assign_.register
+def assign_numpy_(v: np.ndarray, out: Union[np.ndarray, juliacall.ArrayValue]):
+    # FIXME because duals cannot be stored in an array as anything other than object (due to dim limit of 32) we
+    #  cannot use [:] style assignment, perhaps because the duals are seen as full Float64(::Py) entities
+    #  independently, which cannot be stored in the juliacall.VectorValue of duals that is flat_dstate? This isn't
+    #  totally clear to me atm, but the manual assignment does work. This is likely just a nuance in how
+    #  juliacall.VectorValue implements its broadcast assignment?
+    if v.dtype is np.dtype(object):
+        if v.ndim != 1:
+            # TODO can you ravel a juliacall.ArrayValue? If so just do that and iterate.
+            raise NotImplementedError("Cannot assign a non-1d array of duals.")
+        for i in range(len(v)):
+            out[i] = v[i]
+    else:
+        out[:] = v
 
 
 def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
@@ -71,24 +118,38 @@ def _unflatten_state(
             shape += (-1,)
         sv = flat_state_ao_params[:shaped.numel()].reshape(shape)
 
-        # FIXME ***** FIXME
-        # This has to be converted to a numpy array of non-array values because juliacall.ArrayValues don't support
+        # FIXME ***db81f0skj*** FIXME
+        #  This has to be converted to a numpy array of non-array values because juliacall.ArrayValues don't support
         #  math with each other. E.g. if the dynamics involve x * y where both are a juliacall.ArrayValue,
         #  the operation with fail with an AttributeError on __mul__. Converting to numpy is only slightly better,
         #  however, as vectorized math seem to work in this context UNLESS using Dual numbers,
         #  in which case some vectorized math breaks. For example — at least when x and y are 0 dim arrays — x * y
         #  works but -x, or -y does not, while -(x * y) does.
-
-        # E.g. jl("Float64[0., 1., 2.]") * jl("Float64[0., 1., 2.]") does not work,
+        #  E.g. jl("Float64[0., 1., 2.]") * jl("Float64[0., 1., 2.]") does not work,
         #  while jl("Float64[0., 1., 2.]").to_numpy() * jl("Float64[0., 1., 2.]").to_numpy()
-        # FIXME ***** FIXME
+        # FIXME ***db81f0skj*** FIXME
         if isinstance(sv, juliacall.ArrayValue):
             sv = sv.to_numpy(copy=False)
         assert isinstance(sv, np.ndarray) or isinstance(sv, Tnsr)
 
-        state_ao_params[v] = sv
+        # FIXME db81f0skj turns out that the dual number is issue is fixed if we always unflatten to arrays of
+        #  non-zero dim. Then the array status of the dual is kept even when mathing between them, which prevents
+        #  down stream stuff from breaking. Note this retains the array dtype of object that we get when running
+        #  to_numpy on a 0-dim (scalar) juliacall.ArrayValue of Duals, and doesn't try to access the buffer
+        #  within the dual, which results in a violoation of numpy's 32 dimension limit.
+        state_ao_params[v] = atleast_1d(sv)
         flat_state_ao_params = flat_state_ao_params[shaped.numel():]
     return state_ao_params
+
+
+def require_float64(state_ao_params: StateAndOrParams[Tnsr]):
+    # Forward diff through diffeqpy currently requires float64.
+    # TODO update when this is fixed.
+    for k, v in state_ao_params.items():
+        # TODO be more specific than object — this is what we get during forward diff with
+        #  numpy arrays of dual numbers.
+        if v.dtype not in (torch.float64, np.float64, object):
+            raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
 
 
 def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr]):
@@ -122,10 +183,12 @@ def _diffeqdotjl_ode_simulate_inner(
     timespan: Tnsr
 ) -> StateAndOrParams[torch.tensor]:
 
+    require_float64(initial_state_and_params)
+
     initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
 
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
-    def ode_f(flat_dstate, flat_state, flat_params, t):
+    def ode_f(flat_dstate_out, flat_state, flat_params, t):
         # Unflatten the state u according to the state variables stored in initial dstate.
         state = _unflatten_state(flat_state, initial_state)
         # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
@@ -137,7 +200,9 @@ def _diffeqdotjl_ode_simulate_inner(
         state_ao_params = StateAndOrParams(**state, **params, t=t)
         dstate = dynamics(state_ao_params)
 
-        flat_dstate[:] = _flatten_state_ao_params(dstate)
+        require_float64(dstate)
+
+        assign_(_flatten_state_ao_params(dstate), flat_dstate_out)
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.
