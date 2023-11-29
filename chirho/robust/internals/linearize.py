@@ -43,6 +43,8 @@ def _flat_conjugate_gradient_solve(
     """
     if cg_iters is None:
         cg_iters = b.numel()
+    else:
+        cg_iters = min(cg_iters, b.numel())
 
     p = b.clone()
     r = b.clone()
@@ -66,9 +68,6 @@ def _flat_conjugate_gradient_solve(
         p = torch.where(not_converged, r + mu * p, p)
         rdotr = torch.where(not_converged, newrdotr, rdotr)
 
-        # rdotr = newrdotr
-        # if rdotr < residual_tol:
-        #     break
     return x
 
 
