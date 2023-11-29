@@ -6,7 +6,6 @@ import pyro
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Point
@@ -30,8 +29,6 @@ class DiceMultiFrameTensor(pyro.infer.util.MultiFrameTensor):
         return log_dice.expand(log_dice.shape + (1,) * event_dim)
 
 
-@torch.func.functionalize
-@pyro.validation_enabled(False)
 def _dice_importance_weights(
     model_trace: pyro.poutine.Trace,
     guide_trace: pyro.poutine.Trace,
@@ -101,7 +98,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         self.max_plate_nesting = max_plate_nesting
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
-        if self.max_plate_nesting is None and self.num_samples > 1:
+        if self.max_plate_nesting is None:
             self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
             )
@@ -146,7 +143,9 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     guide: Callable[P, Any]
     num_samples: int
     max_plate_nesting: Optional[int]
-    particle_plate_name: str = "__predictive_particles"
+
+    _predictive_model: PredictiveFunctional[P, T]
+    _particle_plate_name: str = "__predictive_particles"
 
     def __init__(
         self,
@@ -174,7 +173,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             )
 
         with pyro.plate(
-            self.particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1
+            self._particle_plate_name, self.num_samples, dim=-self.max_plate_nesting - 1
         ):
             with pyro.poutine.trace() as guide_tr:
                 self.guide(*args, **kwargs)
@@ -185,6 +184,8 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                         self._predictive_model(*args, **kwargs)
 
         log_weights = _dice_importance_weights(
-            model_tr.trace, guide_tr.trace, particle_plate_name=self.particle_plate_name
+            model_tr.trace,
+            guide_tr.trace,
+            particle_plate_name=self._particle_plate_name,
         )
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
