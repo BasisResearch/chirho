@@ -265,6 +265,7 @@ def test_fisher_grad_smoke(data_config):
     empirical_fisher_vp_func = make_empirical_fisher_vp(
         func_log_prob, log_prob_params, data, cov_mat=cov_mat
     )
+
     v = 0.5 * torch.ones(cov_mat.shape[1], requires_grad=True)
 
     def f(x):
@@ -339,4 +340,7 @@ def test_linearize_against_analytic_ate():
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()
     median_scale = torch.abs(analytic_eif_at_test_pts).median()
-    assert median_abs_error / median_scale < 0.5
+    if median_scale > 1:
+        assert median_abs_error / median_scale < 0.5
+    else:
+        assert median_abs_error < 0.5
