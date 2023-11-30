@@ -43,7 +43,7 @@ def dice_log_weight(
     all_frames = set().union(*log_dice_weights.keys())
     target_frames = {f for f in all_frames if value.shape[f.dim - event_dim] > 1}
     log_q = torch.as_tensor(log_dice_weights.sum_to(target_frames), device=value.device)
-    log_weight = -(log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)  # TODO why the - sign?
+    log_weight = (log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)
     return log_weight
 
 
@@ -54,8 +54,8 @@ def dice_correction(
     event_dim: int = 0,
 ) -> torch.Tensor:
     log_weight = dice_log_weight(log_dice_weights, value, event_dim=event_dim)
-    # return -log_weight + value
-    return log_weight.exp() * value
+    # return log_weight + value
+    return (-log_weight).exp() * value  # TODO why the - sign?
 
 
 def _dice_importance_weights(
