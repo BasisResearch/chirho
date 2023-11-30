@@ -32,8 +32,8 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         return super().__enter__()
 
     def _pyro_simulate(self, msg) -> None:
-        start_time = msg["args"][2]
         initial_state = msg["args"][1]
+        start_time = msg["args"][2]
 
         if start_time == self.times[0]:
             # If we're starting at the beginning of the timespan, we need to log the initial state.
