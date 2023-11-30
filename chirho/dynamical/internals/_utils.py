@@ -50,12 +50,38 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
-def _squeeze_time_dim(traj: State[T]) -> State[T]:
-    return State(**{k: traj[k].squeeze(-1) for k in traj.keys()})
+@functools.singledispatch
+def _squeeze_time_dim(state_or_traj):
+    raise NotImplementedError(
+        f"_squeeze_time_dim not implemented for type {type(state_or_traj)}."
+    )
 
 
-def _unsqueeze_time_dim(state: State[T]) -> State[T]:
-    return State(**{k: state[k].unsqueeze(-1) for k in state.keys()})
+@_squeeze_time_dim.register(dict)
+def _squeeze_time_dim_trajectory(traj: State[T]) -> State[T]:
+    return State(**{k: _squeeze_time_dim(traj[k]) for k in traj.keys()})
+
+
+@_squeeze_time_dim.register(torch.Tensor)
+def _squeeze_time_dim_tensor(state: torch.Tensor) -> torch.Tensor:
+    return state.squeeze(-1)
+
+
+@functools.singledispatch
+def _unsqueeze_time_dim(state_or_traj):
+    raise NotImplementedError(
+        f"_unsqueeze_time_dim not implemented for type {type(state_or_traj)}."
+    )
+
+
+@_unsqueeze_time_dim.register(dict)
+def _unsqueeze_time_dim_state(state: State[torch.Tensor]) -> State[torch.Tensor]:
+    return State(**{k: _unsqueeze_time_dim(state[k]) for k in state.keys()})
+
+
+@_unsqueeze_time_dim.register(torch.Tensor)
+def _unsqueeze_time_dim_tensor(state: torch.Tensor) -> torch.Tensor:
+    return state.unsqueeze(-1)
 
 
 class ShallowMessenger(pyro.poutine.messenger.Messenger):
