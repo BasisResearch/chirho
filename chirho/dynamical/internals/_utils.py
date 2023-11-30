@@ -54,6 +54,10 @@ def _squeeze_time_dim(traj: State[torch.Tensor]) -> State[torch.Tensor]:
     return State(**{k: traj[k].squeeze(-1) for k in traj.keys()})
 
 
+def _unsqueeze_time_dim(state: State[torch.Tensor]) -> State[torch.Tensor]:
+    return State(**{k: state[k].unsqueeze(-1) for k in state.keys()})
+
+
 class ShallowMessenger(pyro.poutine.messenger.Messenger):
     """
     Base class for so-called "shallow" effect handlers that uninstall themselves
