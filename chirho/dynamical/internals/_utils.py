@@ -50,11 +50,11 @@ def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
-def _squeeze_time_dim(traj: State[torch.Tensor]) -> State[torch.Tensor]:
+def _squeeze_time_dim(traj: State[T]) -> State[T]:
     return State(**{k: traj[k].squeeze(-1) for k in traj.keys()})
 
 
-def _unsqueeze_time_dim(state: State[torch.Tensor]) -> State[torch.Tensor]:
+def _unsqueeze_time_dim(state: State[T]) -> State[T]:
     return State(**{k: state[k].unsqueeze(-1) for k in state.keys()})
 
 
