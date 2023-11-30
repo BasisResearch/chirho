@@ -78,4 +78,6 @@ def test_start_end_time_collisions():
     with TorchDiffEq(), LogTrajectory(times=torch.tensor([0.0, 1.0, 2.0, 3.0])) as log:
         simulate(dynamics, init_state, start_time, end_time)
 
-    assert len(log.trajectory["X"]) == len(log.times) == 4  # previously failed bc len(X) == 3
+    assert (
+        len(log.trajectory["X"]) == len(log.times) == 4
+    )  # previously failed bc len(X) == 3
