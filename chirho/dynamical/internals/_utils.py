@@ -75,7 +75,7 @@ def _unsqueeze_time_dim(state_or_traj):
 
 
 @_unsqueeze_time_dim.register(dict)
-def _unsqueeze_time_dim_state(state: State[torch.Tensor]) -> State[torch.Tensor]:
+def _unsqueeze_time_dim_state(state: State[T]) -> State[T]:
     return State(**{k: _unsqueeze_time_dim(state[k]) for k in state.keys()})
 
 
