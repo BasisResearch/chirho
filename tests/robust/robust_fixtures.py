@@ -76,9 +76,7 @@ class HighDimLinearModel(pyro.nn.PyroModule):
     def __init__(
         self,
         p: int,
-        link_fn: Callable[torch.Tensor, dist.Distribution] = lambda mu: dist.Normal(
-            mu, 1.0
-        ),
+        link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
         prior_scale: Optional[float] = None,
     ):
         super().__init__()

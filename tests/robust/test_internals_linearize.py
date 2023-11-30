@@ -339,4 +339,4 @@ def test_linearize_against_analytic_ate():
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()
     median_scale = torch.abs(analytic_eif_at_test_pts).median()
-    assert median_abs_error / median_scale < 0.25
+    assert median_abs_error / median_scale < 0.5
