@@ -124,6 +124,7 @@ def _unflatten_state(
         #  works but -x, or -y does not, while -(x * y) does.
         #  E.g. jl("Float64[0., 1., 2.]") * jl("Float64[0., 1., 2.]") does not work,
         #  while jl("Float64[0., 1., 2.]").to_numpy() * jl("Float64[0., 1., 2.]").to_numpy()
+        #  It's not clear if this maintains the speed of vectorized math.
         # FIXME ***db81f0skj*** FIXME
         if isinstance(sv, juliacall.ArrayValue):
             sv = sv.to_numpy(copy=False)

@@ -37,35 +37,45 @@ def test_backend_arg():
     assert result is not None
 
 
-def test_inner_simulates_of_solvers_match_forward():
+@pytest.mark.parametrize("simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
+def test_inner_simulates_of_solvers_match_forward(simulate_inner_bknd):
     sp0 = State(x=torch.tensor(10.).double(), c=torch.tensor(0.1).double())
     timespan = torch.linspace(0., 10., 10).double()
 
-    diffeqdotjl_res = _diffeqdotjl_ode_simulate_inner(
-        dynamics=lambda s: State(x=-s['x'] * s['c']),
-        initial_state_and_params=sp0,
-        timespan=timespan
-    )
+    res = simulate_inner_bknd(lambda s: State(x=-s['x'] * s['c']), sp0, timespan)
 
-    torchdiffeq_res = _torchdiffeq_ode_simulate_inner(
-        dynamics=lambda s: State(x=-s['x'] * s['c']),
-        initial_state=sp0,
-        timespan=timespan
-    )
+    correct = torch.tensor([10.0000,  8.9484,  8.0074,  7.1653,  6.4118,  5.7375,  5.1342,  4.5943,
+                            4.1111,  3.6788], dtype=torch.float64)
 
-    assert torch.allclose(diffeqdotjl_res['x'], torchdiffeq_res['x'])
+    assert torch.allclose(res['x'], correct, atol=1e-4)
 
 
-@pytest.mark.parametrize("simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
-def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd):
-    c_ = torch.tensor(0.1, requires_grad=True, dtype=torch.float64)
+@pytest.mark.parametrize(
+    "simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
+@pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
+@pytest.mark.parametrize("c", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
+def test_smoke_inner_simulates_forward_nd(simulate_inner_bknd, x0, c):
+    sp0 = State(x=x0.double(), c=c.double())
     timespan = torch.linspace(0., 10., 10).double()
+
+    simulate_inner_bknd(lambda s: State(x=-s['x'] * s['c']), sp0, timespan)
+
+
+@pytest.mark.parametrize(
+    "simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
+@pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
+@pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
+def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd, x0, c_):
+    c_ = c_.double().requires_grad_()
+    timespan = torch.linspace(0., 10., 10).double()
+
+    # TODO add other inputs we want to gradcheck.
 
     def dynamics(s: State):
         return State(x=-(s['x'] * s['c']))
 
     def wrapped_simulate_inner(c):
-        sp0 = State(x=torch.tensor(10.).double(), c=c)
+        sp0 = State(x=x0.double(), c=c)
         return simulate_inner_bknd(dynamics, sp0, timespan)['x']
 
     torch.autograd.gradcheck(wrapped_simulate_inner, c_)
