@@ -266,7 +266,9 @@ def test_fisher_grad_smoke(data_config):
         func_log_prob, log_prob_params, data, cov_mat=cov_mat
     )
     v = 0.5 * torch.ones(cov_mat.shape[1], requires_grad=True)
-    f = lambda x: empirical_fisher_vp_func({"loc": x**2})["loc"].sum()
+
+    def f(x):
+        return empirical_fisher_vp_func({"loc": x})["loc"].sum()
 
     # Check using `torch.func.grad`
     assert (
@@ -276,7 +278,7 @@ def test_fisher_grad_smoke(data_config):
     # Check using autograd
     assert torch.autograd.gradcheck(
         f, v, atol=0.2
-    ), f"Finite difference gradients do not match autograd gradients"
+    ), "Finite difference gradients do not match autograd gradients"
 
 
 def test_linearize_against_analytic_ate():
@@ -285,7 +287,9 @@ def test_linearize_against_analytic_ate():
     beta = 1
     N_train = 100
     N_test = 100
-    link = lambda mu: dist.Normal(mu, 1.0)
+
+    def link(mu):
+        return dist.Normal(mu, 1.0)
 
     # Generate data
     benchmark_model = BenchmarkLinearModel(p, link, alpha, beta)

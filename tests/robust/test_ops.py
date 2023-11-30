@@ -2,7 +2,6 @@ import functools
 from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
 
 import pyro
-import pyro.distributions as dist
 import pytest
 import torch
 from typing_extensions import ParamSpec

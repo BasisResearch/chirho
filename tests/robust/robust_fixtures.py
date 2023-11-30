@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Dict, Optional, TypeVar
+from typing import Callable, Optional, TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -174,9 +174,6 @@ class BenchmarkLinearModel(HighDimLinearModel):
 
     def sample_treatment_weight(self):
         return torch.tensor(self.treatment_weight)
-
-    def sample_treatment_null_weight(self):
-        return torch.tensor(0.0)
 
     def sample_intercept(self):
         return torch.tensor(0.0)
