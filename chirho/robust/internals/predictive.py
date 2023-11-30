@@ -43,7 +43,7 @@ def dice_log_weight(
     all_frames = set().union(*log_dice_weights.keys())
     target_frames = {f for f in all_frames if value.shape[f.dim - event_dim] > 1}
     log_q = torch.as_tensor(log_dice_weights.sum_to(target_frames), device=value.device)
-    log_weight = (log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)
+    log_weight = -(log_q - log_q.detach()).expand(log_q.shape + (1,) * event_dim)  # TODO why the - sign?
     return log_weight
 
 
@@ -54,6 +54,7 @@ def dice_correction(
     event_dim: int = 0,
 ) -> torch.Tensor:
     log_weight = dice_log_weight(log_dice_weights, value, event_dim=event_dim)
+    # return -log_weight + value
     return log_weight.exp() * value
 
 
@@ -80,7 +81,7 @@ def _dice_importance_weights(
             if not node["is_observed"] and not node["fn"].has_rsample:
                 log_dice.add((plate_stacks[name], log_prob))
 
-            node_weight = dice_log_weight(log_dice, log_prob) + log_prob
+            node_weight = dice_correction(log_dice, log_prob)
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
@@ -100,7 +101,7 @@ def _dice_importance_weights(
             if not node["is_observed"]:
                 continue  # DEBUG
 
-            node_weight = dice_log_weight(log_dice, log_prob) + log_prob
+            node_weight = dice_correction(log_dice, log_prob)
             for f in plate_stacks[name]:
                 if f.name != particle_plate_name:
                     node_weight = node_weight.sum(dim=f.dim, keepdim=True)
