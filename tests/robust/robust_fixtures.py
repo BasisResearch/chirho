@@ -149,7 +149,7 @@ class BenchmarkLinearModel(HighDimLinearModel):
     def __init__(
         self,
         p: int,
-        link_fn: Callable[torch.Tensor, dist.Distribution],
+        link_fn: Callable[..., dist.Distribution],
         alpha: int,
         beta: int,
         treatment_weight: float = 0.0,
