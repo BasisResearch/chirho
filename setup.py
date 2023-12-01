@@ -59,6 +59,7 @@ setup(
             "sphinx_rtd_theme==1.3.0",
             "myst_parser",
             "nbsphinx",
+            "nbval",
         ],
     },
     python_requires=">=3.8",
