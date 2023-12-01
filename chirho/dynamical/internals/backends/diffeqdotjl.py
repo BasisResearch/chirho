@@ -13,13 +13,60 @@ from chirho.indexed.ops import IndexSet, gather, get_index_plates
 from torch import Tensor as Tnsr
 from juliatorch import JuliaFunction
 import juliacall
-# Even though this is unused, it must be called to register a seval with de.
+# Even though this is unused, it must be called to register a seval with de. (FIXME I'm doubting whether this is true)
 jl = juliacall.Main.seval
 import numpy as np
 from typing import Union
 from functools import singledispatch
 
-# TODO some of this is shared with torchdiffeq and needs to be moved to utils etc.
+
+def diffeqdotjl_compile_problem(
+    dynamics: Dynamics[Tnsr],
+    initial_state_and_params: StateAndOrParams[Tnsr],
+    start_time: Tnsr,
+    end_time: Tnsr,
+    **kwargs
+) -> de.ODEProblem:
+
+    require_float64(initial_state_and_params)
+
+    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
+
+    # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
+    def ode_f(flat_dstate_out, flat_state, flat_params, t):
+        # Unflatten the state u according to the state variables stored in initial dstate.
+        state = _unflatten_state(flat_state, initial_state)
+        # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
+        #  of julia DualNumbers carrying the forward gradient information. I.e. while initial_params has the same
+        #  real values as flat_params, they do not carry gradient information that can be propagated through the julia
+        #  solver.
+        params = _unflatten_state(flat_params, torch_params)
+
+        state_ao_params = StateAndOrParams(**state, **params, t=t)
+        dstate = dynamics(state_ao_params)
+
+        require_float64(dstate)
+
+        assign_(_flatten_state_ao_params(dstate), flat_dstate_out)
+
+    # Flatten the initial state and parameters.
+    flat_initial_state = _flatten_state_ao_params(initial_state)
+    flat_torch_params = _flatten_state_ao_params(torch_params)
+
+    prob = de.seval("ODEProblem{true, SciMLBase.FullSpecialize}")(
+        ode_f,
+        flat_initial_state.detach().numpy(),
+        np.array([start_time, end_time], dtype=np.float64),
+        flat_torch_params.detach().numpy())
+    fast_prob = de.jit(prob)
+
+    return fast_prob
+
+
+# TODO g179du91 move to internal ops as other backends might also use this?
+@pyro.poutine.runtime.effectful(type="_lazily_compile_problem")
+def _lazily_compile_problem(*args, **kwargs) -> de.ODEProblem:
+    raise NotImplementedError()
 
 
 def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
@@ -178,29 +225,13 @@ def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params:
 def _diffeqdotjl_ode_simulate_inner(
     dynamics: Dynamics[Tnsr],
     initial_state_and_params: StateAndOrParams[Tnsr],
-    timespan: Tnsr
+    timespan: Tnsr,
+    **kwargs
 ) -> StateAndOrParams[torch.tensor]:
 
     require_float64(initial_state_and_params)
 
     initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
-
-    # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
-    def ode_f(flat_dstate_out, flat_state, flat_params, t):
-        # Unflatten the state u according to the state variables stored in initial dstate.
-        state = _unflatten_state(flat_state, initial_state)
-        # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
-        #  of julia DualNumbers carrying the forward gradient information. I.e. while initial_params has the same
-        #  real values as flat_params, they do not carry gradient information that can be propagated through the julia
-        #  solver.
-        params = _unflatten_state(flat_params, torch_params)
-
-        state_ao_params = StateAndOrParams(**state, **params, t=t)
-        dstate = dynamics(state_ao_params)
-
-        require_float64(dstate)
-
-        assign_(_flatten_state_ao_params(dstate), flat_dstate_out)
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.
@@ -209,6 +240,14 @@ def _diffeqdotjl_ode_simulate_inner(
     flat_torch_params = _flatten_state_ao_params(torch_params)
     outer_u0_t_p = torch.cat([flat_initial_state, timespan, flat_torch_params])
 
+    compiled_prob = _lazily_compile_problem(
+        dynamics,
+        initial_state_and_params,
+        timespan[0],
+        timespan[-1],
+        **kwargs,
+    )
+
     def inner_solve(u0_t_p):
 
         # Unpack the concatenated initial state, timespan, and parameters.
@@ -216,10 +255,11 @@ def _diffeqdotjl_ode_simulate_inner(
         tspan = u0_t_p[flat_initial_state.numel():-flat_torch_params.numel()]
         p = u0_t_p[-flat_torch_params.numel():]
 
-        # See here for why we use this FullSpecialize syntax:
-        #  https://github.com/SciML/juliatorch#fitting-a-harmonic-oscillators-parameter-and-initial-conditions-to-match-observations
-        prob = de.seval("ODEProblem{true, SciMLBase.FullSpecialize}")(ode_f, u0, (tspan[0], tspan[-1]), p)
-        sol = de.solve(prob)
+        # Remake the otherwise-immutable problem to use the new parameters.
+        remade_compiled_prob = de.remake(compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1]))
+
+        # prob = de.seval("ODEProblem{true, SciMLBase.FullSpecialize}")(ode_f, u0, (tspan[0], tspan[-1]), p)
+        sol = de.solve(remade_compiled_prob)
 
         # Interpolate the solution at the requested times.
         return sol(tspan)
@@ -229,3 +269,59 @@ def _diffeqdotjl_ode_simulate_inner(
 
     # Unflatten the trajectory.
     return _unflatten_state(flat_traj, initial_state, to_traj=True)
+
+
+def diffeqdotjl_simulate_trajectory(
+    dynamics: Dynamics[Tnsr],
+    initial_state_and_params: StateAndOrParams[Tnsr],
+    timespan: Tnsr,
+    **kwargs,
+) -> StateAndOrParams[Tnsr]:
+    return _diffeqdotjl_ode_simulate_inner(dynamics, initial_state_and_params, timespan)
+
+
+def diffeqdotjl_simulate_to_interruption(
+    interruptions: List[Interruption],
+    dynamics: Dynamics[Tnsr],
+    initial_state_and_params: StateAndOrParams[Tnsr],
+    start_time: Tnsr,
+    end_time: Tnsr,
+    **kwargs,
+) -> Tuple[StateAndOrParams[Tnsr], Tnsr, Optional[Interruption]]:
+
+    # TODO implement the actual retrieval of the next interruption (see torchdiffeq_simulate_to_interruption)
+
+    from chirho.dynamical.handlers.interruption import StaticInterruption
+    next_interruption = StaticInterruption(end_time)
+
+    value = simulate_point(
+        dynamics, initial_state_and_params, start_time, end_time, **kwargs
+    )
+
+    return value, end_time, next_interruption
+
+
+def diffeqdotjl_simulate_point(
+    dynamics: Dynamics[torch.Tensor],
+    initial_state_and_params: StateAndOrParams[torch.Tensor],
+    start_time: torch.Tensor,
+    end_time: torch.Tensor,
+    **kwargs,
+) -> StateAndOrParams[torch.Tensor]:
+    # TODO this is exactly the same as torchdiffeq, so factor out to utils or something.
+
+    timespan = torch.stack((start_time, end_time))
+    trajectory = _diffeqdotjl_ode_simulate_inner(
+        dynamics, initial_state_and_params, timespan, **kwargs
+    )
+
+    # TODO support dim != -1
+    idx_name = "__time"
+    name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+    name_to_dim[idx_name] = -1
+
+    final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
+    final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
+    final_state = _squeeze_time_dim(final_state_traj)
+    return final_state
+

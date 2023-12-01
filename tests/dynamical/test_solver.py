@@ -7,10 +7,11 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.handlers.solver import TorchDiffEq, DiffEqDotJL
 from chirho.dynamical.ops import State, simulate
 from chirho.dynamical.internals.backends.diffeqdotjl import _diffeqdotjl_ode_simulate_inner
 from chirho.dynamical.internals.backends.torchdiffeq import _torchdiffeq_ode_simulate_inner
+from chirho.dynamical.handlers import LogTrajectory
 
 from .dynamical_fixtures import bayes_sir_model
 
@@ -37,17 +38,25 @@ def test_backend_arg():
     assert result is not None
 
 
-@pytest.mark.parametrize("simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
-def test_inner_simulates_of_solvers_match_forward(simulate_inner_bknd):
+@pytest.mark.parametrize("solver", [DiffEqDotJL, TorchDiffEq])
+def test_inner_simulates_of_solvers_match_forward(solver):
     sp0 = State(x=torch.tensor(10.).double(), c=torch.tensor(0.1).double())
-    timespan = torch.linspace(0., 10., 10).double()
+    timespan = torch.linspace(1.0, 10., 10).double()
 
-    res = simulate_inner_bknd(lambda s: State(x=-s['x'] * s['c']), sp0, timespan)
+    def dynamics(s: State):
+        # FIXME
+        #  -(s['x'] * s['c']) works but (-s['x']) * s['c'] errors on exceeding max ndim of 32. This occurs
+        #  despite the fact that at every stage everything is a proper ndarray of dtype object.
+        return State(x=-(s['x'] * s['c']))
 
-    correct = torch.tensor([10.0000,  8.9484,  8.0074,  7.1653,  6.4118,  5.7375,  5.1342,  4.5943,
-                            4.1111,  3.6788], dtype=torch.float64)
+    with LogTrajectory(timespan) as lt:
+        with solver():
+            simulate(dynamics, sp0, timespan[0] - 1., timespan[-1] + 1.)
 
-    assert torch.allclose(res['x'], correct, atol=1e-4)
+    correct = torch.tensor([9.0484, 8.1873, 7.4082, 6.7032, 6.0653, 5.4881,
+                            4.9659, 4.4933, 4.0657, 3.6788], dtype=torch.float64)
+
+    assert torch.allclose(lt.trajectory['x'], correct, atol=1e-4)
 
 
 @pytest.mark.parametrize(
