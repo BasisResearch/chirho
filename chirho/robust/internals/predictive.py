@@ -4,14 +4,13 @@ from typing import Any, Callable, Container, Generic, Optional, TypeVar
 
 import pyro
 import torch
+from pyro.util import get_rng_state, set_rng_seed, set_rng_state
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Point
-from pyro.util import get_rng_state, set_rng_seed, set_rng_state
-
 
 pyro.settings.set(module_local_params=True)
 

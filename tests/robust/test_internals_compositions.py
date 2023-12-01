@@ -3,9 +3,6 @@ import warnings
 
 import pyro
 import torch
-from typing_extensions import ParamSpec
-
-# from pyro.poutine.seed_messenger import SeedMessenger
 
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
@@ -66,7 +63,6 @@ def test_nmc_likelihood_seeded():
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    # seeded_guide = SeedMessenger(rng_seed=123)(guide)
 
     log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=3)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
