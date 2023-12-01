@@ -71,23 +71,29 @@ def test_smoke_inner_simulates_forward_nd(simulate_inner_bknd, x0, c):
 
 
 @pytest.mark.parametrize(
-    "simulate_inner_bknd", [_diffeqdotjl_ode_simulate_inner, _torchdiffeq_ode_simulate_inner])
+    "solver", [DiffEqDotJL, TorchDiffEq])
 @pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
 @pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
-def test_gradcheck_inner_simulates_of_solvers_wrt_param(simulate_inner_bknd, x0, c_):
+def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_):
     c_ = c_.double().requires_grad_()
-    timespan = torch.linspace(0., 10., 10).double()
+    timespan = torch.linspace(1.0, 10., 10).double()
 
     # TODO add other inputs we want to gradcheck.
 
     def dynamics(s: State):
+        # FIXME
+        #  -(s['x'] * s['c']) works but (-s['x']) * s['c'] errors on exceeding max ndim of 32. This occurs
+        #  despite the fact that at every stage everything is a proper ndarray of dtype object.
         return State(x=-(s['x'] * s['c']))
 
-    def wrapped_simulate_inner(c):
+    def wrapped_simulate(c):
         sp0 = State(x=x0.double(), c=c)
-        return simulate_inner_bknd(dynamics, sp0, timespan)['x']
+        with LogTrajectory(timespan) as lt:
+            with solver():
+                simulate(dynamics, sp0, timespan[0] - 1., timespan[-1] + 1.)
+        return lt.trajectory['x']
 
-    torch.autograd.gradcheck(wrapped_simulate_inner, c_)
+    torch.autograd.gradcheck(wrapped_simulate, c_)
 
 
 # TODO test whether float64 is properly required of initial state for diffeqpy backend.
