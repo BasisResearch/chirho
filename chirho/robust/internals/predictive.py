@@ -10,6 +10,8 @@ from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Point
+from pyro.util import get_rng_state, set_rng_seed, set_rng_state
+
 
 pyro.settings.set(module_local_params=True)
 
@@ -109,16 +111,20 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
+        rng_seed: int = 123,
     ):
         super().__init__()
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
+        self.rng_seed = rng_seed
+        self.old_state = get_rng_state()
 
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
+        set_rng_seed(self.rng_seed)
         if self.max_plate_nesting is None:
             self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
@@ -136,4 +142,5 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             max_plate_nesting=self.max_plate_nesting,
             **kwargs,
         )[0]
+        set_rng_state(self.old_state)
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
