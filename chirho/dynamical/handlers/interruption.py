@@ -139,6 +139,8 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         if msg["continuation"] is None:
             msg["continuation"] = obs_continuation
         else:
-            msg["continuation"] = lambda new_msg: obs_continuation(msg["continuation"](new_msg))
-        
+            msg["continuation"] = lambda new_msg: obs_continuation(
+                msg["continuation"](new_msg)
+            )
+
         super()._pyro_simulate(msg)
