@@ -130,5 +130,17 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         self.observation = observation
         super().__init__(times)
 
-    def _pyro_post_simulate(self, msg: dict) -> None:
-        self.trajectory = observe(self.trajectory, self.observation)
+    def _pyro_simulate(self, msg: dict) -> None:
+        # We use a continuation to ensure that the observation is applied to the trajectory after the simulation
+        #  has completed, regardless of the order of the handlers.
+        def obs_continuation(msg: dict) -> None:
+            self.trajectory = observe(self.trajectory, self.observation)
+
+        if msg["continuation"] is None:
+            msg["continuation"] = obs_continuation
+        else:
+            msg["continuation"] = lambda new_msg: obs_continuation(
+                msg["continuation"](new_msg)
+            )
+
+        super()._pyro_simulate(msg)

@@ -3,7 +3,11 @@ from typing import Generic, TypeVar
 import pyro
 import torch
 
-from chirho.dynamical.internals._utils import _squeeze_time_dim, append
+from chirho.dynamical.internals._utils import (
+    _squeeze_time_dim,
+    _unsqueeze_time_dim,
+    append,
+)
 from chirho.dynamical.internals.solver import simulate_trajectory
 from chirho.dynamical.ops import State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
@@ -23,9 +27,20 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         super().__init__()
 
-    def __enter__(self) -> "LogTrajectory[T]":
+    def _pyro_simulate(self, msg) -> None:
+        initial_state = msg["args"][1]
+        start_time = msg["args"][2]
+
         self.trajectory: State[T] = State()
-        return super().__enter__()
+
+        if start_time == self.times[0]:
+            # If we're starting at the beginning of the timespan, we need to log the initial state.
+            # LogTrajectory's simulate_point will log only timepoints that are greater than the start_time of each
+            # simulate_point call, which can occur multiple times in a single simulate call when there
+            # are interruptions.
+            self.trajectory = append(
+                _unsqueeze_time_dim(initial_state), self.trajectory
+            )
 
     def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
