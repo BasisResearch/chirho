@@ -27,13 +27,11 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         super().__init__()
 
-    def __enter__(self) -> "LogTrajectory[T]":
-        self.trajectory: State[T] = State()
-        return super().__enter__()
-
     def _pyro_simulate(self, msg) -> None:
         initial_state = msg["args"][1]
         start_time = msg["args"][2]
+
+        self.trajectory: State[T] = State()
 
         if start_time == self.times[0]:
             # If we're starting at the beginning of the timespan, we need to log the initial state.
@@ -41,7 +39,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             # simulate_point call, which can occur multiple times in a single simulate call when there
             # are interruptions.
             self.trajectory = append(
-                self.trajectory, _unsqueeze_time_dim(initial_state)
+                _unsqueeze_time_dim(initial_state), self.trajectory
             )
 
     def _pyro_simulate_point(self, msg) -> None:
