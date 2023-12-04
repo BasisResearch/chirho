@@ -8,7 +8,11 @@ from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import bayes_sir_model, check_states_match, check_trajectories_match_in_all_but_values
+from .dynamical_fixtures import (
+    bayes_sir_model,
+    check_states_match,
+    check_trajectories_match_in_all_but_values,
+)
 
 pyro.settings.set(module_local_params=True)
 
@@ -96,6 +100,7 @@ def test_start_end_time_collisions():
         == 4
     )  # previously failed bc len(X) == 3
 
+
 def test_multiple_simulates():
     sir1 = bayes_sir_model()
     sir2 = bayes_sir_model()
@@ -114,7 +119,7 @@ def test_multiple_simulates():
 
     with LogTrajectory(times=logging_times) as dt3:
         with TorchDiffEq():
-            result22 = simulate(sir2, init_state, start_time, end_time)    
+            result22 = simulate(sir2, init_state, start_time, end_time)
 
     # Simulation outputs do not depend on LogTrajectory context
     assert check_states_match(result11, result21)
