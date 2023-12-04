@@ -92,7 +92,6 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                         )
 
         msg["value"] = state
-        # msg["done"] = True
 
 
 class Interruption(Generic[T], ShallowMessenger):
