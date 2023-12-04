@@ -1,18 +1,11 @@
 import pyro
 import pyro.distributions as dist
 import pyro.infer
-import pytest
 import torch
 
-from chirho.counterfactual.handlers import (
-    MultiWorldCounterfactual,
-    SingleWorldCounterfactual,
-)
-#from chirho.counterfactual.handlers.counterfactual import Preemptions
+from chirho.counterfactual.handlers import SingleWorldCounterfactual
 from chirho.counterfactual.ops import split
 from chirho.explainable.ops import preempt
-from chirho.indexed.ops import IndexSet, indices_of
-from chirho.interventional.handlers import do
 
 
 def test_preempt_op_singleworld():
@@ -36,4 +29,3 @@ def test_preempt_op_singleworld():
     tr = pyro.poutine.trace(model).get_trace()
     assert torch.all(tr.nodes["x_"]["value"] == 0.0)
     assert torch.all(tr.nodes["y_"]["value"] == 1.0)
-
