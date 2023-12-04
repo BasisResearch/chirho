@@ -4,7 +4,6 @@ import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.event_loop import InterruptionEventLoop
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals.solver import check_dynamics
 from chirho.dynamical.ops import State, simulate
@@ -49,7 +48,7 @@ def test_validate_dynamics_torchdiffeq():
 
 def test_validate_dynamics_setting_torchdiffeq():
     with pyro.settings.context(validate_dynamics=False):
-        with InterruptionEventLoop(), TorchDiffEq():
+        with TorchDiffEq(), TorchDiffEq():
             simulate(
                 invalid_diff,
                 init_state,
@@ -59,7 +58,7 @@ def test_validate_dynamics_setting_torchdiffeq():
 
     with pyro.settings.context(validate_dynamics=True):
         with pytest.raises(ValueError):
-            with InterruptionEventLoop(), TorchDiffEq():
+            with TorchDiffEq(), TorchDiffEq():
                 simulate(
                     invalid_diff,
                     init_state,

@@ -81,7 +81,9 @@ venv/
 /.vscode
 
 # Automatically generated files
+docs/source/lightning_logs
 docs/preconvert
 docs/build
 site/
 out
+*.matrix.gz

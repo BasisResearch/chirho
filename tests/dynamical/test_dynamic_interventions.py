@@ -2,17 +2,12 @@ import logging
 
 import pytest
 import torch
-from torch import tensor as tt
 
 from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.dynamical.handlers import (
-    DynamicIntervention,
-    InterruptionEventLoop,
-    LogTrajectory,
-)
+from chirho.dynamical.handlers import DynamicIntervention, LogTrajectory
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
@@ -83,18 +78,16 @@ def test_nested_dynamic_intervention_causes_change(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
-                    simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    simulate(model, init_state, start_time, end_time)
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
@@ -181,12 +174,12 @@ def test_dynamic_intervention_causes_change(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(trigger_state),
+                event_fn=get_state_reached_event_f(trigger_state),
                 intervention=intervene_state,
             ):
-                simulate(model, init_state, start_time, end_time, solver=TorchDiffEq())
+                simulate(model, init_state, start_time, end_time)
 
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
@@ -253,13 +246,13 @@ def test_split_twinworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
                     with TwinWorldCounterfactual() as cf:
@@ -268,7 +261,6 @@ def test_split_twinworld_dynamic_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
 
     with cf:
@@ -301,13 +293,13 @@ def test_split_multiworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with InterruptionEventLoop():
+        with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
                     with MultiWorldCounterfactual() as cf:
@@ -316,7 +308,6 @@ def test_split_multiworld_dynamic_intervention(
                             init_state,
                             start_time,
                             end_time,
-                            solver=TorchDiffEq(),
                         )
 
     with cf:
@@ -345,37 +336,31 @@ def test_split_twinworld_dynamic_matches_output(
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with InterruptionEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
+            event_fn=get_state_reached_event_f(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
+                event_fn=get_state_reached_event_f(ts2),
                 intervention=is2,
             ):
                 with TwinWorldCounterfactual() as cf:
-                    cf_result = simulate(
-                        model, init_state, start_time, end_time, solver=TorchDiffEq()
-                    )
+                    cf_result = simulate(model, init_state, start_time, end_time)
 
-    with InterruptionEventLoop():
+    with TorchDiffEq():
         with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
+            event_fn=get_state_reached_event_f(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
+                event_fn=get_state_reached_event_f(ts2),
                 intervention=is2,
             ):
-                cf_expected = simulate(
-                    model, init_state, start_time, end_time, solver=TorchDiffEq()
-                )
+                cf_expected = simulate(model, init_state, start_time, end_time)
 
-    with InterruptionEventLoop():
-        factual_expected = simulate(
-            model, init_state, start_time, end_time, solver=TorchDiffEq()
-        )
+    with TorchDiffEq():
+        factual_expected = simulate(model, init_state, start_time, end_time)
 
     with cf:
         factual_indices = IndexSet(
@@ -412,38 +397,40 @@ def test_split_twinworld_dynamic_matches_output(
 def test_grad_of_dynamic_intervention_event_f_params():
     def model(X: State[torch.Tensor]):
         dX = State()
-        dX["x"] = tt(1.0)
+        dX["x"] = torch.tensor(1.0)
         dX["z"] = X["dz"]
-        dX["dz"] = tt(0.0)  # also a constant, this gets set by interventions.
-        dX["param"] = tt(
+        dX["dz"] = torch.tensor(0.0)  # also a constant, this gets set by interventions.
+        dX["param"] = torch.tensor(
             0.0
         )  # this is a constant event function parameter, so no change.
         return dX
 
-    param = torch.nn.Parameter(tt(5.0))
+    param = torch.nn.Parameter(torch.tensor(5.0))
     # Param has to be part of the state in order to take gradients with respect to it.
-    s0 = State(x=tt(0.0), z=tt(0.0), dz=tt(0.0), param=param)
+    s0 = State(
+        x=torch.tensor(0.0), z=torch.tensor(0.0), dz=torch.tensor(0.0), param=param
+    )
 
     dynamic_intervention = DynamicIntervention(
-        event_f=lambda t, s: t - s["param"],
-        intervention=State(dz=tt(1.0)),
+        event_fn=lambda t, s: t - s["param"],
+        intervention=State(dz=torch.tensor(1.0)),
     )
 
     # noinspection DuplicatedCode
-    with InterruptionEventLoop():
+    with TorchDiffEq():
         with dynamic_intervention:
-            result = simulate(model, s0, start_time, end_time, solver=TorchDiffEq())
+            result = simulate(model, s0, start_time, end_time)
 
     (dxdparam,) = torch.autograd.grad(
         outputs=(result["x"],), inputs=(param,), create_graph=True
     )
-    assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
+    assert torch.isclose(dxdparam, torch.tensor(0.0), atol=1e-5)
 
     # Z begins accruing dz=1 at t=param, so dzdparam should be -1.0.
     (dzdparam,) = torch.autograd.grad(
         outputs=(result["z"],), inputs=(param,), create_graph=True
     )
-    assert torch.isclose(dzdparam, tt(-1.0), atol=1e-5)
+    assert torch.isclose(dzdparam, torch.tensor(-1.0), atol=1e-5)
 
 
 def test_grad_of_event_f_params_torchdiffeq_only():
@@ -454,15 +441,17 @@ def test_grad_of_event_f_params_torchdiffeq_only():
 
     import torchdiffeq
 
-    param = torch.nn.Parameter(tt(5.0))
+    param = torch.nn.Parameter(torch.tensor(5.0))
 
-    dx = tt(1.0)
-    dz = tt(0.0)
-    dparam = tt(0.0)  # this is a constant event function parameter, so no change.
+    dx = torch.tensor(1.0)
+    dz = torch.tensor(0.0)
+    dparam = torch.tensor(
+        0.0
+    )  # this is a constant event function parameter, so no change.
     ds = (dx, dz, dparam)
 
-    t0 = tt(0.0)
-    x0, z0, param0 = tt(0.0), tt(0.0), param
+    t0 = torch.tensor(0.0)
+    x0, z0, param0 = torch.tensor(0.0), torch.tensor(0.0), param
     s0 = (x0, z0, param0)  # x, z, param
 
     t_at_split, s_at_split = torchdiffeq.odeint_event(
@@ -482,15 +471,15 @@ def test_grad_of_event_f_params_torchdiffeq_only():
     )
 
     assert torch.isreal(dxdparam)
-    assert torch.isclose(dxdparam, tt(1.0))
+    assert torch.isclose(dxdparam, torch.tensor(1.0))
 
-    dz = tt(1.0)
+    dz = torch.tensor(1.0)
 
     t_at_end, s_at_end = torchdiffeq.odeint_event(
-        lambda t, s: (dx, dz, tt(0.0)),
+        lambda t, s: (dx, dz, torch.tensor(0.0)),
         (x_at_split, z_at_split, param_at_split),
         t_at_split,
-        event_fn=lambda t, s: t - tt(10.0),  # Terminate at a constant t=10.
+        event_fn=lambda t, s: t - torch.tensor(10.0),  # Terminate at a constant t=10.
     )
 
     x_at_end, z_at_end, param_at_end = tuple(v[-1] for v in s_at_end)
@@ -498,17 +487,17 @@ def test_grad_of_event_f_params_torchdiffeq_only():
         outputs=(x_at_end,), inputs=(param,), create_graph=True
     )
 
-    assert torch.isclose(dxdparam, tt(0.0), atol=1e-5)
+    assert torch.isclose(dxdparam, torch.tensor(0.0), atol=1e-5)
 
     (dzdparam,) = torch.autograd.grad(
         outputs=(z_at_end,), inputs=(param,), create_graph=True
     )
 
-    assert torch.isclose(dzdparam, tt(-1.0))
+    assert torch.isclose(dzdparam, torch.tensor(-1.0))
 
     # Run a second time without the event function, but with the t_at_end terminating the tspan.
     s_at_end2 = torchdiffeq.odeint(
-        func=lambda t, s: (dx, dz, tt(0.0)),
+        func=lambda t, s: (dx, dz, torch.tensor(0.0)),
         y0=(x_at_split, z_at_split, param_at_split),
         t=torch.cat((t_at_split[None], t_at_end[None])),
         # t=torch.tensor((t_at_split[None], t_at_end[None])),  <-- This is what breaks the gradient propagation.
