@@ -70,6 +70,13 @@ def test_nmc_likelihood_seeded():
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     func_log_prob = SeedMessenger(123)(func_log_prob)
 
+    datapoint = {"y": torch.tensor([1.0, 2.0, 3.0])}
+    prob_call_one = func_log_prob(log_prob_params, datapoint)
+    prob_call_two = func_log_prob(log_prob_params, datapoint)
+    prob_call_three = func_log_prob(log_prob_params, datapoint)
+    assert torch.allclose(prob_call_two, prob_call_three)
+    assert torch.allclose(prob_call_one, prob_call_two)
+
     predictive = pyro.infer.Predictive(
         model, guide=guide, num_samples=2, parallel=True, return_sites=["y"]
     )
