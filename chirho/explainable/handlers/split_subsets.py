@@ -1,7 +1,11 @@
+import contextlib
 import itertools
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, Mapping, TypeVar
 
+from chirho.explainable.handlers import Preemptions
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
+from chirho.interventional.handlers import do
+from chirho.interventional.ops import Intervention
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -43,3 +47,32 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
         )
 
     return _undo_split
+
+
+@contextlib.contextmanager
+def SplitSubsets(
+    actions: Mapping[str, Intervention[T]],
+    *,
+    bias: float = 0.0,
+    prefix: str = "__cause_split_",
+):
+    """
+    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
+    On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
+    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
+    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
+
+    :param actions: A mapping of sites to interventions.
+    :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
+    """
+    # TODO support event_dim != 0 propagation in factual_preemption
+    preemptions = {
+        antecedent: undo_split(antecedents=[antecedent])
+        for antecedent in actions.keys()
+    }
+
+    with do(actions=actions):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+            yield
