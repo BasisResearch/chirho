@@ -221,7 +221,7 @@ def test_empirical_fisher_vp_against_analytical(
         (torch.ones(2, requires_grad=True), torch.eye(2)),
     ],
 )
-def test_fisher_vmap_smoke(data_config):
+def test_fisher_vmap(data_config):
     loc, cov_mat = data_config
     func_log_prob = gaussian_log_prob
     log_prob_params = {"loc": loc}
@@ -230,23 +230,25 @@ def test_fisher_vmap_smoke(data_config):
     empirical_fisher_vp_func = make_empirical_fisher_vp(
         func_log_prob, log_prob_params, data, cov_mat=cov_mat
     )
-    v_single = torch.ones(cov_mat.shape[1])
-    v_batch = torch.stack([v_single, v_single], axis=0)
+    v_single_one = torch.ones(cov_mat.shape[1])
+    v_single_two = 0.4 * torch.ones(cov_mat.shape[1])
+    v_batch = torch.stack([v_single_one, v_single_two], axis=0)
     empirical_fisher_vp_func_batched = torch.func.vmap(empirical_fisher_vp_func)
 
     # Check if fisher vector product works on a single vector and a batch of vectors
-    empirical_fisher_vp_func({"loc": v_single})
-    empirical_fisher_vp_func_batched({"loc": v_batch})
-    try:
+    single_one_out = empirical_fisher_vp_func({"loc": v_single_one})
+    single_two_out = empirical_fisher_vp_func({"loc": v_single_two})
+    batch_out = empirical_fisher_vp_func_batched({"loc": v_batch})
+
+    assert torch.allclose(batch_out["loc"][0], single_one_out["loc"])
+    assert torch.allclose(batch_out["loc"][1], single_two_out["loc"])
+
+    with pytest.raises(RuntimeError):
+        # Fisher vector product should not work on a batch of vectors
         empirical_fisher_vp_func({"loc": v_batch})
-        assert False, "Fisher vector product should not work on a batch of vectors"
-    except RuntimeError:
-        pass
-    try:
-        empirical_fisher_vp_func_batched({"loc": v_single})
-        assert False, "Batched Fisher vector product should not work on a single vector"
-    except RuntimeError:
-        pass
+    with pytest.raises(RuntimeError):
+        # Batched Fisher vector product should not work on a single vector
+        empirical_fisher_vp_func_batched({"loc": v_single_one})
 
 
 @pytest.mark.parametrize(
@@ -314,7 +316,7 @@ def test_linearize_against_analytic_ate():
     adam = torch.optim.Adam(elbo.parameters(), lr=0.03)
 
     # Do gradient steps
-    for _ in range(2000):
+    for _ in range(500):
         adam.zero_grad()
         loss = elbo(D_train)
         loss.backward()

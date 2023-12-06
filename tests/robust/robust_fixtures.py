@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Optional, TypeVar
+from typing import Callable, Optional, Tuple, TypedDict, TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -65,7 +65,7 @@ class DataConditionedModel(PyroModule):
         super().__init__()
         self.model = model
 
-    def forward(self, D: Point[T]):
+    def forward(self, D: Point[torch.Tensor]):
         with condition(data=D):
             # Assume first dimension corresponds to # of datapoints
             N = D[next(iter(D))].shape[0]
@@ -193,7 +193,22 @@ class MLEGuide(torch.nn.Module):
             pyro.sample(name, dist.Delta(value))
 
 
-def closed_form_ate_correction(X_test: Point[T], theta: ParamDict):
+class ATETestPoint(TypedDict):
+    X: torch.Tensor
+    A: torch.Tensor
+    Y: torch.Tensor
+
+
+class ATEParamDict(TypedDict):
+    propensity_weights: torch.Tensor
+    outcome_weights: torch.Tensor
+    treatment_weight: torch.Tensor
+    intercept: torch.Tensor
+
+
+def closed_form_ate_correction(
+    X_test: ATETestPoint, theta: ATEParamDict
+) -> Tuple[torch.Tensor, torch.Tensor]:
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
