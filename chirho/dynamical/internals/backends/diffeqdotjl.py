@@ -20,6 +20,174 @@ from typing import Union
 from functools import singledispatch
 
 
+class JuliaThingWrapper:
+    """
+    This wrapper just acts as a pass-through to the julia object, but obscures the underlying memory buffer of the
+    julia thing (realvalue, symbolic, dual number, etc.). This prevents numpy from introspecting the julia thing as a
+    sequence with a large number of dimensions (exceeding the ndim 32 limit). Unfortunately, even with a dtype of
+    np.object_, this introspection still occurs. The issue of casting to a numpy array can also be addressed by first
+    creating an empty array of dtype object, and then filling it with the julia thing (as occurs in unwrap_array
+    below), but this fails to generalize well in cases where numpy is doing the casting itself. As of now, this seems
+    the most robust solution.
+    """
+
+    def __init__(self, julia_thing):
+        self.julia_thing = julia_thing
+
+    @staticmethod
+    def wrap_array(arr: np.ndarray):
+        return np.vectorize(JuliaThingWrapper)(arr)
+
+    @staticmethod
+    def unwrap_array(arr: np.ndarray):
+        out = np.array(arr.shape, dtype=np.object_)
+        for idx, v in np.ndenumerate(arr):
+            out[idx] = v.julia_thing
+
+    @classmethod
+    def _forward_dunders(cls):
+
+        dunders = [
+            '__abs__',
+            '__add__',
+            # '__and__',
+            '__bool__',
+            # '__call__',
+            '__ceil__',
+            # '__class__',
+            # '__complex__',
+            # '__contains__',
+            # '__delattr__',
+            # '__delitem__',
+            # '__dir__',
+            # '__doc__',
+            '__eq__',
+            '__float__',
+            '__floor__',
+            '__floordiv__',
+            # '__format__',
+            '__ge__',
+            # '__getattr__',
+            # '__getattribute__',
+            # '__getitem__',
+            # '__getstate__',
+            '__gt__',
+            # '__hash__',
+            # '__init__',
+            # '__init_subclass__',
+            '__invert__',
+            # '__iter__',
+            '__le__',
+            # '__len__',
+            '__lshift__',
+            '__lt__',
+            '__mod__',
+            # '__module__',
+            '__mul__',
+            # '__name__',
+            '__ne__',
+            '__neg__',
+            # '__new__',
+            '__or__',
+            '__pos__',
+            '__pow__',
+            '__radd__',
+            '__rand__',
+            # '__reduce__',
+            # '__reduce_ex__',
+            # '__repr__',
+            '__reversed__',
+            '__rfloordiv__',
+            '__rlshift__',
+            '__rmod__',
+            '__rmul__',
+            '__ror__',
+            '__round__',
+            '__rpow__',
+            '__rrshift__',
+            '__rshift__',
+            '__rsub__',
+            '__rtruediv__',
+            '__rxor__',
+            # '__setattr__',
+            # '__setitem__',
+            # '__sizeof__',
+            # '__slots__',
+            # '__str__',
+            '__sub__',
+            # '__subclasshook__',
+            '__truediv__',
+            '__trunc__',
+            '__xor__',
+            # '_jl_callmethod',
+            # '_jl_deserialize',
+            # '_jl_display',
+            # '_jl_help',
+            # '_jl_isnull',
+            # '_jl_raw',
+            # '_jl_serialize',
+            # '_repr_mimebundle_',
+            # 'conjugate',
+            # 'imag',
+            # 'real',
+            # 'val'
+        ]
+
+        for method_name in dunders:
+            cls._make_dunder(method_name)
+
+    def __repr__(self):
+        return f"JuliaThingWrapper({self.julia_thing})"
+
+    @classmethod
+    def _make_dunder(cls, method_name):
+        """
+        Automate the definition of dunder methods on the underlying julia things. Note that just intercepting
+        getattr doesn't work here because dunder method calls skip getattr.
+        """
+
+        def dunder(self: JuliaThingWrapper, *args):
+            attr = getattr(self.julia_thing, method_name)
+
+            if not args:
+                result = attr()
+            else:
+                if len(args) != 1:
+                    raise ValueError("Only one argument is supported for automated dunder method dispatch.")
+                other, = args
+
+                # In certain cases, that TODO need to be sussed out (maybe numpy internal nuance)
+                #  the julia_thing is a scalar array of a JuliaThingWrapper, so we need to further unwrap the scalar
+                #  array to get at the julia symbolic directly.
+                if isinstance(other, np.ndarray):
+                    if other.ndim == 0:
+                        other = other.item()
+                    else:
+                        # Wrap self in an array and recurse back through numpy broadcasting. This is required when a
+                        #  JuliaThingWrapper "scalar" is involved in an operation with a numpy array on the right.
+                        scalar_array_self = np.array(self)
+                        scalar_array_self_attr = getattr(scalar_array_self, method_name)
+                        return scalar_array_self_attr(other)
+
+                if isinstance(other, JuliaThingWrapper):
+                    other = other.julia_thing
+
+                # Perform the operation using the corresponding method of the Julia object
+                result = attr(other)
+
+                if result is NotImplemented:
+                    raise NotImplementedError(f"Operation {method_name} is not implemented for {self.julia_thing} and {other}.")
+
+            # Rewrap
+            return JuliaThingWrapper(result)
+
+        setattr(cls, method_name, dunder)
+
+
+# noinspection PyProtectedMember
+JuliaThingWrapper._forward_dunders()
+
+
 def diffeqdotjl_compile_problem(
     dynamics: Dynamics[Tnsr],
     initial_state_and_params: StateAndOrParams[Tnsr],
@@ -35,19 +203,37 @@ def diffeqdotjl_compile_problem(
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
     def ode_f(flat_dstate_out, flat_state, flat_params, t):
         # Unflatten the state u according to the state variables stored in initial dstate.
-        state = _unflatten_state(flat_state, initial_state)
-        # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
-        #  of julia DualNumbers carrying the forward gradient information. I.e. while initial_params has the same
-        #  real values as flat_params, they do not carry gradient information that can be propagated through the julia
-        #  solver.
-        params = _unflatten_state(flat_params, torch_params)
+        state = _unflatten_state(
+            # Wrap julia symbolics (that will be passed through this during jit) so that numpy doesn't introspect them
+            #  as sequences with a large number of dimensions.
+            JuliaThingWrapper.wrap_array(flat_state),
+            initial_state
+        )
 
-        state_ao_params = StateAndOrParams(**state, **params, t=t)
+        # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
+        # of julia symbolics involved in jit copmilation. I.e. while initial_params has the same real values as
+        # flat_params, they do not carry gradient information that can be propagated through the julia solver.
+        params = _unflatten_state(
+            JuliaThingWrapper.wrap_array(flat_params),
+            torch_params
+        )
+
+        state_ao_params = StateAndOrParams(**state, **params, t=JuliaThingWrapper(t))
+
         dstate = dynamics(state_ao_params)
 
-        require_float64(dstate)
-
-        assign_(_flatten_state_ao_params(dstate), flat_dstate_out)
+        # We cannot put cast the raw julia symbolics into an array in order to broadcast assign them, so we have to
+        #  manually assign them one by one.
+        # TODO move this logic to an unwrap_array method in JuliaThingWrapper, then unwrap and broadcast as usual.
+        #  TLDR abstract out the complexity.
+        flat_dstate = _flatten_state_ao_params(dstate)
+        for i, v in enumerate(flat_dstate):
+            try:
+                flat_dstate_out[i] = v.julia_thing
+            except IndexError:
+                # TODO this could be made more informative by pinpointing which particular dstate is the wrong shape.
+                raise IndexError(f"Number of elements in dstate ({len(flat_dstate)}) does not match the number of "
+                                 f"elements defined in the initial state ({len(flat_dstate_out)}).")
 
     # Flatten the initial state and parameters.
     flat_initial_state = _flatten_state_ao_params(initial_state)
@@ -72,77 +258,33 @@ def _lazily_compile_problem(*args, **kwargs) -> de.ODEProblem:
 def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
     return _var_order(frozenset(state_ao_params.keys()))
 
+# TODO get rid of these dispatches if we're committing to jit compilation. b/c in that case the only thing
+#  that goes through them are numpy arrays.
+
 
 # Single dispatch cat thing that handles both tensors and numpy arrays.
 @singledispatch
-def cat(*vs):
+def flat_cat(*vs):
     # Default implementation assumes we're dealing some underying julia thing that needs to be put back into an array.
     # This will re-route to the numpy implementation.
     # FIXME this causes infinite recursion — does recursive dispatching not work from within the default implementation?
     # return cat(*np.atleast_1d(vecs))
-    return cat_numpy(*np.atleast_1d(vs))
+    return flat_cat_numpy(*np.atleast_1d(vs))
 
 
-@cat.register
-def cat_torch(*vs: Tnsr):
+@flat_cat.register
+def flat_cat_torch(*vs: Tnsr):
     return torch.cat([v.ravel() for v in vs])
 
 
-@cat.register
-def cat_numpy(*vs: np.ndarray):
-    return np.concatenate([v.ravel() for v in vs])
-
-
-@singledispatch
-def atleast_1d(*vs):
-    raise NotImplementedError
-
-
-@atleast_1d.register
-def atleast_1d_torch(*vs: Tnsr):
-    # Unlike np.atleast_1d, torch.atleast_1d sometimes returns a tuple of a single tensor
-    #  but not always. np.atleast_1d never returns a tuple of a single tensor.
-    ret = torch.atleast_1d(vs)
-    if len(vs) == 1 and isinstance(ret, tuple):
-        return ret[0]
-    return ret
-
-
-@atleast_1d.register
-def atleast_1d_numpy(*vs: np.ndarray):
-    return np.atleast_1d(vs)
-
-
-@singledispatch
-def assign_(v, out):  # _ suffix is torch convention for in place operation.
-    raise NotImplementedError
-
-
-@assign_.register
-def assign_torch_(v: Tnsr, out: Union[Tnsr, juliacall.ArrayValue]):
-    out[:] = v
-
-
-@assign_.register
-def assign_numpy_(v: np.ndarray, out: Union[np.ndarray, juliacall.ArrayValue]):
-    # FIXME because duals cannot be stored in an array as anything other than object (due to dim limit of 32) we
-    #  cannot use [:] style assignment, perhaps because the duals are seen as full Float64(::Py) entities
-    #  independently, which cannot be stored in the juliacall.VectorValue of duals that is flat_dstate? This isn't
-    #  totally clear to me atm, but the manual assignment does work. This is likely just a nuance in how
-    #  juliacall.VectorValue implements its broadcast assignment?
-    if v.dtype is np.dtype(object):
-        if v.ndim != 1:
-            # TODO can you ravel a juliacall.ArrayValue? If so just do that and iterate.
-            raise NotImplementedError("Cannot assign a non-1d array of duals.")
-        for i in range(len(v)):
-            out[i] = v[i]
-    else:
-        out[:] = v
+@flat_cat.register
+def flat_cat_numpy(*vs: np.ndarray):
+    return np.concatenate([v.ravel() if isinstance(v, np.ndarray) else [v] for v in vs])
 
 
 def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
     var_order = get_var_order(state_ao_params)
-    return cat(*[state_ao_params[v] for v in var_order])
+    return flat_cat(*[state_ao_params[v] for v in var_order])
 
 
 def _unflatten_state(
@@ -177,12 +319,9 @@ def _unflatten_state(
             sv = sv.to_numpy(copy=False)
         assert isinstance(sv, np.ndarray) or isinstance(sv, Tnsr)
 
-        # FIXME db81f0skj turns out that the dual number is issue is fixed if we always unflatten to arrays of
-        #  non-zero dim. Then the array status of the dual is kept even when mathing between them, which prevents
-        #  down stream stuff from breaking. Note this retains the array dtype of object that we get when running
-        #  to_numpy on a 0-dim (scalar) juliacall.ArrayValue of Duals, and doesn't try to access the buffer
-        #  within the dual, which results in a violoation of numpy's 32 dimension limit.
-        state_ao_params[v] = atleast_1d(sv)
+        state_ao_params[v] = sv
+
+        # Update to capture only the remaining.
         flat_state_ao_params = flat_state_ao_params[shaped.numel():]
     return state_ao_params
 
@@ -193,8 +332,11 @@ def require_float64(state_ao_params: StateAndOrParams[Tnsr]):
     for k, v in state_ao_params.items():
         # TODO be more specific than object — this is what we get during forward diff with
         #  numpy arrays of dual numbers.
-        if v.dtype not in (torch.float64, np.float64, object):
-            raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
+        try:
+            if v.dtype not in (torch.float64, np.float64, object):
+                raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
+        except Exception as e:
+            raise
 
 
 def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr]):
@@ -242,6 +384,10 @@ def _diffeqdotjl_ode_simulate_inner(
 
     compiled_prob = _lazily_compile_problem(
         dynamics,
+        # TODO TODO either refactor or clarify the fact that these inputs are only used on the first compilation so that
+        #  the types shapes etc. get compiled along with the problem. Subsequently, these are ignored (even though they
+        #  have the same as exact values as the args passed into the remake below). The outer_u0_t_p has to be passed
+        #  into the JuliaFunction.apply so that those values can be put into Dual numbers by juliatorch.
         initial_state_and_params,
         timespan[0],
         timespan[-1],
