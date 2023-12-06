@@ -75,7 +75,7 @@ def test_inner_simulates_of_solvers_match_forward(solver):
     lambda s: s['x'] + s['c'],
     lambda s: s['x'] - s['c'],
     lambda s: s['x'] ** s['c'],
-    lambda s: s['x'] * s['c'],
+    lambda s: 2. * s['x'] * s['c'],  # test including python numeric type
     lambda s: (np.atleast_1d(s['x']) @ np.atleast_1d(s['c'])) * s['x'],
     lambda s: np.matmul(np.atleast_1d(s['x']), np.atleast_1d(s['c'])) * s['x']
 ])
