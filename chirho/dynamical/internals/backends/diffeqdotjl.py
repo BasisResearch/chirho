@@ -11,49 +11,17 @@ from chirho.indexed.ops import IndexSet, gather, get_index_plates
 from torch import Tensor as Tnsr
 from juliatorch import JuliaFunction
 import juliacall
-# Even though this is unused, it must be called to register a seval with de. (FIXME in retrospect, this may be false)
-jl = juliacall.Main.seval
 import numpy as np
 from typing import Union
 from functools import singledispatch
 from copy import copy
+from juliacall import Main as jl
 
 
-class JuliaThingWrapper:
-    """
-    This wrapper just acts as a pass-through to the julia object, but obscures the underlying memory buffer of the
-    julia thing (realvalue, symbolic, dual number, etc.). This prevents numpy from introspecting the julia thing as a
-    sequence with a large number of dimensions (exceeding the ndim 32 limit). Unfortunately, even with a dtype of
-    np.object_, this introspection still occurs. The issue of casting to a numpy array can also be addressed by first
-    creating an empty array of dtype object, and then filling it with the julia thing (as occurs in unwrap_array
-    below), but this fails to generalize well in cases where numpy is doing the casting itself. As of now, this seems
-    the most robust solution.
-
-    Note that numpy arrays of objects will, internally, use the dunder math methods of the objects they contain when
-    performing math operations. This is not fast, but for our purposes is fine b/c the main application here involves
-    julia symbolics only during jit compilation. As such, the point of this class is to wrap scalar valued julia things
-    only so that we can use numpy arrays of julia things.
-    """
+class _DunderedJuliaThingWrapper:
 
     def __init__(self, julia_thing):
         self.julia_thing = julia_thing
-
-    @staticmethod
-    def wrap_array(arr: np.ndarray):
-        return np.vectorize(JuliaThingWrapper)(arr)
-
-    @staticmethod
-    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None):
-        # As discussed in docstring, we cannot simply vectorize a deconstructor because numpy will try to internally
-        #  cast the unwrapped_julia things into an array, which fails due to introspection triggering the ndim 32 limit.
-        # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
-        #  compilation for our use case.
-        if out is None:
-            out = np.empty(arr.shape, dtype=np.object_)
-
-        for idx, v in np.ndenumerate(arr):
-            out[idx] = v.julia_thing
-        return out
 
     @classmethod
     def _forward_dunders(cls):
@@ -105,9 +73,6 @@ class JuliaThingWrapper:
         for method_name in dunders:
             cls._make_dunder(method_name)
 
-    def __repr__(self):
-        return f"JuliaThingWrapper({self.julia_thing})"
-
     @classmethod
     def _make_dunder(cls, method_name):
         """
@@ -116,7 +81,7 @@ class JuliaThingWrapper:
         to work with.
         """
 
-        def dunder(self: JuliaThingWrapper, *args):
+        def dunder(self: _DunderedJuliaThingWrapper, *args):
             # Retrieve the underlying dunder method of the julia thing.
             method = getattr(self.julia_thing, method_name)
 
@@ -145,7 +110,7 @@ class JuliaThingWrapper:
                         return scalar_array_self_attr(other)
 
                 # Extract the underlying julia thing.
-                if isinstance(other, JuliaThingWrapper):
+                if isinstance(other, _DunderedJuliaThingWrapper):
                     other = other.julia_thing
 
                 # Perform the operation using the corresponding method of the Julia object
@@ -160,13 +125,96 @@ class JuliaThingWrapper:
 
         setattr(cls, method_name, dunder)
 
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        # Default implementation for array_ufunc. The whole purpose here is to define a super method
+        #  that will basically only resolve if the corresponding dunder method has been defined.
+        methodf = getattr(ufunc, method)
+        if methodf is NotImplemented:
+            return NotImplemented
+        return methodf(*args, **kwargs)
+
 
 # noinspection PyProtectedMember
-JuliaThingWrapper._forward_dunders()
+_DunderedJuliaThingWrapper._forward_dunders()
+
+
+class JuliaThingWrapper(_DunderedJuliaThingWrapper):
+    """
+    This wrapper just acts as a pass-through to the julia object, but obscures the underlying memory buffer of the
+    julia thing (realvalue, symbolic, dual number, etc.). This prevents numpy from introspecting the julia thing as a
+    sequence with a large number of dimensions (exceeding the ndim 32 limit). Unfortunately, even with a dtype of
+    np.object_, this introspection still occurs. The issue of casting to a numpy array can also be addressed by first
+    creating an empty array of dtype object, and then filling it with the julia thing (as occurs in unwrap_array
+    below), but this fails to generalize well in cases where numpy is doing the casting itself. As of now, this seems
+    the most robust solution.
+
+    Note that numpy arrays of objects will, internally, use the dunder math methods of the objects they contain when
+    performing math operations. This is not fast, but for our purposes is fine b/c the main application here involves
+    julia symbolics only during jit compilation. As such, the point of this class is to wrap scalar valued julia things
+    only so that we can use numpy arrays of julia things.
+    """
+
+    @staticmethod
+    def wrap_array(arr: np.ndarray):
+        return np.vectorize(JuliaThingWrapper)(arr)
+
+    @staticmethod
+    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None):
+        # As discussed in docstring, we cannot simply vectorize a deconstructor because numpy will try to internally
+        #  cast the unwrapped_julia things into an array, which fails due to introspection triggering the ndim 32 limit.
+        # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
+        #  compilation for our use case.
+        if out is None:
+            out = np.empty(arr.shape, dtype=np.object_)
+
+        for idx, v in np.ndenumerate(arr):
+            out[idx] = v.julia_thing
+        return out
+
+    def __repr__(self):
+        return f"JuliaThingWrapper({self.julia_thing})"
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        """
+        Many numpy functions (like sin, exp, log, etc.) are so-called "universal functions" that don't correspond to
+        a standard dunder method. To handle these, we need to dispatch the julia version of the function on the
+        underlying julia thing. This is done by overriding __array_ufunc__ and forwarding the call to the the jl
+        function operating on the underlying julia thing, assuming that the corresponding dunder method hasn't
+        already been defined.
+        """
+
+        # Attempt to resolve this ufunc to any dunder methods that have been defined for a particular operation. This
+        #  will call _DunderedJuliaThingWrapper.__array_ufunc__, in which numpy's ufunc will be resolved to the
+        #  corresponding dunder method, which will then resolve to the dunder method of the underlying julia thing.
+        dunder_ret = super().__array_ufunc__(ufunc, method, *args, **kwargs)
+        if dunder_ret is not NotImplemented:
+            return dunder_ret
+        # Otherwise, continue on to try to get the julia version of the ufunc.
+
+        # Not sure when this wouldn't be the case, but for explicitness, require for now that the method is __call__.
+        if method != '__call__':
+            return NotImplemented
+
+        # Only support self-referential ufuncs for now. Dunders should handle everything else?
+        if len(args) != 1:
+            return NotImplemented
+        maybe_self, = args
+        if maybe_self is not self:
+            return NotImplemented
+
+        ufunc_name = ufunc.__name__
+        jlfunc = getattr(jl, ufunc_name)
+
+        if jlfunc is NotImplemented:
+            return NotImplemented
+
+        result = jlfunc(self.julia_thing)
+
+        return JuliaThingWrapper(result)
 
 
 def diffeqdotjl_compile_problem(
-    dynamics: Dynamics[Tnsr],
+    dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
@@ -299,30 +347,29 @@ def require_float64(state_ao_params: StateAndOrParams[Tnsr]):
             raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
 
 
-def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr], t0: Tnsr):
+def separate_state_and_params(dynamics: Dynamics[np.ndarray], initial_state_ao_params: StateAndOrParams[Tnsr], t0: Tnsr):
     """
     Non-explicitly (bad?), the initial_state must include parameters that inform dynamics. This is required
      for this backend because the solve function passed to Julia must be a pure wrt to parameters that
      one wants to differentiate with respect to.
     """
 
-    # Copy so we can add time in without modifying the original.
-    initial_state_ao_params = copy(initial_state_ao_params)
+    # Copy so we can add time in without modifying the original, also convert elements to numpy arrays so that the
+    #  user's dynamics only have to handle numpy arrays, and not also torch tensors. This is fine, as the only way
+    #  we use the initial_dstate below is for its keys, which comprise the state variables.
+    initial_state_ao_params_np = {k: copy(v.detach().numpy()) for k, v in initial_state_ao_params.items()}
     # TODO unify this time business with how torchdiffeq is doing it?
-    if 't' in initial_state_ao_params:
-        raise ValueError("Initial state cannot contain a time variable. This is added on the backend.")
-    initial_state_ao_params['t'] = t0
+    if 't' in initial_state_ao_params_np:
+        raise ValueError("Initial state cannot contain a time variable 't'. This is added on the backend.")
+    initial_state_ao_params_np['t'] = t0.detach().numpy()
 
-    # Run the dynamics on the initial state.
-    initial_dstate = dynamics(initial_state_ao_params)
-
-    # Clear out time, so it's not misinterpreted as a parameter.
-    initial_state_ao_params.pop('t')
+    # Run the dynamics on the converted initial state.
+    initial_dstate_np = dynamics(initial_state_ao_params_np)
 
     # Keys that don't appear in the returned dstate are parameters.
-    param_keys = [k for k in initial_state_ao_params.keys() if k not in initial_dstate.keys()]
+    param_keys = [k for k in initial_state_ao_params.keys() if k not in initial_dstate_np.keys()]
     # Keys that do appear in the dynamics are state variables.
-    state_keys = [k for k in initial_state_ao_params.keys() if k in initial_dstate.keys()]
+    state_keys = [k for k in initial_state_ao_params.keys() if k in initial_dstate_np.keys()]
 
     torch_params = StateAndOrParams(**{k: initial_state_ao_params[k] for k in param_keys})
     initial_state = StateAndOrParams(**{k: initial_state_ao_params[k] for k in state_keys})
@@ -331,7 +378,7 @@ def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params:
 
 
 def _diffeqdotjl_ode_simulate_inner(
-    dynamics: Dynamics[Tnsr],
+    dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     timespan: Tnsr,
     **kwargs
@@ -385,7 +432,7 @@ def _diffeqdotjl_ode_simulate_inner(
 
 
 def diffeqdotjl_simulate_trajectory(
-    dynamics: Dynamics[Tnsr],
+    dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     timespan: Tnsr,
     **kwargs,
@@ -395,7 +442,7 @@ def diffeqdotjl_simulate_trajectory(
 
 def diffeqdotjl_simulate_to_interruption(
     interruptions: List[Interruption],
-    dynamics: Dynamics[Tnsr],
+    dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
@@ -415,7 +462,7 @@ def diffeqdotjl_simulate_to_interruption(
 
 
 def diffeqdotjl_simulate_point(
-    dynamics: Dynamics[torch.Tensor],
+    dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
