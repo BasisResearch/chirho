@@ -3,7 +3,6 @@ import warnings
 
 import pyro
 import torch
-from typing_extensions import ParamSpec
 
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
