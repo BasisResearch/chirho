@@ -121,7 +121,7 @@ def linearize(
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
-    seed: Optional[int] = 123,
+    seed: int = 123,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
