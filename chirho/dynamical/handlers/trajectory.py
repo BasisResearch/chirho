@@ -21,16 +21,13 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
     def __init__(self, times: torch.Tensor):
         self.times = times
+        self._trajectory: State[T] = State()
 
         # Require that the times are sorted. This is required by the index masking we do below.
         if not torch.all(self.times[1:] > self.times[:-1]):
             raise ValueError("The passed times must be sorted.")
 
         super().__init__()
-
-    def __enter__(self):
-        super().__enter__()
-        self._trajectory: State[T] = State()
 
     def _pyro_post_simulate(self, msg) -> None:
         initial_state = msg["args"][1]
