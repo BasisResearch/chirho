@@ -27,7 +27,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             raise ValueError("The passed times must be sorted.")
 
         super().__init__()
-    
+
     def _pyro_post_simulate(self, msg) -> None:
         initial_state = msg["args"][1]
         start_time = msg["args"][2]
