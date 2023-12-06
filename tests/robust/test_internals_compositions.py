@@ -3,6 +3,7 @@ import warnings
 
 import pyro
 import torch
+from pyro.poutine.seed_messenger import SeedMessenger
 
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
@@ -22,6 +23,7 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     model(), guide()  # initialize
     log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=100)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
+    func_log_prob = SeedMessenger(123)(func_log_prob)
 
     predictive = pyro.infer.Predictive(
         model, guide=guide, num_samples=1000, parallel=True, return_sites=["y"]
@@ -66,6 +68,7 @@ def test_nmc_likelihood_seeded():
 
     log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=3)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
+    func_log_prob = SeedMessenger(123)(func_log_prob)
 
     predictive = pyro.infer.Predictive(
         model, guide=guide, num_samples=2, parallel=True, return_sites=["y"]

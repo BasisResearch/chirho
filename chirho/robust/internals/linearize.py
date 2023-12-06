@@ -3,6 +3,7 @@ from typing import Any, Callable, Optional, TypeVar
 
 import pyro
 import torch
+from pyro.poutine.seed_messenger import SeedMessenger
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
@@ -120,6 +121,7 @@ def linearize(
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
+    seed: Optional[int] = 123,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
@@ -138,6 +140,7 @@ def linearize(
         model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
+    func_log_prob = SeedMessenger(seed)(func_log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
     cg_solver = functools.partial(
