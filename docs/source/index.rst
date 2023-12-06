@@ -46,6 +46,7 @@ Table of Contents
    :maxdepth: 2
    :caption: For Contributors
 
+   contributing
    design_notes/index
 
 Indices and tables
