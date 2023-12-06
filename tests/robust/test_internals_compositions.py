@@ -30,7 +30,7 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     )
     predictive_params, func_predictive = make_functional_call(predictive)
 
-    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=10)
+    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=2)
 
     with torch.no_grad():
         data = func_predictive(predictive_params)

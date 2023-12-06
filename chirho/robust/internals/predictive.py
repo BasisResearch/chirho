@@ -125,7 +125,9 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 self.model, self.guide, *args, **kwargs
             )
             warnings.warn(
-                "Since max_plate_nesting is not specified, the first call to NMCLogPredictiveLikelihood will not be seeded properly. See https://github.com/BasisResearch/chirho/pull/408"
+                "Since max_plate_nesting is not specified, \
+                the first call to NMCLogPredictiveLikelihood will not be seeded properly. \
+                See https://github.com/BasisResearch/chirho/pull/408"
             )
 
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
