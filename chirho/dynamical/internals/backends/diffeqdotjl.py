@@ -16,6 +16,7 @@ jl = juliacall.Main.seval
 import numpy as np
 from typing import Union
 from functools import singledispatch
+from copy import copy
 
 
 class JuliaThingWrapper:
@@ -174,7 +175,7 @@ def diffeqdotjl_compile_problem(
 
     require_float64(initial_state_and_params)
 
-    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
+    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params, start_time)
 
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
     def ode_f(flat_dstate_out, flat_state, flat_params, t):
@@ -192,7 +193,7 @@ def diffeqdotjl_compile_problem(
         params = _unflatten_state(
             JuliaThingWrapper.wrap_array(flat_params),
             torch_params
-        )
+        ) if len(flat_params) > 0 else StateAndOrParams()
 
         state_ao_params = StateAndOrParams(**state, **params, t=JuliaThingWrapper(t))
 
@@ -258,6 +259,9 @@ def flat_cat_numpy(*vs: np.ndarray):
 
 
 def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
+    if len(state_ao_params) == 0:
+        # TODO do17bdy1t address type specificity
+        return torch.tensor([], dtype=torch.float64)
     var_order = get_var_order(state_ao_params)
     return flat_cat(*[state_ao_params[v] for v in var_order])
 
@@ -289,22 +293,31 @@ def _unflatten_state(
 
 
 def require_float64(state_ao_params: StateAndOrParams[Tnsr]):
-    # Forward diff through diffeqpy currently requires float64. # TODO update when this is fixed.
+    # Forward diff through diffeqpy currently requires float64. # TODO do17bdy1t update when this is fixed.
     for k, v in state_ao_params.items():
         if v.dtype is not torch.float64:
             raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
 
 
-def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr]):
+def separate_state_and_params(dynamics: Dynamics[Tnsr], initial_state_ao_params: StateAndOrParams[Tnsr], t0: Tnsr):
     """
     Non-explicitly (bad?), the initial_state must include parameters that inform dynamics. This is required
      for this backend because the solve function passed to Julia must be a pure wrt to parameters that
      one wants to differentiate with respect to.
     """
 
+    # Copy so we can add time in without modifying the original.
+    initial_state_ao_params = copy(initial_state_ao_params)
+    # TODO unify this time business with how torchdiffeq is doing it?
+    if 't' in initial_state_ao_params:
+        raise ValueError("Initial state cannot contain a time variable. This is added on the backend.")
+    initial_state_ao_params['t'] = t0
+
     # Run the dynamics on the initial state.
-    # FIXME need time in here, ideally without modifying the user's initial_state_ao_params
     initial_dstate = dynamics(initial_state_ao_params)
+
+    # Clear out time, so it's not misinterpreted as a parameter.
+    initial_state_ao_params.pop('t')
 
     # Keys that don't appear in the returned dstate are parameters.
     param_keys = [k for k in initial_state_ao_params.keys() if k not in initial_dstate.keys()]
@@ -329,7 +342,7 @@ def _diffeqdotjl_ode_simulate_inner(
     # The backend solver requires that the dynamics are a pure function, meaning the parameters must be passed
     #  in as arguments. Thus, we simply require that the params are passed along in the initial state, and assume
     #  that anything not returned by the dynamics are parameters, and not state.
-    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params)
+    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params, timespan[0])
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.
