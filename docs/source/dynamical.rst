@@ -19,10 +19,6 @@ Handlers
    :members:
    :undoc-members:
 
-.. automodule:: chirho.dynamical.handlers.event_loop
-   :members:
-   :undoc-members:
-
 .. automodule:: chirho.dynamical.handlers.interruption
    :members:
    :undoc-members:
