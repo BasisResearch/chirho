@@ -43,8 +43,6 @@ def _flat_conjugate_gradient_solve(
     """
     if cg_iters is None:
         cg_iters = b.numel()
-    else:
-        cg_iters = min(cg_iters, b.numel())
 
     p = b.clone()
     r = b.clone()
@@ -139,6 +137,11 @@ def linearize(
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
+    log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
+    if cg_iters is None:
+        cg_iters = log_prob_params_numel
+    else:
+        cg_iters = min(cg_iters, log_prob_params_numel)
     cg_solver = functools.partial(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
