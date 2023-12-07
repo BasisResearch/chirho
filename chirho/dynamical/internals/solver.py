@@ -46,38 +46,14 @@ def get_new_interruptions() -> List[Interruption]:
 
 
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
-    def _install_interruption(
-        self,
-        h: Interruption[T],
-        all_interruptions: List[Prioritized[Interruption[T]]],
-        start_time: R,
-        end_time: R,
-    ) -> None:
-        """
-        Install an interruption into the context.
-        """
+    @staticmethod
+    def _prioritize_interruption(h: Interruption[T]) -> Prioritized[Interruption[T]]:
         from chirho.dynamical.handlers.interruption import StaticEvent, ZeroEvent
 
         if isinstance(h.predicate, StaticEvent):
-            if h.predicate.time > end_time:
-                warnings.warn(
-                    f"{Interruption.__name__} {h} with time={h.predicate.time} "
-                    f"occurred after the end of the timespan ({start_time}, {end_time})."
-                    "This interruption will have no effect.",
-                    UserWarning,
-                )
-            elif h.predicate.time < start_time:
-                raise ValueError(
-                    f"{Interruption.__name__} {h} with time {h.predicate.time} "
-                    f"occurred before the start of the timespan ({start_time}, {end_time})."
-                    "This interruption will have no effect."
-                )
-            else:
-                heapq.heappush(
-                    all_interruptions, Prioritized(float(h.predicate.time), h)
-                )
+            return Prioritized(float(h.predicate.time), h)
         elif isinstance(h.predicate, ZeroEvent):
-            heapq.heappush(all_interruptions, Prioritized(-math.inf, h))
+            return Prioritized(-math.inf, h)
         else:
             raise NotImplementedError(f"cannot install interruption {h}")
 
@@ -95,18 +71,32 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
 
         # local state
         all_interruptions: List[Prioritized[Interruption[T]]] = []
-        self._install_interruption(
-            on(StaticEvent(end_time), lambda d, s: (d, s)),
+        heapq.heappush(
             all_interruptions,
-            start_time,
-            end_time,
+            self._prioritize_interruption(
+                on(StaticEvent(end_time), lambda d, s: (d, s))
+            ),
         )
 
         while start_time < end_time:
             for h in get_new_interruptions():
-                self._install_interruption(h, all_interruptions, start_time, end_time)
+                if isinstance(h.predicate, StaticEvent):
+                    if h.predicate.time > end_time:
+                        warnings.warn(
+                            f"{Interruption.__name__} {h} with time={h.predicate.time} "
+                            f"occurred after the end of the timespan ({start_time}, {end_time})."
+                            "This interruption will have no effect.",
+                            UserWarning,
+                        )
+                    elif h.predicate.time < start_time:
+                        raise ValueError(
+                            f"{Interruption.__name__} {h} with time {h.predicate.time} "
+                            f"occurred before the start of the timespan ({start_time}, {end_time})."
+                            "This interruption will have no effect."
+                        )
+                heapq.heappush(all_interruptions, self._prioritize_interruption(h))
 
-            possible_interruptions = []
+            possible_interruptions: List[Interruption[T]] = []
             while all_interruptions:
                 ph: Prioritized[Interruption[T]] = heapq.heappop(all_interruptions)
                 possible_interruptions.append(ph.item)
@@ -127,8 +117,8 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
-                        self._install_interruption(
-                            h, all_interruptions, start_time, end_time
+                        heapq.heappush(
+                            all_interruptions, self._prioritize_interruption(h)
                         )
 
         msg["value"] = state
