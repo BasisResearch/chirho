@@ -9,10 +9,6 @@ from chirho.dynamical.internals.solver import Solver
 S = TypeVar("S")
 T = TypeVar("T")
 
-# USed e.g. as
-# with TorchDiffEq():
-#     simulate(dynamics, initial_state, start_time, end_time)
-
 
 class TorchDiffEq(Solver[torch.Tensor]):
     """
