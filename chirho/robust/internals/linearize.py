@@ -94,7 +94,7 @@ def make_empirical_fisher_vp(
     batched_func_log_prob: Callable[[ParamDict, Point[T]], torch.Tensor] = torch.vmap(
         lambda p, data: func_log_prob(p, data, *args, **kwargs),
         in_dims=(None, 0),
-        randomness="different",
+        randomness="same",
     )
 
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
