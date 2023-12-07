@@ -88,7 +88,7 @@ def _torchdiffeq_ode_simulate_inner(
             torch.cat((s, s[..., -1].unsqueeze(time_dim)), dim=time_dim) for s in solns
         )
 
-    return type(initial_state)(**zip(var_order, solns))
+    return type(initial_state)(**dict(zip(var_order, solns)))
 
 
 def _batched_odeint(
