@@ -19,9 +19,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
     trajectory: State[T]
     _trajectory: State[T]
 
-    def __init__(self, times: torch.Tensor):
+    def __init__(self, times: torch.Tensor, is_traced: bool = False):
         self.times = times
         self._trajectory: State[T] = State()
+        self.is_traced = is_traced
 
         # Require that the times are sorted. This is required by the index masking we do below.
         if not torch.all(self.times[1:] > self.times[:-1]):
@@ -45,6 +46,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         # Clear the internal trajectory so that we don't keep appending to it on subsequent simulate calls.
         self.trajectory = self._trajectory
         self._trajectory: State[T] = State()
+
+        if self.is_traced:
+            # This adds the trajectory to the trace so that it can be accessed later.
+            [pyro.deterministic(name, value) for name, value in self.trajectory.items()]
 
     def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times

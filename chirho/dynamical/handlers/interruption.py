@@ -126,9 +126,10 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         self,
         times: torch.Tensor,
         observation: Observation[State[T]],
+        **kwargs,
     ):
         self.observation = observation
-        super().__init__(times)
+        super().__init__(times, **kwargs)
 
     def _pyro_post_simulate(self, msg: dict) -> None:
         super()._pyro_post_simulate(msg)
