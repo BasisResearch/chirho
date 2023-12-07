@@ -21,7 +21,26 @@ def simulate(
     **kwargs,
 ) -> State[T]:
     """
-    Simulate a dynamical system.
+    Simulate a dynamical system for (``end_time - start_time``) units of time, starting the system at ``initial_state``,
+    and rolling out the system according to the ``dynamics`` function. Note that this function is effectful, and must
+    be within the context of a solver backend, such as :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`.
+
+    :param dynamics: A function that takes a state and returns the derivative of the state with respect to time.
+    :type dynamics: :ref:`Dynamics[T] <type-alias-Dynamics>`
+
+    :param initial_state: The initial state of the system.
+    :type initial_state: :ref:`State[T] <type-alias-State>`
+
+    :param start_time: The starting time of the simulation — a scalar.
+    :type start_time: :ref:`R <type-alias-R>`
+
+    :param end_time: The ending time of the simulation — a scalar.
+    :type end_time: :ref:`R <type-alias-R>`
+
+    :param kwargs: Additional keyword arguments to pass to the solver.
+
+    :return: The final state of the system after the simulation.
+    :rtype: :ref:`State[T] <type-alias-State>`
     """
     from chirho.dynamical.internals.solver import check_dynamics, simulate_point
 
