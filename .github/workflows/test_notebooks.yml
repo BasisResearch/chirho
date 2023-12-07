@@ -39,7 +39,7 @@ jobs:
         - name: Install Python packages from requirements.txt
           run: |
             pip install --upgrade pip
-            pip install -e .[test,dynamical]
+            pip install -e .[test]
     
         - name: Run Notebook Test
           run: | 

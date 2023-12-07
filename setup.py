@@ -45,7 +45,7 @@ setup(
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE
+        "test": EXTRAS_REQUIRE + DYNAMICAL_REQUIRE
         + [
             "pytest",
             "pytest-cov",
