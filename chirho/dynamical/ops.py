@@ -1,7 +1,5 @@
 import numbers
-import sys
-import typing
-from typing import Callable, Dict, Generic, TypeVar, Union
+from typing import Callable, Mapping, TypeVar, Union
 
 import pyro
 import torch
@@ -10,17 +8,7 @@ R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 
-
-if typing.TYPE_CHECKING:
-    State = Dict[str, T]
-elif sys.version_info >= (3, 9):
-    State = dict
-else:
-
-    class State(Generic[T], Dict[str, T]):
-        pass
-
-
+State = Mapping[str, T]
 Dynamics = Callable[[State[T]], State[T]]
 
 
