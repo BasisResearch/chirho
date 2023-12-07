@@ -164,13 +164,13 @@ def simulate_trajectory(
 
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
-    interruption_stack: List[Interruption],
+    interruption_stack: List[Interruption[T]],
     dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
     **kwargs,
-) -> Tuple[State[T], R, Optional[Interruption]]:
+) -> Tuple[State[T], R, Optional[Interruption[T]]]:
     """
     Simulate a dynamical system until the next interruption.
 

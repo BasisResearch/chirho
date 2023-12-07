@@ -169,15 +169,17 @@ def _torchdiffeq_get_next_interruptions(
     dynamics: Dynamics[torch.Tensor],
     start_state: State[torch.Tensor],
     start_time: torch.Tensor,
-    interruptions: List[Interruption],
+    interruptions: List[Interruption[torch.Tensor]],
     **kwargs,
-) -> Tuple[Tuple[Interruption, ...], torch.Tensor]:
+) -> Tuple[Tuple[Interruption[torch.Tensor], ...], torch.Tensor]:
     # special case: static interruptions
     from chirho.dynamical.handlers.interruption import StaticEvent
 
     assert len(interruptions) > 0, "should have at least one interruption here"
     if all(isinstance(i.predicate, StaticEvent) for i in interruptions):
-        next_static_interruption = min(interruptions, key=lambda i: i.predicate.time)
+        next_static_interruption = min(
+            interruptions, key=lambda i: getattr(i.predicate, "time")
+        )
         assert isinstance(next_static_interruption.predicate, StaticEvent)
         return (next_static_interruption,), next_static_interruption.predicate.time
 
@@ -230,13 +232,13 @@ def _torchdiffeq_get_next_interruptions(
 
 
 def torchdiffeq_simulate_to_interruption(
-    interruptions: List[Interruption],
+    interruptions: List[Interruption[torch.Tensor]],
     dynamics: Dynamics[torch.Tensor],
     initial_state: State[torch.Tensor],
     start_time: torch.Tensor,
     end_time: torch.Tensor,
     **kwargs,
-) -> Tuple[State[torch.Tensor], torch.Tensor, Optional[Interruption]]:
+) -> Tuple[State[torch.Tensor], torch.Tensor, Optional[Interruption[torch.Tensor]]]:
     assert len(interruptions) > 0, "should have at least one interruption here"
 
     (next_interruption,), interruption_time = _torchdiffeq_get_next_interruptions(
@@ -250,7 +252,7 @@ def torchdiffeq_simulate_to_interruption(
 
 
 def torchdiffeq_combined_event_f(
-    interruptions: List[Interruption],
+    interruptions: List[Interruption[torch.Tensor]],
     var_order: Tuple[str, ...],
 ) -> Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], torch.Tensor]:
     """
@@ -268,7 +270,7 @@ def torchdiffeq_combined_event_f(
         state: State[torch.Tensor] = dict(zip(var_order, flat_state))
         return torch.stack(
             torch.broadcast_tensors(
-                *[di.predicate.event_fn(t, state) for di in interruptions]
+                *[getattr(di.predicate, "event_fn")(t, state) for di in interruptions]
             ),
             dim=-1,
         )

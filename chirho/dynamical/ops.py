@@ -1,21 +1,10 @@
-import contextlib
 import numbers
-from typing import (
-    Callable,
-    Concatenate,
-    Mapping,
-    Optional,
-    ParamSpec,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Mapping, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
 
 R = Union[numbers.Real, torch.Tensor]
-P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
