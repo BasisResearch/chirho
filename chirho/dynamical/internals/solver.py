@@ -21,11 +21,6 @@ T = TypeVar("T")
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
     @typing.final
     @staticmethod
-    def _pyro_simulate(msg: dict) -> None:
-        msg["done"] = True
-
-    @typing.final
-    @staticmethod
     def _pyro_post_simulate(msg: dict) -> None:
         from chirho.dynamical.handlers.interruption import StaticInterruption
 
@@ -92,6 +87,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                         )
 
         msg["value"] = state
+        msg["done" = True
 
 
 class Interruption(Generic[T], ShallowMessenger):
