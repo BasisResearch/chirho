@@ -13,7 +13,7 @@ pyro.settings.set(module_local_params=True)
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(1.0))
+init_state = dict(S=torch.tensor(1.0))
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(4.0)
 
@@ -24,7 +24,7 @@ def valid_diff(state: State) -> State:
 
 def invalid_diff(state: State) -> State:
     pyro.sample("x", pyro.distributions.Normal(0.0, 1.0))
-    return State(S=(state["S"]))
+    return dict(S=(state["S"]))
 
 
 def test_validate_dynamics_torchdiffeq():

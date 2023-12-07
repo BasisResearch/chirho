@@ -38,13 +38,8 @@ def _deriv(
     time: torch.Tensor,
     state: Tuple[torch.Tensor, ...],
 ) -> Tuple[torch.Tensor, ...]:
-    env: State[torch.Tensor] = State()
-    for var, value in zip(var_order, state):
-        env[var] = value
-
-    assert "t" not in set(env.keys()), "variable name t is reserved for time"
-    env["t"] = time
-
+    assert "t" not in var_order, "variable name t is reserved for time"
+    env: State[torch.Tensor] = dict(zip(var_order + ("t",), state + (time,)))
     ddt: State[torch.Tensor] = dynamics(env)
     return tuple(ddt.get(var, torch.tensor(0.0)) for var in var_order)
 
@@ -54,7 +49,7 @@ def _torchdiffeq_ode_simulate_inner(
     initial_state: State[torch.Tensor],
     timespan,
     **odeint_kwargs,
-):
+) -> State[torch.Tensor]:
     var_order = _var_order(frozenset(initial_state.keys()))  # arbitrary, but fixed
 
     diff = timespan[:-1] < timespan[1:]
@@ -93,11 +88,7 @@ def _torchdiffeq_ode_simulate_inner(
             torch.cat((s, s[..., -1].unsqueeze(time_dim)), dim=time_dim) for s in solns
         )
 
-    trajectory: State[torch.Tensor] = State()
-    for var, soln in zip(var_order, solns):
-        trajectory[var] = soln
-
-    return trajectory
+    return type(initial_state)(**zip(var_order, solns))
 
 
 def _batched_odeint(
@@ -273,10 +264,7 @@ def torchdiffeq_combined_event_f(
     """
 
     def combined_event_f(t: torch.Tensor, flat_state: Tuple[torch.Tensor, ...]):
-        state: State[torch.Tensor] = State(
-            **{k: v for k, v in zip(var_order, flat_state)}
-        )
-
+        state: State[torch.Tensor] = dict(zip(var_order, flat_state))
         return torch.stack(
             torch.broadcast_tensors(*[di.event_fn(t, state) for di in interruptions]),
             dim=-1,
