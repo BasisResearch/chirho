@@ -65,33 +65,34 @@ def test_inner_simulates_of_solvers_match_forward(solver):
 # @pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
 
 @pytest.mark.parametrize(
-    "solver", [DiffEqDotJL])  #, TorchDiffEq])
+    # torchdiffeq needs torch versions of the last three dynfuncs, or to skip them.
+    "solver", [DiffEqDotJL])  # , TorchDiffEq])
 @pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
-@pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
+@pytest.mark.parametrize("c_", [torch.tensor(0.5), torch.tensor([0.5, 0.3])])
 @pytest.mark.parametrize("dynfunc", [
+    # Unsimplified defs just ensure the solutions are stable but still exercise the relevant ops. Julia does compile
+    #  these away, but not until it's able to successfully push symbolics through the unsimplified python func.
     lambda s: -s['x'] * s['c'],
     lambda s: -(s['x'] * s['c']),
-    lambda s: s['x'] / s['c'],
-    lambda s: s['x'] + s['c'],
-    lambda s: s['x'] - s['c'],
-    lambda s: s['x'] ** s['c'],
-    lambda s: 2. * s['x'] * s['c'],  # test including python numeric type
-    lambda s: (np.atleast_1d(s['x']) @ np.atleast_1d(s['c'])) * s['x'],
-    lambda s: np.matmul(np.atleast_1d(s['x']), np.atleast_1d(s['c'])) * s['x'],
-    lambda s: np.sin(s['x']) * np.cos(s['c']) + np.log(np.abs(s['x'] + s['c'])),
+    lambda s: -.5 * s['x'] * s['c'],  # w/ python numeric type
+    lambda s: -s['x'] / (1. / s['c']),
+    lambda s: -s['x'] * (s['c'] + s['c'] - s['c']),
+    lambda s: -s['x'] ** (s['c'] / s['c']),
+    # The last three dynfuncs test numpy ufunc dispatch to julia.
+    # .ravel and slice ensure that the return here always matches the initial state (the 2x2 matmul gives you 4 elems).
+    lambda s: -((np.atleast_2d(s['x']).T @ np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
+    lambda s: -(np.matmul(np.atleast_2d(s['x']).T, np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
+    lambda s: np.sin(s['t']) + np.sin(np.pi + s['t']) - s['x'] * np.exp(np.log(s['c']))
 ])
 def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_, dynfunc):
     c_ = c_.double().requires_grad_()
     timespan = torch.linspace(1.0, 10., 10).double()
 
-    # TODO add other inputs we want to gradcheck.
+    # TODO gradcheck wrt time.
 
     def dynamics(s: State):
-        # FIXME
-        #  -(s['x'] * s['c']) works but (-s['x']) * s['c'] errors on exceeding max ndim of 32. This occurs
-        #  despite the fact that at every stage everything is a proper ndarray of dtype object.
         try:
-            dx = -s['x'] * s['c']
+            dx = dynfunc(s)
 
             # for the test case where there are two parameters but only one (scalar) state variable.
             if x0.ndim == 0 and c_.ndim > 0:
@@ -109,9 +110,7 @@ def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_, dynfunc)
 
     # This goes outside the gradcheck b/c DiffEqDotJl lazily compiles the problem.
     with solver():
-        # FIXME atol=1e-3 is only required for the final test case, values of around 1e1 are off by about 1e-3.
-        #  Unclear why at the moment.
-        torch.autograd.gradcheck(wrapped_simulate, c_, atol=1e-3)
+        torch.autograd.gradcheck(wrapped_simulate, c_, atol=1e-4)
 
 
 # TODO test that the informative error fires when dstate returns something that isn't the right shape.
