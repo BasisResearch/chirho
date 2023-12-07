@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import numbers
 from typing import (
     Callable,
@@ -43,17 +42,15 @@ def simulate(
 
 
 def on(
-    predicate: Callable[Concatenate[State[T], P], bool],
+    predicate: Callable[[State[T]], bool],
     callback: Optional[
-        Callable[Concatenate[Dynamics[T], State[T], P], Tuple[Dynamics[T], State[T]]]
+        Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
     ] = None,
 ):
     if callback is None:
 
         def _on(
-            callback: Callable[
-                Concatenate[Dynamics[T], State[T], P], Tuple[Dynamics[T], State[T]]
-            ]
+            callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
         ):
             return on(predicate, callback)
 
@@ -61,15 +58,4 @@ def on(
 
     from chirho.dynamical.internals.solver import Interruption
 
-    @contextlib.contextmanager
-    def cm(*args: P.args, **kwargs: P.kwargs):
-        predicate_: Callable[[State[T]], bool] = lambda state: predicate(
-            state, *args, **kwargs
-        )
-        callback_: Callable[
-            [Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]
-        ] = lambda dynamics, state: callback(dynamics, state, *args, **kwargs)
-        with Interruption(predicate_, callback_):
-            yield
-
-    return cm
+    return Interruption(predicate, callback)

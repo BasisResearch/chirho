@@ -11,18 +11,79 @@ import pyro
 import torch
 
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
-from chirho.dynamical.ops import Dynamics, State
+from chirho.dynamical.ops import Dynamics, State, on
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 
 
+class Interruption(Generic[T], ShallowMessenger):
+    predicate: Callable[[State[T]], bool]
+    callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
+
+    def __init__(
+        self,
+        predicate: Callable[[State[T]], bool],
+        callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]],
+    ):
+        self.predicate = predicate
+        self.callback = callback
+
+    def _pyro_get_new_interruptions(self, msg: dict) -> None:
+        if msg["value"] is None:
+            msg["value"] = []
+        assert isinstance(msg["value"], list)
+        msg["value"].append(self)
+
+
+@pyro.poutine.runtime.effectful(type="get_new_interruptions")
+def get_new_interruptions() -> List[Interruption]:
+    """
+    Install the active interruptions into the context.
+    """
+    return []
+
+
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
+    def _install_interruption(
+        self,
+        h: Interruption[T],
+        all_interruptions: List[Prioritized[Interruption[T]]],
+        start_time: R,
+        end_time: R,
+    ) -> None:
+        """
+        Install an interruption into the context.
+        """
+        from chirho.dynamical.handlers.interruption import StaticEvent, ZeroEvent
+
+        if isinstance(h.predicate, StaticEvent):
+            if h.predicate.time > end_time:
+                warnings.warn(
+                    f"{Interruption.__name__} {h} with time={h.predicate.time} "
+                    f"occurred after the end of the timespan ({start_time}, {end_time})."
+                    "This interruption will have no effect.",
+                    UserWarning,
+                )
+            elif h.predicate.time < start_time:
+                raise ValueError(
+                    f"{Interruption.__name__} {h} with time {h.predicate.time} "
+                    f"occurred before the start of the timespan ({start_time}, {end_time})."
+                    "This interruption will have no effect."
+                )
+            else:
+                heapq.heappush(
+                    all_interruptions, Prioritized(float(h.predicate.time), h)
+                )
+        elif isinstance(h.predicate, ZeroEvent):
+            heapq.heappush(all_interruptions, Prioritized(-math.inf, h))
+        else:
+            raise NotImplementedError(f"cannot install interruption {h}")
+
     @typing.final
-    @staticmethod
-    def _pyro_simulate(msg: dict) -> None:
-        from chirho.dynamical.handlers.interruption import StaticInterruption
+    def _pyro_simulate(self, msg: dict) -> None:
+        from chirho.dynamical.handlers.interruption import StaticEvent
 
         dynamics: Dynamics[T] = msg["args"][0]
         state: State[T] = msg["args"][1]
@@ -33,36 +94,21 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             check_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
 
         # local state
-        all_interruptions: List[Prioritized] = []
-        heapq.heappush(
+        all_interruptions: List[Prioritized[Interruption[T]]] = []
+        self._install_interruption(
+            on(StaticEvent(end_time), lambda d, s: (d, s)),
             all_interruptions,
-            Prioritized(float(end_time), StaticInterruption(end_time)),
+            start_time,
+            end_time,
         )
 
         while start_time < end_time:
             for h in get_new_interruptions():
-                if isinstance(h, StaticInterruption) and h.time >= end_time:
-                    warnings.warn(
-                        f"{StaticInterruption.__name__} {h} with time={h.time} "
-                        f"occurred after the end of the timespan ({start_time}, {end_time})."
-                        "This interruption will have no effect.",
-                        UserWarning,
-                    )
-                elif isinstance(h, StaticInterruption) and h.time < start_time:
-                    raise ValueError(
-                        f"{StaticInterruption.__name__} {h} with time {h.time} "
-                        f"occurred before the start of the timespan ({start_time}, {end_time})."
-                        "This interruption will have no effect."
-                    )
-                else:
-                    heapq.heappush(
-                        all_interruptions,
-                        Prioritized(float(getattr(h, "time", -math.inf)), h),
-                    )
+                self._install_interruption(h, all_interruptions, start_time, end_time)
 
             possible_interruptions = []
             while all_interruptions:
-                ph: Prioritized[Interruption] = heapq.heappop(all_interruptions)
+                ph: Prioritized[Interruption[T]] = heapq.heappop(all_interruptions)
                 possible_interruptions.append(ph.item)
                 if ph.priority > start_time:
                     break
@@ -77,35 +123,16 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                dynamics, state = next_interruption.apply_fn(dynamics, state)
+                dynamics, state = next_interruption.callback(dynamics, state)
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
-                        heapq.heappush(
-                            all_interruptions,
-                            Prioritized(float(getattr(h, "time", -math.inf)), h),
+                        self._install_interruption(
+                            h, all_interruptions, start_time, end_time
                         )
 
         msg["value"] = state
         msg["done"] = True
-
-
-class Interruption(Generic[T], ShallowMessenger):
-    apply_fn: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
-
-    def _pyro_get_new_interruptions(self, msg) -> None:
-        if msg["value"] is None:
-            msg["value"] = []
-        assert isinstance(msg["value"], list)
-        msg["value"].append(self)
-
-
-@pyro.poutine.runtime.effectful(type="get_new_interruptions")
-def get_new_interruptions() -> List[Interruption]:
-    """
-    Install the active interruptions into the context.
-    """
-    return []
 
 
 @pyro.poutine.runtime.effectful(type="simulate_point")
