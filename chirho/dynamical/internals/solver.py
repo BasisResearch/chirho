@@ -80,21 +80,21 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
 
         while start_time < end_time:
             for h in get_new_interruptions():
-                if isinstance(h.predicate, StaticEvent):
-                    if h.predicate.time > end_time:
-                        warnings.warn(
-                            f"{Interruption.__name__} {h} with time={h.predicate.time} "
-                            f"occurred after the end of the timespan ({start_time}, {end_time})."
-                            "This interruption will have no effect.",
-                            UserWarning,
-                        )
-                    elif h.predicate.time < start_time:
-                        raise ValueError(
-                            f"{Interruption.__name__} {h} with time {h.predicate.time} "
-                            f"occurred before the start of the timespan ({start_time}, {end_time})."
-                            "This interruption will have no effect."
-                        )
-                heapq.heappush(all_interruptions, self._prioritize_interruption(h))
+                if isinstance(h.predicate, StaticEvent) and h.predicate.time > end_time:
+                    warnings.warn(
+                        f"{Interruption.__name__} {h} with time={h.predicate.time} "
+                        f"occurred after the end of the timespan ({start_time}, {end_time})."
+                        "This interruption will have no effect.",
+                        UserWarning,
+                    )
+                elif isinstance(h.predicate, StaticEvent) and h.predicate.time < start_time:
+                    raise ValueError(
+                        f"{Interruption.__name__} {h} with time {h.predicate.time} "
+                        f"occurred before the start of the timespan ({start_time}, {end_time})."
+                        "This interruption will have no effect."
+                    )
+                else:
+                    heapq.heappush(all_interruptions, self._prioritize_interruption(h))
 
             possible_interruptions: List[Interruption[T]] = []
             while all_interruptions:
