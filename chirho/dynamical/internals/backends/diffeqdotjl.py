@@ -335,7 +335,7 @@ def flat_cat(*vs):
 
     # If atleast_1d receives a single argument, it will return a single array, rather than a tuple of arrays.
     vs = np.atleast_1d(*vs)
-    return flat_cat_numpy(*(vs if isinstance(vs, tuple) else (vs,)))
+    return flat_cat_numpy(*(vs if isinstance(vs, list) else (vs,)))
 
 
 @flat_cat.register
