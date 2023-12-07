@@ -3,7 +3,6 @@ from typing import Any, Callable, Optional, TypeVar
 
 import pyro
 import torch
-from pyro.poutine.seed_messenger import SeedMessenger
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
@@ -11,6 +10,7 @@ from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
     make_functional_call,
+    reset_rng_state,
 )
 from chirho.robust.ops import Point
 
@@ -121,7 +121,6 @@ def linearize(
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
-    seed: int = 123,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
@@ -140,7 +139,6 @@ def linearize(
         model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
-    func_log_prob = SeedMessenger(seed)(func_log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
     cg_solver = functools.partial(
@@ -155,7 +153,9 @@ def linearize(
         fvp = make_empirical_fisher_vp(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
+
+        pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(fvp, point_score)
+        return cg_solver(pinned_fvp, point_score)
 
     return _fn
