@@ -96,7 +96,7 @@ def make_empirical_fisher_vp(
         randomness="different",
     )
 
-    N = data[next(iter(data))].shape[0]
+    N = data[next(iter(data))].shape[0]  # type: ignore
     mean_vector = 1 / N * torch.ones(N)
 
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
