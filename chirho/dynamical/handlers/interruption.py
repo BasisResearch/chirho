@@ -131,4 +131,5 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
         super().__init__(times)
 
     def _pyro_post_simulate(self, msg: dict) -> None:
+        super()._pyro_post_simulate(msg)
         self.trajectory = observe(self.trajectory, self.observation)
