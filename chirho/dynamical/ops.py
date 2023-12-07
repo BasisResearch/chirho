@@ -1,10 +1,22 @@
+import contextlib
+import functools
 import numbers
-from typing import Callable, Mapping, TypeVar, Union
+from typing import (
+    Callable,
+    Concatenate,
+    Mapping,
+    Optional,
+    ParamSpec,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch
 
 R = Union[numbers.Real, torch.Tensor]
+P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -28,3 +40,28 @@ def simulate(
     if pyro.settings.get("validate_dynamics"):
         check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
     return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
+
+
+def on(
+    predicate: Callable[Concatenate[State[T], P], bool],
+    callback: Optional[
+        Callable[Concatenate[Dynamics[T], State[T], P], Tuple[Dynamics[T], State[T]]]
+    ] = None,
+):
+    if callback is None:
+        return functools.partial(on, predicate)
+
+    from chirho.dynamical.internals.solver import Interruption
+
+    @contextlib.contextmanager
+    def cm(*args: P.args, **kwargs: P.kwargs):
+        predicate_: Callable[[State[T]], bool] = lambda state: predicate(
+            state, *args, **kwargs
+        )
+        callback_: Callable[
+            [Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]
+        ] = lambda dynamics, state: callback(dynamics, state, *args, **kwargs)
+        with Interruption(predicate_, callback_):
+            yield
+
+    return cm
