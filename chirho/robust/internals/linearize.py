@@ -103,9 +103,11 @@ def make_empirical_fisher_vp(
         return batched_func_log_prob(params, data)
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
-        jvp_fn = lambda log_prob_params: torch.func.jvp(
-            bound_batched_func_log_prob, (log_prob_params,), (v,)
-        )[1]
+        def jvp_fn(log_prob_params: ParamDict) -> torch.Tensor:
+            return torch.func.jvp(
+                bound_batched_func_log_prob, (log_prob_params,), (v,)
+            )[1]
+
         # Perlmutter's trick
         vjp_fn = torch.func.vjp(jvp_fn, log_prob_params)[1]
         return vjp_fn(-1 * mean_vector)[0]  # Fisher = -E[Hessian]
