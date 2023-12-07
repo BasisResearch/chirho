@@ -19,6 +19,11 @@ from juliacall import Main as jl
 
 
 class _DunderedJuliaThingWrapper:
+    """
+    Handles just the dunder forwarding to the undelrying julia thing. Beyond a separation of concerns, this is
+    a separate class because we need to be able to cast back into something that doesn't have custom __array_ufunc__
+    behavior. See _default_ufunc below for more details on this nuance.
+    """
 
     def __init__(self, julia_thing):
         self.julia_thing = julia_thing
@@ -30,27 +35,29 @@ class _DunderedJuliaThingWrapper:
         dunders = [
             '__abs__',
             '__add__',
+            # FIXME 18d0j1h9 python sometimes expects not a JuliaThingWrapper from __bool__, what do e.g. julia
+            #  symbolics expect?
             '__bool__',
             '__ceil__',
-            '__eq__',
+            '__eq__',  # FIXME 18d0j1h9
             '__float__',
             '__floor__',
             '__floordiv__',
-            '__ge__',
-            '__gt__',
+            '__ge__',  # FIXME 18d0j1h9
+            '__gt__',  # FIXME 18d0j1h9
             '__invert__',
-            '__le__',
+            '__le__',  # FIXME 18d0j1h9
             '__lshift__',
-            '__lt__',
+            '__lt__',  # FIXME 18d0j1h9
             '__mod__',
             '__mul__',
             '__ne__',
             '__neg__',
-            '__or__',
+            '__or__',  # FIXME 18d0j1h9
             '__pos__',
             '__pow__',
             '__radd__',
-            '__rand__',
+            '__rand__',  # FIXME 18d0j1h9 (also, where is __and__?)
             '__reversed__',
             '__rfloordiv__',
             '__rlshift__',
@@ -67,7 +74,7 @@ class _DunderedJuliaThingWrapper:
             '__sub__',
             '__truediv__',
             '__trunc__',
-            '__xor__',
+            '__xor__',  # FIXME 18d0j1h9
         ]
 
         for method_name in dunders:
@@ -130,57 +137,6 @@ class _DunderedJuliaThingWrapper:
 _DunderedJuliaThingWrapper._forward_dunders()
 
 
-def _default_ufunc(ufunc, method, *args, **kwargs):
-    f = getattr(ufunc, method)
-
-    # Numpy's behavior changes if __array_ufunc__ is defined at all, i.e. a super() call is insufficient to
-    #  capture the default behavior as if no __array_ufunc__ were involved. The way to do this is to create
-    #  a standard np.ndarray view of the underlying memory, and then call the ufunc on that.
-    nargs = (cast_as_lacking_array_ufunc(x) for x in args)
-
-    try:
-        ret = f(*nargs, **kwargs)
-        return cast_as_having_array_func(ret)
-    except TypeError as e:
-        # If the exception reports anything besides non-implementation of the ufunc, then re-raise.
-        if f"no callable {ufunc.__name__} method" not in str(e):
-            raise
-        # Otherwise, just return NotImplemented in keeping with standard __array_ufunc__ behavior.
-        else:
-            return NotImplemented
-
-
-class _JuliaThingWrapperArray(np.ndarray):
-    """
-    Subclassing the numpy array in order to translate ufunc calls to julia equivalent calls. This is required because
-    numpy doesn't defer to the __array_ufunc__ method of the underlying object for arrays of dtype object.
-    """
-
-    def cast_as_lacking_array_ufunc(self):
-        # This effectively presents an array without the __array_ufunc__ method defined. See note in _default_ufunc.
-        return self.view(np.ndarray)
-
-    @staticmethod
-    def cast_as_having_array_func(v):
-        return v.view(_JuliaThingWrapperArray)
-
-    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
-        # First, try to resolve the ufunc in the standard manner (this will dispatch first to dunder methods).
-        ret = _default_ufunc(ufunc, method, *args, **kwargs)
-        if ret is not NotImplemented:
-            return ret
-
-        # Otherwise, because numpy doesn't defer to the ufuncs of the underlying objects when being called on an array
-        # of objects (unlike how it behaves with dunder-definable ops), iterate manually and do so here.
-        result = _JuliaThingWrapperArray(self.shape, dtype=object)
-
-        for idx, v in np.ndenumerate(self):
-            assert isinstance(v, JuliaThingWrapper)
-            result[idx] = v._jl_ufunc(ufunc)
-
-        return result
-
-
 class JuliaThingWrapper(_DunderedJuliaThingWrapper):
     """
     This wrapper just acts as a pass-through to the julia object, but obscures the underlying memory buffer of the
@@ -195,6 +151,9 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
     performing math operations. This is not fast, but for our purposes is fine b/c the main application here involves
     julia symbolics only during jit compilation. As such, the point of this class is to wrap scalar valued julia things
     only so that we can use numpy arrays of julia things.
+
+    This class also handles the forwarding of numpy universal functions like sin, exp, log, etc. to the corresopnding
+    julia version. See __array_ufunc__ for more details.
     """
 
     @staticmethod
@@ -232,9 +191,6 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
 
         return JuliaThingWrapper(result)
 
-    def cast_as_lacking_array_ufunc(self):
-        return _DunderedJuliaThingWrapper(self.julia_thing)
-
     def __array_ufunc__(self, ufunc, method, *args, **kwargs):
         """
         Many numpy functions (like sin, exp, log, etc.) are so-called "universal functions" that don't correspond to
@@ -253,6 +209,80 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         return self._jl_ufunc(ufunc)
 
 
+class _JuliaThingWrapperArray(np.ndarray):
+    """
+    Subclassing the numpy array in order to translate ufunc calls to julia equivalent calls at the array level (
+    rather than the element level). This is required because numpy doesn't defer to the __array_ufunc__ method of the
+    underlying object for arrays of dtype object.
+    """
+
+    def __array_ufunc__(self, ufunc, method, *args, **kwargs):
+        # First, try to resolve the ufunc in the standard manner (this will dispatch first to dunder methods).
+        ret = _default_ufunc(ufunc, method, *args, **kwargs)
+        if ret is not NotImplemented:
+            return ret
+
+        # Otherwise, because numpy doesn't defer to the ufuncs of the underlying objects when being called on an array
+        # of objects (unlike how it behaves with dunder-definable ops), iterate manually and do so here.
+        result = _JuliaThingWrapperArray(self.shape, dtype=object)
+
+        for idx, v in np.ndenumerate(self):
+            assert isinstance(v, JuliaThingWrapper)
+            result[idx] = v._jl_ufunc(ufunc)
+
+        return result
+
+
+def _default_ufunc(ufunc, method, *args, **kwargs):
+    f = getattr(ufunc, method)
+
+    # Numpy's behavior changes if __array_ufunc__ is defined at all, i.e. a super() call is insufficient to
+    #  capture the default behavior as if no __array_ufunc__ were involved. The way to do this is to create
+    #  a standard np.ndarray view of the underlying memory, and then call the ufunc on that.
+    nargs = (cast_as_lacking_array_ufunc(x) for x in args)
+
+    try:
+        ret = f(*nargs, **kwargs)
+        return cast_as_having_array_func(ret)
+    except TypeError as e:
+        # If the exception reports anything besides non-implementation of the ufunc, then re-raise.
+        if f"no callable {ufunc.__name__} method" not in str(e):
+            raise
+        # Otherwise, just return NotImplemented in keeping with standard __array_ufunc__ behavior.
+        else:
+            return NotImplemented
+
+
+# These functions handle casting back and forth from entities that have custom behavior for numpy ufuncs, and those
+# that don't.
+@singledispatch
+def cast_as_lacking_array_ufunc(v):
+    return v
+
+
+@cast_as_lacking_array_ufunc.register
+def _(v: _JuliaThingWrapperArray):
+    return v.view(np.ndarray)
+
+
+@cast_as_lacking_array_ufunc.register
+def _(v: JuliaThingWrapper):
+    return _DunderedJuliaThingWrapper(v.julia_thing)
+
+
+@singledispatch
+def cast_as_having_array_func(v):
+    return v
+
+
+@cast_as_having_array_func.register
+def _(v: np.ndarray):
+    return v.view(_JuliaThingWrapperArray)
+
+
+@cast_as_having_array_func.register
+def _(v: _DunderedJuliaThingWrapper):
+    return JuliaThingWrapper(v.julia_thing)
 
 
 def diffeqdotjl_compile_problem(
@@ -526,33 +556,3 @@ def diffeqdotjl_simulate_point(
     final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
     final_state = _squeeze_time_dim(final_state_traj)
     return final_state
-
-
-@singledispatch
-def cast_as_lacking_array_ufunc(v):
-    return v
-
-
-@cast_as_lacking_array_ufunc.register
-def _(v: _JuliaThingWrapperArray):
-    return v.view(np.ndarray)
-
-
-@cast_as_lacking_array_ufunc.register
-def _(v: JuliaThingWrapper):
-    return _DunderedJuliaThingWrapper(v.julia_thing)
-
-
-@singledispatch
-def cast_as_having_array_func(v):
-    return v
-
-
-@cast_as_having_array_func.register
-def _(v: np.ndarray):
-    return v.view(_JuliaThingWrapperArray)
-
-
-@cast_as_having_array_func.register
-def _(v: _DunderedJuliaThingWrapper):
-    return JuliaThingWrapper(v.julia_thing)
