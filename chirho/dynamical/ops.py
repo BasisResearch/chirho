@@ -49,7 +49,15 @@ def on(
     ] = None,
 ):
     if callback is None:
-        return functools.partial(on, predicate)
+
+        def _on(
+            callback: Callable[
+                Concatenate[Dynamics[T], State[T], P], Tuple[Dynamics[T], State[T]]
+            ]
+        ):
+            return on(predicate, callback)
+
+        return _on
 
     from chirho.dynamical.internals.solver import Interruption
 
