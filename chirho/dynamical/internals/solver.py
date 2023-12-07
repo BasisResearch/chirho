@@ -87,7 +87,10 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                         "This interruption will have no effect.",
                         UserWarning,
                     )
-                elif isinstance(h.predicate, StaticEvent) and h.predicate.time < start_time:
+                elif (
+                    isinstance(h.predicate, StaticEvent)
+                    and h.predicate.time < start_time
+                ):
                     raise ValueError(
                         f"{Interruption.__name__} {h} with time {h.predicate.time} "
                         f"occurred before the start of the timespan ({start_time}, {end_time})."
