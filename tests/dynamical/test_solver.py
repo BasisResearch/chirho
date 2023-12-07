@@ -13,7 +13,7 @@ from chirho.dynamical.internals.backends.diffeqdotjl import _diffeqdotjl_ode_sim
 from chirho.dynamical.internals.backends.torchdiffeq import _torchdiffeq_ode_simulate_inner
 from chirho.dynamical.handlers import LogTrajectory
 
-from .dynamical_fixtures import bayes_sir_model
+from .dynamical_fixtures import build_bayes_sir_dynamics
 
 pyro.settings.set(module_local_params=True)
 
@@ -26,13 +26,13 @@ end_time = torch.tensor(4.0)
 
 
 def test_no_backend_error():
-    sir = bayes_sir_model()
+    sir = build_bayes_sir_dynamics()
     with pytest.raises(NotImplementedError):
         simulate(sir, init_state, start_time, end_time)
 
 
 def test_backend_arg():
-    sir = bayes_sir_model()
+    sir = build_bayes_sir_dynamics()
     with TorchDiffEq():  # TODO parameterize and use diffeqdotjl
         result = simulate(sir, init_state, start_time, end_time)
     assert result is not None
@@ -59,11 +59,7 @@ def test_inner_simulates_of_solvers_match_forward(solver):
     assert torch.allclose(lt.trajectory['x'], correct, atol=1e-4)
 
 
-# @pytest.mark.parametrize(
-#     "solver", [DiffEqDotJL, TorchDiffEq])
-# @pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
-# @pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
-
+# TODO this really is testing jit compilation AND gradcheck — split into two separate tests?
 @pytest.mark.parametrize(
     # torchdiffeq needs torch versions of the last three dynfuncs, or to skip them.
     "solver", [DiffEqDotJL])  # , TorchDiffEq])
@@ -91,16 +87,13 @@ def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_, dynfunc)
     # TODO gradcheck wrt time.
 
     def dynamics(s: State):
-        try:
-            dx = dynfunc(s)
+        dx = dynfunc(s)
 
-            # for the test case where there are two parameters but only one (scalar) state variable.
-            if x0.ndim == 0 and c_.ndim > 0:
-                dx = dx.sum()
+        # for the test case where there are two parameters but only one (scalar) state variable.
+        if x0.ndim == 0 and c_.ndim > 0:
+            dx = dx.sum()
 
-            return State(x=dx)
-        except Exception as e:
-            raise  # TODO remove, just for breakpoint
+        return State(x=dx)
 
     def wrapped_simulate(c):
         sp0 = State(x=x0.double(), c=c)

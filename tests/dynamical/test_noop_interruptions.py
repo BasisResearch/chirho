@@ -11,7 +11,7 @@ from chirho.dynamical.handlers import (
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match
+from .dynamical_fixtures import UnifiedFixtureDynamicsTorch, check_states_match
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ intervene_states = [
 ]
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -69,7 +69,7 @@ def test_noop_point_interruptions(model, init_state, start_time, end_time):
     # TODO test pointinterruptions when they are out of scope of the timespan
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -138,7 +138,7 @@ def test_noop_point_interventions(
     assert check_states_match(observational_execution_result, result_double_pi2)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -154,7 +154,7 @@ def test_point_interruption_at_start(model, init_state, start_time, end_time):
     assert check_states_match(observational_execution_result, result_pint)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])

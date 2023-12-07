@@ -12,7 +12,7 @@ from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
-from .dynamical_fixtures import UnifiedFixtureDynamics
+from .dynamical_fixtures import UnifiedFixtureDynamicsTorch
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     return event_f
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -155,7 +155,7 @@ def test_nested_dynamic_intervention_causes_change(
     )
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -217,7 +217,7 @@ def test_dynamic_intervention_causes_change(
     )
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -271,7 +271,7 @@ def test_split_twinworld_dynamic_intervention(
             assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -318,7 +318,7 @@ def test_split_multiworld_dynamic_intervention(
             assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])

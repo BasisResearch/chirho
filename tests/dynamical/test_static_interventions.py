@@ -14,7 +14,7 @@ from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
 
 from .dynamical_fixtures import (
-    UnifiedFixtureDynamics,
+    UnifiedFixtureDynamicsTorch,
     check_states_match,
     check_trajectories_match_in_all_but_values,
 )
@@ -42,7 +42,7 @@ intervene_states = [
 intervene_times = (logging_times - 0.5).tolist()
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -125,7 +125,7 @@ def test_point_intervention_causes_difference(
 
 
 # TODO get rid of some entries cz this test takes too long to run w/ all permutations.
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -186,7 +186,7 @@ def test_nested_point_interventions_cause_difference(
 # TODO test that we're getting the exactly right answer, instead of just "a different answer" as we are now.
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -220,7 +220,7 @@ def test_twinworld_point_intervention(
             assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -254,7 +254,7 @@ def test_multiworld_point_intervention(
             assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
@@ -274,7 +274,7 @@ def test_split_odeint_broadcast(
             assert len(indices_of(trajectory[k], event_dim=1)) > 0
 
 
-@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamicsTorch()])
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])

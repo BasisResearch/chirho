@@ -17,7 +17,7 @@ from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
-    UnifiedFixtureDynamics,
+    UnifiedFixtureDynamicsTorch,
     run_svi_inference_torch_direct,
 )
 
@@ -60,7 +60,7 @@ reparam = pyro.poutine.reparam(config=reparam_config)
 
 
 def counterf_model():
-    model = UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7)
+    model = UnifiedFixtureDynamicsTorchReparam(beta=0.5, gamma=0.7)
     obs = condition(data=flight_landing_data)(model.observation)
     vec_obs3 = StaticBatchObservation(times=flight_landing_times, observation=obs)
     with vec_obs3:
@@ -88,7 +88,7 @@ def conditioned_model():
 
 
 # A reparameterized observation function of various flight arrivals.
-class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
+class UnifiedFixtureDynamicsTorchReparam(UnifiedFixtureDynamicsTorch):
     def observation(self, X: State[torch.Tensor]):
         # super().observation(X)
 

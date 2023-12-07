@@ -2,34 +2,40 @@ import logging
 
 import pyro
 import torch
+import pytest
 
 from chirho.dynamical.handlers import LogTrajectory, StaticInterruption
-from chirho.dynamical.handlers.solver import TorchDiffEq
+from chirho.dynamical.handlers.solver import TorchDiffEq, DiffEqDotJL
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, simulate
 
-from .dynamical_fixtures import bayes_sir_model, check_states_match
+from .dynamical_fixtures import build_bayes_sir_dynamics, check_states_match
 
 pyro.settings.set(module_local_params=True)
 
 logger = logging.getLogger(__name__)
 
+# TODO do17bdy1t .double is strictly for DiffEqDotJL backend, remove when float32 is supported.
 # Global variables for tests
-init_state = State(S=torch.tensor(1.0), I=torch.tensor(2.0), R=torch.tensor(3.3))
-start_time = torch.tensor(0.0)
-end_time = torch.tensor(4.0)
-logging_times = torch.tensor([1.0, 2.0, 3.0])
+init_state = State(S=torch.tensor(1.0).double(), I=torch.tensor(2.0).double(), R=torch.tensor(3.3).double())
+start_time = torch.tensor(0.0).double()
+end_time = torch.tensor(4.0).double()
+logging_times = torch.tensor([1.0, 2.0, 3.0]).double()
 
 
-def test_logging():
-    sir = bayes_sir_model()
-    with TorchDiffEq(), LogTrajectory(times=logging_times) as dt1:
-        result1 = simulate(sir, init_state, start_time, end_time)
+@pytest.mark.parametrize("solver", [TorchDiffEq, DiffEqDotJL])
+@pytest.mark.parametrize("build_dynamics", [build_bayes_sir_dynamics])
+def test_logging(solver, build_dynamics):
+    dynamics = build_dynamics(solver)
+    dynamics.extend_initial_state_with_params_(init_state)
+
+    with solver(), LogTrajectory(times=logging_times) as dt1:
+        result1 = simulate(dynamics, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt2:
-        with TorchDiffEq():
-            result2 = simulate(sir, init_state, start_time, end_time)
-    result3 = TorchDiffEq()(simulate)(sir, init_state, start_time, end_time)
+        with solver():
+            result2 = simulate(dynamics, init_state, start_time, end_time)
+    result3 = solver()(simulate)(dynamics, init_state, start_time, end_time)
 
     assert len(dt1.trajectory.keys()) == 3
     assert len(dt2.trajectory.keys()) == 3
@@ -39,17 +45,21 @@ def test_logging():
     assert check_states_match(result1, result3)
 
 
-def test_logging_with_colliding_interruption():
-    sir = bayes_sir_model()
-    with TorchDiffEq(), LogTrajectory(times=logging_times) as dt1:
-        simulate(sir, init_state, start_time, end_time)
+@pytest.mark.parametrize("solver", [TorchDiffEq, DiffEqDotJL])
+@pytest.mark.parametrize("build_dynamics", [build_bayes_sir_dynamics])
+def test_logging_with_colliding_interruption(solver, build_dynamics):
+    dynamics = build_dynamics(solver)
+    dynamics.extend_initial_state_with_params_(init_state)
+
+    with solver(), LogTrajectory(times=logging_times) as dt1:
+        simulate(dynamics, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt2:
-        with TorchDiffEq():
+        with solver():
             with StaticInterruption(
                 time=torch.tensor(2.0),
             ):
-                simulate(sir, init_state, start_time, end_time)
+                simulate(dynamics, init_state, start_time, end_time)
 
     check_states_match(dt1.trajectory, dt2.trajectory)
 
