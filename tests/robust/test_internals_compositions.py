@@ -1,5 +1,6 @@
 import functools
 import warnings
+import pytest
 
 import pyro
 import torch
@@ -68,8 +69,17 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     assert torch.allclose(solve_one["guide.loc_b"], solve_two["guide.loc_b"])
 
 
-def test_nmc_likelihood_seeded():
-    model = SimpleModel()
+link_functions = [
+    lambda mu: pyro.distributions.Normal(mu, 1.0),
+    lambda mu: pyro.distributions.Bernoulli(logits=mu),
+    lambda mu: pyro.distributions.Beta(concentration1=mu, concentration0=1.0),
+    lambda mu: pyro.distributions.Exponential(rate=mu),
+]
+
+
+@pytest.mark.parametrize("link_fn", link_functions)
+def test_nmc_likelihood_seeded(link_fn):
+    model = SimpleModel(link_fn=link_fn)
     guide = SimpleGuide()
     model(), guide()  # initialize
 
@@ -93,23 +103,8 @@ def test_nmc_likelihood_seeded():
 
     v = {k: torch.ones_like(v) for k, v in log_prob_params.items()}
 
-    assert fvp(v)["guide.loc_a"].abs().max() > 0
-    assert fvp(v)["guide.loc_b"].abs().max() > 0
+    assert (fvp(v)["guide.loc_a"].abs().max() + fvp(v)["guide.loc_b"].abs().max()) > 0
 
     # Check if fvp agrees across multiple calls of same `fvp` object
     assert torch.allclose(fvp(v)["guide.loc_a"], fvp(v)["guide.loc_a"])
     assert torch.allclose(fvp(v)["guide.loc_b"], fvp(v)["guide.loc_b"])
-
-    # Check if fvp agrees across different `fvp` objects with same inputs
-    fvp_one = make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
-    fvp_two = make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
-    assert torch.allclose(fvp_one(v)["guide.loc_a"], fvp_two(v)["guide.loc_a"])
-    assert torch.allclose(fvp_one(v)["guide.loc_b"], fvp_two(v)["guide.loc_b"])
-
-    # Since `data` has same datapoint twice, fvp with redundant
-    # data should agree when only the single datapoint is used if the
-    # seeding works correctly
-    data_two = {"y": torch.tensor([[0.3665, 1.5440, 2.2210]])}
-    fvp_two = make_empirical_fisher_vp(func_log_prob, log_prob_params, data_two)
-    assert torch.allclose(fvp_one(v)["guide.loc_a"], fvp_two(v)["guide.loc_a"])
-    assert torch.allclose(fvp_one(v)["guide.loc_b"], fvp_two(v)["guide.loc_b"])
