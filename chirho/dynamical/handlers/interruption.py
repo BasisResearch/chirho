@@ -1,4 +1,5 @@
 import numbers
+import typing
 from typing import Callable, Generic, Tuple, TypeVar, Union
 
 import pyro
@@ -6,8 +7,7 @@ import pyro.contrib.autoname
 import torch
 
 from chirho.dynamical.handlers.trajectory import LogTrajectory
-from chirho.dynamical.internals.solver import Interruption
-from chirho.dynamical.ops import Dynamics, State
+from chirho.dynamical.ops import Dynamics, State, on
 from chirho.indexed.ops import cond
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
@@ -17,16 +17,61 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class DependentInterruption(Generic[T], Interruption[T]):
+class ZeroEvent(Generic[T]):
+    """
+    Class for creating event functions for use with :func:`~chirho.dynamical.ops.on`
+    that trigger when a given scalar-valued function approaches and crosses ``0.``
+
+    For example, to define an event handler that calls :func:`~chirho.interventional.ops.intervene`
+    when the state variable `x` exceeds 10.0, we could use the following::
+
+        @on(ZeroEvent(lambda time, state: state["x"] - 10.0)
+        def callback(dynamics: Dynamics[T], state: State[T]) -> Tuple[Dynamics[T], State[T]]:
+            return dynamics, intervene(state, {"x": 0.0})
+
+    .. note:: some backends, such as :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
+        only support event handler predicates specified via :class:`~ZeroEvent` ,
+        not via arbitrary boolean-valued functions of the state.
+
+    :param event_fn: A function that approaches and crosses 0.0 at the moment the event should be triggered.
+    """
+
     event_fn: Callable[[R, State[T]], R]
 
-    def apply_fn(
-        self, dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
-        return dynamics, state
+    def __init__(self, event_fn: Callable[[R, State[T]], R]):
+        self.event_fn = event_fn
+        super().__init__()
+
+    def __call__(self, state: State[T]) -> bool:
+        return bool(self.event_fn(typing.cast(torch.Tensor, state["t"]), state) == 0.0)
 
 
-class StaticInterruption(Generic[T], DependentInterruption[T]):
+class StaticEvent(Generic[T], ZeroEvent[T]):
+    """
+    Class for creating event functions for use with :func:`~chirho.dynamical.ops.on`
+    that trigger at a specified time.
+
+    For example, to define an event handler that calls :func:`~chirho.interventional.ops.intervene`
+    at time 10.0, we could use the following::
+
+        @on(StaticEvent(10.0))
+        def callback(dynamics: Dynamics[T], state: State[T]) -> Tuple[Dynamics[T], State[T]]:
+            return dynamics, intervene(state, {"x": 0.0})
+
+    :param time: The time at which the event should be triggered.
+    """
+
+    time: torch.Tensor
+    event_fn: Callable[[R, State[T]], R]
+
+    def __init__(self, time: R):
+        self.time = torch.as_tensor(time)
+        super().__init__(
+            lambda time, _: cond(0.0, self.time - time, case=time < self.time)
+        )
+
+
+def StaticInterruption(time: R):
     """
     A handler that will interrupt a simulation at a specified time, and then resume it afterward.
     Other handlers, such as :class:`~chirho.dynamical.handlers.interruption.StaticObservation`
@@ -38,31 +83,16 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
     :param time: The time at which the simulation will be interrupted.
     """
 
-    time: torch.Tensor
+    @on(StaticEvent(time))
+    def callback(
+        dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        return dynamics, state
 
-    def __init__(self, time: R):
-        self.time = torch.as_tensor(time)
-        super().__init__()
-
-    def event_fn(self, time: R, state: State[T]) -> R:
-        return cond(0.0, self.time - time, case=time < self.time)
-
-
-class DynamicInterruption(Generic[T], DependentInterruption[T]):
-    """
-    :param event_f: An event trigger function that approaches and returns 0.0 when the event should be triggered.
-        This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
-        element of the state exceeds some threshold, etc. It takes both the current time and current state.
-    """
-
-    event_fn: Callable[[R, State[T]], R]
-
-    def __init__(self, event_fn: Callable[[R, State[T]], R]):
-        self.event_fn = event_fn
-        super().__init__()
+    return callback
 
 
-class StaticObservation(Generic[T], StaticInterruption[T]):
+def StaticObservation(time: R, observation: Observation[State[T]]):
     """
     This effect handler interrupts a simulation at a given time
     (as outlined by :class:`~chirho.dynamical.handlers.interruption.StaticInterruption`), and then applies
@@ -88,29 +118,17 @@ class StaticObservation(Generic[T], StaticInterruption[T]):
     :param observation: The observation noise model to apply to the state at the given time. Can be conditioned on data.
     """
 
-    observation: Observation[State[T]]
-    time: torch.Tensor
-
-    def __init__(
-        self,
-        time: R,
-        observation: Observation[State[T]],
-    ):
-        self.observation = observation
-        # Add a small amount of time to the observation time to ensure that
-        # the observation occurs after the logging period.
-        super().__init__(time)
-
-    def apply_fn(
-        self, dynamics: Dynamics[T], state: State[T]
+    @on(StaticEvent(time))
+    def callback(
+        dynamics: Dynamics[T], state: State[T]
     ) -> Tuple[Dynamics[T], State[T]]:
-        with pyro.contrib.autoname.scope(
-            prefix=f"t={torch.as_tensor(self.time).item()}"
-        ):
-            return dynamics, observe(state, self.observation)
+        with pyro.contrib.autoname.scope(prefix=f"t={torch.as_tensor(time).item()}"):
+            return dynamics, observe(state, observation)
+
+    return callback
 
 
-class StaticIntervention(Generic[T], StaticInterruption[T]):
+def StaticIntervention(time: R, intervention: Intervention[State[T]]):
     """
     This effect handler interrupts a simulation at a specified time, and applies an intervention to the state at that
     time. It can be used as below:
@@ -132,22 +150,34 @@ class StaticIntervention(Generic[T], StaticInterruption[T]):
         `lambda state: {"x": state["x"] + 1.0}`.
     """
 
-    intervention: Intervention[State[T]]
-
-    def __init__(self, time: R, intervention: Intervention[State[T]]):
-        self.intervention = intervention
-        super().__init__(time)
-
-    def apply_fn(
-        self, dynamics: Dynamics[T], state: State[T]
+    @on(StaticEvent(time))
+    def callback(
+        dynamics: Dynamics[T], state: State[T]
     ) -> Tuple[Dynamics[T], State[T]]:
-        return dynamics, intervene(state, self.intervention)
+        return dynamics, intervene(state, intervention)
+
+    return callback
 
 
-class DynamicIntervention(Generic[T], DynamicInterruption[T]):
-    # TODO AZ the fact that the event_f also takes time explicitly isn't consistent with the fact that time is rolled
-    #  into the state when passed to user-specified dynamics.
+def DynamicInterruption(event_fn: Callable[[R, State[T]], R]):
+    """
+    :param event_f: An event trigger function that approaches and returns 0.0 when the event should be triggered.
+        This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
+        element of the state exceeds some threshold, etc. It takes both the current time and current state.
+    """
 
+    @on(ZeroEvent(event_fn))
+    def callback(
+        dynamics: Dynamics[T], state: State[T]
+    ) -> Tuple[Dynamics[T], State[T]]:
+        return dynamics, state
+
+    return callback
+
+
+def DynamicIntervention(
+    event_fn: Callable[[R, State[T]], R], intervention: Intervention[State[T]]
+):
     """
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time. This works similarly to
@@ -163,20 +193,13 @@ class DynamicIntervention(Generic[T], DynamicInterruption[T]):
         `lambda state: {"x": state["x"] + 1.0}`.
     """
 
-    intervention: Intervention[State[T]]
-
-    def __init__(
-        self,
-        event_fn: Callable[[R, State[T]], R],
-        intervention: Intervention[State[T]],
-    ):
-        self.intervention = intervention
-        super().__init__(event_fn)
-
-    def apply_fn(
-        self, dynamics: Dynamics[T], state: State[T]
+    @on(ZeroEvent(event_fn))
+    def callback(
+        dynamics: Dynamics[T], state: State[T]
     ) -> Tuple[Dynamics[T], State[T]]:
-        return dynamics, intervene(state, self.intervention)
+        return dynamics, intervene(state, intervention)
+
+    return callback
 
 
 class StaticBatchObservation(Generic[T], LogTrajectory[T]):
