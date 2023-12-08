@@ -16,6 +16,31 @@ T = TypeVar("T")
 
 
 class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
+    """
+    An effect handler that logs the trajectory of a dynamical system at specified times. This is useful when
+    interested in more than just the final state of the dynamical system. This can be used as below in conjunction
+    with a specified solver backend, such as :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`.
+
+    .. code-block:: python
+
+            times = torch.linspace(0, 10, 100)
+            with TorchDiffEq():
+                with LogTrajectory(times) as trajectory_logger:
+                    simulate(dynamics, initial_state, start_time, end_time)
+
+    `trajectory_logger.trajectory` can be then be accessed to yield an object of type
+    :ref:`State[T] <type-alias-State>`, but where
+    each value in the mapping has an additional time dimension appended to the end. For example, if the shape of a state
+    named `'x'` is `(3, 4)`, then the shape of `trajectory_logger.trajectory['x']` will be `(3, 4, 100)`.
+
+    :param times: The times at which to log the trajectory.
+    :type times: torch.Tensor
+
+    :param is_traced: Whether to trace the trajectory. If True and executed within the context of a pyro trace,
+        the trajectory will appear in the trace.
+
+    """
+
     trajectory: State[T]
     _trajectory: State[T]
 

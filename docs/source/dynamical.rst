@@ -5,6 +5,11 @@ Dynamical
    :members:
    :undoc-members:
 
+Types
+------------
+
+.. include:: dynamical_type_aliases.rst
+
 Operations
 ----------
 
