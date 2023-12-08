@@ -10,6 +10,7 @@ from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
     make_functional_call,
+    reset_rng_state,
 )
 from chirho.robust.ops import Point
 
@@ -66,9 +67,6 @@ def _flat_conjugate_gradient_solve(
         p = torch.where(not_converged, r + mu * p, p)
         rdotr = torch.where(not_converged, newrdotr, rdotr)
 
-        # rdotr = newrdotr
-        # if rdotr < residual_tol:
-        #     break
     return x
 
 
@@ -144,6 +142,11 @@ def linearize(
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     score_fn = torch.func.grad(func_log_prob)
 
+    log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
+    if cg_iters is None:
+        cg_iters = log_prob_params_numel
+    else:
+        cg_iters = min(cg_iters, log_prob_params_numel)
     cg_solver = functools.partial(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
@@ -156,7 +159,9 @@ def linearize(
         fvp = make_empirical_fisher_vp(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
+
+        pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(fvp, point_score)
+        return cg_solver(pinned_fvp, point_score)
 
     return _fn

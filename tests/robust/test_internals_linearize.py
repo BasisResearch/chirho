@@ -39,8 +39,8 @@ T = TypeVar("T")
 def test_cg_solve(ndim: int, dtype: torch.dtype):
     cg_iters = None
     residual_tol = 1e-10
-
-    A = torch.eye(ndim, dtype=dtype) + 0.1 * torch.rand(ndim, ndim, dtype=dtype)
+    U = torch.rand(ndim, ndim, dtype=dtype)
+    A = torch.eye(ndim, dtype=dtype) + 0.1 * U.mm(U.t())
     expected_x = torch.randn(ndim, dtype=dtype)
     b = A @ expected_x
 
@@ -57,7 +57,8 @@ def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     cg_iters = None
     residual_tol = 1e-10
 
-    A = torch.eye(ndim, dtype=dtype) + 0.1 * torch.rand(ndim, ndim, dtype=dtype)
+    U = torch.rand(ndim, ndim, dtype=dtype)
+    A = torch.eye(ndim, dtype=dtype) + 0.1 * U.mm(U.t())
     expected_x = torch.randn(num_particles, ndim, dtype=dtype)
     b = torch.einsum("ij,nj->ni", A, expected_x)
     assert b.shape == (num_particles, ndim)

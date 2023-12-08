@@ -1,3 +1,4 @@
+import contextlib
 import functools
 from typing import Any, Callable, Dict, Mapping, Tuple, TypeVar
 
@@ -87,3 +88,12 @@ def guess_max_plate_nesting(
     elbo = pyro.infer.Trace_ELBO()
     elbo._guess_max_plate_nesting(model, guide, args, kwargs)
     return elbo.max_plate_nesting
+
+
+@contextlib.contextmanager
+def reset_rng_state(rng_state: T):
+    try:
+        prev_rng_state: T = pyro.util.get_rng_state()
+        yield pyro.util.set_rng_state(rng_state)
+    finally:
+        pyro.util.set_rng_state(prev_rng_state)

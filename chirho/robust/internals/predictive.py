@@ -1,5 +1,6 @@
 import contextlib
 import math
+import warnings
 from typing import Any, Callable, Container, Generic, Optional, TypeVar
 
 import pyro
@@ -122,6 +123,11 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         if self.max_plate_nesting is None:
             self.max_plate_nesting = guess_max_plate_nesting(
                 self.model, self.guide, *args, **kwargs
+            )
+            warnings.warn(
+                "Since max_plate_nesting is not specified, \
+                the first call to NMCLogPredictiveLikelihood will not be seeded properly. \
+                See https://github.com/BasisResearch/chirho/pull/408"
             )
 
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
