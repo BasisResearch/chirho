@@ -27,6 +27,17 @@ class DependentInterruption(Generic[T], Interruption[T]):
 
 
 class StaticInterruption(Generic[T], DependentInterruption[T]):
+    """
+    A handler that will interrupt a simulation at a specified time, and then resume it afterward.
+    Other handlers, such as :class:`~chirho.dynamical.handlers.interruption.StaticObservation`
+    and :class:`~chirho.dynamical.handlers.interruption.StaticIntervention` subclass this handler to provide additional
+    functionality.
+
+    Won't generally be used by itself, but rather as a base class for other handlers.
+
+    :param time: The time at which the simulation will be interrupted.
+    """
+
     time: torch.Tensor
 
     def __init__(self, time: R):
@@ -52,6 +63,31 @@ class DynamicInterruption(Generic[T], DependentInterruption[T]):
 
 
 class StaticObservation(Generic[T], StaticInterruption[T]):
+    """
+    This effect handler interrupts a simulation at a given time
+    (as outlined by :class:`~chirho.dynamical.handlers.interruption.StaticInterruption`), and then applies
+    a user-specified observation noise model to the state at that time. Typically, this noise model
+    will be conditioned on some noisy observation of the state at that time. For a system involving a
+    scalar state named `x`, it can be used like so:
+
+    .. code-block:: python
+
+        def observation(state: State[torch.Tensor]):
+            pyro.sample("x_obs", dist.Normal(state["x"], 1.0))
+
+        data = {"x_obs": torch.tensor(10.0)}
+        obs = condition(data=data)(observation)
+        with TorchDiffEq():
+            with StaticObservation(time=2.9, observation=obs):
+                result = simulate(dynamics, init_state, start_time, end_time)
+
+    For details on other entities used above, see :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
+    :func:`~chirho.dynamical.ops.simulate`, and :class:`~chirho.observational.handlers.condition`.
+
+    :param time: The time at which the observation is made.
+    :param observation: The observation noise model to apply to the state at the given time. Can be conditioned on data.
+    """
+
     observation: Observation[State[T]]
     time: torch.Tensor
 
@@ -76,11 +112,24 @@ class StaticObservation(Generic[T], StaticInterruption[T]):
 
 class StaticIntervention(Generic[T], StaticInterruption[T]):
     """
-    This effect handler interrupts a simulation at a given time, and
-    applies an intervention to the state at that time.
+    This effect handler interrupts a simulation at a specified time, and applies an intervention to the state at that
+    time. It can be used as below:
+
+    .. code-block:: python
+
+        intervention = {"x": torch.tensor(1.0)}
+        with TorchDiffEq():
+            with StaticIntervention(time=1.5, intervention=intervention):
+                simulate(dynamics, init_state, start_time, end_time)
+
+    For details on other entities used above, see :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
+    :func:`~chirho.dynamical.ops.simulate`.
 
     :param time: The time at which the intervention is applied.
-    :param intervention: The instantaneous intervention applied to the state when the event is triggered.
+    :param intervention: The instantaneous intervention applied to the state when the event is triggered. The supplied
+        intervention will be passed to :func:`~chirho.interventional.ops.intervene`, and as such can be any types
+        supported by that function. This includes state dependent interventions specified by a function, such as
+        `lambda state: {"x": state["x"] + 1.0}`.
     """
 
     intervention: Intervention[State[T]]
@@ -96,11 +145,22 @@ class StaticIntervention(Generic[T], StaticInterruption[T]):
 
 
 class DynamicIntervention(Generic[T], DynamicInterruption[T]):
+    # TODO AZ the fact that the event_f also takes time explicitly isn't consistent with the fact that time is rolled
+    #  into the state when passed to user-specified dynamics.
+
     """
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
-    applies an intervention to the state at that time.
+    applies an intervention to the state at that time. This works similarly to
+    :class:`~chirho.dynamical.handlers.interruption.StaticIntervention`, but supports state-dependent trigger
+    conditions for the intervention, as opposed to a static, time-dependent trigger condition.
 
-    :param intervention: The instantaneous intervention applied to the state when the event is triggered.
+    :param event_fn: An event trigger function that approaches and crosses 0.0 at the moment the intervention should be
+     applied triggered. Upon triggering, the simulation is interrupted and the intervention is applied to the state. The
+     event function takes both the current time and current state as arguments.
+    :param intervention: The instantaneous intervention applied to the state when the event is triggered. The supplied
+        intervention will be passed to :func:`~chirho.interventional.ops.intervene`, and as such can be any types
+        supported by that function. This includes state dependent interventions specified by a function, such as
+        `lambda state: {"x": state["x"] + 1.0}`.
     """
 
     intervention: Intervention[State[T]]
@@ -120,6 +180,34 @@ class DynamicIntervention(Generic[T], DynamicInterruption[T]):
 
 
 class StaticBatchObservation(Generic[T], LogTrajectory[T]):
+    """
+    This effect handler behaves similarly to :class:`~chirho.dynamical.handlers.interruption.StaticObservation`,
+    but does not interrupt the simulation. Instead, it uses :class:`~chirho.dynamical.handlers.trajectory.LogTrajectory`
+    to log the trajectory of the system at specified times, and then applies an observation noise model to the
+    logged trajectory. This is especially useful when one has many noisy observations of the system at different
+    times, and/or does not want to incur the overhead of interrupting the simulation at each observation time.
+
+    For a system involving a scalar state named `x`, it can be used like so:
+
+    .. code-block:: python
+
+        def observation(state: State[torch.Tensor]):
+            pyro.sample("x_obs", dist.Normal(state["x"], 1.0))
+
+        data = {"x_obs": torch.tensor([10., 20., 10.])}
+        obs = condition(data=data)(observation)
+        with TorchDiffEq():
+            with StaticBatchObservation(times=torch.tensor([1.0, 2.0, 3.0]), observation=obs):
+                result = simulate(dynamics, init_state, start_time, end_time)
+
+    For details on other entities used above, see :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
+    :func:`~chirho.dynamical.ops.simulate`, and :class:`~chirho.observational.handlers.condition`.
+
+    :param times: The times at which the observations are made.
+    :param observation: The observation noise model to apply to the logged trajectory. Can be conditioned on data.
+
+    """
+
     observation: Observation[State[T]]
 
     def __init__(

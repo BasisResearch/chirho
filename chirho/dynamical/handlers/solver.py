@@ -11,6 +11,35 @@ T = TypeVar("T")
 
 
 class TorchDiffEq(Solver[torch.Tensor]):
+    """
+    A dynamical systems solver backend for ordinary differential equations using
+    `torchdiffeq <https://github.com/rtqichen/torchdiffeq>`_.
+    When used in conjunction with :func:`simulate <chirho.dynamical.ops.simulate>`, as below, this backend will take
+    responsibility for simulating the dynamical system defined by the arguments
+    to :func:`simulate <chirho.dynamical.ops.simulate>`
+
+    .. code-block:: python
+
+        with TorchDiffEq():
+            simulate(dynamics, initial_state, start_time, end_time)
+
+    Additional details on the arguments below can be found in the
+    `torchdiffeq documentation <https://github.com/rtqichen/torchdiffeq#keyword-arguments>`_
+
+    :param rtol: The relative tolerance for the solver.
+    :type rtol: float
+
+    :param atol: The absolute tolerance for the solver.
+    :type atol: float
+
+    :param method: The solver method to use.
+    :type method: str
+
+    :param options: Additional options to pass to the solver.
+    :type options: dict
+
+    """
+
     def __init__(self, rtol=1e-7, atol=1e-9, method=None, options=None):
         self.rtol = rtol
         self.atol = atol
