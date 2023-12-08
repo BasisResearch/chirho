@@ -1,6 +1,3 @@
-Type Aliases
-------------
-
 .. _type-alias-R:
 
 .. py:data:: R
