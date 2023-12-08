@@ -1,8 +1,8 @@
 import functools
 import warnings
-import pytest
 
 import pyro
+import pytest
 import torch
 
 from chirho.robust.internals.linearize import (
