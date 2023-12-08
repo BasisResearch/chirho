@@ -8,7 +8,7 @@ Dynamical
 Types
 ------------
 
-.. include:: type_alias.rst
+.. include:: dynamical_type_aliases.rst
 
 Operations
 ----------
