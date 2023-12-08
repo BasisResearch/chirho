@@ -2,7 +2,7 @@ import contextlib
 import itertools
 from typing import Callable, Iterable, Mapping, TypeVar
 
-from chirho.explainable.handlers import Preemptions
+from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
