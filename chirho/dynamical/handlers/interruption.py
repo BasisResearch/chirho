@@ -37,6 +37,7 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
 
     :param time: The time at which the simulation will be interrupted.
     """
+
     time: torch.Tensor
 
     def __init__(self, time: R):
@@ -86,6 +87,7 @@ class StaticObservation(Generic[T], StaticInterruption[T]):
     :param time: The time at which the observation is made.
     :param observation: The observation noise model to apply to the state at the given time. Can be conditioned on data.
     """
+
     observation: Observation[State[T]]
     time: torch.Tensor
 

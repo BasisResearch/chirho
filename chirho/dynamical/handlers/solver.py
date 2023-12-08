@@ -39,6 +39,7 @@ class TorchDiffEq(Solver[torch.Tensor]):
     :type options: dict
 
     """
+
     def __init__(self, rtol=1e-7, atol=1e-9, method=None, options=None):
         self.rtol = rtol
         self.atol = atol
