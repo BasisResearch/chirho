@@ -72,14 +72,14 @@ class StaticObservation(Generic[T], StaticInterruption[T]):
 
     .. code-block:: python
 
-        def observation(state: State[T]):
+        def observation(state: State[torch.Tensor]):
             pyro.sample("x_obs", dist.Normal(state["x"], 1.0))
 
         data = {"x_obs": torch.tensor(10.0)}
         obs = condition(data=data)(observation)
         with TorchDiffEq():
             with StaticObservation(time=2.9, observation=obs):
-                result2 = simulate(dynamics, init_state, start_time, end_time)
+                result = simulate(dynamics, init_state, start_time, end_time)
 
     For details on other entities used above, see :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
     :func:`~chirho.dynamical.ops.simulate`, and :class:`~chirho.observational.handlers.condition`.
@@ -117,7 +117,7 @@ class StaticIntervention(Generic[T], StaticInterruption[T]):
 
     .. code-block:: python
 
-        intervention = lambda state: {"x": 1.0}
+        intervention = {"x": torch.tensor(1.0)}
         with TorchDiffEq():
             with StaticIntervention(time=1.5, intervention=intervention):
                 simulate(dynamics, init_state, start_time, end_time)
@@ -191,14 +191,14 @@ class StaticBatchObservation(Generic[T], LogTrajectory[T]):
 
     .. code-block:: python
 
-            def observation(state: State[T]):
-                pyro.sample("x_obs", dist.Normal(state["x"], 1.0))
+        def observation(state: State[torch.Tensor]):
+            pyro.sample("x_obs", dist.Normal(state["x"], 1.0))
 
-            data = {"x_obs": torch.tensor([10., 20., 10.)}
-            obs = condition(data=data)(observation)
-            with TorchDiffEq():
-                with StaticBatchObservation(times=[1.0, 2.0, 3.0], observation=obs):
-                    result2 = simulate(dynamics, init_state, start_time, end_time)
+        data = {"x_obs": torch.tensor([10., 20., 10.])}
+        obs = condition(data=data)(observation)
+        with TorchDiffEq():
+            with StaticBatchObservation(times=torch.tensor([1.0, 2.0, 3.0]), observation=obs):
+                result = simulate(dynamics, init_state, start_time, end_time)
 
     For details on other entities used above, see :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
     :func:`~chirho.dynamical.ops.simulate`, and :class:`~chirho.observational.handlers.condition`.
