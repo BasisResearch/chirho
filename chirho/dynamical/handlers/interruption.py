@@ -50,6 +50,7 @@ def StaticInterruption(time: R):
 
     :param time: The time at which the simulation will be interrupted.
     """
+
     @on(StaticEvent(time))
     def callback(
         dynamics: Dynamics[T], state: State[T]
@@ -84,6 +85,7 @@ def StaticObservation(time: R, observation: Observation[State[T]]):
     :param time: The time at which the observation is made.
     :param observation: The observation noise model to apply to the state at the given time. Can be conditioned on data.
     """
+
     @on(StaticEvent(time))
     def callback(
         dynamics: Dynamics[T], state: State[T]
@@ -115,6 +117,7 @@ def StaticIntervention(time: R, intervention: Intervention[State[T]]):
         supported by that function. This includes state dependent interventions specified by a function, such as
         `lambda state: {"x": state["x"] + 1.0}`.
     """
+
     @on(StaticEvent(time))
     def callback(
         dynamics: Dynamics[T], state: State[T]
@@ -130,6 +133,7 @@ def DynamicInterruption(event_fn: Callable[[R, State[T]], R]):
         This can be designed to trigger when the current state is "close enough" to some trigger state, or when an
         element of the state exceeds some threshold, etc. It takes both the current time and current state.
     """
+
     @on(ZeroEvent(event_fn))
     def callback(
         dynamics: Dynamics[T], state: State[T]
@@ -156,6 +160,7 @@ def DynamicIntervention(
         supported by that function. This includes state dependent interventions specified by a function, such as
         `lambda state: {"x": state["x"] + 1.0}`.
     """
+
     @on(ZeroEvent(event_fn))
     def callback(
         dynamics: Dynamics[T], state: State[T]
