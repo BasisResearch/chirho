@@ -36,9 +36,14 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
         data = func_predictive(predictive_params)
     fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
 
-    v = {k: torch.ones_like(v) for k, v in log_prob_params.items()}
+    v = {
+        k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v)
+        for k, v in log_prob_params.items()
+    }
 
-    assert fvp(v)["guide.loc_a"].abs().max() > 0  # sanity check for non-zero fvp
+    # For this model, fvp for loc_a is zero. See
+    # https://github.com/BasisResearch/chirho/issues/427
+    assert fvp(v)["guide.loc_a"].abs().max() == 0
 
     solve_one = cg_solver(fvp, v)
     solve_two = cg_solver(fvp, v)
@@ -57,5 +62,8 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
             )
         )
 
+    assert torch.allclose(
+        solve_one["guide.loc_a"], torch.zeros_like(log_prob_params["guide.loc_a"])
+    )
     assert torch.allclose(solve_one["guide.loc_a"], solve_two["guide.loc_a"])
     assert torch.allclose(solve_one["guide.loc_b"], solve_two["guide.loc_b"])

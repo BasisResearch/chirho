@@ -17,15 +17,16 @@ T = TypeVar("T")
 class SimpleModel(PyroModule):
     def __init__(
         self,
-        link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1),
+        link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
     ):
+        super().__init__()
         self.link_fn = link_fn
 
     def forward(self):
         a = pyro.sample("a", dist.Normal(0, 1))
         with pyro.plate("data", 3, dim=-1):
-            b = pyro.sample("a", dist.Normal(a, 1))
-            return pyro.sample("y", self.link_fn(b))
+            b = pyro.sample("b", dist.Normal(a, 1))
+            return pyro.sample("y", dist.Normal(b, 1))
 
 
 class SimpleGuide(torch.nn.Module):
