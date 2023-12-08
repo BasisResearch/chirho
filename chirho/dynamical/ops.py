@@ -78,8 +78,9 @@ def on(
         ...
         >>> assert xf < 0
 
-    .. warning:: ``on`` is a so-called "shallow" effect handler that only handles the first :func:`~chirho.dynamical.ops.simulate`
-        call within its context, and its ``callback`` can be triggered at most once.
+    .. warning:: ``on`` is a so-called "shallow" effect handler that only handles
+        the first :func:`~chirho.dynamical.ops.simulate`call within its context,
+        and its ``callback`` can be triggered at most once.
 
     .. warning:: some backends may not support interruptions via arbitrary predicates, and may only support
         interruptions that include additional information such as a statically known time at which to activate.
