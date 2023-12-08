@@ -1,21 +1,21 @@
-from typing import Callable, List, Optional, Tuple
+from copy import copy
+from functools import singledispatch
+from typing import Callable, List, Optional, Tuple, Union
 
+import juliacall
+import numpy as np
 import pyro
 import torch
 from diffeqpy import de
+from juliacall import Main as jl
+from juliatorch import JuliaFunction
+from torch import Tensor as Tnsr
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
-from chirho.dynamical.ops import Dynamics, State as StateAndOrParams
+from chirho.dynamical.ops import Dynamics
+from chirho.dynamical.ops import State as StateAndOrParams
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
-from torch import Tensor as Tnsr
-from juliatorch import JuliaFunction
-import juliacall
-import numpy as np
-from typing import Union
-from functools import singledispatch
-from copy import copy
-from juliacall import Main as jl
 
 
 class _DunderedJuliaThingWrapper:
@@ -30,51 +30,50 @@ class _DunderedJuliaThingWrapper:
 
     @classmethod
     def _forward_dunders(cls):
-
         # Forward all the math related dunder methods to the underlying julia thing.
         dunders = [
-            '__abs__',
-            '__add__',
+            "__abs__",
+            "__add__",
             # FIXME 18d0j1h9 python sometimes expects not a JuliaThingWrapper from __bool__, what do e.g. julia
             #  symbolics expect?
-            '__bool__',
-            '__ceil__',
-            '__eq__',  # FIXME 18d0j1h9
-            '__float__',
-            '__floor__',
-            '__floordiv__',
-            '__ge__',  # FIXME 18d0j1h9
-            '__gt__',  # FIXME 18d0j1h9
-            '__invert__',
-            '__le__',  # FIXME 18d0j1h9
-            '__lshift__',
-            '__lt__',  # FIXME 18d0j1h9
-            '__mod__',
-            '__mul__',
-            '__ne__',
-            '__neg__',
-            '__or__',  # FIXME 18d0j1h9
-            '__pos__',
-            '__pow__',
-            '__radd__',
-            '__rand__',  # FIXME 18d0j1h9 (also, where is __and__?)
-            '__reversed__',
-            '__rfloordiv__',
-            '__rlshift__',
-            '__rmod__',
-            '__rmul__',
-            '__ror__',
-            '__round__',
-            '__rpow__',
-            '__rrshift__',
-            '__rshift__',
-            '__rsub__',
-            '__rtruediv__',
-            '__rxor__',
-            '__sub__',
-            '__truediv__',
-            '__trunc__',
-            '__xor__',  # FIXME 18d0j1h9
+            "__bool__",
+            "__ceil__",
+            "__eq__",  # FIXME 18d0j1h9
+            "__float__",
+            "__floor__",
+            "__floordiv__",
+            "__ge__",  # FIXME 18d0j1h9
+            "__gt__",  # FIXME 18d0j1h9
+            "__invert__",
+            "__le__",  # FIXME 18d0j1h9
+            "__lshift__",
+            "__lt__",  # FIXME 18d0j1h9
+            "__mod__",
+            "__mul__",
+            "__ne__",
+            "__neg__",
+            "__or__",  # FIXME 18d0j1h9
+            "__pos__",
+            "__pow__",
+            "__radd__",
+            "__rand__",  # FIXME 18d0j1h9 (also, where is __and__?)
+            "__reversed__",
+            "__rfloordiv__",
+            "__rlshift__",
+            "__rmod__",
+            "__rmul__",
+            "__ror__",
+            "__round__",
+            "__rpow__",
+            "__rrshift__",
+            "__rshift__",
+            "__rsub__",
+            "__rtruediv__",
+            "__rxor__",
+            "__sub__",
+            "__truediv__",
+            "__trunc__",
+            "__xor__",  # FIXME 18d0j1h9
         ]
 
         for method_name in dunders:
@@ -97,11 +96,15 @@ class _DunderedJuliaThingWrapper:
                 result = method()
 
                 if result is NotImplemented:
-                    raise NotImplementedError(f"Operation {method_name} is not implemented for {self.julia_thing}.")
+                    raise NotImplementedError(
+                        f"Operation {method_name} is not implemented for {self.julia_thing}."
+                    )
             else:
                 if len(args) != 1:
-                    raise ValueError("Only one argument is supported for automated dunder method dispatch.")
-                other, = args
+                    raise ValueError(
+                        "Only one argument is supported for automated dunder method dispatch."
+                    )
+                (other,) = args
 
                 if isinstance(other, np.ndarray):
                     if other.ndim == 0:
@@ -124,8 +127,10 @@ class _DunderedJuliaThingWrapper:
                 result = method(other)
 
                 if result is NotImplemented:
-                    raise NotImplementedError(f"Operation {method_name} is not implemented for"
-                                              f" {self.julia_thing} and {other}.")
+                    raise NotImplementedError(
+                        f"Operation {method_name} is not implemented for"
+                        f" {self.julia_thing} and {other}."
+                    )
 
             # Rewrap the return.
             return JuliaThingWrapper(result)
@@ -290,12 +295,13 @@ def diffeqdotjl_compile_problem(
     initial_state_and_params: StateAndOrParams[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
-    **kwargs
+    **kwargs,
 ) -> de.ODEProblem:
-
     require_float64(initial_state_and_params)
 
-    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params, start_time)
+    initial_state, torch_params = separate_state_and_params(
+        dynamics, initial_state_and_params, start_time
+    )
 
     # See the note below for why this must be a pure function and cannot use the values in torch_params directly.
     def ode_f(flat_dstate_out, flat_state, flat_params, t):
@@ -304,16 +310,17 @@ def diffeqdotjl_compile_problem(
             # Wrap julia symbolics (that will be passed through this during jit) so that numpy doesn't introspect them
             #  as sequences with a large number of dimensions.
             JuliaThingWrapper.wrap_array(flat_state),
-            initial_state
+            initial_state,
         )
 
         # Note that initial_params will be a dictionary of shaped torch tensors, while flat_params will be a vector
         # of julia symbolics involved in jit copmilation. I.e. while initial_params has the same real values as
         # flat_params, they do not carry gradient information that can be propagated through the julia solver.
-        params = _unflatten_state(
-            JuliaThingWrapper.wrap_array(flat_params),
-            torch_params
-        ) if len(flat_params) > 0 else StateAndOrParams()
+        params = (
+            _unflatten_state(JuliaThingWrapper.wrap_array(flat_params), torch_params)
+            if len(flat_params) > 0
+            else StateAndOrParams()
+        )
 
         state_ao_params = StateAndOrParams(**state, **params, t=JuliaThingWrapper(t))
 
@@ -326,9 +333,11 @@ def diffeqdotjl_compile_problem(
             JuliaThingWrapper.unwrap_array(flat_dstate, out=flat_dstate_out)
         except IndexError as e:
             # TODO this could be made more informative by pinpointing which particular dstate is the wrong shape.
-            raise IndexError(f"Number of elements in dstate ({len(flat_dstate)}) does not match the number of"
-                             f" elements defined in the initial state ({len(flat_dstate_out)}). "
-                             f"\nOriginal error: {e}")
+            raise IndexError(
+                f"Number of elements in dstate ({len(flat_dstate)}) does not match the number of"
+                f" elements defined in the initial state ({len(flat_dstate_out)}). "
+                f"\nOriginal error: {e}"
+            )
 
     # Flatten the initial state and parameters.
     flat_initial_state = _flatten_state_ao_params(initial_state)
@@ -339,7 +348,8 @@ def diffeqdotjl_compile_problem(
         ode_f,
         flat_initial_state.detach().numpy(),
         np.array([start_time, end_time], dtype=np.float64),
-        flat_torch_params.detach().numpy())
+        flat_torch_params.detach().numpy(),
+    )
 
     fast_prob = de.jit(prob)
 
@@ -378,7 +388,9 @@ def flat_cat_numpy(*vs: np.ndarray):
     return np.concatenate([v.ravel() for v in vs])
 
 
-def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]) -> Union[Tnsr, np.ndarray]:
+def _flatten_state_ao_params(
+    state_ao_params: StateAndOrParams[Union[Tnsr, np.ndarray]]
+) -> Union[Tnsr, np.ndarray]:
     if len(state_ao_params) == 0:
         # TODO do17bdy1t address type specificity
         return torch.tensor([], dtype=torch.float64)
@@ -387,11 +399,10 @@ def _flatten_state_ao_params(state_ao_params: StateAndOrParams[Union[Tnsr, np.nd
 
 
 def _unflatten_state(
-        flat_state_ao_params: Tnsr,
-        shaped_state_ao_params: StateAndOrParams[Union[Tnsr, juliacall.VectorValue]],
-        to_traj: bool = False
+    flat_state_ao_params: Tnsr,
+    shaped_state_ao_params: StateAndOrParams[Union[Tnsr, juliacall.VectorValue]],
+    to_traj: bool = False,
 ) -> StateAndOrParams[Union[Tnsr, np.ndarray]]:
-
     var_order = get_var_order(shaped_state_ao_params)
     state_ao_params = StateAndOrParams()
     for v in var_order:
@@ -402,12 +413,12 @@ def _unflatten_state(
             #  and because we know the rest of the shape we can auto-detect its size with -1.
             shape += (-1,)
 
-        sv = flat_state_ao_params[:shaped.numel()].reshape(shape)
+        sv = flat_state_ao_params[: shaped.numel()].reshape(shape)
 
         state_ao_params[v] = sv
 
         # Slice so that only the remaining elements are left.
-        flat_state_ao_params = flat_state_ao_params[shaped.numel():]
+        flat_state_ao_params = flat_state_ao_params[shaped.numel() :]
 
     return state_ao_params
 
@@ -416,10 +427,16 @@ def require_float64(state_ao_params: StateAndOrParams[Tnsr]):
     # Forward diff through diffeqpy currently requires float64. # TODO do17bdy1t update when this is fixed.
     for k, v in state_ao_params.items():
         if v.dtype is not torch.float64:
-            raise ValueError(f"State variable {k} has dtype {v.dtype}, but must be float64.")
+            raise ValueError(
+                f"State variable {k} has dtype {v.dtype}, but must be float64."
+            )
 
 
-def separate_state_and_params(dynamics: Dynamics[np.ndarray], initial_state_ao_params: StateAndOrParams[Tnsr], t0: Tnsr):
+def separate_state_and_params(
+    dynamics: Dynamics[np.ndarray],
+    initial_state_ao_params: StateAndOrParams[Tnsr],
+    t0: Tnsr,
+):
     """
     Non-explicitly (bad?), the initial_state must include parameters that inform dynamics. This is required
      for this backend because the solve function passed to Julia must be a pure wrt to parameters that
@@ -429,22 +446,34 @@ def separate_state_and_params(dynamics: Dynamics[np.ndarray], initial_state_ao_p
     # Copy so we can add time in without modifying the original, also convert elements to numpy arrays so that the
     #  user's dynamics only have to handle numpy arrays, and not also torch tensors. This is fine, as the only way
     #  we use the initial_dstate below is for its keys, which comprise the state variables.
-    initial_state_ao_params_np = {k: copy(v.detach().numpy()) for k, v in initial_state_ao_params.items()}
+    initial_state_ao_params_np = {
+        k: copy(v.detach().numpy()) for k, v in initial_state_ao_params.items()
+    }
     # TODO unify this time business with how torchdiffeq is doing it?
-    if 't' in initial_state_ao_params_np:
-        raise ValueError("Initial state cannot contain a time variable 't'. This is added on the backend.")
-    initial_state_ao_params_np['t'] = t0.detach().numpy()
+    if "t" in initial_state_ao_params_np:
+        raise ValueError(
+            "Initial state cannot contain a time variable 't'. This is added on the backend."
+        )
+    initial_state_ao_params_np["t"] = t0.detach().numpy()
 
     # Run the dynamics on the converted initial state.
     initial_dstate_np = dynamics(initial_state_ao_params_np)
 
     # Keys that don't appear in the returned dstate are parameters.
-    param_keys = [k for k in initial_state_ao_params.keys() if k not in initial_dstate_np.keys()]
+    param_keys = [
+        k for k in initial_state_ao_params.keys() if k not in initial_dstate_np.keys()
+    ]
     # Keys that do appear in the dynamics are state variables.
-    state_keys = [k for k in initial_state_ao_params.keys() if k in initial_dstate_np.keys()]
+    state_keys = [
+        k for k in initial_state_ao_params.keys() if k in initial_dstate_np.keys()
+    ]
 
-    torch_params = StateAndOrParams(**{k: initial_state_ao_params[k] for k in param_keys})
-    initial_state = StateAndOrParams(**{k: initial_state_ao_params[k] for k in state_keys})
+    torch_params = StateAndOrParams(
+        **{k: initial_state_ao_params[k] for k in param_keys}
+    )
+    initial_state = StateAndOrParams(
+        **{k: initial_state_ao_params[k] for k in state_keys}
+    )
 
     return initial_state, torch_params
 
@@ -453,15 +482,16 @@ def _diffeqdotjl_ode_simulate_inner(
     dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     timespan: Tnsr,
-    **kwargs
+    **kwargs,
 ) -> StateAndOrParams[torch.tensor]:
-
     require_float64(initial_state_and_params)
 
     # The backend solver requires that the dynamics are a pure function, meaning the parameters must be passed
     #  in as arguments. Thus, we simply require that the params are passed along in the initial state, and assume
     #  that anything not returned by the dynamics are parameters, and not state.
-    initial_state, torch_params = separate_state_and_params(dynamics, initial_state_and_params, timespan[0])
+    initial_state, torch_params = separate_state_and_params(
+        dynamics, initial_state_and_params, timespan[0]
+    )
 
     # Flatten the initial state, timespan, and parameters into a single vector. This is required because
     #  juliatorch currently requires a single matrix or vector as input.
@@ -482,14 +512,15 @@ def _diffeqdotjl_ode_simulate_inner(
     )
 
     def inner_solve(u0_t_p):
-
         # Unpack the concatenated initial state, timespan, and parameters.
-        u0 = u0_t_p[:flat_initial_state.numel()]
-        tspan = u0_t_p[flat_initial_state.numel():-flat_torch_params.numel()]
-        p = u0_t_p[-flat_torch_params.numel():]
+        u0 = u0_t_p[: flat_initial_state.numel()]
+        tspan = u0_t_p[flat_initial_state.numel() : -flat_torch_params.numel()]
+        p = u0_t_p[-flat_torch_params.numel() :]
 
         # Remake the otherwise-immutable problem to use the new parameters.
-        remade_compiled_prob = de.remake(compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1]))
+        remade_compiled_prob = de.remake(
+            compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1])
+        )
 
         sol = de.solve(remade_compiled_prob)
 
@@ -520,10 +551,10 @@ def diffeqdotjl_simulate_to_interruption(
     end_time: Tnsr,
     **kwargs,
 ) -> Tuple[StateAndOrParams[Tnsr], Tnsr, Optional[Interruption]]:
-
     # TODO TODO implement the actual retrieval of the next interruption (see torchdiffeq_simulate_to_interruption)
 
     from chirho.dynamical.handlers.interruption import StaticInterruption
+
     next_interruption = StaticInterruption(end_time)
 
     value = simulate_point(

@@ -84,7 +84,6 @@ class TorchDiffEq(Solver[torch.Tensor]):
 # Maybe rename to something more explicit like:
 # class LazilyCompilingDiffEqDotJL(Solver[torch.Tensor]):
 class DiffEqDotJL(Solver[torch.Tensor]):
-
     def __init__(self):
         super().__init__()
 
@@ -129,7 +128,9 @@ class DiffEqDotJL(Solver[torch.Tensor]):
             diffeqdotjl_simulate_to_interruption,
         )
 
-        interruptions, dynamics, initial_state_and_params, start_time, end_time = msg["args"]
+        interruptions, dynamics, initial_state_and_params, start_time, end_time = msg[
+            "args"
+        ]
         msg["kwargs"].update(self.solve_kwargs)
         msg["value"] = diffeqdotjl_simulate_to_interruption(
             interruptions,
@@ -146,11 +147,12 @@ class DiffEqDotJL(Solver[torch.Tensor]):
 
     # TODO g179du91 move to parent class as other solvers might also need to lazily compile?
     def _pyro__lazily_compile_problem(self, msg) -> None:
-
         dynamics, initial_state_ao_params, start_time, end_time = msg["args"]
 
         if self._lazily_compiled_solver is None:
-            from chirho.dynamical.internals.backends.diffeqdotjl import diffeqdotjl_compile_problem
+            from chirho.dynamical.internals.backends.diffeqdotjl import (
+                diffeqdotjl_compile_problem,
+            )
 
             msg["kwargs"].update(self.solve_kwargs)
 
