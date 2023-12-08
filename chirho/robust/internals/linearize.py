@@ -10,6 +10,7 @@ from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
     make_functional_call,
+    reset_rng_state,
 )
 from chirho.robust.ops import Point
 
@@ -154,7 +155,9 @@ def linearize(
         fvp = make_empirical_fisher_vp(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
+
+        pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
         point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(fvp, point_score)
+        return cg_solver(pinned_fvp, point_score)
 
     return _fn
