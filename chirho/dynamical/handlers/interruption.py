@@ -18,6 +18,24 @@ T = TypeVar("T")
 
 
 class ZeroEvent(Generic[T]):
+    """
+    Class for creating event functions for use with :func:`~chirho.dynamical.ops.on`
+    that trigger when a given scalar-valued function approaches and crosses ``0.``
+
+    For example, to define an event handler that calls :func:`~chirho.interventional.ops.intervene`
+    when the state variable `x` exceeds 10.0, we could use the following::
+
+        @on(ZeroEvent(lambda time, state: state["x"] - 10.0)
+        def callback(dynamics: Dynamics[T], state: State[T]) -> Tuple[Dynamics[T], State[T]]:
+            return dynamics, intervene(state, {"x": 0.0})
+
+    .. note:: some backends, such as :class:`~chirho.dynamical.handlers.solver.TorchDiffEq`,
+        only support event handler predicates specified via :class:`~ZeroEvent` ,
+        not via arbitrary boolean-valued functions of the state.
+
+    :param event_fn: A function that approaches and crosses 0.0 at the moment the event should be triggered.
+    """
+
     event_fn: Callable[[R, State[T]], R]
 
     def __init__(self, event_fn: Callable[[R, State[T]], R]):
@@ -29,6 +47,20 @@ class ZeroEvent(Generic[T]):
 
 
 class StaticEvent(Generic[T], ZeroEvent[T]):
+    """
+    Class for creating event functions for use with :func:`~chirho.dynamical.ops.on`
+    that trigger at a specified time.
+
+    For example, to define an event handler that calls :func:`~chirho.interventional.ops.intervene`
+    at time 10.0, we could use the following::
+
+        @on(StaticEvent(10.0))
+        def callback(dynamics: Dynamics[T], state: State[T]) -> Tuple[Dynamics[T], State[T]]:
+            return dynamics, intervene(state, {"x": 0.0})
+
+    :param time: The time at which the event should be triggered.
+    """
+
     time: torch.Tensor
     event_fn: Callable[[R, State[T]], R]
 

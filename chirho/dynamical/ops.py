@@ -55,6 +55,39 @@ def on(
         Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
     ] = None,
 ):
+    """
+    Creates a context manager that, when active, interrupts the first :func:`~chirho.dynamical.ops.simulate`
+    call the first time that the ``predicate`` function applied to the current state returns ``True``.
+    The ``callback`` function is then called with the current dynamics and state, and the return values
+    are used as the new dynamics and state for the remainder of the simulation time.
+
+    ``callback`` functions may invoke effectful operations such as :func:`~chirho.interventional.ops.intervene`
+    that are then handled by the effect handlers around the :func:`~chirho.dynamical.ops.simulate` call.
+
+    ``on`` may be used with two arguments to immediately create a context manager or higher-order function,
+    or invoked with one ``predicate`` argument as a decorator for creating a context manager
+    or higher-order function from a ``callback`` functions::
+
+        >>> @on(lambda state: state["x"] > 0)
+        ... def intervene_on_positive_x(dynamics, state):
+        ...     return dynamics, intervene(state, {"x": state["x"] - 100})
+        ...
+        >>> with solver:
+        ...     with intervene_on_positive_x:
+        ...         xf = simulate(dynamics, {"x": 0}, 0, 1)["x"]
+        ...
+        >>> assert xf < 0
+
+    .. warning:: ``on`` is a so-called "shallow" effect handler that only handles the first :func:`~chirho.dynamical.ops.simulate`
+        call within its context, and its ``callback`` can be triggered at most once.
+
+    .. warning:: some backends may not support interruptions via arbitrary predicates, and may only support
+        interruptions that include additional information such as a statically known time at which to activate.
+
+    :param predicate: A function that takes a state and returns a boolean.
+    :param callback: A function that takes a dynamics and state and returns a new dynamics and state.
+    :return: A context manager that interrupts a simulation when the predicate is true.
+    """
     if callback is None:
 
         def _on(
