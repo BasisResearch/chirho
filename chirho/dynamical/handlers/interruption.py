@@ -117,7 +117,7 @@ class StaticIntervention(Generic[T], StaticInterruption[T]):
 
     .. code-block:: python
 
-        intervention = lambda state: {"x": 1.0}
+        intervention = {"x": 1.0}
         with TorchDiffEq():
             with StaticIntervention(time=1.5, intervention=intervention):
                 simulate(dynamics, init_state, start_time, end_time)
