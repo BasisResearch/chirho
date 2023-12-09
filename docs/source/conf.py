@@ -29,6 +29,10 @@ autodoc_type_aliases = {
     'R': 'R',
     'State': 'State',
     'Dynamics': 'Dynamics',
+    'AtomicIntervention': 'AtomicIntervention',
+    'CompoundIntervention': 'CompoundIntervention',
+    'Intervention': 'Intervention',
+
 }
 
 # -- General configuration ---------------------------------------------------

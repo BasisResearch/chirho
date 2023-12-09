@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import functools
 from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar
