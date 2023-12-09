@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numbers
 import typing
 from typing import Callable, Generic, Tuple, TypeVar, Union
