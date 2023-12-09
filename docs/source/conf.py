@@ -32,6 +32,10 @@ autodoc_type_aliases = {
     'AtomicIntervention': 'AtomicIntervention',
     'CompoundIntervention': 'CompoundIntervention',
     'Intervention': 'Intervention',
+    'AtomicObservation': 'AtomicObservation',
+    'CompoundObservation': 'CompoundObservation',
+    'Observation': 'Observation',
+    'Kernel': 'Kernel',
 
 }
 
