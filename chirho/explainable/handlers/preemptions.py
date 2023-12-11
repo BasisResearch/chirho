@@ -12,14 +12,14 @@ T = TypeVar("T")
 
 class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     """
-    Effect handler that applies the operation :func:`~chirho.counterfactual.ops.preempt`
+    Effect handler that applies the operation :func:`~chirho.explainable.ops.preempt`
     to sample sites in a probabilistic program,
     similar to the handler :func:`~chirho.observational.handlers.condition`
     for :func:`~chirho.observational.ops.observe` .
     or the handler :func:`~chirho.interventional.handlers.do`
     for :func:`~chirho.interventional.ops.intervene` .
 
-    See the documentation for :func:`~chirho.counterfactual.ops.preempt` for more details.
+    See the documentation for :func:`~chirho.explainable.ops.preempt` for more details.
 
     This handler introduces an auxiliary discrete random variable at each preempted sample site
     whose name is the name of the sample site prefixed by ``prefix``, and

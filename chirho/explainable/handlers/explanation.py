@@ -44,15 +44,15 @@ def SearchForExplanation(
         using :func:`~chirho.counterfactual.ops.split` . \
         Unless alternative interventions are provided, \
         counterfactual values are uniformly sampled for each antecedent node \
-        using :func:`~chirho.counterfactual.handlers.explanation.uniform_proposal` \
-        given its support as a :class:`~pyro.distributions.constraints.Constraint` .
+        using :func:`~chirho.explainable.internals.uniform_proposal` \
+        given its support as a :class:`~pyro.distributions.constraints.Constraint`.
 
-      2. These interventions are randomly :func:`~chirho.counterfactual.ops.preempt`-ed \
-        using :func:`~chirho.counterfactual.handlers.explanation.undo_split` \
-        by a :func:`~chirho.counterfactual.handlers.explanation.SearchForCause` handler.
+      2. These interventions are randomly :func:`~chirho.explainable.ops.preempt`-ed \
+        using :func:`~chirho.explainable.handlers.undo_split` \
+        by a :func:`~chirho.explainable.handlers.SplitSubsets` handler.
 
-      3. The witness nodes are randomly :func:`~chirho.counterfactual.ops.preempt`-ed \
-        to be kept at the values given in ``witnesses`` .
+      3. The witness nodes are randomly :func:`~chirho.explainable.ops.preempt`-ed \
+        to be kept at the values given in ``witnesses``.
 
       4. A :func:`~pyro.factor` node is added tracking whether the consequent nodes differ \
         between the factual and counterfactual worlds.
