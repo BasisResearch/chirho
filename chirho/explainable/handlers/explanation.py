@@ -45,7 +45,7 @@ def SearchForExplanation(
         Unless alternative interventions are provided, \
         counterfactual values are uniformly sampled for each antecedent node \
         using :func:`~chirho.explainable.internals.uniform_proposal` \
-        given its support as a :class:`~pyro.distributions.constraints.Constraint` .
+        given its support as a :class:`~pyro.distributions.constraints.Constraint`.
 
       2. These interventions are randomly :func:`~chirho.explainable.ops.preempt`-ed \
         using :func:`~chirho.explainable.handlers.undo_split` \
