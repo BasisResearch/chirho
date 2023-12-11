@@ -18,7 +18,7 @@ def uniform_proposal(
     support. The choice of distribution depends on the type of support provided.
 
     - If the support is `real`, it creates a wide Normal distribution
-      and standard deviation, defaulting to (0,100).
+      and standard deviation, defaulting to (0,10).
     - If the support is `boolean`, it creates a Bernoulli distribution with a fixed logit of 0,
       corresponding to success probability .5.
     - If the support is an `interval`, the transformed distribution is centered around the

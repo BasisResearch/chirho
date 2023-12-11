@@ -15,7 +15,7 @@ def undo_split(antecedents: Iterable[str] = [], event_dim: int = 0) -> Callable[
     """
     A helper function that undoes an upstream :func:`~chirho.counterfactual.ops.split` operation,
     meant to be used to create arguments to pass to :func:`~chirho.interventional.ops.intervene` ,
-    :func:`~chirho.counterfactual.ops.split`  or :func:`~chirho.counterfactual.ops.preempt`.
+    :func:`~chirho.counterfactual.ops.split`  or :func:`~chirho.explainable.ops.preempt`.
     Works by gathering the factual value and scattering it back into two alternative cases.
 
     :param antecedents: A list of upstream intervened sites which induced the :func:`split` to be reversed.
@@ -61,7 +61,7 @@ def SplitSubsets(
     On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
     (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
     nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
-    intervention is executed. See tests in `tests/counterfactual/test_handlers_explanation.py` for examples.
+    intervention is executed. See tests in `tests/explainable/test_split_subsets.py` for examples.
 
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
