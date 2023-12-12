@@ -1,6 +1,6 @@
 from copy import copy
 from functools import singledispatch
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Callable, List, Optional, Tuple, Union, Any
 
 import juliacall
 import numpy as np
@@ -13,6 +13,7 @@ from torch import Tensor as Tnsr
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
+from chirho.dynamical.handlers.interruption import DependentInterruption
 from chirho.dynamical.ops import Dynamics
 from chirho.dynamical.ops import State as StateAndOrParams
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
@@ -108,9 +109,9 @@ class _DunderedJuliaThingWrapper:
 
                 if isinstance(other, np.ndarray):
                     if other.ndim == 0:
-                        # In certain cases, that TODO need to be sussed out (maybe numpy internal nuance) the
-                        #  julia_thing is a scalar array of a JuliaThingWrapper, so we need to further unwrap the
-                        #  scalar array to get at the JuliaThingWrapper (and, in turn, the julia_thing).
+                        # In certain cases, that julia_thing is a scalar array of a JuliaThingWrapper, so we need to
+                        # further unwrap the scalar array to get at the JuliaThingWrapper (and, in turn,
+                        # the julia_thing).
                         other = other.item()
                     else:
                         # Wrap self in an array and recurse back through numpy broadcasting. This is required when a
@@ -162,20 +163,20 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
     """
 
     @staticmethod
-    def wrap_array(arr: np.ndarray):
+    def wrap_array(arr: Union[np.ndarray, juliacall.ArrayValue]):
+        if isinstance(arr, juliacall.ArrayValue):
+            arr = arr.to_numpy(copy=False)
+
         regular_array = np.vectorize(JuliaThingWrapper)(arr)
         # Because we need to forward numpy ufuncs to julia,
         return regular_array.view(_JuliaThingWrapperArray)
 
     @staticmethod
-    def unwrap_array(arr: np.ndarray, out: Optional[np.ndarray] = None):
+    def unwrap_array(arr: np.ndarray, out: np.ndarray):
         # As discussed in docstring, we cannot simply vectorize a deconstructor because numpy will try to internally
         #  cast the unwrapped_julia things into an array, which fails due to introspection triggering the ndim 32 limit.
         # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
         #  compilation for our use case.
-        if out is None:
-            out = np.empty(arr.shape, dtype=np.object_)
-
         for idx, v in np.ndenumerate(arr):
             out[idx] = v.julia_thing
         return out
@@ -482,8 +483,18 @@ def _diffeqdotjl_ode_simulate_inner(
     dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     timespan: Tnsr,
+    cb: Optional[de.VectorContinuousCallback] = None,
     **kwargs,
-) -> StateAndOrParams[torch.tensor]:
+) -> Tuple[StateAndOrParams[torch.tensor], torch.Tensor]:
+    """
+    Unlike its torchdiffeq analog, this includes the final state in the trajectory and
+    returns the end time. This allows this single solve to both compute the trajectory
+    up to a particular point and return information sufficient to figure out which
+    interruption was responsible for the termination.
+
+    Note that this takes a fully constructed VectorContinuousCallback.
+    """
+
     require_float64(initial_state_and_params)
 
     # The backend solver requires that the dynamics are a pure function, meaning the parameters must be passed
@@ -502,7 +513,7 @@ def _diffeqdotjl_ode_simulate_inner(
     compiled_prob = _lazily_compile_problem(
         dynamics,
         # Note: these inputs are only used on the first compilation so that the types, shapes etc. get compiled along
-        # with the problem. Subsequently (in the inner_solve), these are ignored (even though they have the same as
+        # with the problem. Subsequently, (in the inner_solve), these are ignored (even though they have the same as
         # exact values as the args passed into `remake` below). The outer_u0_t_p has to be passed into the
         # JuliaFunction.apply so that those values can be put into Dual numbers by juliatorch.
         initial_state_and_params,
@@ -522,16 +533,35 @@ def _diffeqdotjl_ode_simulate_inner(
             compiled_prob, u0=u0, p=p, tspan=(tspan[0], tspan[-1])
         )
 
-        sol = de.solve(remade_compiled_prob)
+        # TODO this also has kwargs it could take (e.g. the solver to use).
+        sol = de.solve(remade_compiled_prob, callback=cb)
+
+        # Append the terminating point to the evaluated tspan. Note that from here, we
+        #  operate largely just on the julia side so that the array shaping can just be
+        #  handled on that side.
+        jl.tspan, jl.sol = tspan, sol
+        jl.seval('tspan = [tspan; sol.t[end]]')
 
         # Interpolate the solution at the requested times.
-        return sol(tspan)
+        jl.seval('ret = sol(tspan)')
 
-    # Finally, execute the juliacall function
-    flat_traj = JuliaFunction.apply(inner_solve, outer_u0_t_p)
+        # Flatten and add ending time to solution.
+        return jl.seval('[vcat(ret...); tspan[end]]')
+
+    # Finally, execute the juliacall function and...
+    flat_ret = JuliaFunction.apply(inner_solve, outer_u0_t_p)
+    # ...dissect result.
+    end_t = flat_ret[-1]
+    flat_traj = flat_ret[:-1].reshape(len(flat_initial_state), -1)
 
     # Unflatten the trajectory.
-    return _unflatten_state(flat_traj, initial_state, to_traj=True)
+    return _unflatten_state(flat_traj, initial_state, to_traj=True), end_t
+
+
+def _remove_final_state_and_time(traj: StateAndOrParams[Tnsr], end_t: Tnsr) -> StateAndOrParams[Tnsr]:
+    # Just something to wrap the return of the _simulate_inner so that we can just get the requested trajectory.
+    # FIXME need to use IndexSet here?
+    return {k: v[..., :-1] for k, v in traj.items()}
 
 
 def diffeqdotjl_simulate_trajectory(
@@ -540,28 +570,80 @@ def diffeqdotjl_simulate_trajectory(
     timespan: Tnsr,
     **kwargs,
 ) -> StateAndOrParams[Tnsr]:
-    return _diffeqdotjl_ode_simulate_inner(dynamics, initial_state_and_params, timespan)
+    ret = _diffeqdotjl_ode_simulate_inner(dynamics, initial_state_and_params, timespan, **kwargs)
+    return _remove_final_state_and_time(*ret)
 
 
 def diffeqdotjl_simulate_to_interruption(
-    interruptions: List[Interruption],
+    interruptions: List[DependentInterruption],
     dynamics: Dynamics[np.ndarray],
     initial_state_and_params: StateAndOrParams[Tnsr],
     start_time: Tnsr,
     end_time: Tnsr,
     **kwargs,
 ) -> Tuple[StateAndOrParams[Tnsr], Tnsr, Optional[Interruption]]:
-    # TODO TODO implement the actual retrieval of the next interruption (see torchdiffeq_simulate_to_interruption)
-
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
-    next_interruption = StaticInterruption(end_time)
+    # if len(interruptions) == 0:
+    if True:  # TODO WIP restore line above to runtime test all this other stuff.
+        # FIXME as of now, the solver parent class ALWAYS puts a staticinterruption at the end time, which
+        #  is something that torchdiffeq needs, but is maybe already handled by the `if not interruptions`
+        #  clause in torchdiffeq_simulate_to_interruption that does the same thing. I.e. this is very likely
+        #  redundant and can be removed from the solver class s.t. this diffeqdotjl can benefit from not
+        #  requiring a static interruption at the end time.
+        #  AH — so what if you have just dynamic interventions that don't trigger? Well then you get
+        #   the error below saying "no element of the event function output...was zero".
+        # Default case is to just simulate to the end.
+        # TODO WIP this HAS to be simulate_point in order for trajectory to be logged. This won't work to achieve
+        #  the goal of not having to simulate twice (once to find interruption, and a second time to get trajectory).
+        final_state = simulate_point(
+            dynamics,
+            initial_state_and_params,
+            start_time,
+            end_time,
+            **kwargs
+        )
+        return final_state, end_time, interruptions[0]  # None FIXME is StaticInterruption actually required here?
 
-    value = simulate_point(
-        dynamics, initial_state_and_params, start_time, end_time, **kwargs
+    # Otherwise, we need to construct an event based callback to terminate the tspan at the next interruption.
+    combined_cb, combined_condition = _diffeqdotjl_build_combined_event_f_callback(
+        interruptions,
+        shaped_state_ao_params=initial_state_and_params
     )
 
-    return value, end_time, next_interruption
+    trajectory, end_t = _diffeqdotjl_ode_simulate_inner(
+        dynamics=dynamics,
+        initial_state_and_params=initial_state_and_params,
+        timespan=torch.stack((start_time, end_time)),
+        cb=combined_cb,
+        **kwargs
+    )
+    final_state = {k: v[..., -1] for k, v in trajectory.items()}
+
+    # Figure out which interruption was responsible for the termination.
+    # TODO this shares logic with _torchdiffeq_get_next_interruptions, so factor out.
+    # TODO better — find an easier way with DifferentialEquations.jl to figure out which interruption terminated
+    #  the solve.
+    continuous_event_vals = np.empty(len(interruptions), dtype=np.float64)
+    combined_condition(
+        out=continuous_event_vals,
+        u=_flatten_state_ao_params(final_state).detach().numpy(),
+        t=end_t,
+        integrator=None
+    )
+    # TODO AZ figure out the tolerance used in solve and use that.
+    fired_mask = np.isclose(continuous_event_vals, 0.0, rtol=1e-2, atol=1e-3)
+
+    if not np.any(fired_mask):
+        raise RuntimeError(
+            "The solve terminated but no element of the event function output was within tolerance of zero."
+        )
+
+    triggered_events = [interruption for interruption, fired in zip(interruptions, fired_mask) if fired]
+
+    # TODO AZ not a fan of silently suppressing other events that could have triggered the termination — this
+    #  is what the torchdiffeq implementation currently does though.
+    return final_state, end_t, triggered_events[0]
 
 
 def diffeqdotjl_simulate_point(
@@ -574,9 +656,13 @@ def diffeqdotjl_simulate_point(
     # TODO this is exactly the same as torchdiffeq, so factor out to utils or something.
 
     timespan = torch.stack((start_time, end_time))
-    trajectory = _diffeqdotjl_ode_simulate_inner(
+    ret = _diffeqdotjl_ode_simulate_inner(
         dynamics, initial_state_and_params, timespan, **kwargs
     )
+    trajectory = _remove_final_state_and_time(*ret)
+
+    # TODO TODO much of this shape logic needs to be moved into the _simulate_inner so that it also applies to
+    #  simulate_to_interruption.
 
     # TODO support dim != -1
     idx_name = "__time"
@@ -587,3 +673,34 @@ def diffeqdotjl_simulate_point(
     final_state_traj = gather(trajectory, final_idx, name_to_dim=name_to_dim)
     final_state = _squeeze_time_dim(final_state_traj)
     return final_state
+
+
+def _diffeqdotjl_build_combined_event_f_callback(
+        interruptions: List[DependentInterruption],
+        # FIXME this type sig should just be tensor now? Also appears in _unflatten_state
+        shaped_state_ao_params: StateAndOrParams[Union[Tnsr, juliacall.VectorValue]],
+) -> Tuple[de.VectorContinuousCallback, Callable[[np.ndarray, np.ndarray, float, Any], None]]:
+
+    # TODO ideally we'd like to compile this function and reuse it.
+    #  - How to modelingtoolkitize (jit) this? As it's not a sciml problem.
+    #  - How and where to store the compiled function, especially as I believe that
+    #     the current torchdiffeq style implementation will modify the list of interruptions
+    #     that show up here — i.e. we'd either need to change the interface/implementation
+    #     approach or dynamically "turn off" certain interruptions.
+    #  Solution?: lazily jit compile the event_f of each interruption independently, and then
+    #   create a fresh CallbackSet on the julia side for every re-construction of the "combined_event_f"
+    def condition(out, u, t, integrator):
+
+        state = _unflatten_state(
+            flat_state_ao_params=JuliaThingWrapper.wrap_array(u),
+            shaped_state_ao_params=shaped_state_ao_params
+        )
+        wrapped_t = JuliaThingWrapper(t)
+        arr = np.array([interruption.event_fn(wrapped_t, state) for interruption in interruptions])
+
+        JuliaThingWrapper.unwrap_array(arr, out)
+
+    def affect_b(integrator):
+        return de.terminate_b(integrator)
+
+    return de.VectorContinuousCallback(condition, affect_b, len(interruptions)), condition
