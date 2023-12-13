@@ -18,26 +18,29 @@ class SimpleModel(PyroModule):
     def __init__(
         self,
         link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
+        p: int = 3,
     ):
         super().__init__()
         self.link_fn = link_fn
+        self.p = p
 
     def forward(self):
         a = pyro.sample("a", dist.Normal(0, 1))
-        with pyro.plate("data", 3, dim=-1):
+        with pyro.plate("data", self.p, dim=-1):
             b = pyro.sample("b", dist.Normal(a, 1))
             return pyro.sample("y", dist.Normal(b, 1))
 
 
 class SimpleGuide(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, p: int = 3):
         super().__init__()
         self.loc_a = torch.nn.Parameter(torch.rand(()))
-        self.loc_b = torch.nn.Parameter(torch.rand((3,)))
+        self.loc_b = torch.nn.Parameter(torch.rand((p,)))
+        self.p = p
 
     def forward(self):
         a = pyro.sample("a", dist.Normal(self.loc_a, 1))
-        with pyro.plate("data", 3, dim=-1):
+        with pyro.plate("data", self.p, dim=-1):
             b = pyro.sample("b", dist.Normal(self.loc_b, 1))
             return {"a": a, "b": b}
 
