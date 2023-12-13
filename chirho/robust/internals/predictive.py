@@ -143,3 +143,47 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+
+
+class PointLogPredictiveLikelihood(NMCLogPredictiveLikelihood):
+    def forward(
+        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
+    ) -> torch.Tensor:
+        if self.max_plate_nesting is None:
+            self.max_plate_nesting = guess_max_plate_nesting(
+                self.model, self.guide, *args, **kwargs
+            )
+
+        # Retrieve point estimate by sampling from the guide once
+        with pyro.poutine.trace() as guide_tr:
+            self.guide(*args, **kwargs)
+
+        point_estimate = {k: v["value"] for k, v in guide_tr.trace.nodes.items()}
+        model_at_point = condition(data=point_estimate)(self.model)
+
+        # Add plate to batch over many Monte Carlo draws from model
+        num_monte_carlo = data[next(iter(data))].shape[0]  # type: ignore
+
+        def vectorize(fn):
+            def _fn(*args, **kwargs):
+                with pyro.plate(
+                    "__monte_carlo_samples",
+                    size=num_monte_carlo,
+                    dim=-self.max_plate_nesting - 1,
+                ):
+                    return fn(*args, **kwargs)
+
+            return _fn
+
+        batched_model = condition(data=data)(vectorize(model_at_point))
+
+        # Compute log likelihood at each monte carlo sample
+        log_like_trace = pyro.poutine.trace(batched_model).get_trace(*args, **kwargs)
+        log_like_trace.compute_log_prob()
+        log_prob_at_datapoints = torch.zeros(num_monte_carlo)
+        for site_name in data.keys():
+            site_prob = log_like_trace.nodes[site_name]["log_prob"]
+            # Sum probabilities over all dimensions except first batch dimension
+            dims_to_sum = list(range(1, site_prob.dim()))
+            log_prob_at_datapoints += site_prob.sum(dim=dims_to_sum)
+        return log_prob_at_datapoints

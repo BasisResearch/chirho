@@ -9,19 +9,29 @@ from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
+from chirho.robust.internals.predictive import (
+    NMCLogPredictiveLikelihood,
+    PointLogPredictiveLikelihood,
+)
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
 from .robust_fixtures import SimpleGuide, SimpleModel
 
 pyro.settings.set(module_local_params=True)
 
+prob_config = [
+    (NMCLogPredictiveLikelihood, False),
+    (PointLogPredictiveLikelihood, True),
+]
 
-def test_empirical_fisher_vp_nmclikelihood_cg_composition():
+
+@pytest.mark.parametrize("prob_config", prob_config)
+def test_empirical_fisher_vp_nmclikelihood_cg_composition(prob_config):
+    prob_fn, is_batched = prob_config
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    log_prob = NMCLogPredictiveLikelihood(model, guide, num_samples=100)
+    log_prob = prob_fn(model, guide)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     func_log_prob = reset_rng_state(pyro.util.get_rng_state())(func_log_prob)
 
@@ -34,7 +44,9 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
 
     with torch.no_grad():
         data = func_predictive(predictive_params)
-    fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
+    fvp = make_empirical_fisher_vp(
+        func_log_prob, log_prob_params, data, is_batched=is_batched
+    )
 
     v = {
         k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v)

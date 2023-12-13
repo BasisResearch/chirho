@@ -175,8 +175,7 @@ def test_nmc_param_influence_vmap_smoke(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
-    batch_param_eif = torch.vmap(param_eif, randomness="different")
-    test_data_eif: Mapping[str, torch.Tensor] = batch_param_eif(test_data)
+    test_data_eif: Mapping[str, torch.Tensor] = param_eif(test_data)
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -299,7 +298,8 @@ def test_fisher_grad_smoke(data_config):
     ), "Finite difference gradients do not match autograd gradients"
 
 
-def test_linearize_against_analytic_ate():
+@pytest.mark.parametrize("is_point_estimate", [False, True])
+def test_linearize_against_analytic_ate(is_point_estimate):
     p = 1
     alpha = 1
     beta = 1
@@ -347,12 +347,12 @@ def test_linearize_against_analytic_ate():
         model,
         mle_guide,
         num_samples_outer=10000,
+        is_point_estimate=is_point_estimate,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
     )
 
-    batch_param_eif = torch.vmap(param_eif, randomness="different")
-    test_data_eif = batch_param_eif(D_test)
+    test_data_eif = param_eif(D_test)
     median_abs_error = torch.abs(
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()

@@ -63,6 +63,15 @@ def gaussian_log_prob(params: ParamDict, data_point: Point[T], cov_mat) -> T:
         ).log_prob(data_point["x"])
 
 
+def gaussian_log_prob_flattened(
+    params: torch.Tensor, data_point: Point[T], cov_mat: torch.Tensor
+) -> torch.Tensor:
+    with pyro.validation_enabled(False):
+        return pyro.distributions.MultivariateNormal(
+            loc=params, covariance_matrix=cov_mat
+        ).log_prob(data_point["x"])
+
+
 class DataConditionedModel(PyroModule):
     r"""
     Helper class for conditioning on data.
@@ -228,3 +237,14 @@ def closed_form_ate_correction(
     analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     analytic_correction = analytic_eif_at_test_pts.mean()
     return analytic_correction, analytic_eif_at_test_pts
+
+
+def _make_fisher_jvp_score_formulation(
+    f: Callable, params: torch.Tensor, num_monte_carlo: int
+) -> Callable:
+    def empirical_fisher_vp(v):
+        vnew = torch.func.jvp(f, (params,), (v / num_monte_carlo,))[1]
+        (_, vjpfunc) = torch.func.vjp(f, params)
+        return vjpfunc(vnew)[0]
+
+    return empirical_fisher_vp

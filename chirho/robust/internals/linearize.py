@@ -5,7 +5,10 @@ import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
-from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
+from chirho.robust.internals.predictive import (
+    NMCLogPredictiveLikelihood,
+    PointLogPredictiveLikelihood,
+)
 from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
@@ -98,7 +101,7 @@ def make_empirical_fisher_vp(
             randomness="different",
         )
     else:
-        batched_func_log_prob = lambda p, data: func_log_prob(p, data, *args, **kwargs)
+        batched_func_log_prob = functools.partial(func_log_prob, *args, **kwargs)
 
     N = data[next(iter(data))].shape[0]  # type: ignore
     mean_vector = 1 / N * torch.ones(N)
@@ -124,6 +127,7 @@ def linearize(
     guide: Callable[P, Any],
     *,
     num_samples_outer: int,
+    is_point_estimate: bool = False,
     num_samples_inner: Optional[int] = None,
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
@@ -142,12 +146,23 @@ def linearize(
     )
     predictive_params, func_predictive = make_functional_call(predictive)
 
-    log_prob = NMCLogPredictiveLikelihood(
-        model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
-    )
-    log_prob_params, func_log_prob = make_functional_call(log_prob)
-    score_fn = torch.func.grad(func_log_prob)
+    if is_point_estimate:
+        log_prob = PointLogPredictiveLikelihood(
+            model,
+            guide,
+            max_plate_nesting=max_plate_nesting,
+        )
+        make_efvp = functools.partial(make_empirical_fisher_vp, is_batched=True)
+    else:
+        log_prob = NMCLogPredictiveLikelihood(
+            model,
+            guide,
+            num_samples=num_samples_inner,
+            max_plate_nesting=max_plate_nesting,
+        )
+        make_efvp = functools.partial(make_empirical_fisher_vp, is_batched=False)
 
+    log_prob_params, func_log_prob = make_functional_call(log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
     if cg_iters is None:
         cg_iters = log_prob_params_numel
@@ -157,17 +172,27 @@ def linearize(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
 
-    @functools.wraps(score_fn)
-    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
+    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = func_predictive(predictive_params, *args, **kwargs)
-            data = {k: data[k] for k in point.keys()}
-        fvp = make_empirical_fisher_vp(
-            func_log_prob, log_prob_params, data, *args, **kwargs
-        )
-
+            data = {k: data[k] for k in points.keys()}
+        fvp = make_efvp(func_log_prob, log_prob_params, data, *args, **kwargs)
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
-        point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(pinned_fvp, point_score)
+        if not is_point_estimate:
+            batched_func_log_prob = torch.vmap(
+                lambda p, data: func_log_prob(p, data, *args, **kwargs),
+                in_dims=(None, 0),
+                randomness="different",
+            )
+        else:
+            batched_func_log_prob = functools.partial(func_log_prob, *args, **kwargs)
+        if log_prob_params_numel > points[next(iter(points))].shape[0]:
+            score_fn = torch.func.jacrev(batched_func_log_prob)
+        else:
+            score_fn = torch.func.jacfwd(batched_func_log_prob, randomness="different")
+        point_scores: ParamDict = score_fn(log_prob_params, points)
+        return torch.func.vmap(
+            lambda v: cg_solver(pinned_fvp, v), randomness="different"
+        )(point_scores)
 
     return _fn
