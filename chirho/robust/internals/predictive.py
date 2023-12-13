@@ -179,7 +179,7 @@ class PointLogPredictiveLikelihood(NMCLogPredictiveLikelihood):
 
         # Compute log likelihood at each monte carlo sample
         log_like_trace = pyro.poutine.trace(batched_model).get_trace(*args, **kwargs)
-        log_like_trace.compute_log_prob()
+        log_like_trace.compute_log_prob(lambda name, site: name in data.keys())
         log_prob_at_datapoints = torch.zeros(num_monte_carlo)
         for site_name in data.keys():
             site_prob = log_like_trace.nodes[site_name]["log_prob"]
