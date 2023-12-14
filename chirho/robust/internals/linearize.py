@@ -47,6 +47,8 @@ def _flat_conjugate_gradient_solve(
     """
     if cg_iters is None:
         cg_iters = b.numel()
+    else:
+        cg_iters = min(cg_iters, b.numel())
 
     p = b.clone()
     r = b.clone()
@@ -56,9 +58,7 @@ def _flat_conjugate_gradient_solve(
     v = rdotr / torch.dot(p, z)
     newrdotr = rdotr
     mu = newrdotr / rdotr
-
     zeros_xr = torch.zeros_like(x)
-
     for _ in range(cg_iters):
         not_converged = rdotr > residual_tol
         z = torch.where(not_converged, f_Ax(p), z)
@@ -164,15 +164,16 @@ def linearize(
 
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
-    if cg_iters is None:
-        cg_iters = log_prob_params_numel
-    else:
-        cg_iters = min(cg_iters, log_prob_params_numel)
     cg_solver = functools.partial(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
 
-    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
+    def _fn(
+        points: Point[T],
+        pointwise_influence: bool = True,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = func_predictive(predictive_params, *args, **kwargs)
             data = {k: data[k] for k in points.keys()}
@@ -191,6 +192,10 @@ def linearize(
         else:
             score_fn = torch.func.jacfwd(batched_func_log_prob, randomness="different")
         point_scores: ParamDict = score_fn(log_prob_params, points)
+        if not pointwise_influence:
+            point_scores = {
+                k: v.mean(dim=0).unsqueeze(0) for k, v in point_scores.items()
+            }
         return torch.func.vmap(
             lambda v: cg_solver(pinned_fvp, v), randomness="different"
         )(point_scores)
