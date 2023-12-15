@@ -45,22 +45,25 @@ def _flat_conjugate_gradient_solve(
     Notes: This code is adapted from
       https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
     """
-    orignal_dim = len(b.shape)
-    assert orignal_dim in [1, 2]
-    if orignal_dim == 1:
-        b = b.unsqueeze(0)
-        f_Ax = lambda x: f_Ax(x).unsqueeze(0)
+    assert len(b.shape), "b must be a 2D matrix"
+
     if cg_iters is None:
         cg_iters = b.shape[1]
     else:
         cg_iters = min(cg_iters, b.shape[1])
 
+    def _batched_dot(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return (a * b).sum(axis=-1)
+
+    def _batched_product(a: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        return a.unsqueeze(0).t() * B
+
     p = b.clone()
     r = b.clone()
     x = torch.zeros_like(b)
     z = f_Ax(p)
-    rdotr = (r**2).sum(axis=-1)
-    v = rdotr / (p * z).sum(axis=-1)
+    rdotr = _batched_dot(r, r)
+    v = rdotr / _batched_dot(p, z)
     newrdotr = rdotr
     mu = newrdotr / rdotr
     zeros_xr = torch.zeros_like(x)
@@ -68,19 +71,16 @@ def _flat_conjugate_gradient_solve(
         not_converged = rdotr > residual_tol
         not_converged_broadcasted = not_converged.unsqueeze(0).t()
         z = torch.where(not_converged_broadcasted, f_Ax(p), z)
-        v = torch.where(not_converged, rdotr / (p * z).sum(axis=-1), v)
-        x += torch.where(not_converged_broadcasted, v.unsqueeze(0).t() * p, zeros_xr)
-        r -= torch.where(not_converged_broadcasted, v.unsqueeze(0).t() * z, zeros_xr)
-        newrdotr = torch.where(not_converged, (r**2).sum(axis=-1), newrdotr)
+        v = torch.where(not_converged, rdotr / _batched_dot(p, z), v)
+        x += torch.where(not_converged_broadcasted, _batched_product(v, p), zeros_xr)
+        r -= torch.where(not_converged_broadcasted, _batched_product(v, z), zeros_xr)
+        newrdotr = torch.where(not_converged, _batched_dot(r, r), newrdotr)
         mu = torch.where(not_converged, newrdotr / rdotr, mu)
-        p = torch.where(not_converged_broadcasted, r + mu.unsqueeze(0).t() * p, p)
+        p = torch.where(not_converged_broadcasted, r + _batched_product(mu, p), p)
         rdotr = torch.where(not_converged, newrdotr, rdotr)
         if torch.all(~not_converged):
-            break
-    if orignal_dim == 1:
-        return x.reshape((b.shape[1],))
-    else:
-        return x
+            return x
+    return x
 
 
 def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
