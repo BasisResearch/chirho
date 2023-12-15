@@ -180,7 +180,7 @@ def linearize(
 
     def _fn(
         points: Point[T],
-        pointwise_influence: bool = False,
+        pointwise_influence: bool = True,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:

@@ -44,12 +44,16 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition(prob_config):
 
     with torch.no_grad():
         data = func_predictive(predictive_params)
-    fvp = make_empirical_fisher_vp(
-        func_log_prob, log_prob_params, data, is_batched=is_batched
+    fvp = torch.func.vmap(
+        make_empirical_fisher_vp(
+            func_log_prob, log_prob_params, data, is_batched=is_batched
+        )
     )
 
     v = {
-        k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v)
+        k: torch.ones_like(v).unsqueeze(0)
+        if k != "guide.loc_a"
+        else torch.zeros_like(v).unsqueeze(0)
         for k, v in log_prob_params.items()
     }
 

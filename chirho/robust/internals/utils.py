@@ -23,11 +23,13 @@ def make_flatten_unflatten(
 
 @make_flatten_unflatten.register(torch.Tensor)
 def _make_flatten_unflatten_tensor(v: torch.Tensor):
+    batch_size = v.shape[0]
+
     def flatten(v: torch.Tensor) -> torch.Tensor:
         r"""
         Flatten a tensor into a single vector.
         """
-        return v.flatten()
+        return v.reshape((batch_size, -1))
 
     def unflatten(x: torch.Tensor) -> torch.Tensor:
         r"""

@@ -36,6 +36,9 @@ T = TypeVar("T")
 
 @pytest.mark.parametrize("ndim", [1, 2, 3, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+@pytest.mark.skip(
+    reason="conjugate_gradient_solve only works on batches of vectors now"
+)
 def test_cg_solve(ndim: int, dtype: torch.dtype):
     cg_iters = None
     residual_tol = 1e-10
@@ -63,14 +66,13 @@ def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     b = torch.einsum("ij,nj->ni", A, expected_x)
     assert b.shape == (num_particles, ndim)
 
-    batch_solve = torch.vmap(
-        functools.partial(
-            conjugate_gradient_solve,
-            lambda v: A @ v,
-            cg_iters=cg_iters,
-            residual_tol=residual_tol,
-        ),
+    batch_solve = functools.partial(
+        conjugate_gradient_solve,
+        lambda v: torch.einsum("ij,nj->ni", A, v),
+        cg_iters=cg_iters,
+        residual_tol=residual_tol,
     )
+
     actual_x = batch_solve(b)
 
     assert torch.all(torch.sum((actual_x - expected_x) ** 2, dim=1) < 1e-4)
@@ -352,7 +354,7 @@ def test_linearize_against_analytic_ate(is_point_estimate):
         cg_iters=4,  # dimension of params = 4
     )
 
-    test_data_eif = param_eif(D_test)
+    test_data_eif = param_eif(D_test, pointwise_influence=True)
     median_abs_error = torch.abs(
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()
