@@ -28,7 +28,7 @@ def _flat_conjugate_gradient_solve(
     b: torch.Tensor,
     *,
     cg_iters: Optional[int] = None,
-    residual_tol: float = 1e-10,
+    residual_tol: float = 1e-3,
 ) -> torch.Tensor:
     r"""Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
 
@@ -45,32 +45,42 @@ def _flat_conjugate_gradient_solve(
     Notes: This code is adapted from
       https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
     """
+    orignal_dim = len(b.shape)
+    assert orignal_dim in [1, 2]
+    if orignal_dim == 1:
+        b = b.unsqueeze(0)
+        f_Ax = lambda x: f_Ax(x).unsqueeze(0)
     if cg_iters is None:
-        cg_iters = b.numel()
+        cg_iters = b.shape[1]
     else:
-        cg_iters = min(cg_iters, b.numel())
+        cg_iters = min(cg_iters, b.shape[1])
 
     p = b.clone()
     r = b.clone()
     x = torch.zeros_like(b)
     z = f_Ax(p)
-    rdotr = torch.dot(r, r)
-    v = rdotr / torch.dot(p, z)
+    rdotr = (r**2).sum(axis=-1)
+    v = rdotr / (p * z).sum(axis=-1)
     newrdotr = rdotr
     mu = newrdotr / rdotr
     zeros_xr = torch.zeros_like(x)
     for _ in range(cg_iters):
         not_converged = rdotr > residual_tol
-        z = torch.where(not_converged, f_Ax(p), z)
-        v = torch.where(not_converged, rdotr / torch.dot(p, z), v)
-        x += torch.where(not_converged, v * p, zeros_xr)
-        r -= torch.where(not_converged, v * z, zeros_xr)
-        newrdotr = torch.where(not_converged, torch.dot(r, r), newrdotr)
+        not_converged_broadcasted = not_converged.unsqueeze(0).t()
+        z = torch.where(not_converged_broadcasted, f_Ax(p), z)
+        v = torch.where(not_converged, rdotr / (p * z).sum(axis=-1), v)
+        x += torch.where(not_converged_broadcasted, v.unsqueeze(0).t() * p, zeros_xr)
+        r -= torch.where(not_converged_broadcasted, v.unsqueeze(0).t() * z, zeros_xr)
+        newrdotr = torch.where(not_converged, (r**2).sum(axis=-1), newrdotr)
         mu = torch.where(not_converged, newrdotr / rdotr, mu)
-        p = torch.where(not_converged, r + mu * p, p)
+        p = torch.where(not_converged_broadcasted, r + mu.unsqueeze(0).t() * p, p)
         rdotr = torch.where(not_converged, newrdotr, rdotr)
-
-    return x
+        if torch.all(~not_converged):
+            break
+    if orignal_dim == 1:
+        return x.reshape((b.shape[1],))
+    else:
+        return x
 
 
 def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
@@ -170,7 +180,7 @@ def linearize(
 
     def _fn(
         points: Point[T],
-        pointwise_influence: bool = True,
+        pointwise_influence: bool = False,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:
@@ -196,8 +206,9 @@ def linearize(
             point_scores = {
                 k: v.mean(dim=0).unsqueeze(0) for k, v in point_scores.items()
             }
-        return torch.func.vmap(
-            lambda v: cg_solver(pinned_fvp, v), randomness="different"
-        )(point_scores)
+        pinned_fvp_batched = torch.func.vmap(
+            lambda v: pinned_fvp(v), randomness="different"
+        )
+        return cg_solver(pinned_fvp_batched, point_scores)
 
     return _fn
