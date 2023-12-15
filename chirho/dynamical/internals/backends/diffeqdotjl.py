@@ -1,6 +1,7 @@
 from copy import copy
 from functools import singledispatch
 from typing import Callable, List, Optional, Tuple, Union, Any
+import warnings
 
 import juliacall
 import numpy as np
@@ -106,6 +107,16 @@ class _DunderedJuliaThingWrapper:
                         "Only one argument is supported for automated dunder method dispatch."
                     )
                 (other,) = args
+
+                if isinstance(other, torch.Tensor):
+                    warnings.warn(
+                        "A torch tensor is involved in an operation with a julia entity. This works"
+                        " by converting the torch tensor to a numpy array, but gradients will not "
+                        " propagate to the torch tensor this way."
+                        "For gradients to work, parameters of dynamics and event_fns need to"
+                        " appear in the initial_state passed to simulate."
+                    )
+                    other = other.detach().numpy()
 
                 if isinstance(other, np.ndarray):
                     if other.ndim == 0:
@@ -414,7 +425,10 @@ def _unflatten_state(
             #  and because we know the rest of the shape we can auto-detect its size with -1.
             shape += (-1,)
 
-        sv = flat_state_ao_params[: shaped.numel()].reshape(shape)
+        try:
+            sv = flat_state_ao_params[: shaped.numel()].reshape(shape)
+        except Exception as e:
+            raise
 
         state_ao_params[v] = sv
 
@@ -584,8 +598,7 @@ def diffeqdotjl_simulate_to_interruption(
 ) -> Tuple[StateAndOrParams[Tnsr], Tnsr, Optional[Interruption]]:
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
-    # if len(interruptions) == 0:
-    if True:  # TODO WIP restore line above to runtime test all this other stuff.
+    if len(interruptions) == 0:
         # FIXME as of now, the solver parent class ALWAYS puts a staticinterruption at the end time, which
         #  is something that torchdiffeq needs, but is maybe already handled by the `if not interruptions`
         #  clause in torchdiffeq_simulate_to_interruption that does the same thing. I.e. this is very likely
@@ -605,10 +618,16 @@ def diffeqdotjl_simulate_to_interruption(
         )
         return final_state, end_time, interruptions[0]  # None FIXME is StaticInterruption actually required here?
 
+    # TODO would like to not do this every time.
+    initial_state, torch_params = separate_state_and_params(
+        dynamics, initial_state_and_params, start_time
+    )
+
     # Otherwise, we need to construct an event based callback to terminate the tspan at the next interruption.
     combined_cb, combined_condition = _diffeqdotjl_build_combined_event_f_callback(
         interruptions,
-        shaped_state_ao_params=initial_state_and_params
+        initial_state=initial_state,
+        torch_params=torch_params
     )
 
     trajectory, end_t = _diffeqdotjl_ode_simulate_inner(
@@ -640,6 +659,16 @@ def diffeqdotjl_simulate_to_interruption(
         )
 
     triggered_events = [interruption for interruption, fired in zip(interruptions, fired_mask) if fired]
+
+    # FIXME HACK because trajectory overrides simulate point, we have to call it here,
+    #  which will solve the same ODE a second time. Need to refactor higher up to avoid?
+    final_state = simulate_point(
+        dynamics,
+        initial_state_and_params,
+        start_time,
+        end_t,
+        **kwargs
+    )
 
     # TODO AZ not a fan of silently suppressing other events that could have triggered the termination — this
     #  is what the torchdiffeq implementation currently does though.
@@ -678,7 +707,8 @@ def diffeqdotjl_simulate_point(
 def _diffeqdotjl_build_combined_event_f_callback(
         interruptions: List[DependentInterruption],
         # FIXME this type sig should just be tensor now? Also appears in _unflatten_state
-        shaped_state_ao_params: StateAndOrParams[Union[Tnsr, juliacall.VectorValue]],
+        initial_state: StateAndOrParams[Tnsr],
+        torch_params: StateAndOrParams[Tnsr]
 ) -> Tuple[de.VectorContinuousCallback, Callable[[np.ndarray, np.ndarray, float, Any], None]]:
 
     # TODO ideally we'd like to compile this function and reuse it.
@@ -693,10 +723,24 @@ def _diffeqdotjl_build_combined_event_f_callback(
 
         state = _unflatten_state(
             flat_state_ao_params=JuliaThingWrapper.wrap_array(u),
-            shaped_state_ao_params=shaped_state_ao_params
+            shaped_state_ao_params=initial_state
         )
+
+        # Parameters are accessible via the integrator. Event functions that depend on
+        #  parameters that user wants gradients wrt will need to show up here.
+        # TODO need to that gradients do indeed work in this context when pulling parameters
+        #  from the integrator.
+        params = _unflatten_state(
+            flat_state_ao_params=JuliaThingWrapper.wrap_array(integrator.p),
+            shaped_state_ao_params=torch_params
+        )
+
+        # TODO assymetry here — unlike the dynamics function, the event_fn takes time as a separate thing,
+        #  outside of the state mapping.
+        state_ao_params = StateAndOrParams(**state, **params)
         wrapped_t = JuliaThingWrapper(t)
-        arr = np.array([interruption.event_fn(wrapped_t, state) for interruption in interruptions])
+
+        arr = np.array([interruption.event_fn(wrapped_t, state_ao_params) for interruption in interruptions])
 
         JuliaThingWrapper.unwrap_array(arr, out)
 
