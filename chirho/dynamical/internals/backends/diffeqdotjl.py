@@ -19,6 +19,9 @@ from chirho.dynamical.ops import Dynamics
 from chirho.dynamical.ops import State as StateAndOrParams
 from chirho.indexed.ops import IndexSet, gather, get_index_plates, cond
 
+jl.seval("using Symbolics")
+jl.seval("using IfElse")
+
 
 class _DunderedJuliaThingWrapper:
     """
@@ -725,19 +728,27 @@ def _cond_juliathing(
         fst: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
         snd: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
         case: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
-        event_dim: int = 0,
+        # event_dim: int = 0,
         **kwargs
 ) -> _JuliaThingWrapperArray:
 
-    args = (fst, snd, case)
-    # Convert JuliaThingWrappers to scalar numpy arrays.
-    args = [np.array(a).view(_JuliaThingWrapperArray) if not isinstance(a, _JuliaThingWrapperArray)
-            else a for a in args]
-    fst, snd, case = args
+    # TODO if .item fails throw an informative error saying this doesn't currently support non-scalar stuff.
+    fst, snd, case = tuple(arg.item() if isinstance(arg, _JuliaThingWrapperArray) else arg for arg in (fst, snd, case))
 
-    return np.where(case[(...,) + (None,) * event_dim], snd, fst).view(_JuliaThingWrapperArray)
+    # This is the case e.g. if snd is a constant.
+    if not isinstance(snd, JuliaThingWrapper):
+        snd = JuliaThingWrapper(snd)
 
+    if not isinstance(case, JuliaThingWrapper):
+        # Maybe we can relax this, but as-is I can't think of a case that cond should be used and the case didn't
+        #  involve something from julia (i.e. is non-constant).
+        raise ValueError(f"Case must be a JuliaThingWrapper, but got {case}.")
 
+    jl.fst, jl.snd, jl.case = fst.julia_thing, snd.julia_thing, case.julia_thing
+
+    jl.seval('ret = ifelse(case, fst, snd)')  # ifelse evals both branches, useful e.g. for symbolic compilation.
+
+    return jl.ret
 
 
 def _diffeqdotjl_build_combined_event_f_callback(
@@ -791,4 +802,5 @@ def _diffeqdotjl_build_combined_event_f_callback(
         integrator = args[0]
         return de.terminate_b(integrator)
 
+    # FIXME len(interruptions) is wrong — that assumes that each event_fn returns only a scalar.
     return de.VectorContinuousCallback(condition_, affect_b, len(interruptions)), condition_
