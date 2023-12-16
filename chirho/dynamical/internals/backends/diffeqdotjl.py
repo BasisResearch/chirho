@@ -17,7 +17,7 @@ from chirho.dynamical.internals.solver import Interruption, simulate_point
 from chirho.dynamical.handlers.interruption import DependentInterruption
 from chirho.dynamical.ops import Dynamics
 from chirho.dynamical.ops import State as StateAndOrParams
-from chirho.indexed.ops import IndexSet, gather, get_index_plates
+from chirho.indexed.ops import IndexSet, gather, get_index_plates, cond
 
 
 class _DunderedJuliaThingWrapper:
@@ -38,7 +38,7 @@ class _DunderedJuliaThingWrapper:
             "__add__",
             # FIXME 18d0j1h9 python sometimes expects not a JuliaThingWrapper from __bool__, what do e.g. julia
             #  symbolics expect?
-            "__bool__",
+            # "__bool__",  # Not wrapping this, just returning bool(self.julia_thing).
             "__ceil__",
             "__eq__",  # FIXME 18d0j1h9
             "__float__",
@@ -149,6 +149,15 @@ class _DunderedJuliaThingWrapper:
 
         setattr(cls, method_name, dunder)
 
+    def __bool__(self):
+        if isinstance(self.julia_thing, bool):
+            return self.julia_thing
+        warnings.warn(
+            f"Trying to bool julia thing that may or may not behave as expected: {self.julia_thing}\n"
+            f"Evaluated to {bool(self.julia_thing)}."
+        )
+        return bool(self.julia_thing)
+
 
 # noinspection PyProtectedMember
 _DunderedJuliaThingWrapper._forward_dunders()
@@ -189,7 +198,7 @@ class JuliaThingWrapper(_DunderedJuliaThingWrapper):
         # Instead, we have to manually assign each element of the array. This is slow, but only occurs during jit
         #  compilation for our use case.
         for idx, v in np.ndenumerate(arr):
-            out[idx] = v.julia_thing
+            out[idx] = v.julia_thing if isinstance(v, JuliaThingWrapper) else v
         return out
 
     def __repr__(self):
@@ -624,7 +633,7 @@ def diffeqdotjl_simulate_to_interruption(
     )
 
     # Otherwise, we need to construct an event based callback to terminate the tspan at the next interruption.
-    combined_cb, combined_condition = _diffeqdotjl_build_combined_event_f_callback(
+    combined_cb, combined_condition_ = _diffeqdotjl_build_combined_event_f_callback(
         interruptions,
         initial_state=initial_state,
         torch_params=torch_params
@@ -643,12 +652,18 @@ def diffeqdotjl_simulate_to_interruption(
     # TODO this shares logic with _torchdiffeq_get_next_interruptions, so factor out.
     # TODO better — find an easier way with DifferentialEquations.jl to figure out which interruption terminated
     #  the solve.
+
+    # TODO HACK cz the integrator carries the parameters for event_fns.
+    class FakeIntegrator:
+        def __init__(self, p):
+            self.p = p
+
     continuous_event_vals = np.empty(len(interruptions), dtype=np.float64)
-    combined_condition(
+    combined_condition_(
         out=continuous_event_vals,
         u=_flatten_state_ao_params(final_state).detach().numpy(),
-        t=end_t,
-        integrator=None
+        t=end_t.detach().numpy(),
+        integrator=FakeIntegrator(_flatten_state_ao_params(torch_params).detach().numpy())
     )
     # TODO AZ figure out the tolerance used in solve and use that.
     fired_mask = np.isclose(continuous_event_vals, 0.0, rtol=1e-2, atol=1e-3)
@@ -704,6 +719,27 @@ def diffeqdotjl_simulate_point(
     return final_state
 
 
+@cond.register(JuliaThingWrapper)
+@cond.register(_JuliaThingWrapperArray)
+def _cond_juliathing(
+        fst: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
+        snd: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
+        case: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
+        event_dim: int = 0,
+        **kwargs
+) -> _JuliaThingWrapperArray:
+
+    args = (fst, snd, case)
+    # Convert JuliaThingWrappers to scalar numpy arrays.
+    args = [np.array(a).view(_JuliaThingWrapperArray) if not isinstance(a, _JuliaThingWrapperArray)
+            else a for a in args]
+    fst, snd, case = args
+
+    return np.where(case[(...,) + (None,) * event_dim], snd, fst).view(_JuliaThingWrapperArray)
+
+
+
+
 def _diffeqdotjl_build_combined_event_f_callback(
         interruptions: List[DependentInterruption],
         # FIXME this type sig should just be tensor now? Also appears in _unflatten_state
@@ -719,7 +755,7 @@ def _diffeqdotjl_build_combined_event_f_callback(
     #     approach or dynamically "turn off" certain interruptions.
     #  Solution?: lazily jit compile the event_f of each interruption independently, and then
     #   create a fresh CallbackSet on the julia side for every re-construction of the "combined_event_f"
-    def condition(out, u, t, integrator):
+    def condition_(out, u, t, integrator):
 
         state = _unflatten_state(
             flat_state_ao_params=JuliaThingWrapper.wrap_array(u),
@@ -728,8 +764,11 @@ def _diffeqdotjl_build_combined_event_f_callback(
 
         # Parameters are accessible via the integrator. Event functions that depend on
         #  parameters that user wants gradients wrt will need to show up here.
-        # TODO need to that gradients do indeed work in this context when pulling parameters
+        # TODO need to test that gradients do indeed work in this context when pulling parameters
         #  from the integrator.
+        # TODO for compilation, which we're not supporting right now for event_fns, would need to
+        #  confirm that things could be compiled wrt to the integrator? I wouldn't think that symbolics
+        #  would get pushed through the integrator...
         params = _unflatten_state(
             flat_state_ao_params=JuliaThingWrapper.wrap_array(integrator.p),
             shaped_state_ao_params=torch_params
@@ -740,11 +779,16 @@ def _diffeqdotjl_build_combined_event_f_callback(
         state_ao_params = StateAndOrParams(**state, **params)
         wrapped_t = JuliaThingWrapper(t)
 
-        arr = np.array([interruption.event_fn(wrapped_t, state_ao_params) for interruption in interruptions])
+        arr = np.concatenate(tuple(
+            interruption.event_fn(wrapped_t, state_ao_params).ravel()
+            for interruption in interruptions
+        ))
+        arr = arr.view(_JuliaThingWrapperArray)
 
         JuliaThingWrapper.unwrap_array(arr, out)
 
-    def affect_b(integrator):
+    def affect_b(*args):
+        integrator = args[0]
         return de.terminate_b(integrator)
 
-    return de.VectorContinuousCallback(condition, affect_b, len(interruptions)), condition
+    return de.VectorContinuousCallback(condition_, affect_b, len(interruptions)), condition_
