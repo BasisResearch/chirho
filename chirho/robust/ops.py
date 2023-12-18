@@ -39,8 +39,15 @@ def influence_fn(
     target_params, func_target = make_functional_call(target)
 
     @functools.wraps(target)
-    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
-        param_eif = linearized(points, *args, **kwargs)
+    def _fn(
+        points: Point[T],
+        pointwise_influence: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs
+    ) -> S:
+        param_eif = linearized(
+            points, pointwise_influence=pointwise_influence, *args, **kwargs
+        )
         return torch.vmap(
             lambda d: torch.func.jvp(
                 lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)

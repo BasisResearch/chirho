@@ -141,7 +141,7 @@ def linearize(
     num_samples_inner: Optional[int] = None,
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
-    residual_tol: float = 1e-10,
+    residual_tol: float = 1e-4,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
@@ -157,21 +157,18 @@ def linearize(
     predictive_params, func_predictive = make_functional_call(predictive)
 
     if is_point_estimate:
-        log_prob = PointLogPredictiveLikelihood(
-            model,
-            guide,
-            max_plate_nesting=max_plate_nesting,
-        )
-        make_efvp = functools.partial(make_empirical_fisher_vp, is_batched=True)
+        log_prob_type = PointLogPredictiveLikelihood
+        is_batched = True
     else:
-        log_prob = NMCLogPredictiveLikelihood(
-            model,
-            guide,
-            num_samples=num_samples_inner,
-            max_plate_nesting=max_plate_nesting,
-        )
-        make_efvp = functools.partial(make_empirical_fisher_vp, is_batched=False)
+        log_prob_type = NMCLogPredictiveLikelihood
+        is_batched = False
 
+    log_prob = log_prob_type(
+        model,
+        guide,
+        max_plate_nesting=max_plate_nesting,
+    )
+    make_efvp = functools.partial(make_empirical_fisher_vp, is_batched=is_batched)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
     cg_solver = functools.partial(
@@ -189,6 +186,9 @@ def linearize(
             data = {k: data[k] for k in points.keys()}
         fvp = make_efvp(func_log_prob, log_prob_params, data, *args, **kwargs)
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
+        pinned_fvp_batched = torch.func.vmap(
+            lambda v: pinned_fvp(v), randomness="different"
+        )
         if not is_point_estimate:
             batched_func_log_prob = torch.vmap(
                 lambda p, data: func_log_prob(p, data, *args, **kwargs),
@@ -206,9 +206,7 @@ def linearize(
             point_scores = {
                 k: v.mean(dim=0).unsqueeze(0) for k, v in point_scores.items()
             }
-        pinned_fvp_batched = torch.func.vmap(
-            lambda v: pinned_fvp(v), randomness="different"
-        )
+
         return cg_solver(pinned_fvp_batched, point_scores)
 
     return _fn

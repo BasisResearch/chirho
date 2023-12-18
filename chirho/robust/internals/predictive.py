@@ -182,11 +182,15 @@ class PointLogPredictiveLikelihood(NMCLogPredictiveLikelihood):
         log_like_trace.compute_log_prob(lambda name, site: name in data.keys())
         log_prob_at_datapoints = torch.zeros(num_monte_carlo)
         for site_name in data.keys():
-            # Sum probabilities over all dimensions except first batch dimension
-            dims_to_sum = list(
-                range(1, log_like_trace.nodes[site_name]["log_prob"].dim())
-            )
-            log_prob_at_datapoints += log_like_trace.nodes[site_name]["log_prob"].sum(
-                dim=dims_to_sum
-            )
+            if log_like_trace.nodes[site_name]["log_prob"].dim() > 1:
+                # Sum probabilities over all dimensions except first batch dimension
+                dims_to_sum = list(
+                    range(1, log_like_trace.nodes[site_name]["log_prob"].dim())
+                )
+                log_prob_at_datapoints += log_like_trace.nodes[site_name][
+                    "log_prob"
+                ].sum(dim=dims_to_sum)
+            else:
+                log_prob_at_datapoints += log_like_trace.nodes[site_name]["log_prob"]
+
         return log_prob_at_datapoints
