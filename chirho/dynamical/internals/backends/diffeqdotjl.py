@@ -18,6 +18,7 @@ from chirho.dynamical.handlers.interruption import DependentInterruption
 from chirho.dynamical.ops import Dynamics
 from chirho.dynamical.ops import State as StateAndOrParams
 from chirho.indexed.ops import IndexSet, gather, get_index_plates, cond
+from uuid import uuid4
 
 jl.seval("using Symbolics")
 jl.seval("using IfElse")
@@ -387,6 +388,12 @@ def _lazily_compile_problem(*args, **kwargs) -> de.ODEProblem:
     raise NotImplementedError()
 
 
+# TODO g179du91
+@pyro.poutine.runtime.effectful(type="_lazily_compile_event_fn_callback")
+def _lazily_compile_event_fn_callback(*args, **kwargs) -> de.VectorContinuousCallback:
+    raise NotImplementedError()
+
+
 def get_var_order(state_ao_params: StateAndOrParams[Tnsr]) -> Tuple[str, ...]:
     return _var_order(frozenset(state_ao_params.keys()))
 
@@ -636,7 +643,7 @@ def diffeqdotjl_simulate_to_interruption(
     )
 
     # Otherwise, we need to construct an event based callback to terminate the tspan at the next interruption.
-    combined_cb, combined_condition_ = _diffeqdotjl_build_combined_event_f_callback(
+    cb = _diffeqdotjl_build_combined_event_f_callback(
         interruptions,
         initial_state=initial_state,
         torch_params=torch_params
@@ -646,38 +653,11 @@ def diffeqdotjl_simulate_to_interruption(
         dynamics=dynamics,
         initial_state_and_params=initial_state_and_params,
         timespan=torch.stack((start_time, end_time)),
-        cb=combined_cb,
+        cb=cb,
         **kwargs
     )
-    final_state = {k: v[..., -1] for k, v in trajectory.items()}
 
-    # Figure out which interruption was responsible for the termination.
-    # TODO this shares logic with _torchdiffeq_get_next_interruptions, so factor out.
-    # TODO better — find an easier way with DifferentialEquations.jl to figure out which interruption terminated
-    #  the solve.
-
-    # TODO HACK cz the integrator carries the parameters for event_fns.
-    class FakeIntegrator:
-        def __init__(self, p):
-            self.p = p
-
-    continuous_event_vals = np.empty(len(interruptions), dtype=np.float64)
-    combined_condition_(
-        out=continuous_event_vals,
-        u=_flatten_state_ao_params(final_state).detach().numpy(),
-        t=end_t.detach().numpy(),
-        integrator=FakeIntegrator(_flatten_state_ao_params(torch_params).detach().numpy())
-    )
-    # TODO AZ figure out the tolerance used in solve and use that.
-    fired_mask = np.isclose(continuous_event_vals, 0.0, rtol=1e-2, atol=1e-3)
-
-    if not np.any(fired_mask):
-        raise RuntimeError(
-            "The solve terminated but no element of the event function output was within tolerance of zero."
-        )
-
-    triggered_events = [interruption for interruption, fired in zip(interruptions, fired_mask) if fired]
-
+    # final_state = {k: v[..., -1] for k, v in trajectory.items()}
     # FIXME HACK because trajectory overrides simulate point, we have to call it here,
     #  which will solve the same ODE a second time. Need to refactor higher up to avoid?
     final_state = simulate_point(
@@ -688,9 +668,7 @@ def diffeqdotjl_simulate_to_interruption(
         **kwargs
     )
 
-    # TODO AZ not a fan of silently suppressing other events that could have triggered the termination — this
-    #  is what the torchdiffeq implementation currently does though.
-    return final_state, end_t, triggered_events[0]
+    return final_state, end_t, _last_triggered_interruption_ptr[0]  # TODO HACK maybe 18wfghjfs541
 
 
 def diffeqdotjl_simulate_point(
@@ -751,56 +729,92 @@ def _cond_juliathing(
     return jl.ret
 
 
-def _diffeqdotjl_build_combined_event_f_callback(
-        interruptions: List[DependentInterruption],
-        # FIXME this type sig should just be tensor now? Also appears in _unflatten_state
+def diffeqdotjl_compile_event_fn_callback(
+        interruption: DependentInterruption,
         initial_state: StateAndOrParams[Tnsr],
         torch_params: StateAndOrParams[Tnsr]
-) -> Tuple[de.VectorContinuousCallback, Callable[[np.ndarray, np.ndarray, float, Any], None]]:
+) -> de.VectorContinuousCallback:
 
-    # TODO ideally we'd like to compile this function and reuse it.
-    #  - How to modelingtoolkitize (jit) this? As it's not a sciml problem.
-    #  - How and where to store the compiled function, especially as I believe that
-    #     the current torchdiffeq style implementation will modify the list of interruptions
-    #     that show up here — i.e. we'd either need to change the interface/implementation
-    #     approach or dynamically "turn off" certain interruptions.
-    #  Solution?: lazily jit compile the event_f of each interruption independently, and then
-    #   create a fresh CallbackSet on the julia side for every re-construction of the "combined_event_f"
-    def condition_(out, u, t, integrator):
+    flat_p = _flatten_state_ao_params(torch_params)
+    flat_u0 = _flatten_state_ao_params(initial_state)
+
+    # Define the inner bit of the condition function that we're going to compile.
+    def inner_condition(u, t, p):
 
         state = _unflatten_state(
             flat_state_ao_params=JuliaThingWrapper.wrap_array(u),
             shaped_state_ao_params=initial_state
         )
 
-        # Parameters are accessible via the integrator. Event functions that depend on
-        #  parameters that user wants gradients wrt will need to show up here.
-        # TODO need to test that gradients do indeed work in this context when pulling parameters
-        #  from the integrator.
-        # TODO for compilation, which we're not supporting right now for event_fns, would need to
-        #  confirm that things could be compiled wrt to the integrator? I wouldn't think that symbolics
-        #  would get pushed through the integrator...
         params = _unflatten_state(
-            flat_state_ao_params=JuliaThingWrapper.wrap_array(integrator.p),
+            flat_state_ao_params=JuliaThingWrapper.wrap_array(p),
             shaped_state_ao_params=torch_params
         )
 
-        # TODO assymetry here — unlike the dynamics function, the event_fn takes time as a separate thing,
-        #  outside of the state mapping.
         state_ao_params = StateAndOrParams(**state, **params)
         wrapped_t = JuliaThingWrapper(t)
 
-        arr = np.concatenate(tuple(
-            interruption.event_fn(wrapped_t, state_ao_params).ravel()
-            for interruption in interruptions
-        ))
+        arr = interruption.event_fn(wrapped_t, state_ao_params).ravel()
         arr = arr.view(_JuliaThingWrapperArray)
 
+        out = np.empty_like(arr, dtype=object)
         JuliaThingWrapper.unwrap_array(arr, out)
 
-    def affect_b(*args):
-        integrator = args[0]
-        return de.terminate_b(integrator)
+        return out
 
-    # FIXME len(interruptions) is wrong — that assumes that each event_fn returns only a scalar.
-    return de.VectorContinuousCallback(condition_, affect_b, len(interruptions)), condition_
+    # Define symbolic inputs to inner_condition.
+    jl.seval(f"@variables u[1:{len(flat_u0)}, t, p[1:{len(flat_p)}]")
+
+    # Symbolically evaluate the inner_condition for the resultant expression.
+    jl.res = inner_condition(jl.u, jl.t, jl.p)
+
+    # Build the inner_condition function.
+    built_expr = jl.seval("build_function(res, u, t, p)")
+
+    # Evaluate it to turn it into a julia function.
+    jl.inner_condition = jl.eval(built_expr)
+
+    # inner_condition can now be called from a condition function with signature
+    #  expected by the callbacks.
+    str_jl_condition_ = """
+    function condition(out, u, t, integrator)
+        out[:] = inner_condition(u, t, integrator.p)
+    end
+    """
+    condition_ = jl.seval(str_jl_condition_)
+
+    # The "affect" function is only called a single time, so we can just use python. This
+    #  function also tracks which interruption triggered the termination.
+    # TODO HACK maybe 18wfghjfs541 using a global "last interruption" is meh, but using the affect function
+    #  to directly track which interruption was responsible for termination is a lot cleaner than running
+    #  the event_fns after the fact to figure out which one was responsible.
+    def affect_b(integrator, *_):
+        _last_triggered_interruption_ptr[0] = interruption
+        integrator.terminate_b()
+
+    # Return the callback involving only juila functions.
+    return de.VectorContinuousCallback(condition_, affect_b, len(jl.res))
+
+
+# TODO HACK maybe 18wfghjfs541
+_last_triggered_interruption_ptr = [None]  # type: List[DependentInterruption]
+
+
+def _diffeqdotjl_build_combined_event_f_callback(
+        interruptions: List[DependentInterruption],
+        initial_state: StateAndOrParams[Tnsr],
+        torch_params: StateAndOrParams[Tnsr],
+) -> de.CallbackSet:
+
+    cbs = []
+
+    for i, interruption in enumerate(interruptions):
+        vc_cb = _lazily_compile_event_fn_callback(
+            interruption,
+            initial_state,
+            torch_params
+        )  # type: de.VectorContinuousCallback
+
+        cbs.append(vc_cb)
+
+    return de.CallbackSet(cbs)

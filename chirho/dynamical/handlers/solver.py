@@ -91,11 +91,11 @@ class DiffEqDotJL(Solver[torch.Tensor]):
         self._lazily_compiled_solver = None
         self._dynamics_that_solver_was_compiled_with = None
 
-    # def __enter__(self):
-    #     super().__enter__()
-    #     # Clear on entrance so re-use of an instantiated solver handler
-    #     #  doesn't result in unexpected behavior.
-    #     self._lazily_compiled_solver = None
+        # Opting to store this here instead of in interruptions, and instead
+        #  of e.g. tacking on an attribute to the interruption instances that
+        #  isn't listed in their definition.
+        self._lazily_compiled_event_fn_callbacks = dict()
+        self._event_fn_that_callbacks_were_compiled_with = dict()
 
     def _pyro_simulate_point(self, msg) -> None:
         from chirho.dynamical.internals.backends.diffeqdotjl import (
@@ -166,4 +166,28 @@ class DiffEqDotJL(Solver[torch.Tensor]):
             )
 
         msg["value"] = self._lazily_compiled_solver
+        msg["done"] = True
+
+    # TODO g179du91
+    def _pyro__lazily_compile_event_fn_callback(self, msg) -> None:
+        interruption, initial_state, torch_params = msg["args"]
+
+        if interruption not in self._lazily_compiled_event_fn_callbacks:
+            from chirho.dynamical.internals.backends.diffeqdotjl import (
+                diffeqdotjl_compile_event_fn_callback,
+            )
+
+            compiled_event_fn_callback = diffeqdotjl_compile_event_fn_callback(
+                interruption, initial_state, torch_params
+            )
+
+            self._event_fn_that_callbacks_were_compiled_with[interruption] = interruption.event_fn
+            self._lazily_compiled_event_fn_callbacks[interruption] = compiled_event_fn_callback
+        elif interruption.event_fn is not self._event_fn_that_callbacks_were_compiled_with[interruption]:
+            raise ValueError(
+                "Lazily compiling an event fn callback for a different event fn than the one that was previously "
+                "compiled."
+            )
+
+        msg["value"] = self._lazily_compiled_event_fn_callbacks[interruption]
         msg["done"] = True
