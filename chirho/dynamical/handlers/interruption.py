@@ -34,7 +34,7 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
         super().__init__()
 
     def event_fn(self, time: R, state: State[T]) -> R:
-        return cond(0.0, self.time - time, case=time < self.time)
+        return cond(self.time - time, 0.0, case=time >= self.time)
 
 
 class DynamicInterruption(Generic[T], DependentInterruption[T]):

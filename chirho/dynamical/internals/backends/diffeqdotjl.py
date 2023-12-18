@@ -1,3 +1,4 @@
+import functools
 from copy import copy
 from functools import singledispatch
 from typing import Callable, List, Optional, Tuple, Union, Any
@@ -618,6 +619,7 @@ def diffeqdotjl_simulate_to_interruption(
     from chirho.dynamical.handlers.interruption import StaticInterruption
 
     if len(interruptions) == 0:
+    # if True:
         # FIXME as of now, the solver parent class ALWAYS puts a staticinterruption at the end time, which
         #  is something that torchdiffeq needs, but is maybe already handled by the `if not interruptions`
         #  clause in torchdiffeq_simulate_to_interruption that does the same thing. I.e. this is very likely
@@ -708,7 +710,7 @@ def _cond_juliathing(
         case: Union[JuliaThingWrapper, _JuliaThingWrapperArray],
         # event_dim: int = 0,
         **kwargs
-) -> _JuliaThingWrapperArray:
+) -> Union[JuliaThingWrapper, _JuliaThingWrapperArray]:
 
     # TODO if .item fails throw an informative error saying this doesn't currently support non-scalar stuff.
     fst, snd, case = tuple(arg.item() if isinstance(arg, _JuliaThingWrapperArray) else arg for arg in (fst, snd, case))
@@ -726,7 +728,27 @@ def _cond_juliathing(
 
     jl.seval('ret = ifelse(case, fst, snd)')  # ifelse evals both branches, useful e.g. for symbolic compilation.
 
-    return jl.ret
+    ret = jl.ret
+    # TODO move this machinery to a single dispatch static method on JuliaThingWrapper.
+    if isinstance(ret, juliacall.RealValue):
+        return JuliaThingWrapper(ret)
+    elif isinstance(ret, juliacall.ArrayValue):
+        return JuliaThingWrapper.wrap_array(ret)
+
+
+@functools.singledispatch
+def numel(x):
+    raise NotImplementedError(f"numel not implemented for type {type(x)}.")
+
+
+@numel.register
+def _(x: np.ndarray):
+    return x.size
+
+
+@numel.register
+def _(x: Tnsr):
+    return x.numel()
 
 
 def diffeqdotjl_compile_event_fn_callback(
@@ -735,11 +757,17 @@ def diffeqdotjl_compile_event_fn_callback(
         torch_params: StateAndOrParams[Tnsr]
 ) -> de.VectorContinuousCallback:
 
+    # Execute the event_fn once to get the shape of the output.
+    ret1 = interruption.event_fn(0.0, StateAndOrParams(**{
+        k: v.detach().numpy() if isinstance(v, Tnsr) else v for k, v in {**initial_state, **torch_params}.items()
+    }))
+    numel_out = numel(ret1)
+
     flat_p = _flatten_state_ao_params(torch_params)
     flat_u0 = _flatten_state_ao_params(initial_state)
 
     # Define the inner bit of the condition function that we're going to compile.
-    def inner_condition(u, t, p):
+    def inner_condition_(out, u, t, p):
 
         state = _unflatten_state(
             flat_state_ao_params=JuliaThingWrapper.wrap_array(u),
@@ -754,34 +782,44 @@ def diffeqdotjl_compile_event_fn_callback(
         state_ao_params = StateAndOrParams(**state, **params)
         wrapped_t = JuliaThingWrapper(t)
 
-        arr = interruption.event_fn(wrapped_t, state_ao_params).ravel()
-        arr = arr.view(_JuliaThingWrapperArray)
+        ret = interruption.event_fn(wrapped_t, state_ao_params)
+        # TODO implement __array__ on both JuilaThingWrapper and _JuliaThingWrapper array and
+        #  return a scalar np.array(ret) for JuliaThingWrapper and arr.view(_JuliaThingWrapperArray) for
+        #  _JuliaThingWrapperArray.
+        if isinstance(ret, JuliaThingWrapper):
+            ret = np.array(ret)
+        ret = ret.view(_JuliaThingWrapperArray)
 
-        out = np.empty_like(arr, dtype=object)
-        JuliaThingWrapper.unwrap_array(arr, out)
+        JuliaThingWrapper.unwrap_array(ret.ravel(), out)
 
-        return out
+    # Define symbolic inputs to inner_condition_. The JuliaThingWrapper machinery doesn't support
+    #  symbolic arrays though, so these need to be non-symbolic vectors of symbols. This is achieved
+    #  via "scalarize".
+    jl.seval(f"@variables uvec[1:{len(flat_u0)}], t, pvec[1:{len(flat_p)}]")
+    jl.seval(f"u = Symbolics.scalarize(uvec)")
+    jl.seval(f"p = Symbolics.scalarize(pvec)")
+    # Make just a generic empty output vector of type Num with length numel_out.
+    jl.seval(f"out = [Num(0) for _ in 1:{numel_out}]")
 
-    # Define symbolic inputs to inner_condition.
-    jl.seval(f"@variables u[1:{len(flat_u0)}, t, p[1:{len(flat_p)}]")
+    # Symbolically evaluate the inner_condition_ for the resultant expression.
+    inner_condition_(jl.out, jl.u, jl.t, jl.p)
 
-    # Symbolically evaluate the inner_condition for the resultant expression.
-    jl.res = inner_condition(jl.u, jl.t, jl.p)
-
-    # Build the inner_condition function.
-    built_expr = jl.seval("build_function(res, u, t, p)")
+    # Build the inner_condition_ function.
+    built_expr = jl.seval("build_function(out, u, t, p)")
 
     # Evaluate it to turn it into a julia function.
-    jl.inner_condition = jl.eval(built_expr)
+    # This builds both an in place and regular function, but we only need the in place one.
+    # TODO check if args to build_function can make it only build the in-place one?
+    assert len(built_expr) == 2
+    jl.inner_condition_ = jl.eval(built_expr[-1])
 
     # inner_condition can now be called from a condition function with signature
     #  expected by the callbacks.
-    str_jl_condition_ = """
-    function condition(out, u, t, integrator)
-        out[:] = inner_condition(u, t, integrator.p)
+    jl.seval("""
+    function condition_(out, u, t, integrator)
+        inner_condition_(out, u, t, integrator.p)
     end
-    """
-    condition_ = jl.seval(str_jl_condition_)
+    """)
 
     # The "affect" function is only called a single time, so we can just use python. This
     #  function also tracks which interruption triggered the termination.
@@ -793,7 +831,7 @@ def diffeqdotjl_compile_event_fn_callback(
         integrator.terminate_b()
 
     # Return the callback involving only juila functions.
-    return de.VectorContinuousCallback(condition_, affect_b, len(jl.res))
+    return de.VectorContinuousCallback(jl.condition_, affect_b, numel_out)
 
 
 # TODO HACK maybe 18wfghjfs541
