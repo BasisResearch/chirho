@@ -52,8 +52,8 @@ def _flat_conjugate_gradient_solve(
     else:
         cg_iters = min(cg_iters, b.shape[1])
 
-    def _batched_dot(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        return (a * b).sum(axis=-1)
+    def _batched_dot(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        return (x1 * x2).sum(axis=-1)  # type: ignore
 
     def _batched_product(a: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
         return a.unsqueeze(0).t() * B
