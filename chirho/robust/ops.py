@@ -20,7 +20,7 @@ def influence_fn(
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
     **linearize_kwargs
-) -> Callable[Concatenate[Point[T], P], S]:
+) -> Callable[Concatenate[Point[T], bool, P], S]:
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
@@ -53,6 +53,7 @@ def influence_fn(
                 lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
             )[1],
             in_dims=0,
+            randomness="different",
         )(param_eif)
 
     return _fn
