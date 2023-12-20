@@ -20,7 +20,7 @@ def influence_fn(
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
     **linearize_kwargs
-) -> Callable[Concatenate[Point[T], P], S]:
+) -> Callable[Concatenate[Point[T], bool, P], S]:
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
@@ -39,10 +39,21 @@ def influence_fn(
     target_params, func_target = make_functional_call(target)
 
     @functools.wraps(target)
-    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
-        param_eif = linearized(point, *args, **kwargs)
-        return torch.func.jvp(
-            lambda p: func_target(p, *args, **kwargs), (target_params,), (param_eif,)
-        )[1]
+    def _fn(
+        points: Point[T],
+        pointwise_influence: bool = False,
+        *args: P.args,
+        **kwargs: P.kwargs
+    ) -> S:
+        param_eif = linearized(
+            points, pointwise_influence=pointwise_influence, *args, **kwargs
+        )
+        return torch.vmap(
+            lambda d: torch.func.jvp(
+                lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
+            )[1],
+            in_dims=0,
+            randomness="different",
+        )(param_eif)
 
     return _fn

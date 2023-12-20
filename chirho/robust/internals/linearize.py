@@ -152,16 +152,35 @@ def linearize(
     )
 
     @functools.wraps(score_fn)
-    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
+    def _fn(
+        points: Point[T],
+        pointwise_influence: bool = True,
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = func_predictive(predictive_params, *args, **kwargs)
-            data = {k: data[k] for k in point.keys()}
+            data = {k: data[k] for k in points.keys()}
         fvp = make_empirical_fisher_vp(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
-
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
-        point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(pinned_fvp, point_score)
+        batched_func_log_prob = torch.vmap(
+            lambda p, data: func_log_prob(p, data, *args, **kwargs),
+            in_dims=(None, 0),
+            randomness="different",
+        )
+        if log_prob_params_numel > points[next(iter(points))].shape[0]:
+            score_fn = torch.func.jacrev(batched_func_log_prob)
+        else:
+            score_fn = torch.func.jacfwd(batched_func_log_prob, randomness="different")
+        point_scores: ParamDict = score_fn(log_prob_params, points)
+        if not pointwise_influence:
+            point_scores = {
+                k: v.mean(dim=0).unsqueeze(0) for k, v in point_scores.items()
+            }
+        return torch.func.vmap(
+            lambda v: cg_solver(pinned_fvp, v), randomness="different"
+        )(point_scores)
 
     return _fn

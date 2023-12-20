@@ -120,8 +120,7 @@ def test_nmc_predictive_influence_vmap_smoke(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
-    batch_predictive_eif = torch.vmap(predictive_eif, randomness="different")
-    test_data_eif: Mapping[str, torch.Tensor] = batch_predictive_eif(test_data)
+    test_data_eif: Mapping[str, torch.Tensor] = predictive_eif(test_data)
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
