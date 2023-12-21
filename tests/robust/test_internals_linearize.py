@@ -348,9 +348,10 @@ def test_linearize_against_analytic_ate():
         num_samples_outer=10000,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
+        pointwise_influence=True,
     )
 
-    test_data_eif = param_eif(D_test, pointwise_influence=True)
+    test_data_eif = param_eif(D_test)
     median_abs_error = torch.abs(
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()

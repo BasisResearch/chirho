@@ -122,6 +122,7 @@ def linearize(
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
+    pointwise_influence: bool = True,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
@@ -140,8 +141,6 @@ def linearize(
         model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
-    score_fn = torch.func.grad(func_log_prob)
-
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
     if cg_iters is None:
         cg_iters = log_prob_params_numel
@@ -151,10 +150,8 @@ def linearize(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
 
-    @functools.wraps(score_fn)
     def _fn(
         points: Point[T],
-        pointwise_influence: bool = True,
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:
