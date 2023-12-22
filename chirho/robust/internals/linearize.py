@@ -122,6 +122,7 @@ def linearize(
     max_plate_nesting: Optional[int] = None,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-10,
+    pointwise_influence: bool = True,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     assert isinstance(model, torch.nn.Module)
     assert isinstance(guide, torch.nn.Module)
@@ -140,8 +141,6 @@ def linearize(
         model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
-    score_fn = torch.func.grad(func_log_prob)
-
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
     if cg_iters is None:
         cg_iters = log_prob_params_numel
@@ -151,17 +150,37 @@ def linearize(
         conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
     )
 
-    @functools.wraps(score_fn)
-    def _fn(point: Point[T], *args: P.args, **kwargs: P.kwargs) -> ParamDict:
+    def _fn(
+        points: Point[T],
+        *args: P.args,
+        **kwargs: P.kwargs,
+    ) -> ParamDict:
         with torch.no_grad():
             data: Point[T] = func_predictive(predictive_params, *args, **kwargs)
-            data = {k: data[k] for k in point.keys()}
+            data = {k: data[k] for k in points.keys()}
         fvp = make_empirical_fisher_vp(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
-
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
-        point_score: ParamDict = score_fn(log_prob_params, point, *args, **kwargs)
-        return cg_solver(pinned_fvp, point_score)
+        batched_func_log_prob = torch.vmap(
+            lambda p, data: func_log_prob(p, data, *args, **kwargs),
+            in_dims=(None, 0),
+            randomness="different",
+        )
+
+        def bound_batched_func_log_prob(p: ParamDict) -> torch.Tensor:
+            return batched_func_log_prob(p, points)
+
+        if pointwise_influence:
+            score_fn = torch.func.jacrev(bound_batched_func_log_prob)
+            point_scores = score_fn(log_prob_params)
+        else:
+            score_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
+            N_pts = points[next(iter(points))].shape[0]  # type: ignore
+            point_scores = score_fn(1 / N_pts * torch.ones(N_pts))[0]
+            point_scores = {k: v.unsqueeze(0) for k, v in point_scores.items()}
+        return torch.func.vmap(
+            lambda v: cg_solver(pinned_fvp, v), randomness="different"
+        )(point_scores)
 
     return _fn
