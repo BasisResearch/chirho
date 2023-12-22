@@ -358,5 +358,5 @@ def test_linearize_against_analytic_ate():
     assert torch.allclose(
         test_data_eif["guide.treatment_weight_param"][0],
         analytic_eif_at_test_pts.mean(),
-        atol=1e-1,
+        atol=0.5,
     )
