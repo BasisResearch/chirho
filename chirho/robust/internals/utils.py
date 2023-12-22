@@ -23,11 +23,13 @@ def make_flatten_unflatten(
 
 @make_flatten_unflatten.register(torch.Tensor)
 def _make_flatten_unflatten_tensor(v: torch.Tensor):
+    batch_size = v.shape[0]
+
     def flatten(v: torch.Tensor) -> torch.Tensor:
         r"""
         Flatten a tensor into a single vector.
         """
-        return v.flatten()
+        return v.reshape((batch_size, -1))
 
     def unflatten(x: torch.Tensor) -> torch.Tensor:
         r"""
@@ -40,11 +42,13 @@ def _make_flatten_unflatten_tensor(v: torch.Tensor):
 
 @make_flatten_unflatten.register(dict)
 def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
+    batch_size = next(iter(d.values())).shape[0]
+
     def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
         r"""
         Flatten a dictionary of tensors into a single vector.
         """
-        return torch.cat([v.flatten() for k, v in d.items()])
+        return torch.hstack([v.reshape((batch_size, -1)) for k, v in d.items()])
 
     def unflatten(x: torch.Tensor) -> Dict[str, torch.Tensor]:
         r"""
@@ -56,7 +60,12 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
                 [
                     v_flat.reshape(v.shape)
                     for v, v_flat in zip(
-                        d.values(), torch.split(x, [v.numel() for k, v in d.items()])
+                        d.values(),
+                        torch.split(
+                            x,
+                            [int(v.numel() / batch_size) for k, v in d.items()],
+                            dim=1,
+                        ),
                     )
                 ],
             )

@@ -25,7 +25,7 @@ def _flat_conjugate_gradient_solve(
     b: torch.Tensor,
     *,
     cg_iters: Optional[int] = None,
-    residual_tol: float = 1e-10,
+    residual_tol: float = 1e-3,
 ) -> torch.Tensor:
     r"""Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
 
@@ -42,31 +42,41 @@ def _flat_conjugate_gradient_solve(
     Notes: This code is adapted from
       https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
     """
+    assert len(b.shape), "b must be a 2D matrix"
+
     if cg_iters is None:
-        cg_iters = b.numel()
+        cg_iters = b.shape[1]
+    else:
+        cg_iters = min(cg_iters, b.shape[1])
+
+    def _batched_dot(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
+        return (x1 * x2).sum(axis=-1)  # type: ignore
+
+    def _batched_product(a: torch.Tensor, B: torch.Tensor) -> torch.Tensor:
+        return a.unsqueeze(0).t() * B
 
     p = b.clone()
     r = b.clone()
     x = torch.zeros_like(b)
     z = f_Ax(p)
-    rdotr = torch.dot(r, r)
-    v = rdotr / torch.dot(p, z)
+    rdotr = _batched_dot(r, r)
+    v = rdotr / _batched_dot(p, z)
     newrdotr = rdotr
     mu = newrdotr / rdotr
-
     zeros_xr = torch.zeros_like(x)
-
     for _ in range(cg_iters):
         not_converged = rdotr > residual_tol
-        z = torch.where(not_converged, f_Ax(p), z)
-        v = torch.where(not_converged, rdotr / torch.dot(p, z), v)
-        x += torch.where(not_converged, v * p, zeros_xr)
-        r -= torch.where(not_converged, v * z, zeros_xr)
-        newrdotr = torch.where(not_converged, torch.dot(r, r), newrdotr)
+        not_converged_broadcasted = not_converged.unsqueeze(0).t()
+        z = torch.where(not_converged_broadcasted, f_Ax(p), z)
+        v = torch.where(not_converged, rdotr / _batched_dot(p, z), v)
+        x += torch.where(not_converged_broadcasted, _batched_product(v, p), zeros_xr)
+        r -= torch.where(not_converged_broadcasted, _batched_product(v, z), zeros_xr)
+        newrdotr = torch.where(not_converged, _batched_dot(r, r), newrdotr)
         mu = torch.where(not_converged, newrdotr / rdotr, mu)
-        p = torch.where(not_converged, r + mu * p, p)
+        p = torch.where(not_converged_broadcasted, r + _batched_product(mu, p), p)
         rdotr = torch.where(not_converged, newrdotr, rdotr)
-
+        if torch.all(~not_converged):
+            return x
     return x
 
 
@@ -162,6 +172,9 @@ def linearize(
             func_log_prob, log_prob_params, data, *args, **kwargs
         )
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
+        pinned_fvp_batched = torch.func.vmap(
+            lambda v: pinned_fvp(v), randomness="different"
+        )
         batched_func_log_prob = torch.vmap(
             lambda p, data: func_log_prob(p, data, *args, **kwargs),
             in_dims=(None, 0),
@@ -179,8 +192,6 @@ def linearize(
             N_pts = points[next(iter(points))].shape[0]  # type: ignore
             point_scores = score_fn(1 / N_pts * torch.ones(N_pts))[0]
             point_scores = {k: v.unsqueeze(0) for k, v in point_scores.items()}
-        return torch.func.vmap(
-            lambda v: cg_solver(pinned_fvp, v), randomness="different"
-        )(point_scores)
+        return cg_solver(pinned_fvp_batched, point_scores)
 
     return _fn
