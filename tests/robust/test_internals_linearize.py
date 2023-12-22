@@ -36,22 +36,6 @@ T = TypeVar("T")
 
 @pytest.mark.parametrize("ndim", [1, 2, 3, 10])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
-def test_cg_solve(ndim: int, dtype: torch.dtype):
-    cg_iters = None
-    residual_tol = 1e-10
-    U = torch.rand(ndim, ndim, dtype=dtype)
-    A = torch.eye(ndim, dtype=dtype) + 0.1 * U.mm(U.t())
-    expected_x = torch.randn(ndim, dtype=dtype)
-    b = A @ expected_x
-
-    actual_x = conjugate_gradient_solve(
-        lambda v: A @ v, b, cg_iters=cg_iters, residual_tol=residual_tol
-    )
-    assert torch.sum((actual_x - expected_x) ** 2) < 1e-4
-
-
-@pytest.mark.parametrize("ndim", [1, 2, 3, 10])
-@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
 @pytest.mark.parametrize("num_particles", [1, 4])
 def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     cg_iters = None
@@ -63,14 +47,13 @@ def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     b = torch.einsum("ij,nj->ni", A, expected_x)
     assert b.shape == (num_particles, ndim)
 
-    batch_solve = torch.vmap(
-        functools.partial(
-            conjugate_gradient_solve,
-            lambda v: A @ v,
-            cg_iters=cg_iters,
-            residual_tol=residual_tol,
-        ),
+    batch_solve = functools.partial(
+        conjugate_gradient_solve,
+        lambda v: torch.einsum("ij,nj->ni", A, v),
+        cg_iters=cg_iters,
+        residual_tol=residual_tol,
     )
+
     actual_x = batch_solve(b)
 
     assert torch.all(torch.sum((actual_x - expected_x) ** 2, dim=1) < 1e-4)
