@@ -167,15 +167,18 @@ def linearize(
             in_dims=(None, 0),
             randomness="different",
         )
-        if log_prob_params_numel > points[next(iter(points))].shape[0]:
-            score_fn = torch.func.jacrev(batched_func_log_prob)
+
+        def bound_batched_func_log_prob(p: ParamDict) -> torch.Tensor:
+            return batched_func_log_prob(p, points)
+
+        if pointwise_influence:
+            score_fn = torch.func.jacrev(bound_batched_func_log_prob)
+            point_scores: ParamDict = score_fn(log_prob_params)
         else:
-            score_fn = torch.func.jacfwd(batched_func_log_prob, randomness="different")
-        point_scores: ParamDict = score_fn(log_prob_params, points)
-        if not pointwise_influence:
-            point_scores = {
-                k: v.mean(dim=0).unsqueeze(0) for k, v in point_scores.items()
-            }
+            score_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
+            N_pts = points[next(iter(points))].shape[0]  # type: ignore
+            point_scores: ParamDict = score_fn(1 / N_pts * torch.ones(N_pts))[0]
+            point_scores = {k: v.unsqueeze(0) for k, v in point_scores.items()}
         return torch.func.vmap(
             lambda v: cg_solver(pinned_fvp, v), randomness="different"
         )(point_scores)

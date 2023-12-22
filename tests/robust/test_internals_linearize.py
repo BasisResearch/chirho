@@ -360,3 +360,20 @@ def test_linearize_against_analytic_ate():
         assert median_abs_error / median_scale < 0.5
     else:
         assert median_abs_error < 0.5
+
+    # Test w/ pointwise_influence=False
+    param_eif = linearize(
+        model,
+        mle_guide,
+        num_samples_outer=10000,
+        num_samples_inner=1,
+        cg_iters=4,  # dimension of params = 4
+        pointwise_influence=False,
+    )
+
+    test_data_eif = param_eif(D_test)
+    assert torch.allclose(
+        test_data_eif["guide.treatment_weight_param"][0],
+        analytic_eif_at_test_pts.mean(),
+        atol=1e-1,
+    )
