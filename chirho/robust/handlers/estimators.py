@@ -1,4 +1,6 @@
-from typing import Any, Callable, Concatenate, Optional
+from typing import Any, Callable, Optional
+
+from typing_extensions import Concatenate
 
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
