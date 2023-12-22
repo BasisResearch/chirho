@@ -173,11 +173,11 @@ def linearize(
 
         if pointwise_influence:
             score_fn = torch.func.jacrev(bound_batched_func_log_prob)
-            point_scores: ParamDict = score_fn(log_prob_params)
+            point_scores = score_fn(log_prob_params)
         else:
             score_fn = torch.func.vjp(bound_batched_func_log_prob, log_prob_params)[1]
             N_pts = points[next(iter(points))].shape[0]  # type: ignore
-            point_scores: ParamDict = score_fn(1 / N_pts * torch.ones(N_pts))[0]
+            point_scores = score_fn(1 / N_pts * torch.ones(N_pts))[0]
             point_scores = {k: v.unsqueeze(0) for k, v in point_scores.items()}
         return torch.func.vmap(
             lambda v: cg_solver(pinned_fvp, v), randomness="different"
