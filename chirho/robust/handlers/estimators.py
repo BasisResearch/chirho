@@ -11,6 +11,26 @@ def one_step_correction(
     functional: Optional[Functional[P, S]] = None,
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
+    """
+    Returns a function that computes the one-step correction for the
+    functional at a specified set of test points as discussed in
+    [1].
+
+    :param model: Python callable containing Pyro primitives.
+    :type model: Callable[P, Any]
+    :param guide: Python callable containing Pyro primitives.
+    :type guide: Callable[P, Any]
+    :param functional: model summary of interest, which is a function of the
+        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
+    :type functional: Optional[Functional[P, S]], optional
+    :return: function to compute the one-step correction
+    :rtype: Callable[Concatenate[Point[T], P], S]
+
+    **References**
+
+    [1] `Semiparametric doubly robust targeted double machine learning: a review`,
+    Edward H. Kennedy, 2022.
+    """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
     eif_fn = influence_fn(model, guide, functional, **influence_kwargs_one_step)

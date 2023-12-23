@@ -98,6 +98,30 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
+    r"""
+    Approximates the log predictive likelihood induced by ``model`` and ``guide``
+    using Monte Carlo sampling at an arbitrary point :math:`x`.
+
+    .. math::
+        \log \left(\sum_{n=1}^N p(x \mid \theta_n)\right),
+        \quad \theta_n \sim q(\theta \mid \phi),
+
+    where :math:`q(\theta \mid \phi)` is the guide and :math:`p(x \mid \theta_n)`
+    is the model conditioned on the latents from the guide.
+
+    :param model: Python callable containing Pyro primitives.
+    :type model: torch.nn.Module
+    :param guide: Python callable containing Pyro primitives.
+        Must only contain continuous latent variables.
+    :type guide: torch.nn.Module
+    :param num_samples: Number of Monte Carlo draws
+        used to approximate predictive distribution, defaults to 1
+    :type num_samples: int, optional
+    :param max_plate_nesting: bound on max number of nested :func:`pyro.plate`
+        contexts. Defaults to ``None``.
+    :type max_plate_nesting: Optional[int], optional
+    """
+
     model: Callable[P, Any]
     guide: Callable[P, Any]
     num_samples: int

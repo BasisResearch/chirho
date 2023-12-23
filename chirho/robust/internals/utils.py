@@ -18,11 +18,23 @@ ParamDict = Mapping[str, torch.Tensor]
 def make_flatten_unflatten(
     v,
 ) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
+    """
+    Returns functions to flatten and unflatten an object. Used as a helper
+    in :func:`chirho.robust.internals.linearize.conjugate_gradient_solve`
+
+    :param v: some object
+    :raises NotImplementedError:
+    :return: flatten and unflatten functions
+    :rtype: Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]
+    """
     raise NotImplementedError
 
 
 @make_flatten_unflatten.register(torch.Tensor)
 def _make_flatten_unflatten_tensor(v: torch.Tensor):
+    """
+    Returns functions to flatten and unflatten a `torch.Tensor`.
+    """
     batch_size = v.shape[0]
 
     def flatten(v: torch.Tensor) -> torch.Tensor:
@@ -42,6 +54,9 @@ def _make_flatten_unflatten_tensor(v: torch.Tensor):
 
 @make_flatten_unflatten.register(dict)
 def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
+    """
+    Returns functions to flatten and unflatten a dictionary of `torch.Tensor`s.
+    """
     batch_size = next(iter(d.values())).shape[0]
 
     def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
@@ -77,6 +92,15 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
 def make_functional_call(
     mod: Callable[P, T]
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
+    """
+    Converts a PyTorch module into a functional call for use with
+    functions in :class:`torch.func`.
+
+    :param mod: PyTorch module
+    :type mod: Callable[P, T]
+    :return: parameter dictionary and functional call
+    :rtype: Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]
+    """
     assert isinstance(mod, torch.nn.Module)
     param_dict: ParamDict = dict(mod.named_parameters())
 
@@ -94,6 +118,16 @@ def make_functional_call(
 def guess_max_plate_nesting(
     model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs
 ) -> int:
+    """
+    Guesses the maximum plate nesting level by running `pyro.infer.Trace_ELBO`
+
+    :param model: Python callable containing Pyro primitives.
+    :type model: Callable[P, Any]
+    :param guide: Python callable containing Pyro primitives.
+    :type guide: Callable[P, Any]
+    :return: maximum plate nesting level
+    :rtype: int
+    """
     elbo = pyro.infer.Trace_ELBO()
     elbo._guess_max_plate_nesting(model, guide, args, kwargs)
     return elbo.max_plate_nesting
@@ -101,6 +135,9 @@ def guess_max_plate_nesting(
 
 @contextlib.contextmanager
 def reset_rng_state(rng_state: T):
+    """
+    Helper to temporarily reset the Pyro RNG state.
+    """
     try:
         prev_rng_state: T = pyro.util.get_rng_state()
         yield pyro.util.set_rng_state(rng_state)
