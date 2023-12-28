@@ -1,15 +1,18 @@
 import functools
-from typing import Callable, Iterable, Optional, Tuple, TypeVar
+from typing import Any, Callable, Iterable, Optional, Tuple, TypeVar
 
 import pyro
+import pyro.distributions as dist
+import pyro.distributions.constraints as constraints
 import torch
+from torch.distributions import biject_to
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, cond_n, gather
 from chirho.interventional.ops import Intervention, intervene
 
 S = TypeVar("S")
-T = TypeVar("T")
+T = TypeVar("T", bound=Any)
 
 
 @pyro.poutine.runtime.effectful(type="preempt")
@@ -42,6 +45,39 @@ def preempt(
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
     return cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))
+
+
+@functools.singledispatch
+def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
+    if isinstance(support, constraints.interval):
+        default_scale = 10 * abs(support.upper_bound - support.lower_bound)
+    else:
+        default_scale = 0.1
+
+    if support is constraints.boolean and hasattr(v1, "dtype") and hasattr(v2, "dtype"):
+        if v1.dtype != v2.dtype:
+            raise TypeError("Boolean tensors have to be of the same dtype.")
+
+        eps = kwargs.get("eps", -1e8)
+        event_dim = kwargs.get("event_dim", 0)
+        neq: torch.Tensor = v1 != v2
+
+        for _ in range(event_dim):
+            neq = torch.all(neq, dim=-1, keepdim=False)
+
+        return cond(eps, 0.0, neq, event_dim=event_dim)
+
+    if support is constraints.real:
+        return dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(v1 - v2)
+
+    else:
+        tfm = biject_to(support).inv
+        diff = torch.abs(v1 - v2)
+        diff_unconstrained = tfm(diff)
+
+        return dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(
+            diff_unconstrained
+        )
 
 
 def consequent_differs(
