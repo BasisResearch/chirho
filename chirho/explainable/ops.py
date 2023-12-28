@@ -79,7 +79,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
         return cond(eps, 0.0, eq, event_dim=event_dim)
 
     if support is constraints.real:
-        return dist.Normal(0, kwargs.get("scale", kwargs.get("scale", 1.0))).log_prob(
+        return dist.Normal(0, kwargs.get("scale", kwargs.get("scale", 0.1))).log_prob(
             v1 - v2
         )
 
@@ -92,7 +92,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
             diff = torch.abs(v1 - v2)
             diff_transformed = diff / interval_range
         else:
-            default_scale = kwargs.get("scale", 1.0)
+            default_scale = kwargs.get("scale", 0.1)
             diff = torch.abs(v1 - v2)
             diff_transformed = tfm(diff)
 
