@@ -2,17 +2,14 @@ import functools
 from typing import Any, Callable, Iterable, Optional, Tuple, TypeVar
 
 import pyro
-
-# import pyro.distributions as dist
-# import pyro.distributions.constraints as constraints
+import pyro.distributions as dist
+import pyro.distributions.constraints as constraints
 import torch
+from torch.distributions import biject_to
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.indexed.ops import IndexSet, cond, cond_n, gather
 from chirho.interventional.ops import Intervention, intervene
-
-# from torch.distributions import biject_to
-
 
 S = TypeVar("S")
 T = TypeVar("T", bound=Any)
@@ -48,6 +45,58 @@ def preempt(
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
     return cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))
+
+
+@functools.singledispatch
+def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
+    """
+    Computes soft equality between two values `v1` and `v2` given a distribution constraint `support`.
+    Returns a negative value if there is a difference (the larger the difference, the lower the value)
+    and tends to `Norm(0,1).log_prob(0)` as `v1` and `v2` tend to each other,
+    except for when the support is boolean, in which case it returns `0.0` if the values are equal
+    and a large negative number (`eps`) otherwise.
+
+    :param support: distribution constraint (`real`/`boolean`/`positive`/`interval`).
+    :params v1, v2: the values to be compared.
+    :param kwargs: Additional keywords arguments:
+        - for boolean, the function expects `eps` to set a large negative value for.
+        - For interval and real constraints, `scale` adjusts the softness of the inequality.
+    :return: A tensor of log probabilities capturing the soft equality between `v1` and `v2`.
+    :raises TypeError: If boolean tensors have different data types.
+    """
+
+    if support is constraints.boolean and hasattr(v1, "dtype") and hasattr(v2, "dtype"):
+        if v1.dtype != v2.dtype:
+            raise TypeError("Boolean tensors have to be of the same dtype.")
+
+        eps = kwargs.get("eps", -1e8)
+        event_dim = kwargs.get("event_dim", 0)
+        eq: torch.Tensor = v1 == v2
+
+        for _ in range(event_dim):
+            eq = torch.all(eq, dim=-1, keepdim=False)
+
+        return cond(eps, 0.0, eq, event_dim=event_dim)
+
+    if support is constraints.real:
+        return dist.Normal(0, kwargs.get("scale", kwargs.get("scale", 1.0))).log_prob(
+            v1 - v2
+        )
+
+    else:
+        tfm = biject_to(support).inv
+
+        if isinstance(support, constraints.interval):
+            default_scale = 1e-3
+            interval_range = abs(support.upper_bound - support.lower_bound)
+            diff = torch.abs(v1 - v2)
+            diff_transformed = diff / interval_range
+        else:
+            default_scale = kwargs.get("scale", 1.0)
+            diff = torch.abs(v1 - v2)
+            diff_transformed = tfm(diff)
+
+    return dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(diff_transformed)
 
 
 def consequent_differs(
