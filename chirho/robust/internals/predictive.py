@@ -240,7 +240,7 @@ def get_importance_traces(
                 guide_trace.pack_tensors()
                 model_trace.pack_tensors(guide_trace.plate_to_symbol)
             return model_trace, guide_trace
-        else:
+        else:  # use the prior as a guide, but don't run model twice
             model_trace, _ = pyro.infer.enum.get_importance_trace(
                 "flat", max_plate_nesting, model, lambda *_, **__: None, args, kwargs
             )
