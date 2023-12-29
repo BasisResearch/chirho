@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import math
 import warnings
 from typing import (
@@ -7,7 +8,6 @@ from typing import (
     Container,
     Dict,
     Generic,
-    List,
     Mapping,
     Optional,
     Tuple,
@@ -16,9 +16,14 @@ from typing import (
 
 import pyro
 import torch
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
-from chirho.indexed.handlers import DependentMaskMessenger
+from chirho.indexed.handlers import (
+    DependentMaskMessenger,
+    IndexPlatesMessenger,
+    add_indices,
+)
+from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 from chirho.observational.handlers.condition import Observations, condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Point
@@ -95,50 +100,96 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
 
 
+@functools.singledispatch
+def unbind_leftmost_dim(v, name: str, size: int = 1, **kwargs):
+    raise NotImplementedError
+
+
+@unbind_leftmost_dim.register
+def _unbind_leftmost_dim_tensor(
+    v: torch.Tensor, name: str, size: int = 1, *, event_dim: int = 0
+) -> torch.Tensor:
+    size = max(size, v.shape[0])
+    v = v.expand((size,) + v.shape[1:])
+
+    if name not in get_index_plates():
+        add_indices(IndexSet(**{name: set(range(size))}))
+
+    new_dim: int = get_index_plates()[name].dim
+    orig_shape = v.shape
+    while new_dim - event_dim < -len(v.shape):
+        v = v[None]
+    if v.shape[0] == 1 and orig_shape[0] != 1:
+        v = torch.transpose(v, -len(orig_shape), new_dim - event_dim)
+    return v
+
+
+@unbind_leftmost_dim.register
+def _unbind_leftmost_dim_distribution(
+    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
+) -> pyro.distributions.Distribution:
+    size = max(size, v.batch_shape[0])
+    if v.batch_shape[0] != 1:
+        raise NotImplementedError("Cannot freely reshape distribution")
+
+    if name not in get_index_plates():
+        add_indices(IndexSet(**{name: set(range(size))}))
+
+    new_dim: int = get_index_plates()[name].dim
+    orig_shape = v.batch_shape
+
+    new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
+    return v.expand(new_shape)
+
+
 class BatchedObservations(Observations[torch.Tensor]):
     data: Dict[str, torch.Tensor]
     name: str
     size: int
-    dim: int
 
     def __init__(
         self,
         data: Mapping[str, torch.Tensor],
-        dim: int,
         *,
         name: str = "__particles_data",
     ):
-        self.dim = dim
-
         assert len(name) > 0
         self.name = name
-
         self.size = next(iter(data.values())).shape[0] if data else 1
-
         assert all(v.shape[0] == self.size for v in data.values())
         super().__init__({k: v for k, v in data.items()})
 
-        self._plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
+    def _pyro_sample(self, msg: dict) -> None:
+        if msg["name"] in self.data and not msg["infer"].get("_do_not_observe", False):
+            event_dim = len(msg["fn"].event_shape)
+            old_datum = self.data[msg["name"]]
+            try:
+                self.data[msg["name"]] = unbind_leftmost_dim(
+                    old_datum, self.name, size=self.size, event_dim=event_dim
+                )
+                return super()._pyro_sample(msg)
+            finally:
+                self.data[msg["name"]] = old_datum
+
+
+class BatchedLatents(pyro.poutine.messenger.Messenger):
+    name: str
+    num_particles: int
+
+    def __init__(self, num_particles: int, *, name: str = "__particles_mc"):
+        assert num_particles > 0
+        assert len(name) > 0
+        self.num_particles = num_particles
+        self.name = name
+        super().__init__()
 
     def _pyro_sample(self, msg: dict) -> None:
-        if msg["name"] not in self.data:
-            return super()._pyro_sample(msg)
-
-        old_datum, event_dim = self.data[msg["name"]], len(msg["fn"].event_shape)
-
-        try:
-            new_datum: torch.Tensor = torch.as_tensor(old_datum)
-            with self._plate:  # enter plate context here to ensure plate.dim is set
-                while self._plate.dim - event_dim < -len(new_datum.shape):
-                    new_datum = new_datum[None]
-                if new_datum.shape[0] == 1 and old_datum.shape[0] != 1:
-                    new_datum = torch.transpose(
-                        new_datum, -len(old_datum.shape), self._plate.dim - event_dim
-                    )
-                self.data[msg["name"]] = new_datum
-                return super()._pyro_sample(msg)
-        finally:
-            self.data[msg["name"]] = old_datum
+        if self.num_particles > 1 and self.name not in indices_of(msg["fn"]):
+            msg["fn"] = unbind_leftmost_dim(
+                msg["fn"].expand((1,) + msg["fn"].batch_shape),
+                self.name,
+                size=self.num_particles,
+            )
 
 
 class PredictiveModel(Generic[P, T], torch.nn.Module):
@@ -190,7 +241,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         super().__init__()
         self.model = model
         self.guide = guide
-        self._predictive_model = PredictiveModel(model, guide)
+        self._predictive_model: PredictiveModel[P, T] = PredictiveModel(model, guide)
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
 
@@ -287,13 +338,11 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
     def _batched_predictive_model(
         self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ):
-        predictive_model = PredictiveModel(self.model, self.guide)
-        with pyro.plate(
-            self.mc_plate_name, self.num_samples, dim=-self.max_plate_nesting - 2
-        ):
-            with BatchedObservations(
-                data, dim=-self.max_plate_nesting - 1, name=self.data_plate_name
-            ):
+        predictive_model: PredictiveModel[P, Any] = PredictiveModel(
+            self.model, self.guide
+        )
+        with BatchedLatents(self.num_samples, name=self.mc_plate_name):
+            with BatchedObservations(data, name=self.data_plate_name):
                 return predictive_model(*args, **kwargs)
 
     def forward(
@@ -305,12 +354,14 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
             max_plate_nesting=self.max_plate_nesting + 2,
             pack=True,
         )
-        model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
+        with IndexPlatesMessenger(first_available_dim=-self.max_plate_nesting - 1):
+            model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
+            plate_names = [
+                get_index_plates()[p].name
+                for p in [self.mc_plate_name, self.data_plate_name]
+            ]
 
-        wds = "".join(
-            model_trace.plate_to_symbol[p]
-            for p in [self.mc_plate_name, self.data_plate_name]
-        )
+        wds = "".join(model_trace.plate_to_symbol[p] for p in plate_names)
 
         log_weights = 0.0
         for site in model_trace.nodes.values():

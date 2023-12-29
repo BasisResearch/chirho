@@ -5,11 +5,19 @@ import pyro
 import pytest
 import torch
 
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.indexed.ops import indices_of
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
+from chirho.robust.internals.predictive import (
+    BatchedNMCLogPredictiveLikelihood,
+    BatchedObservations,
+    NMCLogPredictiveLikelihood,
+    PredictiveFunctional,
+    PredictiveModel,
+)
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -113,3 +121,38 @@ def test_nmc_likelihood_seeded(link_fn):
     # Check if fvp agrees across multiple calls of same `fvp` object
     assert torch.allclose(fvp(v)["guide.loc_a"], fvp(v)["guide.loc_a"])
     assert torch.allclose(fvp(v)["guide.loc_b"], fvp(v)["guide.loc_b"])
+
+
+def test_batched_observations():
+    max_plate_nesting = 1
+    plate_name = "__dummy_plate__"
+    model = SimpleModel()
+    guide = SimpleGuide()
+
+    model(), guide()  # initialize
+
+    predictive = pyro.infer.Predictive(model, num_samples=3, return_sites=["y"])
+
+    test_data = predictive()
+
+    with IndexPlatesMessenger(first_available_dim=-max_plate_nesting - 1):
+        with pyro.poutine.trace() as tr:
+            with BatchedObservations(test_data, name=plate_name):
+                model()
+
+        tr.trace.compute_log_prob()
+
+        for name, node in tr.trace.nodes.items():
+            if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(
+                node
+            ):
+                if name in test_data:
+                    assert plate_name in indices_of(node["log_prob"], event_dim=0)
+                    assert plate_name in indices_of(
+                        node["value"], event_dim=len(node["fn"].event_shape)
+                    )
+                else:
+                    assert plate_name not in indices_of(node["log_prob"], event_dim=0)
+                    assert plate_name not in indices_of(
+                        node["value"], event_dim=len(node["fn"].event_shape)
+                    )
