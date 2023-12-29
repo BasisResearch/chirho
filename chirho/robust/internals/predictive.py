@@ -171,18 +171,18 @@ class BatchedObservations(Observations[torch.Tensor]):
         if msg["name"] not in self.data:
             return
 
-        old_datum = torch.as_tensor(self.data[msg["name"]])
-        event_dim = len(msg["fn"].event_shape)
+        old_datum, event_dim = self.data[msg["name"]], len(msg["fn"].event_shape)
 
         try:
             if not msg["infer"].get("_do_not_observe", None):
-                new_datum: torch.Tensor = old_datum
+                new_datum: torch.Tensor = torch.as_tensor(old_datum)
                 with self.plate:  # enter plate context here to ensure plate.dim is set
                     while self.plate.dim - event_dim < -len(new_datum.shape):
                         new_datum = new_datum[None]
-                    new_datum = new_datum.transpose(
-                        -len(old_datum.shape), self.plate.dim - event_dim
-                    )
+                    if new_datum.shape[0] == 1:
+                        new_datum = torch.transpose(
+                            new_datum, -len(old_datum.shape), self.plate.dim - event_dim
+                        )
                     self.data[msg["name"]] = new_datum
                     return super()._pyro_sample(msg)
             else:
