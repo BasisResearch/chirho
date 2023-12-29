@@ -229,7 +229,6 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
 def get_importance_traces(
     model: Callable[P, Any],
     guide: Optional[Callable[P, Any]] = None,
-    max_plate_nesting: Optional[int] = None,
     pack: bool = True,
 ) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
     def _fn(
@@ -237,7 +236,7 @@ def get_importance_traces(
     ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
         if guide is not None:
             model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
-                "flat", max_plate_nesting, model, guide, args, kwargs
+                "flat", math.inf, model, guide, args, kwargs
             )
             if pack:
                 guide_trace.pack_tensors()
@@ -245,7 +244,7 @@ def get_importance_traces(
             return model_trace, guide_trace
         else:  # use the prior as a guide, but don't run model twice
             model_trace, _ = pyro.infer.enum.get_importance_trace(
-                "flat", max_plate_nesting, model, lambda *_, **__: None, args, kwargs
+                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
             )
             if pack:
                 model_trace.pack_tensors()
@@ -302,10 +301,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
         self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
         get_nmc_traces = get_importance_traces(
-            self._batched_predictive_model,
-            guide=None,
-            max_plate_nesting=self.max_plate_nesting + 2,
-            pack=True,
+            self._batched_predictive_model, pack=True
         )
         with IndexPlatesMessenger(first_available_dim=-self.max_plate_nesting - 1):
             model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
