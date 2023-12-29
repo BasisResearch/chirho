@@ -100,7 +100,6 @@ class BatchedObservations(Observations[torch.Tensor]):
     name: str
     size: int
     dim: int
-    plate: pyro.poutine.indep_messenger.IndepMessenger
 
     def __init__(
         self,
@@ -119,7 +118,7 @@ class BatchedObservations(Observations[torch.Tensor]):
         assert all(v.shape[0] == self.size for v in data.values())
         super().__init__({k: v for k, v in data.items()})
 
-        self.plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
+        self._plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
 
     def _pyro_sample(self, msg: dict) -> None:
         if msg["name"] not in self.data:
@@ -129,12 +128,12 @@ class BatchedObservations(Observations[torch.Tensor]):
 
         try:
             new_datum: torch.Tensor = torch.as_tensor(old_datum)
-            with self.plate:  # enter plate context here to ensure plate.dim is set
-                while self.plate.dim - event_dim < -len(new_datum.shape):
+            with self._plate:  # enter plate context here to ensure plate.dim is set
+                while self._plate.dim - event_dim < -len(new_datum.shape):
                     new_datum = new_datum[None]
                 if new_datum.shape[0] == 1 and old_datum.shape[0] != 1:
                     new_datum = torch.transpose(
-                        new_datum, -len(old_datum.shape), self.plate.dim - event_dim
+                        new_datum, -len(old_datum.shape), self._plate.dim - event_dim
                     )
                 self.data[msg["name"]] = new_datum
                 return super()._pyro_sample(msg)
@@ -269,8 +268,8 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
 
     def __init__(
         self,
-        model: Callable[P, Any],
-        guide: Callable[P, Any],
+        model: torch.nn.Module,
+        guide: torch.nn.Module,
         *,
         max_plate_nesting: int,
         num_samples: int = 1,
