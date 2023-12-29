@@ -1,14 +1,14 @@
 import contextlib
 import math
 import warnings
-from typing import Any, Callable, Container, Generic, Optional, TypeVar
+from typing import Any, Callable, Container, Dict, Generic, List, Optional, TypeVar
 
 import pyro
 import torch
-from typing_extensions import ParamSpec
+from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger
-from chirho.observational.handlers import condition
+from chirho.observational.handlers.condition import Observations, condition
 from chirho.robust.internals.utils import guess_max_plate_nesting
 from chirho.robust.ops import Point
 
@@ -143,3 +143,99 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+
+
+class BatchedObservations(Observations[torch.Tensor]):
+    data: Dict[str, torch.Tensor]
+    plate: pyro.poutine.indep_messenger.IndepMessenger
+
+    def _pyro_sample(self, msg: dict) -> None:
+        if msg["name"] not in self.data:
+            return
+
+        old_datum = torch.as_tensor(self.data[msg["name"]])
+        event_dim = len(msg["fn"].event_shape)
+
+        try:
+            if not msg["infer"].get("_do_not_observe", None):
+                new_datum: torch.Tensor = old_datum
+                while len(new_datum.shape) - event_dim < self.plate.dim:
+                    new_datum = new_datum[None]
+                new_datum = new_datum.transpose(-len(old_datum.shape), self.plate.dim - event_dim)
+                self.data[msg["name"]] = new_datum
+                with self.plate:
+                    return super()._pyro_sample(msg)
+            else:
+                return super()._pyro_sample(msg)
+        finally:
+            self.data[msg["name"]] = old_datum
+
+
+def BatchedNMCLogPredictiveLikelihood(
+    model: Callable[P, Any],
+    guide: Callable[P, Any],
+    *,
+    max_plate_nesting: int,
+    num_samples: int = 1,
+    avg_particles: bool = False,
+    data_plate_name: str = "__particles_data",
+    mc_plate_name: str = "__particles_mc",
+) -> Callable[Concatenate[Point[torch.Tensor], P], torch.Tensor]:
+
+    def _fn(data: Point[torch.Tensor], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
+
+        plate_names: List[str] = []
+
+        num_datapoints: int = next(iter(data.values())).shape[0]
+        if num_datapoints > 1:
+            data_plate = pyro.plate(data_plate_name, num_datapoints, dim=-max_plate_nesting - 2)
+            data_cond = BatchedObservations(data=data, plate=data_plate)
+            plate_names += [data_plate_name]
+        else:
+            data_cond = Observations(data=data)
+
+        if num_samples > 1:
+            particle_plate = pyro.plate(mc_plate_name, num_samples, dim=-max_plate_nesting - 1)
+            plate_names += [mc_plate_name]
+        else:
+            particle_plate = contextlib.nullcontext()
+
+        with particle_plate, data_cond:
+            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
+                "flat", max_plate_nesting, model, guide, args, kwargs
+            )
+
+        guide_trace.pack_tensors()
+        model_trace.pack_tensors(guide_trace.plate_to_symbol)
+
+        wds = "".join(guide_trace.plate_to_symbol[p] for p in plate_names)
+
+        log_weights = torch.as_tensor(0.0, device=next(iter(data.values())).device)
+        for site in model_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_weights += torch.einsum(
+                site["packed"]["log_prob"]._pyro_dims + "->" + wds,
+                [site["packed"]["log_prob"]],
+            )
+
+        for site in guide_trace.nodes.values():
+            if site["type"] != "sample":
+                continue
+            log_weights -= torch.einsum(
+                site["packed"]["log_prob"]._pyro_dims + "->" + wds,
+                [site["packed"]["log_prob"]],
+            )
+
+        if mc_plate_name not in plate_names:
+            log_weights = log_weights[None]
+
+        if data_plate_name not in plate_names:
+            log_weights = log_weights[..., None]
+
+        if avg_particles:
+            log_weights = torch.logsumexp(log_weights, dim=0) - math.log(num_samples)
+
+        return log_weights
+
+    return _fn
