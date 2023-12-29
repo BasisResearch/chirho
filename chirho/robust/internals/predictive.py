@@ -203,9 +203,9 @@ def BatchedNMCLogPredictiveLikelihood(
 ) -> Callable[Concatenate[Mapping[str, torch.Tensor], P], torch.Tensor]:
     # TODO factorize into composition of general helper functions:
     #   - construct predictive model from model and guide
+    #   - guess max_plate_nesting
     #   - batch observations with BatchedObservations
     #   - batch particles with pyro.plate
-    #   - (optional) guess max_plate_nesting
     #   - compute batched log weights over batch plate set
     #   - logsumexp over particle plate
 
