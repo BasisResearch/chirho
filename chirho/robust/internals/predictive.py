@@ -149,7 +149,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             masked_guide,
             *args,
             num_samples=self.num_samples,
-            max_plate_nesting=self.max_plate_nesting
+            max_plate_nesting=self.max_plate_nesting,
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
