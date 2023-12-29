@@ -95,6 +95,53 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
 
 
+class BatchedObservations(Observations[torch.Tensor]):
+    data: Dict[str, torch.Tensor]
+    name: str
+    size: int
+    dim: int
+    plate: pyro.poutine.indep_messenger.IndepMessenger
+
+    def __init__(
+        self,
+        data: Mapping[str, torch.Tensor],
+        dim: int,
+        *,
+        name: str = "__particles_data",
+    ):
+        self.dim = dim
+
+        assert len(name) > 0
+        self.name = name
+
+        self.size = next(iter(data.values())).shape[0] if data else 1
+
+        assert all(v.shape[0] == self.size for v in data.values())
+        super().__init__({k: v for k, v in data.items()})
+
+        self.plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
+
+    def _pyro_sample(self, msg: dict) -> None:
+        if msg["name"] not in self.data:
+            return super()._pyro_sample(msg)
+
+        old_datum, event_dim = self.data[msg["name"]], len(msg["fn"].event_shape)
+
+        try:
+            new_datum: torch.Tensor = torch.as_tensor(old_datum)
+            with self.plate:  # enter plate context here to ensure plate.dim is set
+                while self.plate.dim - event_dim < -len(new_datum.shape):
+                    new_datum = new_datum[None]
+                if new_datum.shape[0] == 1 and old_datum.shape[0] != 1:
+                    new_datum = torch.transpose(
+                        new_datum, -len(old_datum.shape), self.plate.dim - event_dim
+                    )
+                self.data[msg["name"]] = new_datum
+                return super()._pyro_sample(msg)
+        finally:
+            self.data[msg["name"]] = old_datum
+
+
 class PredictiveModel(Generic[P, T], torch.nn.Module):
     model: Callable[P, T]
     guide: Callable[P, Any]
@@ -174,53 +221,6 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             and not pyro.poutine.util.site_is_subsample(node)
             and node["infer"].get("_model_predictive_site", False)
         }
-
-
-class BatchedObservations(Observations[torch.Tensor]):
-    data: Dict[str, torch.Tensor]
-    name: str
-    size: int
-    dim: int
-    plate: pyro.poutine.indep_messenger.IndepMessenger
-
-    def __init__(
-        self,
-        data: Mapping[str, torch.Tensor],
-        dim: int,
-        *,
-        name: str = "__particles_data",
-    ):
-        self.dim = dim
-
-        assert len(name) > 0
-        self.name = name
-
-        self.size = next(iter(data.values())).shape[0] if data else 1
-
-        assert all(v.shape[0] == self.size for v in data.values())
-        super().__init__({k: v for k, v in data.items()})
-
-        self.plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
-
-    def _pyro_sample(self, msg: dict) -> None:
-        if msg["name"] not in self.data:
-            return super()._pyro_sample(msg)
-
-        old_datum, event_dim = self.data[msg["name"]], len(msg["fn"].event_shape)
-
-        try:
-            new_datum: torch.Tensor = torch.as_tensor(old_datum)
-            with self.plate:  # enter plate context here to ensure plate.dim is set
-                while self.plate.dim - event_dim < -len(new_datum.shape):
-                    new_datum = new_datum[None]
-                if new_datum.shape[0] == 1 and old_datum.shape[0] != 1:
-                    new_datum = torch.transpose(
-                        new_datum, -len(old_datum.shape), self.plate.dim - event_dim
-                    )
-                self.data[msg["name"]] = new_datum
-                return super()._pyro_sample(msg)
-        finally:
-            self.data[msg["name"]] = old_datum
 
 
 def get_importance_traces(
