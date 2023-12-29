@@ -10,6 +10,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Tuple,
     TypeVar,
 )
 
@@ -44,67 +45,6 @@ class _UnmaskNamedSites(DependentMaskMessenger):
         name: Optional[str] = None,
     ) -> torch.Tensor:
         return torch.tensor(name is None or name in self.names, device=device)
-
-
-class PredictiveFunctional(Generic[P, T], torch.nn.Module):
-    model: Callable[P, Any]
-    guide: Callable[P, Any]
-    num_samples: int
-    max_plate_nesting: Optional[int]
-
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        guide: torch.nn.Module,
-        *,
-        num_samples: int = 1,
-        max_plate_nesting: Optional[int] = None,
-    ):
-        super().__init__()
-        self.model = model
-        self.guide = guide
-        self.num_samples = num_samples
-        self.max_plate_nesting = max_plate_nesting
-
-    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
-        if self.max_plate_nesting is None:
-            self.max_plate_nesting = guess_max_plate_nesting(
-                self.model, self.guide, *args, **kwargs
-            )
-
-        particles_plate = (
-            contextlib.nullcontext()
-            if self.num_samples == 1
-            else pyro.plate(
-                "__predictive_particles",
-                self.num_samples,
-                dim=-self.max_plate_nesting - 1,
-            )
-        )
-
-        with pyro.poutine.trace() as guide_tr, particles_plate:
-            self.guide(*args, **kwargs)
-
-        block_guide_sample_sites = pyro.poutine.block(
-            hide=[
-                name
-                for name, node in guide_tr.trace.nodes.items()
-                if node["type"] == "sample"
-                and not pyro.poutine.util.site_is_subsample(node)
-            ]
-        )
-
-        with pyro.poutine.trace() as model_tr:
-            with block_guide_sample_sites:
-                with pyro.poutine.replay(trace=guide_tr.trace), particles_plate:
-                    self.model(*args, **kwargs)
-
-        return {
-            name: node["value"]
-            for name, node in model_tr.trace.nodes.items()
-            if node["type"] == "sample"
-            and not pyro.poutine.util.site_is_subsample(node)
-        }
 
 
 class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
@@ -155,17 +95,112 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
 
 
+class PredictiveModel(Generic[P, T], torch.nn.Module):
+    model: Callable[P, T]
+    guide: Callable[P, Any]
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        guide: torch.nn.Module,
+    ):
+        super().__init__()
+        self.model = model
+        self.guide = guide
+
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        with pyro.poutine.trace() as guide_tr:
+            self.guide(*args, **kwargs)
+
+        block_guide_sample_sites = pyro.poutine.block(
+            hide=[
+                name
+                for name, node in guide_tr.trace.nodes.items()
+                if node["type"] == "sample"
+                and not pyro.poutine.util.site_is_subsample(node)
+            ]
+        )
+
+        with pyro.poutine.infer_config(lambda msg: {"_model_predictive_site": True}):
+            with block_guide_sample_sites:
+                with pyro.poutine.replay(trace=guide_tr.trace):
+                    return self.model(*args, **kwargs)
+
+
+class PredictiveFunctional(Generic[P, T], torch.nn.Module):
+    model: Callable[P, Any]
+    guide: Callable[P, Any]
+    num_samples: int
+    max_plate_nesting: Optional[int]
+
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        guide: torch.nn.Module,
+        *,
+        num_samples: int = 1,
+        max_plate_nesting: Optional[int] = None,
+    ):
+        super().__init__()
+        self.model = model
+        self.guide = guide
+        self._predictive_model = PredictiveModel(model, guide)
+        self.num_samples = num_samples
+        self.max_plate_nesting = max_plate_nesting
+
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
+        if self.max_plate_nesting is None:
+            self.max_plate_nesting = guess_max_plate_nesting(
+                self.model, self.guide, *args, **kwargs
+            )
+
+        particles_plate = (
+            contextlib.nullcontext()
+            if self.num_samples == 1
+            else pyro.plate(
+                "__predictive_particles",
+                self.num_samples,
+                dim=-self.max_plate_nesting - 1,
+            )
+        )
+
+        with pyro.poutine.trace() as model_tr, particles_plate:
+            self._predictive_model(*args, **kwargs)
+
+        return {
+            name: node["value"]
+            for name, node in model_tr.trace.nodes.items()
+            if node["type"] == "sample"
+            and not pyro.poutine.util.site_is_subsample(node)
+            and node["infer"].get("_model_predictive_site", False)
+        }
+
+
 class BatchedObservations(Observations[torch.Tensor]):
     data: Dict[str, torch.Tensor]
+    name: str
+    size: int
+    dim: int
     plate: pyro.poutine.indep_messenger.IndepMessenger
 
     def __init__(
         self,
         data: Mapping[str, torch.Tensor],
-        plate: pyro.poutine.indep_messenger.IndepMessenger,
+        dim: int,
+        *,
+        name: str = "__particles_data",
     ):
+        self.dim = dim
+
+        assert len(name) > 0
+        self.name = name
+
+        self.size = next(iter(data.values())).shape[0] if data else 1
+
+        assert all(v.shape[0] == self.size for v in data.values())
         super().__init__({k: v for k, v in data.items()})
-        self.plate = plate
+
+        self.plate = pyro.plate(name=self.name, size=self.size, dim=self.dim)
 
     def _pyro_sample(self, msg: dict) -> None:
         if msg["name"] not in self.data:
@@ -188,50 +223,78 @@ class BatchedObservations(Observations[torch.Tensor]):
             self.data[msg["name"]] = old_datum
 
 
+def get_importance_traces(
+    model: Callable[P, Any],
+    guide: Optional[Callable[P, Any]] = None,
+    max_plate_nesting: Optional[int] = None,
+    pack: bool = True,
+) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
+    def _fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
+        if guide is not None:
+            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
+                "flat", max_plate_nesting, model, guide, args, kwargs
+            )
+            if pack:
+                guide_trace.pack_tensors()
+                model_trace.pack_tensors(guide_trace.plate_to_symbol)
+            return model_trace, guide_trace
+        else:
+            model_trace, _ = pyro.infer.enum.get_importance_trace(
+                "flat", max_plate_nesting, model, lambda *_, **__: None, args, kwargs
+            )
+            if pack:
+                model_trace.pack_tensors()
+
+            guide_trace = model_trace.copy()
+            for name, node in list(guide_trace.nodes.items()):
+                if node["type"] != "sample":
+                    del model_trace[name]
+                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
+                    del guide_trace[name]
+
+            return model_trace, guide_trace
+
+    return _fn
+
+
 def BatchedNMCLogPredictiveLikelihood(
     model: Callable[P, Any],
     guide: Callable[P, Any],
     *,
     max_plate_nesting: int,
     num_samples: int = 1,
-    avg_particles: bool = False,
     data_plate_name: str = "__particles_data",
     mc_plate_name: str = "__particles_mc",
 ) -> Callable[Concatenate[Mapping[str, torch.Tensor], P], torch.Tensor]:
-    # TODO factorize into composition of general helper functions:
-    #   - (optional) infer max_plate_nesting from model and guide
-    #   - construct predictive model from model and guide
-    #   - batch observations with BatchedObservations
-    #   - batch particles with pyro.plate
-    #   - compute batched log weights over batch plate set
-    #   - logsumexp over particle plate
+
+    predictive_model = PredictiveModel(model, guide)
+
+    def batched_predictive_model(
+        data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+    ):
+        with pyro.plate(mc_plate_name, num_samples, dim=-max_plate_nesting - 2):
+            with BatchedObservations(
+                data, dim=-max_plate_nesting - 1, name=data_plate_name
+            ):
+                return predictive_model(*args, **kwargs)
+
+    get_nmc_predictive_traces = get_importance_traces(
+        batched_predictive_model,
+        guide=None,
+        max_plate_nesting=max_plate_nesting + 2,
+        pack=True,
+    )
+
+    plate_names: List[str] = [mc_plate_name, data_plate_name]
 
     def _fn(
         data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
-        plate_names: List[str] = [mc_plate_name, data_plate_name]
+        model_trace, guide_trace = get_nmc_predictive_traces(data, *args, **kwargs)
 
-        num_datapoints: int = next(iter(data.values())).shape[0]
-        data_cond = BatchedObservations(
-            data=data,
-            plate=pyro.plate(
-                data_plate_name, num_datapoints, dim=-max_plate_nesting - 1
-            )
-        )
-
-        particle_plate = pyro.plate(
-            mc_plate_name, num_samples, dim=-max_plate_nesting - 2
-        )
-
-        with particle_plate, data_cond:
-            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
-                "flat", max_plate_nesting, model, guide, args, kwargs
-            )
-
-        guide_trace.pack_tensors()
-        model_trace.pack_tensors(guide_trace.plate_to_symbol)
-
-        wds = "".join(guide_trace.plate_to_symbol[p] for p in plate_names)
+        wds = "".join(model_trace.plate_to_symbol[p] for p in plate_names)
 
         log_weights = torch.as_tensor(0.0, device=next(iter(data.values())).device)
         for site in model_trace.nodes.values():
@@ -250,11 +313,9 @@ def BatchedNMCLogPredictiveLikelihood(
                 [site["packed"]["log_prob"]],
             )
 
-        assert log_weights.shape == (num_samples, num_datapoints)
+        assert len(log_weights.shape) == 2 and log_weights.shape[0] == num_samples
 
-        if avg_particles:
-            log_weights = torch.logsumexp(log_weights, dim=0) - math.log(num_samples)
-
+        log_weights = torch.logsumexp(log_weights, dim=0) - math.log(num_samples)
         return log_weights
 
     return _fn
