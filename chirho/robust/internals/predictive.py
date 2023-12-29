@@ -169,7 +169,7 @@ class BatchedObservations(Observations[torch.Tensor]):
 
     def _pyro_sample(self, msg: dict) -> None:
         if msg["name"] not in self.data:
-            return
+            return super()._pyro_sample(msg)
 
         old_datum, event_dim = self.data[msg["name"]], len(msg["fn"].event_shape)
 
@@ -212,19 +212,19 @@ def BatchedNMCLogPredictiveLikelihood(
     def _fn(
         data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
-        plate_names: List[str] = []
+        plate_names: List[str] = [mc_plate_name, data_plate_name]
 
         num_datapoints: int = next(iter(data.values())).shape[0]
-        data_plate = pyro.plate(
-            data_plate_name, num_datapoints, dim=-max_plate_nesting - 2
+        data_cond = BatchedObservations(
+            data=data,
+            plate=pyro.plate(
+                data_plate_name, num_datapoints, dim=-max_plate_nesting - 1
+            )
         )
-        data_cond = BatchedObservations(data=data, plate=data_plate)
-        plate_names += [data_plate_name]
 
         particle_plate = pyro.plate(
-            mc_plate_name, num_samples, dim=-max_plate_nesting - 1
+            mc_plate_name, num_samples, dim=-max_plate_nesting - 2
         )
-        plate_names += [mc_plate_name]
 
         with particle_plate, data_cond:
             model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
