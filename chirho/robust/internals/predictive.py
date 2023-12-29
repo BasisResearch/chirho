@@ -215,22 +215,16 @@ def BatchedNMCLogPredictiveLikelihood(
         plate_names: List[str] = []
 
         num_datapoints: int = next(iter(data.values())).shape[0]
-        if num_datapoints > 1:
-            data_plate = pyro.plate(
-                data_plate_name, num_datapoints, dim=-max_plate_nesting - 2
-            )
-            data_cond = BatchedObservations(data=data, plate=data_plate)
-            plate_names += [data_plate_name]
-        else:
-            data_cond = Observations(data=data)
+        data_plate = pyro.plate(
+            data_plate_name, num_datapoints, dim=-max_plate_nesting - 2
+        )
+        data_cond = BatchedObservations(data=data, plate=data_plate)
+        plate_names += [data_plate_name]
 
-        if num_samples > 1:
-            particle_plate = pyro.plate(
-                mc_plate_name, num_samples, dim=-max_plate_nesting - 1
-            )
-            plate_names += [mc_plate_name]
-        else:
-            particle_plate = contextlib.nullcontext()
+        particle_plate = pyro.plate(
+            mc_plate_name, num_samples, dim=-max_plate_nesting - 1
+        )
+        plate_names += [mc_plate_name]
 
         with particle_plate, data_cond:
             model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
@@ -259,11 +253,7 @@ def BatchedNMCLogPredictiveLikelihood(
                 [site["packed"]["log_prob"]],
             )
 
-        if mc_plate_name not in plate_names:
-            log_weights = log_weights[None]
-
-        if data_plate_name not in plate_names:
-            log_weights = log_weights[..., None]
+        assert log_weights.shape == (num_samples, num_datapoints)
 
         if avg_particles:
             log_weights = torch.logsumexp(log_weights, dim=0) - math.log(num_samples)
