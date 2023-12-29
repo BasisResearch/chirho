@@ -149,7 +149,7 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             masked_guide,
             *args,
             num_samples=self.num_samples,
-            max_plate_nesting=self.max_plate_nesting,(optional)
+            max_plate_nesting=self.max_plate_nesting
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
@@ -202,7 +202,7 @@ def BatchedNMCLogPredictiveLikelihood(
     mc_plate_name: str = "__particles_mc",
 ) -> Callable[Concatenate[Mapping[str, torch.Tensor], P], torch.Tensor]:
     # TODO factorize into composition of general helper functions:
-    #   - (optional) guess max_plate_nesting
+    #   - (optional) infer max_plate_nesting from model and guide
     #   - construct predictive model from model and guide
     #   - batch observations with BatchedObservations
     #   - batch particles with pyro.plate
