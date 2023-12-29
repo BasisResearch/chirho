@@ -284,7 +284,6 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
         self.num_samples = num_samples
         self.data_plate_name = data_plate_name
         self.mc_plate_name = mc_plate_name
-        self._plate_names: List[str] = [mc_plate_name, data_plate_name]
 
     def _batched_predictive_model(
         self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
@@ -309,7 +308,10 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
         )
         model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
 
-        wds = "".join(model_trace.plate_to_symbol[p] for p in self._plate_names)
+        wds = "".join(
+            model_trace.plate_to_symbol[p]
+            for p in [self.mc_plate_name, self.data_plate_name]
+        )
 
         log_weights = 0.0
         for site in model_trace.nodes.values():
