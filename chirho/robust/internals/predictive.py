@@ -1,7 +1,17 @@
 import contextlib
 import math
 import warnings
-from typing import Any, Callable, Container, Dict, Generic, List, Optional, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Container,
+    Dict,
+    Generic,
+    List,
+    Mapping,
+    Optional,
+    TypeVar,
+)
 
 import pyro
 import torch
@@ -149,6 +159,14 @@ class BatchedObservations(Observations[torch.Tensor]):
     data: Dict[str, torch.Tensor]
     plate: pyro.poutine.indep_messenger.IndepMessenger
 
+    def __init__(
+        self,
+        data: Mapping[str, torch.Tensor],
+        plate: pyro.poutine.indep_messenger.IndepMessenger,
+    ):
+        super().__init__({k: v for k, v in data.items()})
+        self.plate = plate
+
     def _pyro_sample(self, msg: dict) -> None:
         if msg["name"] not in self.data:
             return
@@ -159,11 +177,13 @@ class BatchedObservations(Observations[torch.Tensor]):
         try:
             if not msg["infer"].get("_do_not_observe", None):
                 new_datum: torch.Tensor = old_datum
-                while len(new_datum.shape) - event_dim < self.plate.dim:
-                    new_datum = new_datum[None]
-                new_datum = new_datum.transpose(-len(old_datum.shape), self.plate.dim - event_dim)
-                self.data[msg["name"]] = new_datum
-                with self.plate:
+                with self.plate:  # enter plate context here to ensure plate.dim is set
+                    while self.plate.dim - event_dim < -len(new_datum.shape):
+                        new_datum = new_datum[None]
+                    new_datum = new_datum.transpose(
+                        -len(old_datum.shape), self.plate.dim - event_dim
+                    )
+                    self.data[msg["name"]] = new_datum
                     return super()._pyro_sample(msg)
             else:
                 return super()._pyro_sample(msg)
@@ -180,22 +200,26 @@ def BatchedNMCLogPredictiveLikelihood(
     avg_particles: bool = False,
     data_plate_name: str = "__particles_data",
     mc_plate_name: str = "__particles_mc",
-) -> Callable[Concatenate[Point[torch.Tensor], P], torch.Tensor]:
-
-    def _fn(data: Point[torch.Tensor], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
-
+) -> Callable[Concatenate[Mapping[str, torch.Tensor], P], torch.Tensor]:
+    def _fn(
+        data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+    ) -> torch.Tensor:
         plate_names: List[str] = []
 
         num_datapoints: int = next(iter(data.values())).shape[0]
         if num_datapoints > 1:
-            data_plate = pyro.plate(data_plate_name, num_datapoints, dim=-max_plate_nesting - 2)
+            data_plate = pyro.plate(
+                data_plate_name, num_datapoints, dim=-max_plate_nesting - 2
+            )
             data_cond = BatchedObservations(data=data, plate=data_plate)
             plate_names += [data_plate_name]
         else:
             data_cond = Observations(data=data)
 
         if num_samples > 1:
-            particle_plate = pyro.plate(mc_plate_name, num_samples, dim=-max_plate_nesting - 1)
+            particle_plate = pyro.plate(
+                mc_plate_name, num_samples, dim=-max_plate_nesting - 1
+            )
             plate_names += [mc_plate_name]
         else:
             particle_plate = contextlib.nullcontext()
