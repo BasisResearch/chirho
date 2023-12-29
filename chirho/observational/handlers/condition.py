@@ -1,4 +1,4 @@
-from typing import Callable, Generic, Hashable, Mapping, TypeVar, Union
+from typing import Callable, Generic, Mapping, TypeVar, Union
 
 import pyro
 import torch
@@ -61,8 +61,9 @@ class Observations(Generic[T], ObserveNameMessenger):
     Can be used as a drop-in replacement for :func:`pyro.condition` that supports
     a richer set of observational data types and enables counterfactual inference.
     """
+    data: Mapping[str, AtomicObservation[T]]
 
-    def __init__(self, data: Mapping[Hashable, AtomicObservation[T]]):
+    def __init__(self, data: Mapping[str, AtomicObservation[T]]):
         self.data = data
         super().__init__()
 
