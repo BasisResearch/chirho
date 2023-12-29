@@ -126,8 +126,8 @@ class BatchedObservations(Observations[torch.Tensor]):
 
 
 class BatchedLatents(pyro.poutine.messenger.Messenger):
-    name: str
     num_particles: int
+    name: str
 
     def __init__(self, num_particles: int, *, name: str = "__particles_mc"):
         assert num_particles > 0
