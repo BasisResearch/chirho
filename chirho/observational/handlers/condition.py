@@ -61,6 +61,7 @@ class Observations(Generic[T], ObserveNameMessenger):
     Can be used as a drop-in replacement for :func:`pyro.condition` that supports
     a richer set of observational data types and enables counterfactual inference.
     """
+
     data: Mapping[str, AtomicObservation[T]]
 
     def __init__(self, data: Mapping[str, AtomicObservation[T]]):
