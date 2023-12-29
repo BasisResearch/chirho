@@ -97,6 +97,35 @@ def test_soft_eq_interval():
     ), "soft_eq does noh interval"
 
 
+def test_soft_eq_relaxation():
+    # these test cases are for our counterpart
+    # of conditions (i)-(iii) of predicate relaxation
+    # from "Predicate exchange..." by Tavares et al.
+
+    # condition i: when a tends to zero, soft_eq tends to the true only for
+    # true identity and to negative infinity otherwise
+    support = constraints.real
+    assert (
+        soft_eq(support, torch.tensor(1.0), torch.tensor(1.001), scale=1e-10) < 1e-10
+    ), "soft_eq does not tend to negative infinity for false identities as a tends to zero"
+
+    # condition ii: approaching true answer as scale goes to infty
+    scales = [1e6, 1e10]
+    for scale in scales:
+        score_diff = soft_eq(support, torch.tensor(1.0), torch.tensor(2.0), scale=scale)
+        score_id = soft_eq(support, torch.tensor(1.0), torch.tensor(1.0), scale=scale)
+        assert (
+            torch.abs(score_diff - score_id) < 1e-10
+        ), "soft_eq does not approach true answer as scale approaches infinity"
+
+    # condition iii: 0 just in case true identity
+    true_identity = soft_eq(support, torch.tensor(1.0), torch.tensor(1.0))
+    false_identity = soft_eq(support, torch.tensor(1.0), torch.tensor(1.001))
+
+    assert true_identity == 0, "soft_eq does not yield zero on identity"
+    assert true_identity > false_identity, "soft_eq does not penalize difference"
+
+
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_differs(plate_size, event_shape):
