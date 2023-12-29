@@ -259,44 +259,59 @@ def get_importance_traces(
     return _fn
 
 
-def BatchedNMCLogPredictiveLikelihood(
-    model: Callable[P, Any],
-    guide: Callable[P, Any],
-    *,
-    max_plate_nesting: int,
-    num_samples: int = 1,
-    data_plate_name: str = "__particles_data",
-    mc_plate_name: str = "__particles_mc",
-) -> Callable[Concatenate[Mapping[str, torch.Tensor], P], torch.Tensor]:
+class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
+    model: Callable[P, Any]
+    guide: Callable[P, Any]
+    num_samples: int
+    max_plate_nesting: int
+    data_plate_name: str
+    mc_plate_name: str
 
-    predictive_model = PredictiveModel(model, guide)
-
-    def batched_predictive_model(
-        data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+    def __init__(
+        self,
+        model: Callable[P, Any],
+        guide: Callable[P, Any],
+        *,
+        max_plate_nesting: int,
+        num_samples: int = 1,
+        data_plate_name: str = "__particles_data",
+        mc_plate_name: str = "__particles_mc",
     ):
-        with pyro.plate(mc_plate_name, num_samples, dim=-max_plate_nesting - 2):
+        super().__init__()
+        self.model = model
+        self.guide = guide
+        self.max_plate_nesting = max_plate_nesting
+        self.num_samples = num_samples
+        self.data_plate_name = data_plate_name
+        self.mc_plate_name = mc_plate_name
+        self._plate_names: List[str] = [mc_plate_name, data_plate_name]
+
+    def _batched_predictive_model(
+        self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+    ):
+        predictive_model = PredictiveModel(self.model, self.guide)
+        with pyro.plate(
+            self.mc_plate_name, self.num_samples, dim=-self.max_plate_nesting - 2
+        ):
             with BatchedObservations(
-                data, dim=-max_plate_nesting - 1, name=data_plate_name
+                data, dim=-self.max_plate_nesting - 1, name=self.data_plate_name
             ):
                 return predictive_model(*args, **kwargs)
 
-    get_nmc_predictive_traces = get_importance_traces(
-        batched_predictive_model,
-        guide=None,
-        max_plate_nesting=max_plate_nesting + 2,
-        pack=True,
-    )
-
-    plate_names: List[str] = [mc_plate_name, data_plate_name]
-
-    def _fn(
-        data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+    def forward(
+        self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
-        model_trace, guide_trace = get_nmc_predictive_traces(data, *args, **kwargs)
+        get_nmc_traces = get_importance_traces(
+            self._batched_predictive_model,
+            guide=None,
+            max_plate_nesting=self.max_plate_nesting + 2,
+            pack=True,
+        )
+        model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
 
-        wds = "".join(model_trace.plate_to_symbol[p] for p in plate_names)
+        wds = "".join(model_trace.plate_to_symbol[p] for p in self._plate_names)
 
-        log_weights = torch.as_tensor(0.0, device=next(iter(data.values())).device)
+        log_weights = 0.0
         for site in model_trace.nodes.values():
             if site["type"] != "sample":
                 continue
@@ -313,9 +328,8 @@ def BatchedNMCLogPredictiveLikelihood(
                 [site["packed"]["log_prob"]],
             )
 
-        assert len(log_weights.shape) == 2 and log_weights.shape[0] == num_samples
+        assert isinstance(log_weights, torch.Tensor)
+        assert len(log_weights.shape) == 2 and log_weights.shape[0] == self.num_samples
 
-        log_weights = torch.logsumexp(log_weights, dim=0) - math.log(num_samples)
+        log_weights = torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
         return log_weights
-
-    return _fn
