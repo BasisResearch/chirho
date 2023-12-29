@@ -1,3 +1,5 @@
+import math
+
 import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
@@ -10,7 +12,7 @@ from chirho.counterfactual.handlers import (
     SingleWorldCounterfactual,
 )
 from chirho.counterfactual.ops import split
-from chirho.explainable.ops import consequent_differs, preempt, soft_eq
+from chirho.explainable.ops import consequent_differs, preempt, soft_eq, soft_neq
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import Factors
 
@@ -38,44 +40,64 @@ def test_preempt_op_singleworld():
     assert torch.all(tr.nodes["y_"]["value"] == 1.0)
 
 
-def test_soft_eq_boolean():
+def test_soft_boolean():
     support = constraints.boolean
 
     boolean_tensor_1 = torch.tensor([True, False, True, False])
     boolean_tensor_2 = torch.tensor([True, True, False, False])
 
     log_boolean_eq = soft_eq(support, boolean_tensor_1, boolean_tensor_2)
+    log_boolean_neq = soft_neq(support, boolean_tensor_1, boolean_tensor_2)
 
     real_tensor_1 = torch.tensor([1.0, 0.0, 1.0, 0.0])
     real_tensor_2 = torch.tensor([1.0, 1.0, 0.0, 0.0])
 
     real_boolean_eq = soft_eq(support, real_tensor_1, real_tensor_2)
+    real_boolean_neq = soft_neq(support, real_tensor_1, real_tensor_2)
 
     with pytest.raises(
         TypeError, match="Boolean tensors have to be of the same dtype."
     ):
         soft_eq(support, boolean_tensor_1, real_tensor_1)
 
+    with pytest.raises(
+        TypeError, match="Boolean tensors have to be of the same dtype."
+    ):
+        soft_neq(support, boolean_tensor_1, real_tensor_1)
+
     assert torch.equal(log_boolean_eq, real_boolean_eq) and torch.equal(
         real_boolean_eq, torch.tensor([0.0, -1e8, -1e8, 0.0])
     )
 
+    assert torch.equal(log_boolean_neq, real_boolean_neq) and torch.equal(
+        real_boolean_neq, torch.tensor([-1e8, 0.0, 0.0, -1e8])
+    )
 
-def test_soft_eq_positive():
+
+def test_soft_positive():
     t1 = torch.arange(0, 50, 1)
     t2 = t1 + 3
+
     pos_eq = soft_eq(constraints.positive, t1, t2)
+    pos_neq = soft_neq(constraints.positive, t1, t2)
     assert torch.allclose(
         pos_eq, pos_eq[0], rtol=0.001
     ), "soft_eq is not a function of the absolute distance between the two original values"
+    assert torch.allclose(
+        pos_neq, pos_neq[0], rtol=0.001
+    ), "soft_neq is not a function of the absolute distance between the two original values"
 
 
-def test_soft_eq_interval():
+def test_soft_interval():
     t1 = torch.arange(0, 8, 0.1)
     t2 = t1 + 1
     t2b = t1 + 2
+
     inter_eq = soft_eq(constraints.interval(0, 10), t1, t2)
     inter_eq_b = soft_eq(constraints.interval(0, 10), t1, t2b)
+
+    inter_neq = soft_neq(constraints.interval(0, 10), t1, t2)
+    inter_neq_b = soft_neq(constraints.interval(0, 10), t1, t2b)
 
     assert torch.all(
         inter_eq_b < inter_eq
@@ -89,15 +111,36 @@ def test_soft_eq_interval():
         inter_eq_b, inter_eq_b[0], rtol=0.001
     ), "soft_eq is not a function of the absolute distance between the two original values"
 
+    assert torch.all(
+        inter_neq_b > inter_neq
+    ), "soft_neq is not monotonic in the absolute distance between the two original values"
+    assert torch.allclose(
+        inter_neq, inter_neq[0], rtol=0.001
+    ), "soft_neq is not a function of the absolute distance between the two original values"
+    assert torch.allclose(
+        inter_neq_b, inter_neq_b[0], rtol=0.001
+    ), "soft_neq is not a function of the absolute distance between the two original values"
+    assert (
+        soft_neq(constraints.interval(0, 10), torch.tensor(0.0), torch.tensor(10.0))
+        == 0
+    ), "soft_neq is not zero at maximal difference"
+
     inter_eq_10 = soft_eq(constraints.interval(0, 10), t1, t2)
     inter_eq_20 = soft_eq(constraints.interval(-10, 10), t1, t2b)
 
+    inter_neq_10 = soft_neq(constraints.interval(0, 10), t1, t2)
+    inter_neq_20 = soft_neq(constraints.interval(-10, 10), t1, t2b)
+
     assert torch.allclose(
         inter_eq_10, inter_eq_20, rtol=0.001
-    ), "soft_eq does noh interval"
+    ), "soft_eq does not scale with  interval"
+
+    assert torch.allclose(
+        inter_neq_10, inter_neq_20, rtol=0.001
+    ), "soft_neq does not scale with interval"
 
 
-def test_soft_eq_relaxation():
+def test_soft_eq_tavares_relaxation():
     # these test cases are for our counterpart
     # of conditions (i)-(iii) of predicate relaxation
     # from "Predicate exchange..." by Tavares et al.
@@ -124,6 +167,62 @@ def test_soft_eq_relaxation():
 
     assert true_identity == 0, "soft_eq does not yield zero on identity"
     assert true_identity > false_identity, "soft_eq does not penalize difference"
+
+
+def test_soft_neq_tavares_relaxation():
+    support = constraints.real
+
+    min_scale = 1 / math.sqrt(2 * math.pi)
+
+    # condition i: when a tends to allowed minimum (1 / math.sqrt(2 * math.pi)),
+    # the difference in outcomes between identity and non-identity tends to negative infinity
+    diff = soft_neq(
+        support, torch.tensor(1.0), torch.tensor(1.0), scale=min_scale + 0.0001
+    ) - soft_neq(
+        support, torch.tensor(1.0), torch.tensor(1.001), scale=min_scale + 0.0001
+    )
+
+    assert diff < -1e8, "condition i failed"
+
+    # condition ii: as scale goes to infinity
+    # the score tends to that of identity
+    x = torch.tensor(0.0)
+    y = torch.arange(-100, 100, 0.1)
+    indentity_score = soft_neq(
+        support, torch.tensor(1.0), torch.tensor(1.0), scale=1e10
+    )
+    scaled = soft_neq(support, x, y, scale=1e10)
+
+    assert torch.allclose(indentity_score, scaled), "condition ii failed"
+
+    # condition iii: for any scale, the score tends to zero
+    # as difference tends to infinity
+    # and to its minimum as it tends to zero
+    # and doesn't equal to minimum for non-zero difference
+    scales = [0.4, 1, 5, 50, 500]
+    x = torch.tensor(0.0)
+    y = torch.arange(-100, 100, 0.1)
+
+    for scale in scales:
+        z = torch.tensor([-1e10 * scale, 1e10 * scale])
+
+        identity_score = soft_neq(
+            support, torch.tensor(1.0), torch.tensor(1.0), scale=scale
+        )
+        scaled_y = soft_neq(support, x, y, scale=scale)
+        scaled_z = soft_neq(support, x, z, scale=scale)
+
+        assert torch.allclose(
+            identity_score, torch.min(scaled_y)
+        ), "condition iii failed"
+        lower = 1 + scale * 1e-3
+        assert torch.all(
+            soft_neq(
+                support, torch.tensor(1.0), torch.arange(lower, 2, 0.001), scale=scale
+            )
+            > identity_score
+        )
+        assert torch.allclose(scaled_z, torch.tensor(0.0)), "condition iii failed"
 
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])

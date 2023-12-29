@@ -1,4 +1,5 @@
 import functools
+import math
 from typing import Any, Callable, Iterable, Optional, Tuple, TypeVar
 
 import pyro
@@ -99,6 +100,78 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
     return dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(
         diff_transformed
     ) - (dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(torch.tensor(0.0)))
+
+
+@functools.singledispatch
+def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
+    eps = kwargs.get("eps", -1e8)
+
+    if support is constraints.boolean and hasattr(v1, "dtype") and hasattr(v2, "dtype"):
+        if v1.dtype != v2.dtype:
+            raise TypeError("Boolean tensors have to be of the same dtype.")
+
+        event_dim = kwargs.get("event_dim", 0)
+        eq: torch.Tensor = v1 != v2
+
+        for _ in range(event_dim):
+            eq = torch.all(eq, dim=-1, keepdim=False)
+
+        return cond(eps, 0.0, eq, event_dim=event_dim)
+
+    else:
+        scale = kwargs.get("scale", 50)
+
+        min_scale = 1 / math.sqrt(2 * math.pi)  # keeps log probs nonpositive
+        if scale <= min_scale:
+            raise ValueError(
+                f"Scale must be greater than or equal to `1 / math.sqrt(2 * math.pi)`, which is {min_scale}."
+            )
+
+    if support is constraints.real:
+        denominator = (
+            dist.Normal(0, kwargs.get("scale", kwargs.get("scale", scale))).log_prob(
+                v1 - v2
+            )
+            - -1e-10
+        )
+
+        return -eps / denominator
+
+    else:
+        tfm = biject_to(support).inv
+
+        if isinstance(support, constraints.interval):
+            interval_range = abs(support.upper_bound - support.lower_bound)
+            diff = torch.abs(v1 - v2)
+            diff_transformed = diff / interval_range
+
+            interval_default_scale = 1
+
+            denominator = (
+                dist.Normal(0, kwargs.get("scale", interval_default_scale)).log_prob(
+                    diff_transformed
+                )
+                - -1e-10
+            )
+            return (-eps / denominator) - (
+                -eps
+                / (
+                    dist.Normal(
+                        0, kwargs.get("scale", interval_default_scale)
+                    ).log_prob(torch.tensor(1.0))
+                    - 1e-10
+                )
+            )
+
+        else:
+            diff = torch.abs(v1 - v2)
+            diff_transformed = tfm(diff)
+
+            denominator = (
+                dist.Normal(0, kwargs.get("scale", scale)).log_prob(diff_transformed)
+                - -1e-10
+            )
+            return -eps / denominator
 
 
 def consequent_differs(
