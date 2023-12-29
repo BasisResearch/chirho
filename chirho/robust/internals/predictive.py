@@ -1,5 +1,4 @@
 import contextlib
-import functools
 import math
 import warnings
 from typing import (
@@ -18,14 +17,10 @@ import pyro
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.indexed.handlers import (
-    DependentMaskMessenger,
-    IndexPlatesMessenger,
-    add_indices,
-)
-from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
+from chirho.indexed.handlers import DependentMaskMessenger, IndexPlatesMessenger
+from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.observational.handlers.condition import Observations, condition
-from chirho.robust.internals.utils import guess_max_plate_nesting
+from chirho.robust.internals.utils import guess_max_plate_nesting, unbind_leftmost_dim
 from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
@@ -98,48 +93,6 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
-
-
-@functools.singledispatch
-def unbind_leftmost_dim(v, name: str, size: int = 1, **kwargs):
-    raise NotImplementedError
-
-
-@unbind_leftmost_dim.register
-def _unbind_leftmost_dim_tensor(
-    v: torch.Tensor, name: str, size: int = 1, *, event_dim: int = 0
-) -> torch.Tensor:
-    size = max(size, v.shape[0])
-    v = v.expand((size,) + v.shape[1:])
-
-    if name not in get_index_plates():
-        add_indices(IndexSet(**{name: set(range(size))}))
-
-    new_dim: int = get_index_plates()[name].dim
-    orig_shape = v.shape
-    while new_dim - event_dim < -len(v.shape):
-        v = v[None]
-    if v.shape[0] == 1 and orig_shape[0] != 1:
-        v = torch.transpose(v, -len(orig_shape), new_dim - event_dim)
-    return v
-
-
-@unbind_leftmost_dim.register
-def _unbind_leftmost_dim_distribution(
-    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
-) -> pyro.distributions.Distribution:
-    size = max(size, v.batch_shape[0])
-    if v.batch_shape[0] != 1:
-        raise NotImplementedError("Cannot freely reshape distribution")
-
-    if name not in get_index_plates():
-        add_indices(IndexSet(**{name: set(range(size))}))
-
-    new_dim: int = get_index_plates()[name].dim
-    orig_shape = v.batch_shape
-
-    new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
-    return v.expand(new_shape)
 
 
 class BatchedObservations(Observations[torch.Tensor]):
