@@ -2,7 +2,7 @@ import contextlib
 import math
 import typing
 import warnings
-from typing import Any, Callable, Container, Dict, Generic, Mapping, Optional, TypeVar
+from typing import Any, Callable, Container, Dict, Generic, Optional, TypeVar
 
 import pyro
 import torch
@@ -219,7 +219,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         }
 
 
-class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
+class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     model: Callable[P, Any]
     guide: Callable[P, Any]
     num_samples: int
@@ -244,14 +244,14 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
         self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
 
     def _batched_predictive_model(
-        self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ):
         with BatchedLatents(self.num_samples, name=self._mc_plate_name):
             with BatchedObservations(data, name=self._data_plate_name):
                 return self._predictive_model(*args, **kwargs)
 
     def forward(
-        self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
+        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
         get_nmc_traces = get_importance_traces(
             self._batched_predictive_model, pack=True
