@@ -1,14 +1,16 @@
 import contextlib
 import functools
 import math
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Generic, Mapping, Optional, Tuple, TypeVar
+from chirho.observational.handlers.condition import Observations
+from chirho.robust.ops import Point
 
 import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import add_indices
-from chirho.indexed.ops import IndexSet, get_index_plates
+from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -187,3 +189,44 @@ def get_importance_traces(
             return model_trace, guide_trace
 
     return _fn
+
+
+class BatchedObservations(Generic[T], Observations[T]):
+    name: str
+
+    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
+        assert len(name) > 0
+        self.name = name
+        super().__init__(data)
+
+    def _pyro_observe(self, msg: dict) -> None:
+        super()._pyro_observe(msg)
+        if msg["kwargs"]["name"] in self.data:
+            rv, obs = msg["args"]
+            event_dim = (
+                len(rv.event_shape)
+                if hasattr(rv, "event_shape")
+                else msg["kwargs"].get("event_dim", 0)
+            )
+            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
+            msg["args"] = (rv, batch_obs)
+
+
+class BatchedLatents(pyro.poutine.messenger.Messenger):
+    num_particles: int
+    name: str
+
+    def __init__(self, num_particles: int, *, name: str = "__particles_mc"):
+        assert num_particles > 0
+        assert len(name) > 0
+        self.num_particles = num_particles
+        self.name = name
+        super().__init__()
+
+    def _pyro_sample(self, msg: dict) -> None:
+        if self.num_particles > 1 and self.name not in indices_of(msg["fn"]):
+            msg["fn"] = unbind_leftmost_dim(
+                msg["fn"].expand((1,) + msg["fn"].batch_shape),
+                self.name,
+                size=self.num_particles,
+            )

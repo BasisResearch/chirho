@@ -12,10 +12,9 @@ from chirho.robust.internals.linearize import (
     make_empirical_fisher_vp,
 )
 from chirho.robust.internals.predictive import (
-    BatchedObservations,
     NMCLogPredictiveLikelihood,
 )
-from chirho.robust.internals.utils import make_functional_call, reset_rng_state
+from chirho.robust.internals.utils import BatchedObservations, make_functional_call, reset_rng_state
 
 from .robust_fixtures import SimpleGuide, SimpleModel
 

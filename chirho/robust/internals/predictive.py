@@ -2,20 +2,20 @@ import contextlib
 import math
 import typing
 import warnings
-from typing import Any, Callable, Container, Dict, Generic, Optional, TypeVar
+from typing import Any, Callable, Container, Generic, Optional, TypeVar
 
 import pyro
 import torch
 from typing_extensions import ClassVar, ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger, IndexPlatesMessenger
-from chirho.indexed.ops import get_index_plates, indices_of
-from chirho.observational.handlers.condition import Observations, condition
-from chirho.observational.ops import Observation
+from chirho.indexed.ops import get_index_plates
+from chirho.observational.handlers.condition import condition
 from chirho.robust.internals.utils import (
+    BatchedLatents,
+    BatchedObservations,
     get_importance_traces,
     guess_max_plate_nesting,
-    unbind_leftmost_dim,
 )
 from chirho.robust.ops import Point
 
@@ -89,47 +89,6 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             **kwargs,
         )[0]
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
-
-
-class BatchedObservations(Generic[T], Observations[T]):
-    name: str
-
-    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
-        assert len(name) > 0
-        self.name = name
-        super().__init__(data)
-
-    def _pyro_observe(self, msg: dict) -> None:
-        super()._pyro_observe(msg)
-        if msg["kwargs"]["name"] in self.data:
-            rv, obs = msg["args"]
-            event_dim = (
-                len(rv.event_shape)
-                if hasattr(rv, "event_shape")
-                else msg["kwargs"].get("event_dim", 0)
-            )
-            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
-            msg["args"] = (rv, batch_obs)
-
-
-class BatchedLatents(pyro.poutine.messenger.Messenger):
-    num_particles: int
-    name: str
-
-    def __init__(self, num_particles: int, *, name: str = "__particles_mc"):
-        assert num_particles > 0
-        assert len(name) > 0
-        self.num_particles = num_particles
-        self.name = name
-        super().__init__()
-
-    def _pyro_sample(self, msg: dict) -> None:
-        if self.num_particles > 1 and self.name not in indices_of(msg["fn"]):
-            msg["fn"] = unbind_leftmost_dim(
-                msg["fn"].expand((1,) + msg["fn"].batch_shape),
-                self.name,
-                size=self.num_particles,
-            )
 
 
 class PredictiveModel(Generic[P, T], torch.nn.Module):
