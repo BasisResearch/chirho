@@ -282,8 +282,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 [site["packed"]["log_prob"]],
             )
 
-        assert isinstance(log_weights, torch.Tensor)
-        assert len(log_weights.shape) == 2 and log_weights.shape[0] == self.num_samples
-
-        log_weights = torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
-        return log_weights
+        assert isinstance(log_weights, torch.Tensor)  # DEBUG
+        assert len(log_weights.shape) == 2  # DEBUG
+        assert log_weights.shape[0] == self.num_samples  # DEBUG
+        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
