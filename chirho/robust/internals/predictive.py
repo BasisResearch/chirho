@@ -92,30 +92,20 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
 
 
 class BatchedObservations(Generic[T], Observations[T]):
-    data: Dict[str, Observation[T]]
     name: str
 
-    def __init__(
-        self,
-        data: Point[T],
-        *,
-        name: str = "__particles_data",
-    ):
+    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
         assert len(name) > 0
         self.name = name
-        super().__init__({k: v for k, v in data.items()})
+        super().__init__(data)
 
-    def _pyro_sample(self, msg: dict) -> None:
-        if msg["name"] in self.data and not msg["infer"].get("_do_not_observe", False):
-            event_dim = len(msg["fn"].event_shape)
-            old_datum = self.data[msg["name"]]
-            try:
-                self.data[msg["name"]] = unbind_leftmost_dim(
-                    old_datum, self.name, event_dim=event_dim
-                )
-                return super()._pyro_sample(msg)
-            finally:
-                self.data[msg["name"]] = old_datum
+    def _pyro_observe(self, msg: dict) -> None:
+        super()._pyro_observe(msg)
+        if msg["kwargs"]["name"] in self.data:
+            rv, obs = msg["args"]
+            event_dim = len(rv.event_shape)
+            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
+            msg["args"] = (rv, batch_obs)
 
 
 class BatchedLatents(pyro.poutine.messenger.Messenger):
@@ -241,21 +231,19 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self.guide = guide
         self.max_plate_nesting = max_plate_nesting
         self.num_samples = num_samples
-        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
-
-    def _batched_predictive_model(
-        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
-    ):
-        with BatchedLatents(self.num_samples, name=self._mc_plate_name):
-            with BatchedObservations(data, name=self._data_plate_name):
-                return self._predictive_model(*args, **kwargs)
 
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
         get_nmc_traces = get_importance_traces(
-            self._batched_predictive_model, pack=True
+            BatchedLatents(self.num_samples, name=self._mc_plate_name)(
+                BatchedObservations(data, name=self._data_plate_name)(
+                    PredictiveModel(self.model, self.guide)
+                )
+            ),
+            pack=True,
         )
+
         with IndexPlatesMessenger(first_available_dim=-self.max_plate_nesting - 1):
             model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
             plate_names = [
