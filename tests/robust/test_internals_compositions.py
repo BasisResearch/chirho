@@ -27,9 +27,7 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    log_prob = BatchedNMCLogPredictiveLikelihood(
-        model, guide, num_samples=100, max_plate_nesting=1
-    )
+    log_prob = BatchedNMCLogPredictiveLikelihood(model, guide, num_samples=100)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     func_log_prob = reset_rng_state(pyro.util.get_rng_state())(func_log_prob)
 
@@ -43,8 +41,9 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     with torch.no_grad():
         data = func_predictive(predictive_params)
 
-    raw_fvp = make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
-    fvp = torch.func.vmap(raw_fvp)
+    fvp = torch.func.vmap(
+        make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
+    )
 
     v = {
         k: torch.ones_like(v).unsqueeze(0)
@@ -55,10 +54,8 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
 
     # For this model, fvp for loc_a is zero. See
     # https://github.com/BasisResearch/chirho/issues/427
-    fvp_v = fvp(v)
-    for k, fvp_vk in fvp_v.items():
-        assert fvp_vk.shape == v[k].shape
-    assert fvp_v["guide.loc_a"].abs().max() == 0
+    assert fvp(v)["guide.loc_a"].abs().max() == 0
+    assert all(fvp_vk.shape == v[k].shape for k, fvp_vk in fvp(v).items())
 
     solve_one = cg_solver(fvp, v)
     solve_two = cg_solver(fvp, v)
