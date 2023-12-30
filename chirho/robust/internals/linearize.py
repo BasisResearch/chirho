@@ -159,11 +159,6 @@ def linearize(
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:
-        if batched_log_prob.max_plate_nesting is None:
-            batched_log_prob.max_plate_nesting = guess_max_plate_nesting(
-                model, guide, *args, **kwargs
-            )
-
         with torch.no_grad():
             data: Point[T] = predictive(*args, **kwargs)
             data = {k: data[k] for k in points.keys()}

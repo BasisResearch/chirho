@@ -1,22 +1,18 @@
 import collections
-import contextlib
 import math
 import typing
-import warnings
-from typing import Any, Callable, Container, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Generic, List, Optional, TypeVar
 
 import pyro
 import torch
-from typing_extensions import ClassVar, ParamSpec
+from typing_extensions import ParamSpec
 
-from chirho.indexed.handlers import DependentMaskMessenger, IndexPlatesMessenger
+from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
-from chirho.observational.handlers.condition import condition
 from chirho.robust.internals.utils import (
     BatchedLatents,
     BatchedObservations,
     get_importance_traces,
-    guess_max_plate_nesting,
 )
 from chirho.robust.ops import Point
 
@@ -26,70 +22,6 @@ P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-class _UnmaskNamedSites(DependentMaskMessenger):
-    names: Container[str]
-
-    def __init__(self, names: Container[str]):
-        self.names = names
-
-    def get_mask(
-        self,
-        dist: pyro.distributions.Distribution,
-        value: Optional[torch.Tensor],
-        device: torch.device = torch.device("cpu"),
-        name: Optional[str] = None,
-    ) -> torch.Tensor:
-        return torch.tensor(name is None or name in self.names, device=device)
-
-
-class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
-    model: Callable[P, Any]
-    guide: Callable[P, Any]
-    num_samples: int
-    max_plate_nesting: Optional[int]
-
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        guide: torch.nn.Module,
-        *,
-        num_samples: int = 1,
-        max_plate_nesting: Optional[int] = None,
-    ):
-        super().__init__()
-        self.model = model
-        self.guide = guide
-        self.num_samples = num_samples
-        self.max_plate_nesting = max_plate_nesting
-
-    def forward(
-        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
-    ) -> torch.Tensor:
-        if self.max_plate_nesting is None:
-            self.max_plate_nesting = guess_max_plate_nesting(
-                self.model, self.guide, *args, **kwargs
-            )
-            warnings.warn(
-                "Since max_plate_nesting is not specified, \
-                the first call to NMCLogPredictiveLikelihood will not be seeded properly. \
-                See https://github.com/BasisResearch/chirho/pull/408"
-            )
-
-        masked_guide = pyro.poutine.mask(mask=False)(self.guide)
-        masked_model = _UnmaskNamedSites(names=set(data.keys()))(
-            condition(data=data)(self.model)
-        )
-        log_weights = pyro.infer.importance.vectorized_importance_weights(
-            masked_model,
-            masked_guide,
-            *args,
-            num_samples=self.num_samples,
-            max_plate_nesting=self.max_plate_nesting,
-            **kwargs,
-        )[0]
-        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
 
 
 class PredictiveModel(Generic[P, T], torch.nn.Module):
@@ -129,7 +61,6 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     model: Callable[P, Any]
     guide: Callable[P, Any]
     num_samples: int
-    max_plate_nesting: Optional[int]
 
     def __init__(
         self,
@@ -142,28 +73,16 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         super().__init__()
         self.model = model
         self.guide = guide
-        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
         self.num_samples = num_samples
-        self.max_plate_nesting = max_plate_nesting
-
-    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
-        if self.max_plate_nesting is None:
-            self.max_plate_nesting = guess_max_plate_nesting(
-                self.model, self.guide, *args, **kwargs
-            )
-
-        particles_plate = (
-            contextlib.nullcontext()
-            if self.num_samples == 1
-            else pyro.plate(
-                "__predictive_particles",
-                self.num_samples,
-                dim=-self.max_plate_nesting - 1,
-            )
+        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
+        self._first_available_dim = (
+            -max_plate_nesting - 1 if max_plate_nesting is not None else None
         )
 
-        with pyro.poutine.trace() as model_tr, particles_plate:
-            self._predictive_model(*args, **kwargs)
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
+        with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
+            with pyro.poutine.trace() as model_tr, BatchedLatents(self.num_samples):
+                self._predictive_model(*args, **kwargs)
 
         return {
             name: node["value"]
@@ -178,24 +97,25 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     model: Callable[P, Any]
     guide: Callable[P, Any]
     num_samples: int
-    max_plate_nesting: int
 
-    _data_plate_name: ClassVar[str] = "__particles_data"
-    _mc_plate_name: ClassVar[str] = "__particles_mc"
+    _data_plate_name: str = "__particles_data"
+    _mc_plate_name: str = "__particles_mc"
 
     def __init__(
         self,
         model: torch.nn.Module,
         guide: torch.nn.Module,
         *,
-        max_plate_nesting: int,
         num_samples: int = 1,
+        max_plate_nesting: Optional[int] = None,
     ):
         super().__init__()
         self.model = model
         self.guide = guide
-        self.max_plate_nesting = max_plate_nesting
         self.num_samples = num_samples
+        self._first_available_dim = (
+            -max_plate_nesting - 1 if max_plate_nesting is not None else None
+        )
 
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
@@ -208,7 +128,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             )
         )
 
-        with IndexPlatesMessenger(first_available_dim=-self.max_plate_nesting - 1):
+        with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
             index_plates = get_index_plates()
             plate_name_to_dim = collections.OrderedDict(
@@ -245,14 +165,13 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             ) - math.log(self.num_samples)
             plate_name_to_dim.pop(index_plates[self._mc_plate_name].name)
 
-        # permute if necessary
+        # permute if necessary to move plate dimensions to the left
         perm: List[int] = [dim for dim in plate_name_to_dim.values()]
         perm += [dim for dim in range(-len(log_weights.shape), 0) if dim not in perm]
         log_weights = torch.permute(log_weights, perm)
 
-        # pack log_weights
+        # pack log_weights by squeezing out rightmost dimensions
         for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):
             log_weights = log_weights.squeeze(-1)
 
-        assert len(log_weights.shape) == len(plate_name_to_dim) == 1  # DEBUG
         return log_weights
