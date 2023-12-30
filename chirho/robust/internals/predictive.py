@@ -98,9 +98,6 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     guide: Callable[P, Any]
     num_samples: int
 
-    _data_plate_name: str = "__particles_data"
-    _mc_plate_name: str = "__particles_mc"
-
     def __init__(
         self,
         model: torch.nn.Module,
@@ -108,6 +105,8 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
+        data_plate_name: str = "__particles_data",
+        mc_plate_name: str = "__particles_mc",
     ):
         super().__init__()
         self.model = model
@@ -116,6 +115,8 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self._first_available_dim = (
             -max_plate_nesting - 1 if max_plate_nesting is not None else None
         )
+        self._data_plate_name = data_plate_name
+        self._mc_plate_name = mc_plate_name
 
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
@@ -158,7 +159,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             log_weights -= site_log_prob
 
         # sum out particle dimension and discard
-        if self.num_samples > 1 and self._mc_plate_name in index_plates:
+        if self._mc_plate_name in index_plates:
             log_weights = torch.logsumexp(
                 log_weights,
                 dim=plate_name_to_dim[index_plates[self._mc_plate_name].name],
