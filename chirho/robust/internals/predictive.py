@@ -1,8 +1,9 @@
+import collections
 import contextlib
 import math
 import typing
 import warnings
-from typing import Any, Callable, Container, Generic, Optional, TypeVar
+from typing import Any, Callable, Container, Generic, List, Optional, TypeVar
 
 import pyro
 import torch
@@ -97,8 +98,8 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
 
     def __init__(
         self,
-        model: torch.nn.Module,
-        guide: torch.nn.Module,
+        model: Callable[P, T],
+        guide: Callable[P, Any],
     ):
         super().__init__()
         self.model = model
@@ -113,11 +114,12 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
                 name
                 for name, node in guide_tr.trace.nodes.items()
                 if node["type"] == "sample"
-                and not pyro.poutine.util.site_is_subsample(node)
             ]
         )
 
-        with pyro.poutine.infer_config(lambda msg: {"_model_predictive_site": True}):
+        with pyro.poutine.infer_config(
+            config_fn=lambda msg: {"_model_predictive_site": True}
+        ):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
                     return self.model(*args, **kwargs)
@@ -140,7 +142,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         super().__init__()
         self.model = model
         self.guide = guide
-        self._predictive_model: PredictiveModel[P, T] = PredictiveModel(model, guide)
+        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
 
@@ -203,37 +205,54 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 BatchedObservations(data, name=self._data_plate_name)(
                     PredictiveModel(self.model, self.guide)
                 )
-            ),
-            pack=True,
+            )
         )
 
         with IndexPlatesMessenger(first_available_dim=-self.max_plate_nesting - 1):
-            model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
-            plate_names = [
-                get_index_plates()[p].name
+            model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
+            index_plates = get_index_plates()
+            plate_name_to_dim = collections.OrderedDict(
+                (index_plates[p].name, index_plates[p].dim)
                 for p in [self._mc_plate_name, self._data_plate_name]
-            ]
-
-        wds = "".join(model_trace.plate_to_symbol[p] for p in plate_names)
+                if p in index_plates
+            )
 
         log_weights = typing.cast(torch.Tensor, 0.0)
         for site in model_trace.nodes.values():
             if site["type"] != "sample":
                 continue
-            log_weights += torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wds,
-                [site["packed"]["log_prob"]],
-            )
+            site_log_prob = site["log_prob"]
+            for f in site["cond_indep_stack"]:
+                if f.vectorized and f.name not in plate_name_to_dim:
+                    site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
+            log_weights += site_log_prob
 
         for site in guide_trace.nodes.values():
             if site["type"] != "sample":
                 continue
-            log_weights -= torch.einsum(
-                site["packed"]["log_prob"]._pyro_dims + "->" + wds,
-                [site["packed"]["log_prob"]],
-            )
+            site_log_prob = site["log_prob"]
+            for f in site["cond_indep_stack"]:
+                if f.vectorized and f.name not in plate_name_to_dim:
+                    site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
+            log_weights -= site_log_prob
 
-        assert isinstance(log_weights, torch.Tensor)  # DEBUG
-        assert len(log_weights.shape) == 2  # DEBUG
-        assert log_weights.shape[0] == self.num_samples  # DEBUG
-        return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
+        # sum out particle dimension and discard
+        if self.num_samples > 1 and self._mc_plate_name in index_plates:
+            log_weights = torch.logsumexp(
+                log_weights,
+                dim=plate_name_to_dim[index_plates[self._mc_plate_name].name],
+                keepdim=True,
+            ) - math.log(self.num_samples)
+            plate_name_to_dim.pop(index_plates[self._mc_plate_name].name)
+
+        # permute if necessary
+        perm: List[int] = [dim for dim in plate_name_to_dim.values()]
+        perm += [dim for dim in range(-len(log_weights.shape), 0) if dim not in perm]
+        log_weights = torch.permute(log_weights, perm)
+
+        # pack log_weights
+        for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):
+            log_weights = log_weights.squeeze(-1)
+
+        assert len(log_weights.shape) == len(plate_name_to_dim) == 1  # DEBUG
+        return log_weights

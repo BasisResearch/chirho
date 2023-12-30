@@ -5,9 +5,10 @@ import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
-from chirho.robust.internals.predictive import NMCLogPredictiveLikelihood
+from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
 from chirho.robust.internals.utils import (
     ParamDict,
+    guess_max_plate_nesting,
     make_flatten_unflatten,
     make_functional_call,
     reset_rng_state,
@@ -92,23 +93,17 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
 
 
 def make_empirical_fisher_vp(
-    func_log_prob: Callable[Concatenate[ParamDict, Point[T], P], torch.Tensor],
+    batched_func_log_prob: Callable[Concatenate[ParamDict, Point[T], P], torch.Tensor],
     log_prob_params: ParamDict,
     data: Point[T],
     *args: P.args,
     **kwargs: P.kwargs,
 ) -> Callable[[ParamDict], ParamDict]:
-    batched_func_log_prob: Callable[[ParamDict, Point[T]], torch.Tensor] = torch.vmap(
-        lambda p, data: func_log_prob(p, data, *args, **kwargs),
-        in_dims=(None, 0),
-        randomness="different",
-    )
-
     N = data[next(iter(data))].shape[0]  # type: ignore
     mean_vector = 1 / N * torch.ones(N)
 
     def bound_batched_func_log_prob(params: ParamDict) -> torch.Tensor:
-        return batched_func_log_prob(params, data)
+        return batched_func_log_prob(params, data, *args, **kwargs)
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
         def jvp_fn(log_prob_params: ParamDict) -> torch.Tensor:
@@ -145,12 +140,11 @@ def linearize(
         num_samples=num_samples_outer,
         parallel=True,
     )
-    predictive_params, func_predictive = make_functional_call(predictive)
 
-    log_prob = NMCLogPredictiveLikelihood(
+    batched_log_prob = BatchedNMCLogPredictiveLikelihood(
         model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
-    log_prob_params, func_log_prob = make_functional_call(log_prob)
+    log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
     if cg_iters is None:
         cg_iters = log_prob_params_numel
@@ -165,24 +159,24 @@ def linearize(
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:
+        if batched_log_prob.max_plate_nesting is None:
+            batched_log_prob.max_plate_nesting = guess_max_plate_nesting(
+                model, guide, *args, **kwargs
+            )
+
         with torch.no_grad():
-            data: Point[T] = func_predictive(predictive_params, *args, **kwargs)
+            data: Point[T] = predictive(*args, **kwargs)
             data = {k: data[k] for k in points.keys()}
         fvp = make_empirical_fisher_vp(
-            func_log_prob, log_prob_params, data, *args, **kwargs
+            batched_func_log_prob, log_prob_params, data, *args, **kwargs
         )
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
         pinned_fvp_batched = torch.func.vmap(
             lambda v: pinned_fvp(v), randomness="different"
         )
-        batched_func_log_prob = torch.vmap(
-            lambda p, data: func_log_prob(p, data, *args, **kwargs),
-            in_dims=(None, 0),
-            randomness="different",
-        )
 
         def bound_batched_func_log_prob(p: ParamDict) -> torch.Tensor:
-            return batched_func_log_prob(p, points)
+            return batched_func_log_prob(p, points, *args, **kwargs)
 
         if pointwise_influence:
             score_fn = torch.func.jacrev(bound_batched_func_log_prob)

@@ -2,8 +2,6 @@ import contextlib
 import functools
 import math
 from typing import Any, Callable, Dict, Generic, Mapping, Optional, Tuple, TypeVar
-from chirho.observational.handlers.condition import Observations
-from chirho.robust.ops import Point
 
 import pyro
 import torch
@@ -11,6 +9,8 @@ from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import add_indices
 from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
+from chirho.observational.handlers.condition import Observations
+from chirho.robust.ops import Point
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -159,7 +159,6 @@ def _unbind_leftmost_dim_distribution(
 def get_importance_traces(
     model: Callable[P, Any],
     guide: Optional[Callable[P, Any]] = None,
-    pack: bool = True,
 ) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
     def _fn(
         *args: P.args, **kwargs: P.kwargs
@@ -168,24 +167,18 @@ def get_importance_traces(
             model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
                 "flat", math.inf, model, guide, args, kwargs
             )
-            if pack:
-                guide_trace.pack_tensors()
-                model_trace.pack_tensors(guide_trace.plate_to_symbol)
             return model_trace, guide_trace
         else:  # use prior as default guide, but don't run model twice
             model_trace, _ = pyro.infer.enum.get_importance_trace(
                 "flat", math.inf, model, lambda *_, **__: None, args, kwargs
             )
-            if pack:
-                model_trace.pack_tensors()
 
             guide_trace = model_trace.copy()
             for name, node in list(guide_trace.nodes.items()):
                 if node["type"] != "sample":
-                    del model_trace[name]
+                    del model_trace.nodes[name]
                 elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
-                    del guide_trace[name]
-
+                    del guide_trace.nodes[name]
             return model_trace, guide_trace
 
     return _fn
@@ -224,6 +217,11 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_sample(self, msg: dict) -> None:
+        if pyro.poutine.util.site_is_factor(msg) or pyro.poutine.util.site_is_subsample(
+            msg
+        ):
+            return
+
         if self.num_particles > 1 and self.name not in indices_of(msg["fn"]):
             msg["fn"] = unbind_leftmost_dim(
                 msg["fn"].expand((1,) + msg["fn"].batch_shape),
