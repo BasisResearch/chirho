@@ -131,11 +131,12 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
             index_plates = get_index_plates()
-            plate_name_to_dim = collections.OrderedDict(
-                (index_plates[p].name, index_plates[p].dim)
-                for p in [self._mc_plate_name, self._data_plate_name]
-                if p in index_plates
-            )
+
+        plate_name_to_dim = collections.OrderedDict(
+            (index_plates[p].name, index_plates[p].dim)
+            for p in [self._mc_plate_name, self._data_plate_name]
+            if p in index_plates
+        )
 
         log_weights = typing.cast(torch.Tensor, 0.0)
         for site in model_trace.nodes.values():
