@@ -217,12 +217,13 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_sample(self, msg: dict) -> None:
-        if pyro.poutine.util.site_is_factor(msg) or pyro.poutine.util.site_is_subsample(
-            msg
+        if (
+            self.num_particles > 1
+            and msg["value"] is None
+            and not pyro.poutine.util.site_is_factor(msg)
+            and not pyro.poutine.util.site_is_subsample(msg)
+            and self.name not in indices_of(msg["fn"])
         ):
-            return
-
-        if self.num_particles > 1 and self.name not in indices_of(msg["fn"]):
             msg["fn"] = unbind_leftmost_dim(
                 msg["fn"].expand((1,) + msg["fn"].batch_shape),
                 self.name,

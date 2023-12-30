@@ -141,7 +141,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 continue
             site_log_prob = site["log_prob"]
             for f in site["cond_indep_stack"]:
-                if f.vectorized and f.name not in plate_name_to_dim:
+                if f.dim is not None and f.name not in plate_name_to_dim:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
             log_weights += site_log_prob
 
@@ -150,7 +150,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 continue
             site_log_prob = site["log_prob"]
             for f in site["cond_indep_stack"]:
-                if f.vectorized and f.name not in plate_name_to_dim:
+                if f.dim is not None and f.name not in plate_name_to_dim:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
             log_weights -= site_log_prob
 
