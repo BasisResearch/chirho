@@ -1,6 +1,7 @@
 import contextlib
 import functools
-from typing import Any, Callable, Dict, Mapping, Tuple, TypeVar
+import math
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
@@ -151,3 +152,38 @@ def _unbind_leftmost_dim_distribution(
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
     return v.expand(new_shape)
+
+
+def get_importance_traces(
+    model: Callable[P, Any],
+    guide: Optional[Callable[P, Any]] = None,
+    pack: bool = True,
+) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
+    def _fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
+        if guide is not None:
+            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
+                "flat", math.inf, model, guide, args, kwargs
+            )
+            if pack:
+                guide_trace.pack_tensors()
+                model_trace.pack_tensors(guide_trace.plate_to_symbol)
+            return model_trace, guide_trace
+        else:  # use prior as default guide, but don't run model twice
+            model_trace, _ = pyro.infer.enum.get_importance_trace(
+                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
+            )
+            if pack:
+                model_trace.pack_tensors()
+
+            guide_trace = model_trace.copy()
+            for name, node in list(guide_trace.nodes.items()):
+                if node["type"] != "sample":
+                    del model_trace[name]
+                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
+                    del guide_trace[name]
+
+            return model_trace, guide_trace
+
+    return _fn

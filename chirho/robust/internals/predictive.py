@@ -1,17 +1,7 @@
 import contextlib
 import math
 import warnings
-from typing import (
-    Any,
-    Callable,
-    Container,
-    Dict,
-    Generic,
-    Mapping,
-    Optional,
-    Tuple,
-    TypeVar,
-)
+from typing import Any, Callable, Container, Dict, Generic, Mapping, Optional, TypeVar
 
 import pyro
 import torch
@@ -20,7 +10,11 @@ from typing_extensions import ParamSpec
 from chirho.indexed.handlers import DependentMaskMessenger, IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.observational.handlers.condition import Observations, condition
-from chirho.robust.internals.utils import guess_max_plate_nesting, unbind_leftmost_dim
+from chirho.robust.internals.utils import (
+    get_importance_traces,
+    guess_max_plate_nesting,
+    unbind_leftmost_dim,
+)
 from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
@@ -224,41 +218,6 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             and not pyro.poutine.util.site_is_subsample(node)
             and node["infer"].get("_model_predictive_site", False)
         }
-
-
-def get_importance_traces(
-    model: Callable[P, Any],
-    guide: Optional[Callable[P, Any]] = None,
-    pack: bool = True,
-) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
-    def _fn(
-        *args: P.args, **kwargs: P.kwargs
-    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
-        if guide is not None:
-            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, guide, args, kwargs
-            )
-            if pack:
-                guide_trace.pack_tensors()
-                model_trace.pack_tensors(guide_trace.plate_to_symbol)
-            return model_trace, guide_trace
-        else:  # use prior as default guide, but don't run model twice
-            model_trace, _ = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
-            )
-            if pack:
-                model_trace.pack_tensors()
-
-            guide_trace = model_trace.copy()
-            for name, node in list(guide_trace.nodes.items()):
-                if node["type"] != "sample":
-                    del model_trace[name]
-                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
-                    del guide_trace[name]
-
-            return model_trace, guide_trace
-
-    return _fn
 
 
 class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
