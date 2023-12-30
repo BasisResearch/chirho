@@ -1,15 +1,17 @@
 import contextlib
 import math
+import typing
 import warnings
 from typing import Any, Callable, Container, Dict, Generic, Mapping, Optional, TypeVar
 
 import pyro
 import torch
-from typing_extensions import ParamSpec
+from typing_extensions import ClassVar, ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger, IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates, indices_of
 from chirho.observational.handlers.condition import Observations, condition
+from chirho.observational.ops import Observation
 from chirho.robust.internals.utils import (
     get_importance_traces,
     guess_max_plate_nesting,
@@ -89,21 +91,18 @@ class NMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         return torch.logsumexp(log_weights, dim=0) - math.log(self.num_samples)
 
 
-class BatchedObservations(Observations[torch.Tensor]):
-    data: Dict[str, torch.Tensor]
+class BatchedObservations(Generic[T], Observations[T]):
+    data: Dict[str, Observation[T]]
     name: str
-    size: int
 
     def __init__(
         self,
-        data: Mapping[str, torch.Tensor],
+        data: Point[T],
         *,
         name: str = "__particles_data",
     ):
         assert len(name) > 0
         self.name = name
-        self.size = next(iter(data.values())).shape[0] if data else 1
-        assert all(v.shape[0] == self.size for v in data.values())
         super().__init__({k: v for k, v in data.items()})
 
     def _pyro_sample(self, msg: dict) -> None:
@@ -112,7 +111,7 @@ class BatchedObservations(Observations[torch.Tensor]):
             old_datum = self.data[msg["name"]]
             try:
                 self.data[msg["name"]] = unbind_leftmost_dim(
-                    old_datum, self.name, size=self.size, event_dim=event_dim
+                    old_datum, self.name, event_dim=event_dim
                 )
                 return super()._pyro_sample(msg)
             finally:
@@ -225,8 +224,9 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
     guide: Callable[P, Any]
     num_samples: int
     max_plate_nesting: int
-    data_plate_name: str
-    mc_plate_name: str
+
+    _data_plate_name: ClassVar[str] = "__particles_data"
+    _mc_plate_name: ClassVar[str] = "__particles_mc"
 
     def __init__(
         self,
@@ -235,26 +235,20 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
         *,
         max_plate_nesting: int,
         num_samples: int = 1,
-        data_plate_name: str = "__particles_data",
-        mc_plate_name: str = "__particles_mc",
     ):
         super().__init__()
         self.model = model
         self.guide = guide
         self.max_plate_nesting = max_plate_nesting
         self.num_samples = num_samples
-        self.data_plate_name = data_plate_name
-        self.mc_plate_name = mc_plate_name
+        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
 
     def _batched_predictive_model(
         self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
     ):
-        predictive_model: PredictiveModel[P, Any] = PredictiveModel(
-            self.model, self.guide
-        )
-        with BatchedLatents(self.num_samples, name=self.mc_plate_name):
-            with BatchedObservations(data, name=self.data_plate_name):
-                return predictive_model(*args, **kwargs)
+        with BatchedLatents(self.num_samples, name=self._mc_plate_name):
+            with BatchedObservations(data, name=self._data_plate_name):
+                return self._predictive_model(*args, **kwargs)
 
     def forward(
         self, data: Mapping[str, torch.Tensor], *args: P.args, **kwargs: P.kwargs
@@ -266,12 +260,12 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P], torch.nn.Module):
             model_trace, guide_trace = get_nmc_traces(data, *args, **kwargs)
             plate_names = [
                 get_index_plates()[p].name
-                for p in [self.mc_plate_name, self.data_plate_name]
+                for p in [self._mc_plate_name, self._data_plate_name]
             ]
 
         wds = "".join(model_trace.plate_to_symbol[p] for p in plate_names)
 
-        log_weights = 0.0
+        log_weights = typing.cast(torch.Tensor, 0.0)
         for site in model_trace.nodes.values():
             if site["type"] != "sample":
                 continue

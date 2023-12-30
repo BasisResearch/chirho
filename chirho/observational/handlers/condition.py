@@ -4,7 +4,7 @@ import pyro
 import torch
 
 from chirho.observational.internals import ObserveNameMessenger
-from chirho.observational.ops import AtomicObservation, observe
+from chirho.observational.ops import Observation, observe
 
 T = TypeVar("T")
 R = Union[float, torch.Tensor]
@@ -62,9 +62,9 @@ class Observations(Generic[T], ObserveNameMessenger):
     a richer set of observational data types and enables counterfactual inference.
     """
 
-    data: Mapping[str, AtomicObservation[T]]
+    data: Mapping[str, Observation[T]]
 
-    def __init__(self, data: Mapping[str, AtomicObservation[T]]):
+    def __init__(self, data: Mapping[str, Observation[T]]):
         self.data = data
         super().__init__()
 
