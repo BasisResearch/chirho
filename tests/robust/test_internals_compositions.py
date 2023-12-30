@@ -12,11 +12,8 @@ from chirho.robust.internals.linearize import (
     make_empirical_fisher_vp,
 )
 from chirho.robust.internals.predictive import (
-    BatchedNMCLogPredictiveLikelihood,
     BatchedObservations,
     NMCLogPredictiveLikelihood,
-    PredictiveFunctional,
-    PredictiveModel,
 )
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
@@ -123,8 +120,9 @@ def test_nmc_likelihood_seeded(link_fn):
     assert torch.allclose(fvp(v)["guide.loc_b"], fvp(v)["guide.loc_b"])
 
 
-def test_batched_observations():
-    max_plate_nesting = 1
+@pytest.mark.parametrize("pad_dim", [0, 1, 2])
+def test_batched_observations(pad_dim: int):
+    max_plate_nesting = 1 + pad_dim
     plate_name = "__dummy_plate__"
     model = SimpleModel()
     guide = SimpleGuide()
