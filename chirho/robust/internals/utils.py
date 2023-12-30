@@ -205,6 +205,13 @@ class BatchedObservations(Generic[T], Observations[T]):
             msg["args"] = (rv, batch_obs)
 
 
+def site_is_delta(msg: dict) -> bool:
+    d = msg["fn"]
+    while hasattr(d, "base_dist"):
+        d = d.base_dist
+    return isinstance(d, pyro.distributions.Delta)
+
+
 class BatchedLatents(pyro.poutine.messenger.Messenger):
     num_particles: int
     name: str
@@ -222,6 +229,7 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
             and msg["value"] is None
             and not pyro.poutine.util.site_is_factor(msg)
             and not pyro.poutine.util.site_is_subsample(msg)
+            and not site_is_delta(msg)
             and self.name not in indices_of(msg["fn"])
         ):
             msg["fn"] = unbind_leftmost_dim(
