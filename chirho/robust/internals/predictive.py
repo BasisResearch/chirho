@@ -121,16 +121,12 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
-        get_nmc_traces = get_importance_traces(
-            BatchedLatents(self.num_samples, name=self._mc_plate_name)(
-                BatchedObservations(data, name=self._data_plate_name)(
-                    PredictiveModel(self.model, self.guide)
-                )
-            )
-        )
+        get_nmc_traces = get_importance_traces(PredictiveModel(self.model, self.guide))
 
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
-            model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
+            with BatchedLatents(self.num_samples, name=self._mc_plate_name):
+                with BatchedObservations(data, name=self._data_plate_name):
+                    model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
             index_plates = get_index_plates()
 
         plate_name_to_dim = collections.OrderedDict(
