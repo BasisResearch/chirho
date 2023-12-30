@@ -103,7 +103,11 @@ class BatchedObservations(Generic[T], Observations[T]):
         super()._pyro_observe(msg)
         if msg["kwargs"]["name"] in self.data:
             rv, obs = msg["args"]
-            event_dim = len(rv.event_shape)
+            event_dim = (
+                len(rv.event_shape)
+                if hasattr(rv, "event_shape")
+                else msg["kwargs"].get("event_dim", 0)
+            )
             batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
             msg["args"] = (rv, batch_obs)
 
