@@ -8,7 +8,6 @@ from typing_extensions import Concatenate, ParamSpec
 from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
 from chirho.robust.internals.utils import (
     ParamDict,
-    guess_max_plate_nesting,
     make_flatten_unflatten,
     make_functional_call,
     reset_rng_state,
