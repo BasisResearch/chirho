@@ -143,7 +143,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             for f in site["cond_indep_stack"]:
                 if f.dim is not None and f.name not in plate_name_to_dim:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
-            log_weights += site_log_prob
+            log_weights = log_weights + site_log_prob
 
         for site in guide_trace.nodes.values():
             if site["type"] != "sample":
@@ -152,7 +152,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             for f in site["cond_indep_stack"]:
                 if f.dim is not None and f.name not in plate_name_to_dim:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
-            log_weights -= site_log_prob
+            log_weights = log_weights - site_log_prob
 
         # sum out particle dimension and discard
         if self._mc_plate_name in index_plates:
