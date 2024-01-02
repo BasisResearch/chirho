@@ -11,13 +11,12 @@ from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
-from chirho.robust.internals.utils import (
+from chirho.robust.internals.predictive import (
     BatchedLatents,
+    BatchedNMCLogPredictiveLikelihood,
     BatchedObservations,
-    make_functional_call,
-    reset_rng_state,
 )
+from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
 from .robust_fixtures import SimpleGuide, SimpleModel
 
