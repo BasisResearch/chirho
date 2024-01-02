@@ -121,9 +121,9 @@ def make_empirical_fisher_vp(
 
     .. math::
 
-        -\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log q_{\phi}(x_n) v,
+        -\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log \tilde{p}_{\phi}(x_n) v,
 
-    where :math:`\phi` corresponds to ``log_prob_params``, :math:`q_{\phi}` denotes the
+    where :math:`\phi` corresponds to ``log_prob_params``, :math:`\tilde{p}_{\phi}` denotes the
     predictive distribution ``log_prob``, and :math:`x_n` are the data points in ``data``.
 
     :param func_log_prob: computes the log probability of ``data`` given ``log_prob_params``
@@ -231,16 +231,19 @@ def linearize(
     r"""
     Returns the influence function associated with the parameters
     of ``guide`` and probabilistic program ``model``. This function
-    computes the following quantity at an arbitrary point :math:`p`:
+    computes the following quantity at an arbitrary point :math:`x^{\prime}`:
 
     .. math::
 
-        \left[-\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log q_{\phi}(x_n) \right]
-        \nabla_{\phi} \log q_{\phi}(p),
+        \left[-\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log \tilde{p}_{\phi}(x_n) \right]
+        \nabla_{\phi} \log \tilde{p}_{\phi}(x^{\prime}), \quad
+        \tilde{p}_{\phi}(x) = \int p(x \mid \theta) q_{\phi}(\theta) d\theta,
 
-    where :math:`\phi` corresponds to ``log_prob_params``, :math:`q_{\phi}` denotes the
-    predictive distribution ``log_prob``, and :math:`x_n` are the data points drawn iid
-    from the predictive distribution.
+    where :math:`\phi` corresponds to ``log_prob_params``,
+    :math:`p(x \mid \theta)` denotes the ``model``, :math:`q_{\phi}` denotes the ``guide``,
+    :math:`\tilde{p}_{\phi}` denotes the predictive distribution ``log_prob`` induced
+    from the ``model`` and ``guide``, and :math:`\{x_n\}_{n=1}^N` are the
+    data points drawn iid from the predictive distribution.
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
@@ -251,7 +254,7 @@ def linearize(
         approximate Fisher information in :func:`make_empirical_fisher_vp`
     :type num_samples_outer: int
     :param num_samples_inner: number of Monte Carlo samples used in
-        :class:`NMCLogPredictiveLikelihood`. Defaults to ``num_samples_outer**2``.
+        :class:`BatchedNMCLogPredictiveLikelihood`. Defaults to ``num_samples_outer**2``.
     :type num_samples_inner: Optional[int], optional
     :param max_plate_nesting: bound on max number of nested :func:`pyro.plate`
         contexts. Defaults to ``None``.

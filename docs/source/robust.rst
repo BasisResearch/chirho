@@ -19,6 +19,10 @@ Handlers
    :members:
    :undoc-members:
 
+.. automodule:: chirho.robust.handlers.estimators
+   :members:
+   :undoc-members:
+
 Internals
 ---------
 
