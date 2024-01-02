@@ -44,7 +44,8 @@ def _flat_conjugate_gradient_solve(
 
     .. note::
 
-        Code is adapted from https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py
+        Code is adapted from
+        https://github.com/rlworkgroup/garage/blob/master/src/garage/torch/optimizers/conjugate_gradient_optimizer.py # noqa: E501
 
     """
     assert len(b.shape), "b must be a 2D matrix"
