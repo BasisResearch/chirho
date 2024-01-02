@@ -1,7 +1,7 @@
 import collections
 import math
 import typing
-from typing import Any, Callable, Generic, List, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import torch
@@ -247,10 +247,11 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             index_plates = get_index_plates()
 
         plate_name_to_dim = collections.OrderedDict(
-            (index_plates[p].name, index_plates[p].dim)
+            (p, index_plates[p])
             for p in [self._mc_plate_name, self._data_plate_name]
             if p in index_plates
         )
+        plate_frames = set(plate_name_to_dim.values())
 
         log_weights = typing.cast(torch.Tensor, 0.0)
         for site in model_trace.nodes.values():
@@ -258,7 +259,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 continue
             site_log_prob = site["log_prob"]
             for f in site["cond_indep_stack"]:
-                if f.dim is not None and f.name not in plate_name_to_dim:
+                if f.dim is not None and f not in plate_frames:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
             log_weights = log_weights + site_log_prob
 
@@ -267,7 +268,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
                 continue
             site_log_prob = site["log_prob"]
             for f in site["cond_indep_stack"]:
-                if f.dim is not None and f.name not in plate_name_to_dim:
+                if f.dim is not None and f not in plate_frames:
                     site_log_prob = site_log_prob.sum(f.dim, keepdim=True)
             log_weights = log_weights - site_log_prob
 
@@ -275,15 +276,14 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         if self._mc_plate_name in index_plates:
             log_weights = torch.logsumexp(
                 log_weights,
-                dim=plate_name_to_dim[index_plates[self._mc_plate_name].name],
+                dim=plate_name_to_dim[self._mc_plate_name].dim,
                 keepdim=True,
             ) - math.log(self.num_samples)
-            plate_name_to_dim.pop(index_plates[self._mc_plate_name].name)
+            plate_name_to_dim.pop(self._mc_plate_name)
 
-        # permute if necessary to move plate dimensions to the left
-        perm: List[int] = [dim for dim in plate_name_to_dim.values()]
-        perm += [dim for dim in range(-len(log_weights.shape), 0) if dim not in perm]
-        log_weights = torch.permute(log_weights, perm)
+        # move data plate dimension to the left
+        for name in reversed(plate_name_to_dim.keys()):
+            log_weights = bind_leftmost_dim(log_weights, name)
 
         # pack log_weights by squeezing out rightmost dimensions
         for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):
