@@ -8,7 +8,7 @@ import torch
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import add_indices
-from chirho.indexed.ops import IndexSet, get_index_plates
+from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -165,6 +165,28 @@ def _unbind_leftmost_dim_distribution(
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
     return v.expand(new_shape)
+
+
+@functools.singledispatch
+def bind_leftmost_dim(v, name: str, **kwargs):
+    """
+    Helper function to move a named dimension managed by ``chirho.indexed``
+    into a new unnamed dimension to the left of all named dimensions in the value.
+
+    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+    """
+    raise NotImplementedError
+
+
+@bind_leftmost_dim.register
+def _bind_leftmost_dim_tensor(
+    v: torch.Tensor, name: str, *, event_dim: int = 0, **kwargs
+) -> torch.Tensor:
+    if name not in indices_of(v, event_dim=event_dim):
+        return v
+    return torch.transpose(
+        v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
+    )
 
 
 def get_importance_traces(
