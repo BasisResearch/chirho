@@ -128,6 +128,12 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         self.guide = guide
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> T:
+        """
+        Returns a sample from the posterior predictive distribution.
+
+        :return: Sample from the posterior predictive distribution.
+        :rtype: T
+        """
         with pyro.poutine.trace() as guide_tr:
             self.guide(*args, **kwargs)
 
@@ -192,6 +198,12 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         self._mc_plate_name = name
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
+        """
+        Returns a batch of samples from the posterior predictive distribution.
+
+        :return: Dictionary of samples from the posterior predictive distribution.
+        :rtype: Point[T]
+        """
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
@@ -211,6 +223,27 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
 
 
 class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
+    r"""
+    Approximates the log predictive likelihood induced by ``model`` and ``guide``
+    using Monte Carlo sampling at an arbitrary batch of :math:`N`
+    points :math:`\{x_n\}_{n=1}^N`.
+
+    .. math::
+        \log \left(\frac{1}{M} \sum_{m=1}^M p(x_n \mid \theta_m)\right),
+        \quad \theta_m \sim q_{\phi}(\theta),
+
+    where :math:`q_{\phi}(\theta)` is the guide and :math:`p(x_n \mid \theta_m)`
+    is the model conditioned on the latents from the guide.
+
+    :param model: Python callable containing Pyro primitives.
+    :type model: torch.nn.Module
+    :param guide: Python callable containing Pyro primitives.
+        Must only contain continuous latent variables.
+    :type guide: torch.nn.Module
+    :param num_samples: Number of Monte Carlo draws :math:`M`
+        used to approximate predictive distribution, defaults to 1
+    :type num_samples: int, optional
+    """
     model: Callable[P, Any]
     guide: Callable[P, Any]
     num_samples: int
@@ -238,6 +271,14 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     def forward(
         self, data: Point[T], *args: P.args, **kwargs: P.kwargs
     ) -> torch.Tensor:
+        """
+        Computes the log predictive likelihood of ``data`` given ``model`` and ``guide``.
+
+        :param data: Dictionary of observations.
+        :type data: Point[T]
+        :return: Log predictive likelihood at each datapoint.
+        :rtype: torch.Tensor
+        """
         get_nmc_traces = get_importance_traces(PredictiveModel(self.model, self.guide))
 
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
