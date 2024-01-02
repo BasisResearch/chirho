@@ -116,6 +116,19 @@ def reset_rng_state(rng_state: T):
 
 @functools.singledispatch
 def unbind_leftmost_dim(v, name: str, size: int = 1, **kwargs):
+    """
+    Helper function to move the leftmost dimension of a ``torch.Tensor``
+    or ``pyro.distributions.Distribution`` or other batched value
+    into a fresh named dimension using the machinery in ``chirho.indexed`` ,
+    allocating a new dimension with the given name if necessary
+    via an enclosing :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+
+    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+
+    :param v: Batched value.
+    :param name: Name of the fresh dimension.
+    :param size: Size of the fresh dimension. If 1, the size is inferred from ``v`` .
+    """
     raise NotImplementedError
 
 
@@ -160,6 +173,17 @@ def get_importance_traces(
     model: Callable[P, Any],
     guide: Optional[Callable[P, Any]] = None,
 ) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
+    """
+    Thin functional wrapper around :func:`~pyro.infer.enum.get_importance_trace`
+    that cleans up the original interface to avoid unnecessary arguments
+    and efficiently supports using the prior in a model as a default guide.
+
+    :param model: Model to run.
+    :param guide: Guide to run. If ``None``, use the prior in ``model`` as a guide.
+    :returns: A function that takes the same arguments as ``model`` and ``guide`` and returns
+        a tuple of importance traces ``(model_trace, guide_trace)``.
+    """
+
     def _fn(
         *args: P.args, **kwargs: P.kwargs
     ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
@@ -184,27 +208,6 @@ def get_importance_traces(
     return _fn
 
 
-class BatchedObservations(Generic[T], Observations[T]):
-    name: str
-
-    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
-        assert len(name) > 0
-        self.name = name
-        super().__init__(data)
-
-    def _pyro_observe(self, msg: dict) -> None:
-        super()._pyro_observe(msg)
-        if msg["kwargs"]["name"] in self.data:
-            rv, obs = msg["args"]
-            event_dim = (
-                len(rv.event_shape)
-                if hasattr(rv, "event_shape")
-                else msg["kwargs"].get("event_dim", 0)
-            )
-            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
-            msg["args"] = (rv, batch_obs)
-
-
 def site_is_delta(msg: dict) -> bool:
     d = msg["fn"]
     while hasattr(d, "base_dist"):
@@ -213,6 +216,18 @@ def site_is_delta(msg: dict) -> bool:
 
 
 class BatchedLatents(pyro.poutine.messenger.Messenger):
+    """
+    Effect handler that adds a fresh batch dimension to all latent ``sample`` sites.
+    Similar to wrapping a Pyro model in a ``pyro.plate`` context, but uses the machinery
+    in ``chirho.indexed`` to automatically allocate and track the fresh batch dimension
+    based on the ``name`` argument to ``BatchedLatents`` .
+
+    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+
+    :param int num_particles: Number of particles to use for parallelization.
+    :param str name: Name of the fresh batch dimension.
+    """
+
     num_particles: int
     name: str
 
@@ -237,3 +252,40 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
                 self.name,
                 size=self.num_particles,
             )
+
+
+class BatchedObservations(Generic[T], Observations[T]):
+    """
+    Effect handler that takes a dictionary of observation values for ``sample`` sites
+    that are assumed to be batched along their leftmost dimension, adds a fresh named
+    dimension using the machinery in ``chirho.indexed``, and reshapes the observation
+    values so that the new ``chirho.observational.observe`` sites are batched along
+    the fresh named dimension.
+
+    Useful in combination with ``pyro.infer.Predictive`` which returns a dictionary
+    of values whose leftmost dimension is a batch dimension over independent samples.
+
+    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+
+    :param Point[T] data: Dictionary of observation values.
+    :param str name: Name of the fresh batch dimension.
+    """
+
+    name: str
+
+    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
+        assert len(name) > 0
+        self.name = name
+        super().__init__(data)
+
+    def _pyro_observe(self, msg: dict) -> None:
+        super()._pyro_observe(msg)
+        if msg["kwargs"]["name"] in self.data:
+            rv, obs = msg["args"]
+            event_dim = (
+                len(rv.event_shape)
+                if hasattr(rv, "event_shape")
+                else msg["kwargs"].get("event_dim", 0)
+            )
+            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
+            msg["args"] = (rv, batch_obs)
