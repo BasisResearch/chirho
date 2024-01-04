@@ -54,19 +54,16 @@ def one_step_correction(
 
 
 def one_step_corrected_estimator(
-    test_data: Point[T],
     model: Callable[P, Any],
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
     influence_fn_estimator=influence_fn,
     **influence_kwargs,
-) -> S:
+) -> Callable[Concatenate[Point[T], P], S]:
     """
-    Returns the one-step corrected estimator for the functional at a
+    Returns a function that computes the one-step corrected estimator for the functional at a
     specified set of test points as discussed in [1].
 
-    :param test_data: test data
-    :type test_data: Point[T]
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
     :param guide: Python callable containing Pyro primitives.
@@ -81,13 +78,17 @@ def one_step_corrected_estimator(
         [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
         Callable[Concatenate[Point[T], P], S],
     ]
-    :return: the one-step corrected estimator for the functional evaluated at the
-        test points.
+    :return: function to computer the one-step corrected estimator
     :rtype: S
     """
-    plug_in_estimate = functional(model, guide)()
+    plug_in_estimator = functional(model, guide)
     correction = one_step_correction(
         model, guide, functional, influence_fn_estimator, **influence_kwargs
-    )(test_data)
-    
-    return plug_in_estimate + correction
+    )
+
+    def _one_step_corrected_estimator(test_data: Point[T], *args, **kwargs) -> S:
+        return plug_in_estimator(*args, **kwargs) + correction(
+            test_data, *args, **kwargs
+        )
+
+    return _one_step_corrected_estimator
