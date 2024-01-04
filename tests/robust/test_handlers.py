@@ -90,4 +90,4 @@ def test_estimator_smoke(
         assert not torch.isinf(v).any(), f"one_step for {k} had infs"
         assert not torch.isclose(
             v, torch.zeros_like(v)
-        ).all(), f"one_step for {k} was zero"
+        ).all(), f"{estimation_method} estimator for {k} was zero"
