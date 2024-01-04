@@ -3,7 +3,6 @@ from typing import Any, Callable, Optional
 import torch
 from typing_extensions import Concatenate
 
-from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
 
@@ -11,10 +10,6 @@ def one_step_correction(
     model: Callable[P, Any],
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
-    influence_fn_estimator: Callable[
-        [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
-        Callable[Concatenate[Point[T], P], S],
-    ] = influence_fn,
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -29,12 +24,6 @@ def one_step_correction(
     :param functional: model summary of interest, which is a function of the
         model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
     :type functional: Optional[Functional[P, S]], optional
-    :param influence_fn_estimator: function to approximate the efficient influence
-        function. Defaults to :func:`influence_fn`.
-    :type influence_fn_estimator: Callable[
-        [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
-        Callable[Concatenate[Point[T], P], S],
-    ]
     :return: function to compute the one-step correction
     :rtype: Callable[Concatenate[Point[T], P], S]
 
@@ -45,7 +34,7 @@ def one_step_correction(
     """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
-    eif_fn = influence_fn_estimator(
+    eif_fn = influence_fn(
         model, guide, functional, **influence_kwargs_one_step
     )
 
@@ -58,11 +47,7 @@ def one_step_correction(
 def one_step_corrected_estimator(
     model: Callable[P, Any],
     guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
-    influence_fn_estimator: Callable[
-        [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
-        Callable[Concatenate[Point[T], P], S],
-    ] = influence_fn,
+    functional: Functional[P, S],
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -76,7 +61,7 @@ def one_step_corrected_estimator(
     :type guide: Callable[P, Any]
     :param functional: model summary of interest, which is a function of the
         model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
-    :type functional: Optional[Functional[P, S]], optional
+    :type functional: Functional[P, S]
     :param influence_fn_estimator: function to approximate the efficient influence
         function. Defaults to :func:`influence_fn`.
     :type influence_fn_estimator: Callable[
@@ -86,14 +71,9 @@ def one_step_corrected_estimator(
     :return: function to compute the one-step corrected estimator
     :rtype: S
     """
-    if functional is None:
-        assert isinstance(model, torch.nn.Module)
-        assert isinstance(guide, torch.nn.Module)
-        plug_in_estimator = PredictiveFunctional(model, guide)
-    else:
-        plug_in_estimator = functional(model, guide)
+    plug_in_estimator = functional(model, guide)
     correction_estimator = one_step_correction(
-        model, guide, functional, influence_fn_estimator, **influence_kwargs
+        model, guide, functional, influence_fn, **influence_kwargs
     )
 
     def _one_step_corrected_estimator(test_data: Point[T], *args, **kwargs) -> S:
