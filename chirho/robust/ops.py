@@ -1,6 +1,7 @@
 import functools
 from typing import Any, Callable, Mapping, Optional, TypeVar
 
+import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
@@ -15,11 +16,11 @@ Point = Mapping[str, Observation[T]]
 Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
 
 
+@pyro.poutine.runtime.effectful(type="influence_fn")
 def influence_fn(
     model: Callable[P, Any],
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
-    **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
     Returns the efficient influence function for ``functional``
@@ -46,6 +47,7 @@ def influence_fn(
             import torch
 
             from chirho.robust.ops import influence_fn
+            from chirho.robust.handlers.influence_fn_estimators import MonteCarloInfluenceEstimator
 
             pyro.settings.set(module_local_params=True)
 
@@ -94,62 +96,13 @@ def influence_fn(
                 model, guide=guide, num_samples=10, return_sites=["y"]
             )
             points = predictive()
-            influence = influence_fn(
-                model,
-                guide,
-                SimpleFunctional,
-                num_samples_outer=1000,
-                num_samples_inner=1000,
-            )
+            with MonteCarloInfluenceEstimator(num_samples_outer=1000, num_samples_innfer=1000)
+                influence = influence_fn(
+                    model,
+                    guide,
+                    SimpleFunctional,
+                )
 
             influence(points)
-
-    .. note::
-
-        * ``functional`` must compose with ``torch.func.jvp``
-        * Since the efficient influence function is approximated using Monte Carlo, the result
-          of this function is stochastic, i.e., evaluating this function on the same ``points``
-          can result in different values. To reduce variance, increase ``num_samples_outer`` and
-          ``num_samples_inner`` in ``linearize_kwargs``.
-        * Currently, ``model`` and ``guide`` cannot contain any ``pyro.param`` statements.
-          This issue will be addressed in a future release:
-          https://github.com/BasisResearch/chirho/issues/393.
     """
-    from chirho.robust.internals.linearize import linearize
-    from chirho.robust.internals.predictive import PredictiveFunctional
-    from chirho.robust.internals.utils import make_functional_call
-
-    linearized = linearize(model, guide, **linearize_kwargs)
-
-    if functional is None:
-        assert isinstance(model, torch.nn.Module)
-        assert isinstance(guide, torch.nn.Module)
-        target = PredictiveFunctional(model, guide)
-    else:
-        target = functional(model, guide)
-
-    # TODO check that target_params == model_params | guide_params
-    assert isinstance(target, torch.nn.Module)
-    target_params, func_target = make_functional_call(target)
-
-    @functools.wraps(target)
-    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
-        """
-        Evaluates the efficient influence function for ``functional`` at each
-        point in ``points``.
-
-        :param points: points at which to compute the efficient influence function
-        :type points: Point[T]
-        :return: efficient influence function evaluated at each point in ``points`` or averaged
-        :rtype: S
-        """
-        param_eif = linearized(points, *args, **kwargs)
-        return torch.vmap(
-            lambda d: torch.func.jvp(
-                lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
-            )[1],
-            in_dims=0,
-            randomness="different",
-        )(param_eif)
-
-    return _fn
+    raise NotImplementedError("No default behavior for `influence_fn`.")
