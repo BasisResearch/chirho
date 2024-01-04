@@ -6,7 +6,10 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.estimators import one_step_correction
+from chirho.robust.handlers.estimators import (
+    one_step_corrected_estimator,
+    one_step_correction,
+)
 from chirho.robust.internals.predictive import PredictiveFunctional
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -42,7 +45,10 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 @pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
-def test_one_step_correction_smoke(
+@pytest.mark.parametrize(
+    "estimation_method", [one_step_correction, one_step_corrected_estimator]
+)
+def test_estimator_smoke(
     model,
     guide,
     obs_names,
@@ -51,12 +57,13 @@ def test_one_step_correction_smoke(
     num_samples_inner,
     cg_iters,
     num_predictive_samples,
+    estimation_method,
 ):
     model = model()
     guide = guide(model)
     model(), guide()  # initialize
 
-    one_step = one_step_correction(
+    estimator = estimation_method(
         model,
         guide,
         functional=functools.partial(
@@ -76,9 +83,9 @@ def test_one_step_correction_smoke(
             )().items()
         }
 
-    one_step_on_test: Mapping[str, torch.Tensor] = one_step(test_datum)
-    assert len(one_step_on_test) > 0
-    for k, v in one_step_on_test.items():
+    estimator_on_test: Mapping[str, torch.Tensor] = estimator(test_datum)
+    assert len(estimator_on_test) > 0
+    for k, v in estimator_on_test.items():
         assert not torch.isnan(v).any(), f"one_step for {k} had nans"
         assert not torch.isinf(v).any(), f"one_step for {k} had infs"
         assert not torch.isclose(
