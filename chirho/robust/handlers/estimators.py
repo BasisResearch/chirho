@@ -1,7 +1,9 @@
 from typing import Any, Callable, Optional
 
+import torch
 from typing_extensions import Concatenate
 
+from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
 
@@ -57,7 +59,10 @@ def one_step_corrected_estimator(
     model: Callable[P, Any],
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
-    influence_fn_estimator=influence_fn,
+    influence_fn_estimator: Callable[
+        [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
+        Callable[Concatenate[Point[T], P], S],
+    ] = influence_fn,
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -81,7 +86,12 @@ def one_step_corrected_estimator(
     :return: function to computer the one-step corrected estimator
     :rtype: S
     """
-    plug_in_estimator = functional(model, guide)
+    if functional is None:
+        assert isinstance(model, torch.nn.Module)
+        assert isinstance(guide, torch.nn.Module)
+        plug_in_estimator = PredictiveFunctional(model, guide)
+    else:
+        plug_in_estimator = functional(model, guide)
     correction = one_step_correction(
         model, guide, functional, influence_fn_estimator, **influence_kwargs
     )
@@ -89,6 +99,6 @@ def one_step_corrected_estimator(
     def _one_step_corrected_estimator(test_data: Point[T], *args, **kwargs) -> S:
         return plug_in_estimator(*args, **kwargs) + correction(
             test_data, *args, **kwargs
-        )
+        )  # type: ignore[operator]
 
     return _one_step_corrected_estimator
