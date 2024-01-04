@@ -6,7 +6,8 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.estimators import one_step_correction
+from chirho.robust.handlers.functional_estimators import one_step_correction
+from chirho.robust.handlers.influence_fn_estimators import MonteCarloInfluenceEstimator
 from chirho.robust.internals.predictive import PredictiveFunctional
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -55,18 +56,19 @@ def test_one_step_correction_smoke(
     model = model()
     guide = guide(model)
     model(), guide()  # initialize
-
-    one_step = one_step_correction(
-        model,
-        guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )
+    ):
+        one_step = one_step_correction(
+            model,
+            guide,
+            functional=functools.partial(
+                PredictiveFunctional, num_samples=num_predictive_samples
+            ),
+        )
 
     with torch.no_grad():
         test_datum = {

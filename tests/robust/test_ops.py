@@ -6,6 +6,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
+from chirho.robust.handlers.influence_fn_estimators import MonteCarloInfluenceEstimator
 from chirho.robust.internals.predictive import PredictiveFunctional
 from chirho.robust.ops import influence_fn
 
@@ -55,18 +56,17 @@ def test_nmc_predictive_influence_smoke(
     model = model()
     guide = guide(model)
     model(), guide()  # initialize
-
-    predictive_eif = influence_fn(
-        model,
-        guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )
+    ):
+        predictive_eif = influence_fn(
+            model,
+            guide,
+            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        )
 
     with torch.no_grad():
         test_datum = {
@@ -103,17 +103,17 @@ def test_nmc_predictive_influence_vmap_smoke(
 
     model(), guide()  # initialize
 
-    predictive_eif = influence_fn(
-        model,
-        guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )
+    ):
+        predictive_eif = influence_fn(
+            model,
+            guide,
+            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        )
 
     with torch.no_grad():
         test_data = pyro.infer.Predictive(
