@@ -114,7 +114,6 @@ def apply_correction(plug_in_estimate, correction: S) -> S:
 def apply_correction_point(
     plug_in_estimate: Point[T], correction: Point[T]
 ) -> Point[T]:
-    assert isinstance(plug_in_estimate, dict)
     assert isinstance(correction, dict)
     assert set(plug_in_estimate.keys()) == set(correction.keys())
     return {k: plug_in_estimate[k] + correction[k] for k in plug_in_estimate.keys()}
