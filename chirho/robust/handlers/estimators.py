@@ -1,3 +1,4 @@
+from functools import singledispatch
 from typing import Any, Callable, Optional
 
 import torch
@@ -92,13 +93,36 @@ def one_step_corrected_estimator(
         plug_in_estimator = PredictiveFunctional(model, guide)
     else:
         plug_in_estimator = functional(model, guide)
-    correction = one_step_correction(
+    correction_estimator = one_step_correction(
         model, guide, functional, influence_fn_estimator, **influence_kwargs
     )
 
     def _one_step_corrected_estimator(test_data: Point[T], *args, **kwargs) -> S:
-        return plug_in_estimator(*args, **kwargs) + correction(
-            test_data, *args, **kwargs
-        )  # type: ignore[operator]
+        plug_in_estimate = plug_in_estimator(*args, **kwargs)
+        correction = correction_estimator(test_data, *args, **kwargs)
+        return apply_correction(plug_in_estimate, correction)
 
     return _one_step_corrected_estimator
+
+
+@singledispatch
+def apply_correction(plug_in_estimate, correction: S) -> S:
+    raise NotImplementedError
+
+
+@apply_correction.register(dict)
+def apply_correction_point(
+    plug_in_estimate: Point[T], correction: Point[T]
+) -> Point[T]:
+    assert isinstance(plug_in_estimate, dict)
+    assert isinstance(correction, dict)
+    assert set(plug_in_estimate.keys()) == set(correction.keys())
+    return {k: plug_in_estimate[k] + correction[k] for k in plug_in_estimate.keys()}
+
+
+@apply_correction.register(torch.Tensor)
+def apply_correction_tensor(
+    plug_in_estimate: torch.Tensor, correction: torch.Tensor
+) -> torch.Tensor:
+    assert isinstance(correction, torch.Tensor)
+    return plug_in_estimate + correction
