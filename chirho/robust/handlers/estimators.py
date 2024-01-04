@@ -107,7 +107,9 @@ def one_step_corrected_estimator(
 
 @singledispatch
 def apply_correction(plug_in_estimate, correction: S) -> S:
-    raise NotImplementedError
+    raise NotImplementedError(
+        "The functional must produce a function that return a torch Tensor or a dict of torch Tensors"
+    )
 
 
 @apply_correction.register(dict)
