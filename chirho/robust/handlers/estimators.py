@@ -83,7 +83,7 @@ def one_step_corrected_estimator(
         [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
         Callable[Concatenate[Point[T], P], S],
     ]
-    :return: function to computer the one-step corrected estimator
+    :return: function to compute the one-step corrected estimator
     :rtype: S
     """
     if functional is None:
