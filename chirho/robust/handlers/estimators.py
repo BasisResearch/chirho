@@ -34,9 +34,7 @@ def one_step_correction(
     """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
-    eif_fn = influence_fn(
-        model, guide, functional, **influence_kwargs_one_step
-    )
+    eif_fn = influence_fn(model, guide, functional, **influence_kwargs_one_step)
 
     def _one_step(test_data: Point[T], *args, **kwargs) -> S:
         return eif_fn(test_data, *args, **kwargs)
@@ -60,14 +58,8 @@ def one_step_corrected_estimator(
         Must only contain continuous latent variables.
     :type guide: Callable[P, Any]
     :param functional: model summary of interest, which is a function of the
-        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
+        model and guide.
     :type functional: Functional[P, S]
-    :param influence_fn_estimator: function to approximate the efficient influence
-        function. Defaults to :func:`influence_fn`.
-    :type influence_fn_estimator: Callable[
-        [Callable[P, Any], Callable[P, Any], Optional[Functional[P, S]]],
-        Callable[Concatenate[Point[T], P], S],
-    ]
     :return: function to compute the one-step corrected estimator
     :rtype: S
     """
