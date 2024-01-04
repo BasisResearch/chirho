@@ -65,7 +65,7 @@ def one_step_corrected_estimator(
     """
     plug_in_estimator = functional(model, guide)
     correction_estimator = one_step_correction(
-        model, guide, functional, influence_fn, **influence_kwargs
+        model, guide, functional, **influence_kwargs
     )
 
     def _one_step_corrected_estimator(test_data: Point[T], *args, **kwargs) -> S:
