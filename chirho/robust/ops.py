@@ -1,8 +1,6 @@
-import functools
-from typing import Any, Callable, Mapping, Optional, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 import pyro
-import torch
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.observational.ops import Observation
@@ -20,7 +18,7 @@ Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
 def influence_fn(
     model: Callable[P, Any],
     guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
+    functional: Functional[P, S],
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
     Returns the efficient influence function for ``functional``
