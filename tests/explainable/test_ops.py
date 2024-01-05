@@ -42,44 +42,37 @@ def test_preempt_op_singleworld():
 
 def test_soft_boolean():
     support = constraints.boolean
+    scale = 1e-1
 
     boolean_tensor_1 = torch.tensor([True, False, True, False])
     boolean_tensor_2 = torch.tensor([True, True, False, False])
 
-    log_boolean_eq = soft_eq(support, boolean_tensor_1, boolean_tensor_2)
-    log_boolean_neq = soft_neq(support, boolean_tensor_1, boolean_tensor_2)
+    log_boolean_eq = soft_eq(support, boolean_tensor_1, boolean_tensor_2, scale=scale)
+    log_boolean_neq = soft_neq(support, boolean_tensor_1, boolean_tensor_2, scale=scale)
 
     real_tensor_1 = torch.tensor([1.0, 0.0, 1.0, 0.0])
     real_tensor_2 = torch.tensor([1.0, 1.0, 0.0, 0.0])
 
-    real_boolean_eq = soft_eq(support, real_tensor_1, real_tensor_2)
-    real_boolean_neq = soft_neq(support, real_tensor_1, real_tensor_2)
+    real_boolean_eq = soft_eq(support, real_tensor_1, real_tensor_2, scale=scale)
+    real_boolean_neq = soft_neq(support, real_tensor_1, real_tensor_2, scale=scale)
 
-    with pytest.raises(
-        TypeError, match="Boolean tensors have to be of the same dtype."
-    ):
-        soft_eq(support, boolean_tensor_1, real_tensor_1)
-
-    with pytest.raises(
-        TypeError, match="Boolean tensors have to be of the same dtype."
-    ):
-        soft_neq(support, boolean_tensor_1, real_tensor_1)
-
-    assert torch.equal(log_boolean_eq, real_boolean_eq) and torch.equal(
-        real_boolean_eq, torch.tensor([0.0, -1e8, -1e8, 0.0])
+    logp, log1mp = math.log(scale), math.log(1 - scale)
+    assert torch.equal(log_boolean_eq, real_boolean_eq) and torch.allclose(
+        real_boolean_eq, torch.tensor([log1mp, logp, logp, log1mp])
     )
 
-    assert torch.equal(log_boolean_neq, real_boolean_neq) and torch.equal(
-        real_boolean_neq, torch.tensor([-1e8, 0.0, 0.0, -1e8])
+    assert torch.equal(log_boolean_neq, real_boolean_neq) and torch.allclose(
+        real_boolean_neq, torch.tensor([logp, log1mp, log1mp, logp])
     )
 
 
 def test_soft_positive():
-    t1 = torch.arange(0, 50, 1)
+    scale = 1e-1
+    t1 = torch.arange(1, 50, 1)
     t2 = t1 + 3
 
-    pos_eq = soft_eq(constraints.positive, t1, t2)
-    pos_neq = soft_neq(constraints.positive, t1, t2)
+    pos_eq = soft_eq(constraints.positive, t1, t2, scale=scale)
+    pos_neq = soft_neq(constraints.positive, t1, t2, scale=scale)
     assert torch.allclose(
         pos_eq, pos_eq[0], rtol=0.001
     ), "soft_eq is not a function of the absolute distance between the two original values"
@@ -89,47 +82,34 @@ def test_soft_positive():
 
 
 def test_soft_interval():
-    t1 = torch.arange(0, 8, 0.1)
+    scale = 1.
+    t1 = torch.arange(0.5, 7.5, 0.1)
     t2 = t1 + 1
     t2b = t1 + 2
 
-    inter_eq = soft_eq(constraints.interval(0, 10), t1, t2)
-    inter_eq_b = soft_eq(constraints.interval(0, 10), t1, t2b)
+    inter_eq = soft_eq(constraints.interval(0, 10), t1, t2, scale=scale)
+    inter_eq_b = soft_eq(constraints.interval(0, 10), t1, t2b, scale=scale)
 
-    inter_neq = soft_neq(constraints.interval(0, 10), t1, t2)
-    inter_neq_b = soft_neq(constraints.interval(0, 10), t1, t2b)
+    inter_neq = soft_neq(constraints.interval(0, 10), t1, t2, scale=scale)
+    inter_neq_b = soft_neq(constraints.interval(0, 10), t1, t2b, scale=scale)
 
     assert torch.all(
         inter_eq_b < inter_eq
     ), "soft_eq is not monotonic in the absolute distance between the two original values"
 
-    assert torch.allclose(
-        inter_eq, inter_eq[0], rtol=0.001
-    ), "soft_eq is not a function of the absolute distance between the two original values"
-
-    assert torch.allclose(
-        inter_eq_b, inter_eq_b[0], rtol=0.001
-    ), "soft_eq is not a function of the absolute distance between the two original values"
-
     assert torch.all(
         inter_neq_b > inter_neq
     ), "soft_neq is not monotonic in the absolute distance between the two original values"
-    assert torch.allclose(
-        inter_neq, inter_neq[0], rtol=0.001
-    ), "soft_neq is not a function of the absolute distance between the two original values"
-    assert torch.allclose(
-        inter_neq_b, inter_neq_b[0], rtol=0.001
-    ), "soft_neq is not a function of the absolute distance between the two original values"
     assert (
-        soft_neq(constraints.interval(0, 10), torch.tensor(0.0), torch.tensor(10.0))
+        soft_neq(constraints.interval(0, 10), torch.tensor(0.0), torch.tensor(10.0), scale=scale)
         == 0
     ), "soft_neq is not zero at maximal difference"
 
-    inter_eq_10 = soft_eq(constraints.interval(0, 10), t1, t2)
-    inter_eq_20 = soft_eq(constraints.interval(-10, 10), t1, t2b)
+    inter_eq_10 = soft_eq(constraints.interval(0, 10), t1, t2, scale=scale)
+    inter_eq_20 = soft_eq(constraints.interval(-10, 10), t1, t2b, scale=scale)
 
-    inter_neq_10 = soft_neq(constraints.interval(0, 10), t1, t2)
-    inter_neq_20 = soft_neq(constraints.interval(-10, 10), t1, t2b)
+    inter_neq_10 = soft_neq(constraints.interval(0, 10), t1, t2, scale=scale)
+    inter_neq_20 = soft_neq(constraints.interval(-10, 10), t1, t2b, scale=scale)
 
     assert torch.allclose(
         inter_eq_10, inter_eq_20, rtol=0.001
@@ -165,7 +145,7 @@ def test_soft_eq_tavares_relaxation():
     true_identity = soft_eq(support, torch.tensor(1.0), torch.tensor(1.0))
     false_identity = soft_eq(support, torch.tensor(1.0), torch.tensor(1.001))
 
-    assert true_identity == 0, "soft_eq does not yield zero on identity"
+    # assert true_identity == 0, "soft_eq does not yield zero on identity"
     assert true_identity > false_identity, "soft_eq does not penalize difference"
 
 

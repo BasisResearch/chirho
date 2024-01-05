@@ -81,7 +81,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
         ldj = tfm.log_abs_det_jacobian(v1_inv, v1)
         v2_inv = tfm.inv(v2)
         ldj = ldj + tfm.log_abs_det_jacobian(v2_inv, v2)
-        for _ in range(tfm.domain.event_dim - tfm.codomain.event_dim):
+        for _ in range(tfm.codomain.event_dim - tfm.domain.event_dim):
             ldj = torch.sum(ldj, dim=-1)
         return soft_eq(tfm.domain, v1_inv, v2_inv, **kwargs) - ldj
 
@@ -140,13 +140,11 @@ def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.T
     :raises ValueError: If the specified scale is less than `1 / sqrt(2 * pi)`, to ensure that the log
                         probabilities used in calculations are are nonpositive.
     """
-    if support.is_discrete:  # for pmf, soft_neq = 1 - soft_eq (in log space)
-        return torch.nn.functional.softplus(-soft_eq(support, v1, v2, **kwargs))
+    if support.is_discrete:  # for discrete pmf, soft_neq = 1 - soft_eq (in log space)
+        return torch.log(-torch.expm1(soft_eq(support, v1, v2, **kwargs)))
     elif support is constraints.real:  # base case
         scale = kwargs.get("scale", 0.1)
-        return torch.log(
-            dist.Normal(-torch.abs(v1 - v2), scale).cdf(torch.zeros_like(v1))
-        )
+        return torch.log(2 * dist.Normal(0., scale).cdf(torch.abs(v1 - v2)) - 1)
     else:
         tfm = biject_to(support)
         return soft_neq(tfm.domain, tfm.inv(v1), tfm.inv(v2), **kwargs)
