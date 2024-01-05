@@ -1,5 +1,4 @@
 import functools
-import math
 from typing import Any, Callable, Iterable, Optional, Tuple, TypeVar
 
 import pyro
@@ -65,41 +64,62 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
     :return: A tensor of log probabilities capturing the soft equality between `v1` and `v2`.
     :raises TypeError: If boolean tensors have different data types.
     """
-
-    if support is constraints.boolean and hasattr(v1, "dtype") and hasattr(v2, "dtype"):
-        if v1.dtype != v2.dtype:
-            raise TypeError("Boolean tensors have to be of the same dtype.")
-
-        eps = kwargs.get("eps", -1e8)
-        event_dim = kwargs.get("event_dim", 0)
-        eq: torch.Tensor = v1 == v2
-
-        for _ in range(event_dim):
-            eq = torch.all(eq, dim=-1, keepdim=False)
-
-        return cond(eps, 0.0, eq, event_dim=event_dim)
-
-    if support is constraints.real:
-        return dist.Normal(0, kwargs.get("scale", kwargs.get("scale", 0.1))).log_prob(
-            v1 - v2
-        ) - dist.Normal(0, kwargs.get("scale", 0.1)).log_prob(torch.tensor(0.0))
-
+    if support.is_discrete:
+        raise NotImplementedError(
+            "Soft equality is not implemented for arbitrary discrete distributions."
+        )
+    elif support is constraints.real:  # base case
+        scale = kwargs.get("scale", 0.1)
+        return dist.Normal(0.0, scale).log_prob(v1 - v2)
     else:
-        tfm = biject_to(support).inv
+        # generative process:
+        #   u1, u2 ~ base_dist
+        #   v1 = tfm(u1), v2 = tfm(u2)
+        #   ud = u1 - u2 ~ base_dist
+        tfm = biject_to(support)
+        v1_inv = tfm.inv(v1)
+        ldj = tfm.log_abs_det_jacobian(v1_inv, v1)
+        v2_inv = tfm.inv(v2)
+        ldj = ldj + tfm.log_abs_det_jacobian(v2_inv, v2)
+        for _ in range(tfm.domain.event_dim - tfm.codomain.event_dim):
+            ldj = torch.sum(ldj, dim=-1)
+        return soft_eq(tfm.domain, v1_inv, v2_inv, **kwargs) - ldj
 
-        if isinstance(support, constraints.interval):
-            default_scale = 1e-3
-            interval_range = abs(support.upper_bound - support.lower_bound)
-            diff = torch.abs(v1 - v2)
-            diff_transformed = diff / interval_range
-        else:
-            default_scale = kwargs.get("scale", 0.1)
-            diff = torch.abs(v1 - v2)
-            diff_transformed = tfm(diff)
 
-    return dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(
-        diff_transformed
-    ) - (dist.Normal(0, kwargs.get("scale", default_scale)).log_prob(torch.tensor(0.0)))
+@soft_eq.register
+def _soft_eq_independent(support: constraints.independent, v1: T, v2: T, **kwargs):
+    result = soft_eq(support.base_constraint, v1, v2, **kwargs)
+    for _ in range(support.reinterpreted_batch_ndims):
+        result = torch.sum(result, dim=-1)
+    return result
+
+
+@soft_eq.register(type(constraints.boolean))
+def _soft_eq_boolean(support: constraints.Constraint, v1: T, v2: T, **kwargs):
+    assert support is constraints.boolean
+    scale = kwargs.get("scale", 0.1)
+    return torch.log(cond(scale, 1 - scale, v1 == v2, event_dim=0))
+
+
+@soft_eq.register
+def _soft_eq_integer_interval(
+    support: constraints.integer_interval, v1: T, v2: T, **kwargs
+):
+    scale = kwargs.get("scale", 0.1)
+    width = support.upper_bound - support.lower_bound + 1
+    return dist.Binomial(total_count=width, probs=scale).log_prob(torch.abs(v1 - v2))
+
+
+@soft_eq.register(type(constraints.integer))
+def _soft_eq_integer(support: constraints.Constraint, v1: T, v2: T, **kwargs):
+    scale = kwargs.get("scale", 0.1)
+    return dist.Poisson(rate=scale).log_prob(torch.abs(v1 - v2))
+
+
+@soft_eq.register(type(constraints.positive_integer))
+@soft_eq.register(type(constraints.nonnegative_integer))
+def _soft_eq_positive_integer(support: constraints.Constraint, v1: T, v2: T, **kwargs):
+    return soft_eq(constraints.integer, v1, v2, **kwargs)
 
 
 @functools.singledispatch
@@ -120,74 +140,24 @@ def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.T
     :raises ValueError: If the specified scale is less than `1 / sqrt(2 * pi)`, to ensure that the log
                         probabilities used in calculations are are nonpositive.
     """
-    eps = kwargs.get("eps", -1e8)
-
-    if support is constraints.boolean and hasattr(v1, "dtype") and hasattr(v2, "dtype"):
-        if v1.dtype != v2.dtype:
-            raise TypeError("Boolean tensors have to be of the same dtype.")
-
-        event_dim = kwargs.get("event_dim", 0)
-        eq: torch.Tensor = v1 != v2
-
-        for _ in range(event_dim):
-            eq = torch.all(eq, dim=-1, keepdim=False)
-
-        return cond(eps, 0.0, eq, event_dim=event_dim)
-
-    else:
-        scale = kwargs.get("scale", 50)
-
-        min_scale = 1 / math.sqrt(2 * math.pi)  # keeps log probs nonpositive
-        if scale <= min_scale:
-            raise ValueError(
-                f"Scale must be greater than or equal to `1 / math.sqrt(2 * math.pi)`, which is {min_scale}."
-            )
-
-    if support is constraints.real:
-        denominator = (
-            dist.Normal(0, kwargs.get("scale", kwargs.get("scale", scale))).log_prob(
-                v1 - v2
-            )
-            - -1e-10
+    if support.is_discrete:  # for pmf, soft_neq = 1 - soft_eq (in log space)
+        return torch.nn.functional.softplus(-soft_eq(support, v1, v2, **kwargs))
+    elif support is constraints.real:  # base case
+        scale = kwargs.get("scale", 0.1)
+        return torch.log(
+            dist.Normal(-torch.abs(v1 - v2), scale).cdf(torch.zeros_like(v1))
         )
-
-        return -eps / denominator
-
     else:
-        tfm = biject_to(support).inv
+        tfm = biject_to(support)
+        return soft_neq(tfm.domain, tfm.inv(v1), tfm.inv(v2), **kwargs)
 
-        if isinstance(support, constraints.interval):
-            interval_range = abs(support.upper_bound - support.lower_bound)
-            diff = torch.abs(v1 - v2)
-            diff_transformed = diff / interval_range
 
-            interval_default_scale = 1
-
-            denominator = (
-                dist.Normal(0, kwargs.get("scale", interval_default_scale)).log_prob(
-                    diff_transformed
-                )
-                - -1e-10
-            )
-            return (-eps / denominator) - (
-                -eps
-                / (
-                    dist.Normal(
-                        0, kwargs.get("scale", interval_default_scale)
-                    ).log_prob(torch.tensor(1.0))
-                    - 1e-10
-                )
-            )
-
-        else:
-            diff = torch.abs(v1 - v2)
-            diff_transformed = tfm(diff)
-
-            denominator = (
-                dist.Normal(0, kwargs.get("scale", scale)).log_prob(diff_transformed)
-                - -1e-10
-            )
-            return -eps / denominator
+@soft_neq.register
+def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwargs):
+    result = soft_neq(support.base_constraint, v1, v2, **kwargs)
+    for _ in range(support.reinterpreted_batch_ndims):
+        result = torch.sum(result, dim=-1)
+    return result
 
 
 def consequent_differs(
