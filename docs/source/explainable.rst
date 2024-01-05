@@ -19,7 +19,7 @@ Handlers
    :members:
    :undoc-members:
 
-.. automodule:: chirho.explainable.handlers.alternatives
+.. automodule:: chirho.explainable.handlers.components
    :members:
    :undoc-members:
 
@@ -28,10 +28,6 @@ Handlers
    :undoc-members:
 
 .. automodule:: chirho.explainable.handlers.preemptions
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.explainable.handlers.split_subsets
    :members:
    :undoc-members:
 
