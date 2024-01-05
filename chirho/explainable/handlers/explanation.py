@@ -5,7 +5,7 @@ from typing import Callable, Iterable, Mapping, TypeVar, Union
 import pyro
 import torch
 
-from chirho.explainable.handlers.alternatives import (
+from chirho.explainable.handlers.components import (
     consequent_differs,
     random_intervention,
     undo_split,
