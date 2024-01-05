@@ -68,7 +68,6 @@ def consequent_differs(
                 if name in antecedents
             }
         )
-        # TODO replace this logic with soft_neq
         not_eq: torch.Tensor = consequent != gather(
             consequent, indices, event_dim=event_dim
         )
