@@ -135,6 +135,8 @@ approximations that power much of the modern probabilistic machine learning land
   - Heterogeneous causal effect estimation with a misspecified model
 - `Example: Estimating the effects of drugs on gene expression <https://basisresearch.github.io/chirho/sciplex.html>`_
   - Causal inference with single-cell RNA-seq data
+- `Example: Causal reasoning in dynamical systems <https://basisresearch.github.io/chirho/dynamical_intro.html>`_
+  - Causal inference with continuous-time dynamical systems
 - `Design notes <https://basisresearch.github.io/chirho/design_notes>`_
   - Technical implementation details of ChiRho using effect handlers
 
@@ -155,6 +157,8 @@ Documentation
 - `Indexed <https://basisresearch.github.io/chirho/indexed.html>`_
   - Effect handler utilities for named indices in ChiRho which is useful for manipluating
   and tracking counterfactual worlds
+- `Dynamical <https://basisresearch.github.io/chirho/dynamical.html>`_
+  - Operations and effect handlers for counterfactual reasoning in dynamical systems
   
 Caveats
 -------

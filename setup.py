@@ -2,7 +2,7 @@ import sys
 
 from setuptools import find_packages, setup
 
-VERSION = "0.1.0"
+VERSION = "0.2.0"
 
 try:
     long_description = open("README.rst", encoding="utf-8").read()
@@ -45,7 +45,7 @@ setup(
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE
+        "test": EXTRAS_REQUIRE + DYNAMICAL_REQUIRE
         + [
             "pytest",
             "pytest-cov",
