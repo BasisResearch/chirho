@@ -12,7 +12,8 @@ from chirho.counterfactual.handlers import (
     SingleWorldCounterfactual,
 )
 from chirho.counterfactual.ops import split
-from chirho.explainable.ops import consequent_differs, preempt, soft_eq, soft_neq
+from chirho.explainable.internals.defaults import soft_eq, soft_neq
+from chirho.explainable.ops import consequent_differs, preempt
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import Factors
 
