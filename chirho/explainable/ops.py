@@ -72,10 +72,6 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
         scale = kwargs.get("scale", 0.1)
         return dist.Normal(0.0, scale).log_prob(v1 - v2)
     else:
-        # generative process:
-        #   u1, u2 ~ base_dist
-        #   v1 ~ tfm(u1), v2 ~ tfm(u2)
-        #   ud = u1 - u2 ~ base_dist
         tfm = biject_to(support)
         v1_inv = tfm.inv(v1)
         ldj = tfm.log_abs_det_jacobian(v1_inv, v1)
