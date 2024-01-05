@@ -6,7 +6,9 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.counterfactual.ops import split
-from chirho.explainable.handlers import Preemptions, SplitSubsets, undo_split
+from chirho.explainable.handlers import Preemptions
+from chirho.explainable.handlers.alternatives import undo_split
+from chirho.explainable.handlers.explanation import SplitSubsets
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.observational.handlers import condition
