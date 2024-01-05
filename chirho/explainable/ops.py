@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Callable, Iterable, Optional, Tuple, TypeVar
+from typing import Callable, Iterable, Optional, Tuple, TypeVar
 
 import pyro
 import torch
@@ -9,7 +9,7 @@ from chirho.indexed.ops import IndexSet, cond, cond_n, gather
 from chirho.interventional.ops import Intervention, intervene
 
 S = TypeVar("S")
-T = TypeVar("T", bound=Any)
+T = TypeVar("T")
 
 
 @pyro.poutine.runtime.effectful(type="preempt")
