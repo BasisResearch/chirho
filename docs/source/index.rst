@@ -41,6 +41,7 @@ Table of Contents
    observational
    indexed
    dynamical
+   explainable
 
 .. toctree::
    :maxdepth: 2
