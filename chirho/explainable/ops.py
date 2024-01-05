@@ -74,7 +74,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
     else:
         # generative process:
         #   u1, u2 ~ base_dist
-        #   v1 = tfm(u1), v2 = tfm(u2)
+        #   v1 ~ tfm(u1), v2 ~ tfm(u2)
         #   ud = u1 - u2 ~ base_dist
         tfm = biject_to(support)
         v1_inv = tfm.inv(v1)
@@ -144,7 +144,7 @@ def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.T
         return torch.log(-torch.expm1(soft_eq(support, v1, v2, **kwargs)))
     elif support is constraints.real:  # base case
         scale = kwargs.get("scale", 0.1)
-        return torch.log(2 * dist.Normal(0., scale).cdf(torch.abs(v1 - v2)) - 1)
+        return torch.log(2 * dist.Normal(0.0, scale).cdf(torch.abs(v1 - v2)) - 1)
     else:
         tfm = biject_to(support)
         return soft_neq(tfm.domain, tfm.inv(v1), tfm.inv(v2), **kwargs)

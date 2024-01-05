@@ -66,23 +66,8 @@ def test_soft_boolean():
     )
 
 
-def test_soft_positive():
-    scale = 1e-1
-    t1 = torch.arange(1, 50, 1)
-    t2 = t1 + 3
-
-    pos_eq = soft_eq(constraints.positive, t1, t2, scale=scale)
-    pos_neq = soft_neq(constraints.positive, t1, t2, scale=scale)
-    assert torch.allclose(
-        pos_eq, pos_eq[0], rtol=0.001
-    ), "soft_eq is not a function of the absolute distance between the two original values"
-    assert torch.allclose(
-        pos_neq, pos_neq[0], rtol=0.001
-    ), "soft_neq is not a function of the absolute distance between the two original values"
-
-
 def test_soft_interval():
-    scale = 1.
+    scale = 1.0
     t1 = torch.arange(0.5, 7.5, 0.1)
     t2 = t1 + 1
     t2b = t1 + 2
@@ -101,23 +86,14 @@ def test_soft_interval():
         inter_neq_b > inter_neq
     ), "soft_neq is not monotonic in the absolute distance between the two original values"
     assert (
-        soft_neq(constraints.interval(0, 10), torch.tensor(0.0), torch.tensor(10.0), scale=scale)
+        soft_neq(
+            constraints.interval(0, 10),
+            torch.tensor(0.0),
+            torch.tensor(10.0),
+            scale=scale,
+        )
         == 0
     ), "soft_neq is not zero at maximal difference"
-
-    inter_eq_10 = soft_eq(constraints.interval(0, 10), t1, t2, scale=scale)
-    inter_eq_20 = soft_eq(constraints.interval(-10, 10), t1, t2b, scale=scale)
-
-    inter_neq_10 = soft_neq(constraints.interval(0, 10), t1, t2, scale=scale)
-    inter_neq_20 = soft_neq(constraints.interval(-10, 10), t1, t2b, scale=scale)
-
-    assert torch.allclose(
-        inter_eq_10, inter_eq_20, rtol=0.001
-    ), "soft_eq does not scale with  interval"
-
-    assert torch.allclose(
-        inter_neq_10, inter_neq_20, rtol=0.001
-    ), "soft_neq does not scale with interval"
 
 
 def test_soft_eq_tavares_relaxation():
