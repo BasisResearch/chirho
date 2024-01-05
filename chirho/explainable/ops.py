@@ -79,7 +79,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
         ldj = ldj + tfm.log_abs_det_jacobian(v2_inv, v2)
         for _ in range(tfm.codomain.event_dim - tfm.domain.event_dim):
             ldj = torch.sum(ldj, dim=-1)
-        return soft_eq(tfm.domain, v1_inv, v2_inv, **kwargs) - ldj
+        return soft_eq(tfm.domain, v1_inv, v2_inv, **kwargs) + ldj
 
 
 @soft_eq.register
