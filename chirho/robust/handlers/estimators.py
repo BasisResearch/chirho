@@ -18,52 +18,32 @@ def tmle(
 
     # TODO: detach non-optimizable tensors in model and guide for optimization of epsilon.
 
-    def _initialize_epsilon(test_data: Point[T], *args, **kwargs) -> Point[T]:
-        correction = eif_fn(test_data, *args, **kwargs)
-        flat_correction, treespec = torch.utils._pytree.tree_flatten(correction)
-        return torch.utils._pytree.tree_unflatten(
-            [torch.ones(c.shape[1:]) for c in flat_correction], treespec
+    def _tmle(test_data: Point[T], *args, **kwargs) -> S:
+        influence = eif_fn(test_data, *args, **kwargs)
+        flat_influence, treespec = torch.utils._pytree.tree_flatten(influence)
+
+        # TODO: maybe a different initialization other than just ones?
+        epsilon = torch.utils._pytree.tree_unflatten(
+            [torch.ones(c.shape[1:]) for c in flat_influence], treespec
         )
-
-    def _corrected_log_likelihood_estimator(
-        test_data: Point[T],
-        epsilon: Point[T] = None,
-        *args,
-        **kwargs,
-    ) -> torch.Tensor:
-        plug_in_log_likelihood = BatchedNMCLogPredictiveLikelihood(model, guide)(
-            test_data, *args, **kwargs
-        )
-
-        correction = eif_fn(test_data, *args, **kwargs)
-
-        flat_correction, _ = torch.utils._pytree.tree_flatten(correction)
         flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
 
-        return (
-            torch.log(
-                1
-                + torch.sum(
-                    [
-                        correction * epsilon
-                        for correction, epsilon in zip(flat_correction, flat_epsilon)
-                    ]
-                )
-            )
-            + plug_in_log_likelihood
+        # Note: It would be better to just work in log-space, but the correction from the influence function
+        # can be negative, causing NANs if done naively. It's possible there's still a more numerically stable way
+        # to do this.
+        plug_in_likelihood = torch.exp(
+            BatchedNMCLogPredictiveLikelihood(model, guide)(test_data, *args, **kwargs)
         )
 
-        # return torch.log(1 + flat_epsilon * flat_correction) + plug_in_log_likelihood
-
-    def _tmle(test_data: Point[T], *args, **kwargs) -> S:
-        epsilon = _initialize_epsilon(test_data, *args, **kwargs)
-
-        corrected_log_likelihood = _corrected_log_likelihood_estimator(
-            test_data, epsilon, *args, **kwargs
+        likelihood_correction = 1 + sum(
+            [(inf * eps).sum(-1) for inf, eps in zip(flat_influence, flat_epsilon)]
         )
+
+        corrected_log_likelihood = torch.sum(likelihood_correction * plug_in_likelihood)
+
+        return corrected_log_likelihood
 
         # TODO: optimize corrected_log_likelihood
-        pass
 
     return _tmle
 
