@@ -6,7 +6,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.estimators import one_step_correction
+from chirho.robust.handlers.estimators import one_step_correction, tmle
 from chirho.robust.internals.predictive import PredictiveFunctional
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -56,7 +56,7 @@ def test_one_step_correction_smoke(
     guide = guide(model)
     model(), guide()  # initialize
 
-    one_step = one_step_correction(
+    one_step = tmle(
         model,
         guide,
         functional=functools.partial(
