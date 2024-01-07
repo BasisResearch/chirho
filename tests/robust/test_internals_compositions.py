@@ -234,21 +234,21 @@ def test_kernel_perturbation():
     with pyro.poutine.trace() as model_tr_messenger:
         model()
 
-    kpmodel1 = KernelPerturbedModel(model, eps=torch.tensor(1.0))
+    kpmodel1 = KernelPerturbedModel(model, points=test_data, eps=torch.tensor(1.0))
     with pyro.poutine.trace() as kpmodel1_tr_messenger:
-        kpmodel1(_kernel_loc=test_data)
+        kpmodel1()
 
-    kpmodel2 = KernelPerturbedModel(model, eps=torch.tensor(0.0))
+    kpmodel2 = KernelPerturbedModel(model, points=test_data, eps=torch.tensor(0.0))
     with pyro.poutine.trace() as kpmodel2_tr_messenger:
-        kpmodel2(_kernel_loc=test_data)
+        kpmodel2()
 
     pred_kpmodel1 = PredictiveModel(kpmodel1, guide)
     with pyro.poutine.trace() as pred_kpmodel1_tr_messenger:
-        pred_kpmodel1(_kernel_loc=test_data)
+        pred_kpmodel1()
 
     pred_kpmodel2 = PredictiveModel(kpmodel2, guide)
     with pyro.poutine.trace() as pred_kpmodel2_tr_messenger:
-        pred_kpmodel2(_kernel_loc=test_data)
+        pred_kpmodel2()
 
     # Require that kpmodel1, pred_kpmodel1, and test data give the same values for y.
     assert torch.allclose(

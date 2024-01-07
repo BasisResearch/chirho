@@ -30,22 +30,13 @@ class FiniteDifferenceInfluenceEstimator(pyro.poutine.messenger.Messenger):
         from chirho.robust.internals.predictive import PredictiveFunctional, KernelPerturbedModel
         from chirho.robust.internals.utils import make_functional_call
 
-        # Construct a perturbation of the model that will, with probability epsilon, sample observations from the
-        #  kernel model at a particular point. These samples will have been disconnected from latents, meaning that
-        #  posterior predictive samples from the perturbed model will sometimes, with probability epsilon, ignore the
-        #  posterior entirely.
-        perturbed_model = KernelPerturbedModel(model, self.eps, self.kernel_model)
-
         if functional is None:
             assert isinstance(model, torch.nn.Module)
             assert isinstance(guide, torch.nn.Module)
-            target = PredictiveFunctional(perturbed_model, guide)
-        else:
-            target = functional(perturbed_model, guide)
+            functional = PredictiveFunctional
 
-        # TODO check that target_params == model_params | guide_params
+        target = functional(model, guide)
         assert isinstance(target, torch.nn.Module)
-        target_params, func_target = make_functional_call(target)
 
         @functools.wraps(target)
         def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
@@ -66,9 +57,16 @@ class FiniteDifferenceInfluenceEstimator(pyro.poutine.messenger.Messenger):
             :return:
             """
 
+            # Construct a perturbation of the model that will, with probability epsilon, sample observations from the
+            # kernel model at a particular point. These samples will have been disconnected from latents,
+            # meaning that posterior predictive samples from the perturbed model will sometimes, with probability
+            # epsilon, ignore the posterior entirely.
+            perturbed_model = KernelPerturbedModel(model, points=points, eps=self.eps, kernel=self.kernel_model)
+            target_perturbed = functional(perturbed_model, guide)
+
             # FIXME bdbjdis vmap with func_target etc. here, this is basically just pseudo code right now.
-            t_p_eps = target(perturbed_model, *args, _kernel_loc=points, **kwargs)
-            t_p_hat = target(model, *args, **kwargs)
+            t_p_eps = target_perturbed(*args, **kwargs)
+            t_p_hat = target(*args, **kwargs)
             return (t_p_eps - t_p_hat) / self.eps
 
         msg["value"] = _fn

@@ -135,15 +135,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.trace() as guide_tr:
-
-            # FIXME HACK AZ guide/model specific kwargs
-            _kernel_loc = kwargs.pop("_kernel_loc", None)
-
             self.guide(*args, **kwargs)
-
-            # FIXME HACK AZ
-            if _kernel_loc is not None:
-                kwargs["_kernel_loc"] = _kernel_loc
 
         block_guide_sample_sites = pyro.poutine.block(
             hide=[
@@ -165,16 +157,18 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
 
     # TODO document
     #  this is designed to compose with PredictiveModel and PredictiveFunctional
-    #  induces a mixture "towards" the kernel model at a _kernel_loc, which will traditionally
+    #  induces a mixture "towards" the kernel model at a points, which will traditionally
     #   be a sample from data held out during the training of the guide.
 
     model: Callable[P, T]
+    points: Point[T]
     kernel: Callable[[Point[T]], Any]
     eps: torch.Tensor
 
     def __init__(
         self,
         model: Callable[P, T],
+        points: Point[T],
         eps: torch.Tensor,
         kernel: Optional[Callable[[Point[T]], Any]] = None,
     ):
@@ -190,14 +184,14 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
                 return ret
 
         self.model = model
+        self.points = points
         self.kernel = kernel
         self.eps = eps
 
         if not (0 <= self.eps <= 1):
             raise ValueError("eps must be between 0 and 1.")
 
-    def forward(self, *args: P.args, _kernel_loc: Point[T], **kwargs: P.kwargs) -> T:
-        # FIXME conflicts if user specifies _kernel_loc as an argument for something else?
+    def forward(self, *args: P.args, **kwargs: P.kwargs) -> T:
 
         from pyro.distributions import Categorical
 
@@ -214,7 +208,7 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
         # FIXME 2880dhsl this needs to be vmapped or something to handle vectorized _from_kernel
         if _from_kernel:
             with pyro.poutine.trace() as kernel_tr:
-                self.kernel(_kernel_loc)
+                self.kernel(self.points)
             replay_from_kernel = pyro.poutine.replay(trace=kernel_tr.trace)
 
             # This prevents any outer traces from seeing the kernel sites twice, once in the kernel and again
