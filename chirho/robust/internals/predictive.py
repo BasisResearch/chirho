@@ -135,7 +135,15 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.trace() as guide_tr:
+
+            # FIXME HACK AZ guide/model specific kwargs
+            _kernel_loc = kwargs.pop("_kernel_loc", None)
+
             self.guide(*args, **kwargs)
+
+            # FIXME HACK AZ
+            if _kernel_loc is not None:
+                kwargs["_kernel_loc"] = _kernel_loc
 
         block_guide_sample_sites = pyro.poutine.block(
             hide=[
@@ -151,6 +159,77 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
                     return self.model(*args, **kwargs)
+
+
+class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
+
+    # TODO document
+    #  this is designed to compose with PredictiveModel and PredictiveFunctional
+    #  induces a mixture "towards" the kernel model at a _kernel_loc, which will traditionally
+    #   be a sample from data held out during the training of the guide.
+
+    model: Callable[P, T]
+    kernel: Callable[[Point[T]], Any]
+    eps: torch.Tensor
+
+    def __init__(
+        self,
+        model: Callable[P, T],
+        eps: torch.Tensor,
+        kernel: Optional[Callable[[Point[T]], Any]] = None,
+    ):
+        super().__init__()
+
+        # Define the default kernel as a Delta distribution sitting on the _kernel_loc.
+        import pyro.distributions as dist
+        if kernel is None:
+            def kernel(_kernel_loc: Point[T]):
+                ret = dict()
+                for name, value in _kernel_loc.items():
+                    ret[name] = pyro.sample(name, dist.Delta(value))
+                return ret
+
+        self.model = model
+        self.kernel = kernel
+        self.eps = eps
+
+        if not (0 <= self.eps <= 1):
+            raise ValueError("eps must be between 0 and 1.")
+
+    def forward(self, *args: P.args, _kernel_loc: Point[T], **kwargs: P.kwargs) -> T:
+        # FIXME conflicts if user specifies _kernel_loc as an argument for something else?
+
+        from pyro.distributions import Categorical
+
+        # Observed data will be sampled from the kernel with probability epsilon. This induces a mixture that
+        #  reflects the small "finite difference" (perturbation) required to approximate the influence function.
+        # This will induce a mixture distribution that includes all variables in each branch, but where the observed
+        #  data in the branch that is sampled from the kernel has no dependence on the latents.
+        # This serves to disconnect any connection to a guide that might induce a posterior predictive.
+        _from_kernel = pyro.sample("_from_kernel", Categorical(torch.stack([1. - self.eps, self.eps])))
+
+        # Default to trivial messenger.
+        replay_from_kernel = pyro.poutine.messenger.Messenger()
+        block_kernel_sample_sites = pyro.poutine.messenger.Messenger()
+        # FIXME 2880dhsl this needs to be vmapped or something to handle vectorized _from_kernel
+        if _from_kernel:
+            with pyro.poutine.trace() as kernel_tr:
+                self.kernel(_kernel_loc)
+            replay_from_kernel = pyro.poutine.replay(trace=kernel_tr.trace)
+
+            # This prevents any outer traces from seeing the kernel sites twice, once in the kernel and again
+            #  in the model.
+            block_kernel_sample_sites = pyro.poutine.block(
+                hide=[
+                    name
+                    for name, node in kernel_tr.trace.nodes.items()
+                    if node["type"] == "sample"
+                ]
+            )
+
+        with block_kernel_sample_sites:
+            with replay_from_kernel:
+                return self.model(*args, **kwargs)
 
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
