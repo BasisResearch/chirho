@@ -76,12 +76,14 @@ def test_nmc_predictive_influence_smoke(
             )().items()
         }
 
-    test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif(test_datum)
-    assert len(test_datum_eif) > 0
-    for k, v in test_datum_eif.items():
-        assert not torch.isnan(v).any(), f"eif for {k} had nans"
-        assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
+    # This loop tests whether the predictive_eif can be called multiple times without error.
+    for i in range(2):
+        test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif(test_datum)
+        assert len(test_datum_eif) > 0
+        for k, v in test_datum_eif.items():
+            assert not torch.isnan(v).any(), f"eif for {k} had nans"
+            assert not torch.isinf(v).any(), f"eif for {k} had infs"
+            assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
