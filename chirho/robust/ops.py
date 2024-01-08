@@ -1,5 +1,5 @@
 import functools
-from typing import Any, Callable, Mapping, Optional, TypeVar
+from typing import Any, Callable, Mapping, TypeVar
 
 import torch
 from typing_extensions import Concatenate, ParamSpec
