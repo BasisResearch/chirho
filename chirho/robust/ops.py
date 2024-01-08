@@ -18,7 +18,7 @@ Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
 def influence_fn(
     model: Callable[P, Any],
     guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
+    functional: Functional[P, S],
     **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -116,17 +116,10 @@ def influence_fn(
           https://github.com/BasisResearch/chirho/issues/393.
     """
     from chirho.robust.internals.linearize import linearize
-    from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
 
     linearized = linearize(model, guide, **linearize_kwargs)
-
-    if functional is None:
-        assert isinstance(model, torch.nn.Module)
-        assert isinstance(guide, torch.nn.Module)
-        target = PredictiveFunctional(model, guide)
-    else:
-        target = functional(model, guide)
+    target = functional(model, guide)
 
     # TODO check that target_params == model_params | guide_params
     assert isinstance(target, torch.nn.Module)

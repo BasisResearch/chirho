@@ -59,9 +59,7 @@ def test_nmc_predictive_influence_smoke(
     predictive_eif = influence_fn(
         model,
         guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
@@ -106,9 +104,7 @@ def test_nmc_predictive_influence_vmap_smoke(
     predictive_eif = influence_fn(
         model,
         guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
