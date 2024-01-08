@@ -1,5 +1,5 @@
 from typing import Any, Callable, Optional
-
+import pyro
 import torch
 from typing_extensions import Concatenate
 
@@ -10,40 +10,60 @@ def tmle(
     model: Callable[P, Any],
     guide: Callable[P, Any],
     functional: Optional[Functional[P, S]] = None,
+    *,
+    learning_rate: float = 0.01,
+    n_steps: int = 10000,
+    num_samples: int = 1000,
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
 
     eif_fn = influence_fn(model, guide, functional, **influence_kwargs)
 
-    # TODO: detach non-optimizable tensors in model and guide for optimization of epsilon.
-
     def _tmle(test_data: Point[T], *args, **kwargs) -> S:
         influence = eif_fn(test_data, *args, **kwargs)
         flat_influence, treespec = torch.utils._pytree.tree_flatten(influence)
 
-        # TODO: maybe a different initialization other than just ones?
-        epsilon = torch.utils._pytree.tree_unflatten(
-            [torch.ones(c.shape[1:]) for c in flat_influence], treespec
-        )
-        flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
+        flat_influence = [inf.detach() for inf in flat_influence]
 
-        # Note: It would be better to just work in log-space, but the correction from the influence function
-        # can be negative, causing NANs if done naively. It's possible there's still a more numerically stable way
-        # to do this.
+        # TODO: Why is this a `_to_functional_tensor` rather than a tensor?
         plug_in_likelihood = torch.exp(
             BatchedNMCLogPredictiveLikelihood(model, guide)(test_data, *args, **kwargs)
-        )
+        ).detach()
 
-        likelihood_correction = 1 + sum(
-            [(inf * eps).sum(-1) for inf, eps in zip(flat_influence, flat_epsilon)]
-        )
+        # TODO: maybe a different initialization other than just ones?
+        flat_epsilon = [torch.ones(i.shape[1:], requires_grad=True) for i in flat_influence]
 
-        corrected_log_likelihood = torch.sum(likelihood_correction * plug_in_likelihood)
+        def _functional_negative_likelihood(flat_epsilon):
+            likelihood_correction = 1 + sum(
+                [(inf * eps).sum(-1) for inf, eps in zip(flat_influence, flat_epsilon)]
+            )
+            return -torch.sum(likelihood_correction * plug_in_likelihood)
+        
+        grad_fn = torch.func.grad(_functional_negative_likelihood)
 
-        return corrected_log_likelihood
+        for _ in range(n_steps):
+            # Maximum likelihood estimation over epsilon
+            grad = grad_fn(flat_epsilon)
+            flat_epsilon = [eps - learning_rate * g for eps, g in zip(flat_epsilon, grad)]
 
-        # TODO: optimize corrected_log_likelihood
+        # TODO: Parallelize this
+        plug_in_samples = pyro.infer.predictive.Predictive(functional(model, guide), num_samples=num_samples)(*args, **kwargs)
+
+        plug_in_influence = eif_fn(plug_in_samples, *args, **kwargs)
+        flat_plug_in_influence, _ = torch.utils._pytree.tree_flatten(plug_in_influence)
+
+        plug_in_correction = 1 + sum(
+                [(inf * eps).sum(-1) for inf, eps in zip(flat_plug_in_influence, flat_epsilon)]
+            )
+        
+        
+
+
+
+        assert False
+        
+        return torch.utils._pytree.tree_unflatten(flat_epsilon, treespec)
 
     return _tmle
 
