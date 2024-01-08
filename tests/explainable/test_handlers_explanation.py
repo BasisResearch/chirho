@@ -3,7 +3,9 @@ import pyro.distributions as dist
 import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
-from chirho.explainable.handlers import SearchForExplanation
+from chirho.explainable.handlers.components import undo_split
+from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
+from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import condition
 
@@ -141,3 +143,119 @@ def test_SearchForExplanation():
             ) or bh_int[step] == 1.0
             if bottle_will_shatter:
                 assert log_probs[step] == -1e8
+
+
+def test_SplitSubsets_single_layer():
+    observations = {
+        "prob_sally_throws": 1.0,
+        "prob_bill_throws": 1.0,
+        "prob_sally_hits": 1.0,
+        "prob_bill_hits": 1.0,
+        "prob_bottle_shatters_if_sally": 1.0,
+        "prob_bottle_shatters_if_bill": 1.0,
+    }
+
+    observations_conditioning = condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    )
+
+    with MultiWorldCounterfactual() as mwc:
+        with SplitSubsets({"sally_throws": 0.0}, bias=0.0):
+            with observations_conditioning:
+                with pyro.poutine.trace() as tr:
+                    stones_bayesian_model()
+
+    tr = tr.trace.nodes
+
+    with mwc:
+        preempt_sally_throws = gather(
+            tr["__cause_split_sally_throws"]["value"],
+            IndexSet(**{"sally_throws": {0}}),
+            event_dim=0,
+        )
+
+        int_sally_hits = gather(
+            tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0
+        )
+
+        obs_bill_hits = gather(
+            tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {0}}), event_dim=0
+        )
+
+        int_bill_hits = gather(
+            tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0
+        )
+
+        int_bottle_shatters = gather(
+            tr["bottle_shatters"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        )
+
+    outcome = {
+        "preempt_sally_throws": preempt_sally_throws.item(),
+        "int_sally_hits": int_sally_hits.item(),
+        "obs_bill_hits": obs_bill_hits.item(),
+        "int_bill_hits": int_bill_hits.item(),
+        "intervened_bottle_shatters": int_bottle_shatters.item(),
+    }
+
+    assert list(outcome.values()) == [0, 0.0, 0.0, 1.0, 1.0] or list(
+        outcome.values()
+    ) == [1, 1.0, 0.0, 0.0, 1.0]
+
+
+def test_SplitSubsets_two_layers():
+    observations = {
+        "prob_sally_throws": 1.0,
+        "prob_bill_throws": 1.0,
+        "prob_sally_hits": 1.0,
+        "prob_bill_hits": 1.0,
+        "prob_bottle_shatters_if_sally": 1.0,
+        "prob_bottle_shatters_if_bill": 1.0,
+    }
+
+    observations_conditioning = condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    )
+
+    actions = {"sally_throws": 0.0}
+
+    pinned_preemption_variables = {
+        "preempt_sally_throws": torch.tensor(0),
+        "witness_preempt_bill_hits": torch.tensor(1),
+    }
+    preemption_conditioning = condition(data=pinned_preemption_variables)
+
+    witness_preemptions = {"bill_hits": undo_split(antecedents=actions.keys())}
+    witness_preemptions_handler: Preemptions = Preemptions(
+        actions=witness_preemptions, prefix="witness_preempt_"
+    )
+
+    with MultiWorldCounterfactual() as mwc:
+        with SplitSubsets(actions=actions, bias=0.1, prefix="preempt_"):
+            with preemption_conditioning, witness_preemptions_handler:
+                with observations_conditioning:
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
+
+    tr = tr.trace.nodes
+
+    with mwc:
+        obs_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {0}}),
+            event_dim=0,
+        ).item()
+        int_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        ).item()
+        int_bottle_shatters = gather(
+            tr["bottle_shatters"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        ).item()
+
+    assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
