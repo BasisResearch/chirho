@@ -32,8 +32,8 @@ def influence_fn(
         Must only contain continuous latent variables.
     :type guide: Callable[P, Any]
     :param functional: model summary of interest, which is a function of the
-        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
-    :type functional: Optional[Functional[P, S]], optional
+        model and guide.
+    :type functional: Functional[P, S]
     :return: the efficient influence function for ``functional``
     :rtype: Callable[Concatenate[Point[T], P], S]
 
