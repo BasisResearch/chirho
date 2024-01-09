@@ -220,7 +220,7 @@ def make_empirical_fisher_vp(
 
 def linearize(
     model: Callable[P, Any],
-    guide: Callable[P, Any],
+    points: Point[T],
     *,
     num_samples_outer: int,
     num_samples_inner: Optional[int] = None,
@@ -228,10 +228,10 @@ def linearize(
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-4,
     pointwise_influence: bool = True,
-) -> Callable[Concatenate[Point[T], P], ParamDict]:
+) -> Callable[P, ParamDict]:
     r"""
     Returns the influence function associated with the parameters
-    of ``guide`` and probabilistic program ``model``. This function
+    of probabilistic program ``model``. This function
     computes the following quantity at an arbitrary point :math:`x^{\prime}`:
 
     .. math::
@@ -248,9 +248,6 @@ def linearize(
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-        Must only contain continuous latent variables.
-    :type guide: Callable[P, Any]
     :param num_samples_outer: number of Monte Carlo samples to
         approximate Fisher information in :func:`make_empirical_fisher_vp`
     :type num_samples_outer: int
@@ -271,7 +268,7 @@ def linearize(
         over ``points``. Defaults to True.
     :type pointwise_influence: bool, optional
     :return: the influence function associated with the parameters
-    :rtype: Callable[Concatenate[Point[T], P], ParamDict]
+    :rtype: Callable[P, ParamDict]
 
     **Example usage**:
 
@@ -312,13 +309,13 @@ def linearize(
             )
             points = predictive()
             influence = linearize(
-                model,
-                guide,
+                PredictiveModel(model, guide),
+                points,
                 num_samples_outer=1000,
                 num_samples_inner=1000,
             )
 
-            influence(points)
+            influence()
 
     .. note::
 
@@ -332,19 +329,17 @@ def linearize(
           https://github.com/BasisResearch/chirho/issues/393.
     """
     assert isinstance(model, torch.nn.Module)
-    assert isinstance(guide, torch.nn.Module)
     if num_samples_inner is None:
         num_samples_inner = num_samples_outer**2
 
     predictive = pyro.infer.Predictive(
         model,
-        guide=guide,
         num_samples=num_samples_outer,
         parallel=True,
     )
 
     batched_log_prob = BatchedNMCLogPredictiveLikelihood(
-        model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
+        model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
@@ -357,7 +352,6 @@ def linearize(
     )
 
     def _fn(
-        points: Point[T],
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:

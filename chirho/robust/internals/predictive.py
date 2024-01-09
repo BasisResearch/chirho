@@ -116,12 +116,12 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
     """
 
     model: Callable[P, T]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
 
     def __init__(
         self,
         model: Callable[P, T],
-        guide: Callable[P, Any],
+        guide: Optional[Callable[P, Any]] = None,
     ):
         super().__init__()
         self.model = model
@@ -135,7 +135,8 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.trace() as guide_tr:
-            self.guide(*args, **kwargs)
+            if self.guide is not None:
+                self.guide(*args, **kwargs)
 
         block_guide_sample_sites = pyro.poutine.block(
             hide=[
@@ -175,13 +176,13 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     """
 
     model: Callable[P, Any]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
     num_samples: int
 
     def __init__(
         self,
         model: torch.nn.Module,
-        guide: torch.nn.Module,
+        guide: Optional[torch.nn.Module] = None,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
@@ -245,13 +246,13 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     :type num_samples: int, optional
     """
     model: Callable[P, Any]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
     num_samples: int
 
     def __init__(
         self,
         model: torch.nn.Module,
-        guide: torch.nn.Module,
+        guide: Optional[torch.nn.Module] = None,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
@@ -279,7 +280,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         :return: Log predictive likelihood at each datapoint.
         :rtype: torch.Tensor
         """
-        get_nmc_traces = get_importance_traces(PredictiveModel(self.model, self.guide))
+        get_nmc_traces = get_importance_traces(self.model, self.guide)
 
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             with BatchedLatents(self.num_samples, name=self._mc_plate_name):

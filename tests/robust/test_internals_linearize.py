@@ -13,6 +13,7 @@ from chirho.robust.internals.linearize import (
     linearize,
     make_empirical_fisher_vp,
 )
+from chirho.robust.internals.predictive import PredictiveModel
 
 from .robust_fixtures import (
     BenchmarkLinearModel,
@@ -95,15 +96,6 @@ def test_nmc_param_influence_smoke(
 
     model(), guide()  # initialize
 
-    param_eif = linearize(
-        model,
-        guide,
-        max_plate_nesting=max_plate_nesting,
-        num_samples_outer=num_samples_outer,
-        num_samples_inner=num_samples_inner,
-        cg_iters=cg_iters,
-    )
-
     with torch.no_grad():
         test_datum = {
             k: v[0]
@@ -112,7 +104,16 @@ def test_nmc_param_influence_smoke(
             )().items()
         }
 
-    test_datum_eif: Mapping[str, torch.Tensor] = param_eif(test_datum)
+    param_eif = linearize(
+        PredictiveModel(model, guide),
+        test_datum,
+        max_plate_nesting=max_plate_nesting,
+        num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
+    )
+
+    test_datum_eif: Mapping[str, torch.Tensor] = param_eif()
     assert len(test_datum_eif) > 0
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -144,21 +145,21 @@ def test_nmc_param_influence_vmap_smoke(
 
     model(), guide()  # initialize
 
+    with torch.no_grad():
+        test_data = pyro.infer.Predictive(
+            model, num_samples=4, return_sites=obs_names, parallel=True
+        )()
+
     param_eif = linearize(
-        model,
-        guide,
+        PredictiveModel(model, guide),
+        test_data,
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
     )
 
-    with torch.no_grad():
-        test_data = pyro.infer.Predictive(
-            model, num_samples=4, return_sites=obs_names, parallel=True
-        )()
-
-    test_data_eif: Mapping[str, torch.Tensor] = param_eif(test_data)
+    test_data_eif: Mapping[str, torch.Tensor] = param_eif()
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -326,15 +327,15 @@ def test_linearize_against_analytic_ate():
 
     mle_guide = MLEGuide(theta_hat)
     param_eif = linearize(
-        model,
-        mle_guide,
+        PredictiveModel(model, mle_guide),
+        D_test,
         num_samples_outer=10000,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
         pointwise_influence=True,
     )
 
-    test_data_eif = param_eif(D_test)
+    test_data_eif = param_eif()
     median_abs_error = torch.abs(
         test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()
@@ -346,15 +347,15 @@ def test_linearize_against_analytic_ate():
 
     # Test w/ pointwise_influence=False
     param_eif = linearize(
-        model,
-        mle_guide,
+        PredictiveModel(model, mle_guide),
+        D_test,
         num_samples_outer=10000,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
         pointwise_influence=False,
     )
 
-    test_data_eif = param_eif(D_test)
+    test_data_eif = param_eif()
     assert torch.allclose(
         test_data_eif["guide.treatment_weight_param"][0],
         analytic_eif_at_test_pts.mean(),

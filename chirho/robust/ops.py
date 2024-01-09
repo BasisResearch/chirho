@@ -1,8 +1,7 @@
-import functools
 from typing import Any, Callable, Mapping, TypeVar
 
 import torch
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
 from chirho.observational.ops import Observation
 
@@ -12,30 +11,24 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
+Functional = Callable[[Callable[P, Any]], Callable[P, S]]
 
 
 def influence_fn(
-    model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Functional[P, S],
-    **linearize_kwargs
-) -> Callable[Concatenate[Point[T], P], S]:
+    functional: Functional[P, S], points: Point[T], **linearize_kwargs
+) -> Functional[P, S]:
     """
     Returns the efficient influence function for ``functional``
-    with respect to the parameters of ``guide`` and probabilistic
-    program ``model``.
+    with respect to the parameters of probabilistic program ``model``.
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-        Must only contain continuous latent variables.
-    :type guide: Callable[P, Any]
-    :param functional: model summary of interest, which is a function of the
-        model and guide.
+    :param functional: model summary of interest, which is a function of the model.
     :type functional: Functional[P, S]
+    :param points: points at which to compute the efficient influence function
+    :type points: Point[T]
     :return: the efficient influence function for ``functional``
-    :rtype: Callable[Concatenate[Point[T], P], S]
+    :rtype: Functional[P, S]
 
     **Example usage**:
 
@@ -95,14 +88,13 @@ def influence_fn(
             )
             points = predictive()
             influence = influence_fn(
-                model,
-                guide,
                 SimpleFunctional,
+                points,
                 num_samples_outer=1000,
                 num_samples_inner=1000,
-            )
+            )(PredictiveModel(model, guide))
 
-            influence(points)
+            influence()
 
     .. note::
 
@@ -118,31 +110,31 @@ def influence_fn(
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized = linearize(model, guide, **linearize_kwargs)
-    target = functional(model, guide)
+    def _functional(model: Callable[P, Any]) -> Callable[P, S]:
+        linearized = linearize(model, points, **linearize_kwargs)
+        target = functional(model)
 
-    # TODO check that target_params == model_params | guide_params
-    assert isinstance(target, torch.nn.Module)
-    target_params, func_target = make_functional_call(target)
+        # TODO check that target_params == model_params | guide_params
+        assert isinstance(target, torch.nn.Module)
+        target_params, func_target = make_functional_call(target)
 
-    @functools.wraps(target)
-    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
-        """
-        Evaluates the efficient influence function for ``functional`` at each
-        point in ``points``.
+        def _fn(*args: P.args, **kwargs: P.kwargs) -> S:
+            """
+            Evaluates the efficient influence function for ``functional`` at each
+            point in ``points``.
 
-        :param points: points at which to compute the efficient influence function
-        :type points: Point[T]
-        :return: efficient influence function evaluated at each point in ``points`` or averaged
-        :rtype: S
-        """
-        param_eif = linearized(points, *args, **kwargs)
-        return torch.vmap(
-            lambda d: torch.func.jvp(
-                lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
-            )[1],
-            in_dims=0,
-            randomness="different",
-        )(param_eif)
+            :return: efficient influence function evaluated at each point in ``points`` or averaged
+            :rtype: S
+            """
+            param_eif = linearized(*args, **kwargs)
+            return torch.vmap(
+                lambda d: torch.func.jvp(
+                    lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
+                )[1],
+                in_dims=0,
+                randomness="different",
+            )(param_eif)
 
-    return _fn
+        return _fn
+
+    return _functional

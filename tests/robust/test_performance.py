@@ -12,7 +12,10 @@ from typing_extensions import ParamSpec
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.linearize import make_empirical_fisher_vp
-from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
+from chirho.robust.internals.predictive import (
+    BatchedNMCLogPredictiveLikelihood,
+    PredictiveModel,
+)
 from chirho.robust.internals.utils import guess_max_plate_nesting, make_functional_call
 from chirho.robust.ops import Point
 
@@ -149,7 +152,7 @@ def test_empirical_fisher_vp_performance_with_likelihood(model_guide):
     )
 
     log2_prob_params, func2_log_prob = make_functional_call(
-        BatchedNMCLogPredictiveLikelihood(model, guide)
+        BatchedNMCLogPredictiveLikelihood(PredictiveModel(model, guide))
     )
 
     fisher_hessian_vmapped = make_empirical_fisher_vp(
