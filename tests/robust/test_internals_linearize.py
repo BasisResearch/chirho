@@ -13,7 +13,7 @@ from chirho.robust.internals.linearize import (
     linearize,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.predictive import PredictiveModel
+from chirho.robust.internals.nmc import PredictiveModel
 
 from .robust_fixtures import (
     BenchmarkLinearModel,

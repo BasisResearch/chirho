@@ -5,7 +5,7 @@ import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
-from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
+from chirho.robust.internals.nmc import BatchedNMCLogPredictiveLikelihood
 from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,

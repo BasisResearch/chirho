@@ -11,7 +11,7 @@ from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.predictive import (
+from chirho.robust.internals.nmc import (
     BatchedLatents,
     BatchedNMCLogPredictiveLikelihood,
     BatchedObservations,

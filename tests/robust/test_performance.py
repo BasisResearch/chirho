@@ -12,7 +12,7 @@ from typing_extensions import ParamSpec
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
 from chirho.robust.internals.linearize import make_empirical_fisher_vp
-from chirho.robust.internals.predictive import (
+from chirho.robust.internals.nmc import (
     BatchedNMCLogPredictiveLikelihood,
     PredictiveModel,
 )
