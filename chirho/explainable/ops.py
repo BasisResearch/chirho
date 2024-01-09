@@ -22,7 +22,7 @@ def preempt(
     which returns multiple values concatenated along a new axis
     via the operation :func:`~chirho.indexed.ops.scatter`,
     :func:`preempt` returns a single value determined by the argument ``case``
-    via :func:`~chirho.indexed.ops.cond` .
+    via :func:`~chirho.indexed.ops.cond`.
 
     In a probabilistic program, a :func:`preempt` call induces a mixture distribution
     over downstream values, whereas :func:`split` would induce a joint distribution.

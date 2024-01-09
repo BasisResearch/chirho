@@ -1,5 +1,8 @@
+import math
+
 import pyro
 import pyro.distributions as dist
+import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
@@ -74,8 +77,8 @@ def test_SearchForExplanation():
     )
 
     antecedents = {"sally_throws": 0.0}
-    witnesses = ["bill_throws", "bill_hits"]
-    consequents = ["bottle_shatters"]
+    witnesses = {"bill_throws": constraints.boolean, "bill_hits": constraints.boolean}
+    consequents = {"bottle_shatters": constraints.boolean}
 
     with MultiWorldCounterfactual() as mwc:
         with SearchForExplanation(
@@ -83,6 +86,7 @@ def test_SearchForExplanation():
             witnesses=witnesses,
             consequents=consequents,
             antecedent_bias=0.1,
+            consequent_scale=1e-8,
         ):
             with observations_conditioning:
                 with pyro.plate("sample", 200):
@@ -135,14 +139,14 @@ def test_SearchForExplanation():
 
         st_ant = tr["__antecedent_sally_throws"]["value"].squeeze().tolist()
 
-        assert all(lp == -1e8 or lp == 0.0 for lp in log_probs)
+        assert all(lp <= -1e5 or lp > math.log(0.5) for lp in log_probs)
 
         for step in range(200):
             bottle_will_shatter = (
                 st_obs[step] != st_int[step] and st_ant == 0.0
             ) or bh_int[step] == 1.0
             if bottle_will_shatter:
-                assert log_probs[step] == -1e8
+                assert log_probs[step] <= -1e5
 
 
 def test_SplitSubsets_single_layer():
@@ -160,7 +164,11 @@ def test_SplitSubsets_single_layer():
     )
 
     with MultiWorldCounterfactual() as mwc:
-        with SplitSubsets({"sally_throws": 0.0}, bias=0.0):
+        with SplitSubsets(
+            supports={"sally_throws": constraints.boolean},
+            actions={"sally_throws": 0.0},
+            bias=0.0,
+        ):
             with observations_conditioning:
                 with pyro.poutine.trace() as tr:
                     stones_bayesian_model()
@@ -227,13 +235,20 @@ def test_SplitSubsets_two_layers():
     }
     preemption_conditioning = condition(data=pinned_preemption_variables)
 
-    witness_preemptions = {"bill_hits": undo_split(antecedents=actions.keys())}
+    witness_preemptions = {
+        "bill_hits": undo_split(constraints.boolean, antecedents=actions.keys())
+    }
     witness_preemptions_handler: Preemptions = Preemptions(
         actions=witness_preemptions, prefix="witness_preempt_"
     )
 
     with MultiWorldCounterfactual() as mwc:
-        with SplitSubsets(actions=actions, bias=0.1, prefix="preempt_"):
+        with SplitSubsets(
+            supports={"sally_throws": constraints.boolean},
+            actions=actions,
+            bias=0.1,
+            prefix="preempt_",
+        ):
             with preemption_conditioning, witness_preemptions_handler:
                 with observations_conditioning:
                     with pyro.poutine.trace() as tr:

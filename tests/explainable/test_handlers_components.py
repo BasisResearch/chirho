@@ -1,5 +1,6 @@
 import pyro
 import pyro.distributions as dist
+import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
@@ -43,14 +44,16 @@ def test_undo_split():
         x_obs = torch.zeros(10)
         x_cf_1 = torch.ones(10)
         x_cf_2 = 2 * x_cf_1
-        x_split = split(x_obs, (x_cf_1,), name="split1")
-        x_split = split(x_split, (x_cf_2,), name="split2")
+        x_split = split(x_obs, (x_cf_1,), name="split1", event_dim=1)
+        x_split = split(x_split, (x_cf_2,), name="split2", event_dim=1)
 
-        undo_split2 = undo_split(antecedents=["split2"])
+        undo_split2 = undo_split(
+            support=constraints.independent(constraints.real, 1), antecedents=["split2"]
+        )
         x_undone = undo_split2(x_split)
 
-        assert indices_of(x_split) == indices_of(x_undone)
-        assert torch.all(gather(x_split, IndexSet(split2={0})) == x_undone)
+        assert indices_of(x_split, event_dim=1) == indices_of(x_undone, event_dim=1)
+        assert torch.all(gather(x_split, IndexSet(split2={0}), event_dim=1) == x_undone)
 
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
@@ -60,20 +63,35 @@ def test_undo_split_parametrized(event_shape, plate_size):
 
     replace1 = torch.ones(joint_dims)
     preemption_tensor = replace1 * 5
-    case = torch.randint(0, 2, size=joint_dims)
+    case = torch.randint(0, 2, size=(plate_size,))
 
     @pyro.plate("data", size=plate_size, dim=-1)
     def model():
         w = pyro.sample(
             "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
-        w = split(w, (replace1,), name="split1")
+        w = split(w, (replace1,), name="split1", event_dim=len(event_shape))
 
         w = pyro.deterministic(
-            "w_preempted", preempt(w, preemption_tensor, case, name="w_preempted")
+            "w_preempted",
+            preempt(
+                w,
+                preemption_tensor,
+                case,
+                name="w_preempted",
+                event_dim=len(event_shape),
+            ),
+            event_dim=len(event_shape),
         )
 
-        w = pyro.deterministic("w_undone", undo_split(antecedents=["split1"])(w))
+        w = pyro.deterministic(
+            "w_undone",
+            undo_split(
+                support=constraints.independent(constraints.real, len(event_shape)),
+                antecedents=["split1"],
+            )(w),
+            event_dim=len(event_shape),
+        )
 
     with MultiWorldCounterfactual() as mwc:
         with pyro.poutine.trace() as tr:
@@ -82,7 +100,9 @@ def test_undo_split_parametrized(event_shape, plate_size):
     nd = tr.trace.nodes
 
     with mwc:
-        assert indices_of(nd["w_undone"]["value"]) == IndexSet(split1={0, 1})
+        assert indices_of(
+            nd["w_undone"]["value"], event_dim=len(event_shape)
+        ) == IndexSet(split1={0, 1})
 
         w_undone_shape = list(nd["w_undone"]["value"].shape)
         desired_shape = list(
@@ -93,9 +113,11 @@ def test_undo_split_parametrized(event_shape, plate_size):
         )
         assert w_undone_shape == desired_shape
 
-        cf_values = gather(nd["w_undone"]["value"], IndexSet(split1={1})).squeeze()
+        cf_values = gather(
+            nd["w_undone"]["value"], IndexSet(split1={1}), event_dim=len(event_shape)
+        ).squeeze()
         observed_values = gather(
-            nd["w_undone"]["value"], IndexSet(split1={0})
+            nd["w_undone"]["value"], IndexSet(split1={0}), event_dim=len(event_shape)
         ).squeeze()
 
         preempted_values = cf_values[case == 1.0]
@@ -117,7 +139,9 @@ def test_undo_split_with_interaction():
         )
 
         x_undone = pyro.deterministic(
-            "x_undone", undo_split(antecedents=["x_split"])(x_split), event_dim=0
+            "x_undone",
+            undo_split(support=constraints.real, antecedents=["x_split"])(x_split),
+            event_dim=0,
         )
 
         x_case = torch.tensor(1)
@@ -130,7 +154,9 @@ def test_undo_split_with_interaction():
         )
 
         x_undone_2 = pyro.deterministic(
-            "x_undone_2", undo_split(antecedents=["x"])(x_preempted), event_dim=0
+            "x_undone_2",
+            undo_split(support=constraints.real, antecedents=["x"])(x_preempted),
+            event_dim=0,
         )
 
         x_split2 = pyro.deterministic(
@@ -141,7 +167,9 @@ def test_undo_split_with_interaction():
 
         x_undone_3 = pyro.deterministic(
             "x_undone_3",
-            undo_split(antecedents=["x_split", "x_split2"])(x_split2),
+            undo_split(support=constraints.real, antecedents=["x_split", "x_split2"])(
+                x_split2
+            ),
             event_dim=0,
         )
 
@@ -193,12 +221,17 @@ def test_undo_split_with_interaction():
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 
 
+# @pytest.mark.parametrize("plate_size", [4])
+# @pytest.mark.parametrize("event_shape", [()], ids=str)
+
+
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_differs(plate_size, event_shape):
     factors = {
         "consequent": consequent_differs(
-            antecedents=["split"], event_dim=len(event_shape)
+            antecedents=["split"],
+            support=constraints.independent(constraints.real, len(event_shape)),
         )
     }
 
@@ -210,13 +243,19 @@ def test_consequent_differs(plate_size, event_shape):
         )
         new_w = w.clone()
         new_w[1::2] = 10
-        w = split(w, (new_w,), name="split")
+        w = split(w, (new_w,), name="split", event_dim=len(event_shape))
         consequent = pyro.deterministic(
             "consequent", w * 0.1, event_dim=len(event_shape)
         )
         con_dif = pyro.deterministic(
-            "con_dif", consequent_differs(antecedents=["split"])(consequent)
+            "con_dif",
+            consequent_differs(
+                support=constraints.independent(constraints.real, len(event_shape)),
+                antecedents=["split"],
+            )(consequent),
+            event_dim=0,
         )
+
         return con_dif
 
     with MultiWorldCounterfactual() as mwc:
@@ -227,11 +266,10 @@ def test_consequent_differs(plate_size, event_shape):
     nd = tr.trace.nodes
 
     with mwc:
-        int_con_dif = gather(
-            nd["con_dif"]["value"], IndexSet(**{"split": {1}})
-        ).squeeze()
+        int_con_dif = gather(nd["con_dif"]["value"], IndexSet(**{"split": {1}}))
 
-    assert torch.all(int_con_dif[1::2] == 0.0)
-    assert torch.all(int_con_dif[0::2] == -1e8)
+        assert "split" not in indices_of(int_con_dif)
+        assert not indices_of(int_con_dif)
 
+    assert int_con_dif.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2

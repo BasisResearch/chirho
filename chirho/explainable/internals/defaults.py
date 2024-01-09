@@ -113,9 +113,7 @@ def _soft_eq_independent(support: constraints.independent, v1: T, v2: T, **kwarg
 
 
 @soft_eq.register(type(constraints.boolean))
-def _soft_eq_boolean(
-    support: constraints.Constraint, v1: torch.Tensor, v2: torch.Tensor, **kwargs
-):
+def _soft_eq_boolean(support, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
     assert support is constraints.boolean
     scale = kwargs.get("scale", 0.1)
     return torch.log(cond(scale, 1 - scale, v1 == v2, event_dim=0))
@@ -131,16 +129,14 @@ def _soft_eq_integer_interval(
 
 
 @soft_eq.register(type(constraints.integer))
-def _soft_eq_integer(
-    support: constraints.Constraint, v1: torch.Tensor, v2: torch.Tensor, **kwargs
-):
+def _soft_eq_integer(support, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
     scale = kwargs.get("scale", 0.1)
     return dist.Poisson(rate=scale).log_prob(torch.abs(v1 - v2))
 
 
 @soft_eq.register(type(constraints.positive_integer))
 @soft_eq.register(type(constraints.nonnegative_integer))
-def _soft_eq_positive_integer(support: constraints.Constraint, v1: T, v2: T, **kwargs):
+def _soft_eq_positive_integer(support, v1: T, v2: T, **kwargs):
     return soft_eq(constraints.integer, v1, v2, **kwargs)
 
 
@@ -148,19 +144,16 @@ def _soft_eq_positive_integer(support: constraints.Constraint, v1: T, v2: T, **k
 def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
     """
     Computes soft inequality between two values `v1` and `v2` given a distribution constraint `support`.
-    Tends to zero as the difference between the value increases, and tends to
-    `-eps / (Norm(0,scale).log_prob(0) - 1e-10)` as `v1` and `v2` tend to each other.
+    Tends to `1-log(scale)` as the difference between the value increases, and tends to
+    `log(scale)` as `v1` and `v2` tend to each other, summing elementwise over tensors.
 
     :param support: distribution constraint (`real`/`boolean`/`positive`/`interval`).
     :params v1, v2: the values to be compared.
     :param kwargs: Additional keywords arguments:
-        - for boolean, the function expects `eps` to set a large negative value for.
-        - For interval and real constraints, the function expects `eps` to fix the minimal value and
         `scale` to adjust the softness of the inequality.
     :return: A tensor of log probabilities capturing the soft inequality between `v1` and `v2`.
     :raises TypeError: If boolean tensors have different data types.
-    :raises ValueError: If the specified scale is less than `1 / sqrt(2 * pi)`, to ensure that the log
-                        probabilities used in calculations are are nonpositive.
+    :raises NotImplementedError: If arguments are not tensors.
     """
     if not isinstance(v1, torch.Tensor) or not isinstance(v2, torch.Tensor):
         raise NotImplementedError("Soft equality is only implemented for tensors.")

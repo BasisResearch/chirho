@@ -3,6 +3,7 @@ import contextlib
 from typing import Callable, Iterable, Mapping, TypeVar, Union
 
 import pyro
+import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.explainable.handlers.components import (
@@ -21,6 +22,7 @@ T = TypeVar("T")
 
 @contextlib.contextmanager
 def SplitSubsets(
+    supports: Mapping[str, constraints.Constraint],
     actions: Mapping[str, Intervention[T]],
     *,
     bias: float = 0.0,
@@ -31,15 +33,15 @@ def SplitSubsets(
     On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
     (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
     nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
-    intervention is executed. See tests in `tests/explainable/test_split_subsets.py` for examples.
+    intervention is executed. See tests in `tests/explainable/test_handlers_explanation.py` for examples.
 
+    :param supports: A mapping of sites to their support constraints.
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param prefix: A prefix used for naming additional preemption nodes. Defaults to "__cause_split_".
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to `__cause_split_`.
     """
-    # TODO support event_dim != 0 propagation in factual_preemption
     preemptions = {
-        antecedent: undo_split(antecedents=[antecedent])
+        antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
         for antecedent in actions.keys()
     }
 
@@ -52,16 +54,19 @@ def SplitSubsets(
 def SearchForExplanation(
     antecedents: Union[
         Mapping[str, Intervention[T]],
-        Mapping[str, pyro.distributions.constraints.Constraint],
+        Mapping[str, constraints.Constraint],
     ],
-    witnesses: Union[Mapping[str, Intervention[T]], Iterable[str]],
+    witnesses: Union[
+        Mapping[str, Intervention[T]], Mapping[str, constraints.Constraint]
+    ],
     consequents: Union[
-        Mapping[str, Callable[[T], Union[float, torch.Tensor]]], Iterable[str]
+        Mapping[str, Callable[[T], Union[float, torch.Tensor]]],
+        Mapping[str, constraints.Constraint],
     ],
     *,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
-    consequent_eps: float = -1e8,
+    consequent_scale: float = 1e-2,
     antecedent_prefix: str = "__antecedent_",
     witness_prefix: str = "__witness_",
     consequent_prefix: str = "__consequent_",
@@ -86,30 +91,43 @@ def SearchForExplanation(
       4. A :func:`~pyro.factor` node is added tracking whether the consequent nodes differ \
         between the factual and counterfactual worlds.
 
-    :param antecedents: A mapping from antecedent names to interventions.
-    :param witnesses: A mapping from witness names to interventions.
-    :param consequents: A mapping from consequent names to factor functions.
+    :param antecedents: A mapping from antecedent names to interventions or to constraints.
+    :param witnesses: A mapping from witness names to interventions or to constraints.
+    :param consequents: A mapping from consequent names to factor functions or to constraints.
     """
     if isinstance(
         next(iter(antecedents.values())),
-        pyro.distributions.constraints.Constraint,
+        constraints.Constraint,
     ):
+        antecedents_supports = {a: s for a, s in antecedents.items()}
         antecedents = {
             a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
             for a, s in antecedents.items()
         }
+    else:
+        antecedents_supports = {a: constraints.boolean for a in antecedents.keys()}
+        # TODO generalize to non-scalar antecedents
 
-    if not isinstance(witnesses, collections.abc.Mapping):
+    if isinstance(
+        next(iter(witnesses.values())),
+        constraints.Constraint,
+    ):
         witnesses = {
-            w: undo_split(antecedents=list(antecedents.keys())) for w in witnesses
+            w: undo_split(s, antecedents=list(antecedents.keys()))
+            for w, s in witnesses.items()
         }
 
-    if not isinstance(consequents, collections.abc.Mapping):
+    if isinstance(
+        next(iter(consequents.values())),
+        constraints.Constraint,
+    ):
         consequents = {
             c: consequent_differs(
-                antecedents=list(antecedents.keys()), eps=consequent_eps
+                support=s,
+                antecedents=list(antecedents.keys()),
+                scale=consequent_scale,
             )
-            for c in consequents
+            for c, s in consequents.items()
         }
 
     if len(consequents) == 0:
@@ -125,7 +143,10 @@ def SearchForExplanation(
         raise ValueError("consequents and possible witnesses must be disjoint")
 
     antecedent_handler = SplitSubsets(
-        actions=antecedents, bias=antecedent_bias, prefix=antecedent_prefix
+        supports=antecedents_supports,
+        actions=antecedents,
+        bias=antecedent_bias,
+        prefix=antecedent_prefix,
     )
 
     witness_handler = Preemptions(
