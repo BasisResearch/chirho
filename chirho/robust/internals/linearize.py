@@ -230,19 +230,19 @@ def linearize(
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     r"""
     Returns the influence function associated with the parameters
-    of ``guide`` and probabilistic program ``model``. This function
+    of a normalized probabilistic program ``model``. This function
     computes the following quantity at an arbitrary point :math:`x^{\prime}`:
 
     .. math::
 
         \left[-\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log \tilde{p}_{\phi}(x_n) \right]
         \nabla_{\phi} \log \tilde{p}_{\phi}(x^{\prime}), \quad
-        \tilde{p}_{\phi}(x) = \int p(x \mid \theta) q_{\phi}(\theta) d\theta,
+        \tilde{p}_{\phi}(x) = \int p_{\phi}(x, \theta) d\theta,
 
     where :math:`\phi` corresponds to ``log_prob_params``,
-    :math:`p(x \mid \theta)` denotes the ``model``, :math:`q_{\phi}` denotes the ``guide``,
+    :math:`p(x, \theta)` denotes the ``model``,
     :math:`\tilde{p}_{\phi}` denotes the predictive distribution ``log_prob`` induced
-    from the ``model`` and ``guide``, and :math:`\{x_n\}_{n=1}^N` are the
+    from the ``model``, and :math:`\{x_n\}_{n=1}^N` are the
     data points drawn iid from the predictive distribution.
 
     :param model: Python callable containing Pyro primitives.
@@ -276,6 +276,7 @@ def linearize(
             import pyro.distributions as dist
             import torch
 
+            from chirho.robust.handlers.predictive import PredictiveModel
             from chirho.robust.internals.linearize import linearize
 
             pyro.settings.set(module_local_params=True)
@@ -322,7 +323,7 @@ def linearize(
           can result in different values. To reduce variance, increase ``num_samples_outer`` and
           ``num_samples_inner`` in ``linearize_kwargs``.
 
-        * Currently, ``model`` and ``guide`` cannot contain any ``pyro.param`` statements.
+        * Currently, ``model`` cannot contain any ``pyro.param`` statements.
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
     """

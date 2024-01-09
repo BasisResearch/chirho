@@ -71,14 +71,14 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     """
-    Functional that returns a batch of samples from the posterior predictive
+    Functional that returns a batch of samples from the predictive
     distribution of a Pyro model. As with ``pyro.infer.Predictive`` ,
     the returned values are batched along their leftmost positional dimension.
 
     Similar to ``pyro.infer.Predictive(model, guide, num_samples, parallel=True)``
-    but uses :class:`~PredictiveModel` to construct the predictive distribution
+    when :class:`~PredictiveModel` is used to construct the ``model`` argument
     and infer the model ``sample`` sites whose values should be returned,
-    and uses :class:`~BatchedLatents` to parallelize over samples from the guide.
+    and uses :class:`~BatchedLatents` to parallelize over samples from the model.
 
     .. warning:: ``PredictiveFunctional`` currently applies its own internal instance of
         :class:`~chirho.indexed.handlers.IndexPlatesMessenger` ,

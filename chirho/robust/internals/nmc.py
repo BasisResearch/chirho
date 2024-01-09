@@ -105,15 +105,15 @@ class BatchedObservations(Generic[T], Observations[T]):
 class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
     r"""
     Approximates the log marginal likelihood induced by ``model`` and ``guide``
-    using Monte Carlo sampling at an arbitrary batch of :math:`N`
+    using importance sampling at an arbitrary batch of :math:`N`
     points :math:`\{x_n\}_{n=1}^N`.
 
     .. math::
-        \log \left(\frac{1}{M} \sum_{m=1}^M p(x_n \mid \theta_m)\right),
+        \log \left(\frac{1}{M} \sum_{m=1}^M \frac{p(x_n \mid \theta_m) p(\theta_m) \right)}{q_{\phi}(\theta_m)},
         \quad \theta_m \sim q_{\phi}(\theta),
 
-    where :math:`q_{\phi}(\theta)` is the guide and :math:`p(x_n \mid \theta_m)`
-    is the model conditioned on the latents from the guide.
+    where :math:`q_{\phi}(\theta)` is the guide, and :math:`p(x_n \mid \theta_m) p(\theta_m)`
+    is the model joint density of the data and the latents sampled from the guide.
 
     :param model: Python callable containing Pyro primitives.
     :type model: torch.nn.Module
