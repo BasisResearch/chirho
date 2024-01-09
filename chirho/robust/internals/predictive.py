@@ -116,12 +116,12 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
     """
 
     model: Callable[P, T]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
 
     def __init__(
         self,
         model: Callable[P, T],
-        guide: Callable[P, Any],
+        guide: Optional[Callable[P, Any]] = None,
     ):
         super().__init__()
         self.model = model
@@ -134,8 +134,12 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :return: Sample from the posterior predictive distribution.
         :rtype: T
         """
-        with pyro.poutine.trace() as guide_tr:
-            self.guide(*args, **kwargs)
+        with pyro.poutine.infer_config(
+            config_fn=lambda msg: {"_model_predictive_site": False}
+        ):
+            with pyro.poutine.trace() as guide_tr:
+                if self.guide is not None:
+                    self.guide(*args, **kwargs)
 
         block_guide_sample_sites = pyro.poutine.block(
             hide=[
@@ -156,7 +160,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     """
     Functional that returns a batch of samples from the posterior predictive
-    distribution of a Pyro model given a guide. As with ``pyro.infer.Predictive`` ,
+    distribution of a Pyro model. As with ``pyro.infer.Predictive`` ,
     the returned values are batched along their leftmost positional dimension.
 
     Similar to ``pyro.infer.Predictive(model, guide, num_samples, parallel=True)``
@@ -170,18 +174,15 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         :class:`~chirho.indexed.handlers.IndexPlatesMessenger` context.
 
     :param model: Pyro model.
-    :param guide: Pyro guide.
     :param num_samples: Number of samples to return.
     """
 
     model: Callable[P, Any]
-    guide: Callable[P, Any]
     num_samples: int
 
     def __init__(
         self,
         model: torch.nn.Module,
-        guide: torch.nn.Module,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
@@ -189,9 +190,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     ):
         super().__init__()
         self.model = model
-        self.guide = guide
         self.num_samples = num_samples
-        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
         self._first_available_dim = (
             -max_plate_nesting - 1 if max_plate_nesting is not None else None
         )
@@ -207,7 +206,14 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
-                    self._predictive_model(*args, **kwargs)
+                    with pyro.poutine.infer_config(
+                        config_fn=lambda msg: {
+                            "_model_predictive_site": msg["infer"].get(
+                                "_model_predictive_site", True
+                            )
+                        }
+                    ):
+                        self.model(*args, **kwargs)
 
             return {
                 name: bind_leftmost_dim(
@@ -245,13 +251,13 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
     :type num_samples: int, optional
     """
     model: Callable[P, Any]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
     num_samples: int
 
     def __init__(
         self,
         model: torch.nn.Module,
-        guide: torch.nn.Module,
+        guide: Optional[torch.nn.Module] = None,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
@@ -279,7 +285,7 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         :return: Log predictive likelihood at each datapoint.
         :rtype: torch.Tensor
         """
-        get_nmc_traces = get_importance_traces(PredictiveModel(self.model, self.guide))
+        get_nmc_traces = get_importance_traces(self.model, self.guide)
 
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             with BatchedLatents(self.num_samples, name=self._mc_plate_name):

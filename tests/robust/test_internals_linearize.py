@@ -13,6 +13,7 @@ from chirho.robust.internals.linearize import (
     linearize,
     make_empirical_fisher_vp,
 )
+from chirho.robust.internals.predictive import PredictiveModel
 
 from .robust_fixtures import (
     BenchmarkLinearModel,
@@ -96,8 +97,7 @@ def test_nmc_param_influence_smoke(
     model(), guide()  # initialize
 
     param_eif = linearize(
-        model,
-        guide,
+        PredictiveModel(model, guide),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
@@ -117,7 +117,7 @@ def test_nmc_param_influence_smoke(
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        if k != "guide.loc_a":
+        if not k.endswith("guide.loc_a"):
             assert not torch.isclose(
                 v, torch.zeros_like(v)
             ).all(), f"eif for {k} was zero"
@@ -145,8 +145,7 @@ def test_nmc_param_influence_vmap_smoke(
     model(), guide()  # initialize
 
     param_eif = linearize(
-        model,
-        guide,
+        PredictiveModel(model, guide),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
@@ -163,7 +162,7 @@ def test_nmc_param_influence_vmap_smoke(
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        if k != "guide.loc_a":
+        if not k.endswith("guide.loc_a"):
             assert not torch.isclose(
                 v, torch.zeros_like(v)
             ).all(), f"eif for {k} was zero"
@@ -326,8 +325,7 @@ def test_linearize_against_analytic_ate():
 
     mle_guide = MLEGuide(theta_hat)
     param_eif = linearize(
-        model,
-        mle_guide,
+        PredictiveModel(model, mle_guide),
         num_samples_outer=10000,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
@@ -336,7 +334,7 @@ def test_linearize_against_analytic_ate():
 
     test_data_eif = param_eif(D_test)
     median_abs_error = torch.abs(
-        test_data_eif["guide.treatment_weight_param"] - analytic_eif_at_test_pts
+        test_data_eif["model.guide.treatment_weight_param"] - analytic_eif_at_test_pts
     ).median()
     median_scale = torch.abs(analytic_eif_at_test_pts).median()
     if median_scale > 1:
@@ -346,8 +344,7 @@ def test_linearize_against_analytic_ate():
 
     # Test w/ pointwise_influence=False
     param_eif = linearize(
-        model,
-        mle_guide,
+        PredictiveModel(model, mle_guide),
         num_samples_outer=10000,
         num_samples_inner=1,
         cg_iters=4,  # dimension of params = 4
@@ -356,7 +353,7 @@ def test_linearize_against_analytic_ate():
 
     test_data_eif = param_eif(D_test)
     assert torch.allclose(
-        test_data_eif["guide.treatment_weight_param"][0],
+        test_data_eif["model.guide.treatment_weight_param"][0],
         analytic_eif_at_test_pts.mean(),
         atol=0.5,
     )

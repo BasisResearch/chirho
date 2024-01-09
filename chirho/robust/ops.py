@@ -12,14 +12,11 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
+Functional = Callable[[Callable[P, Any]], Callable[P, S]]
 
 
 def influence_fn(
-    model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Functional[P, S],
-    **linearize_kwargs
+    model: Callable[P, Any], functional: Functional[P, S], **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
     Returns the efficient influence function for ``functional``
@@ -118,8 +115,8 @@ def influence_fn(
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized = linearize(model, guide, **linearize_kwargs)
-    target = functional(model, guide)
+    linearized = linearize(model, **linearize_kwargs)
+    target = functional(model)
 
     # TODO check that target_params == model_params | guide_params
     assert isinstance(target, torch.nn.Module)

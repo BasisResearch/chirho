@@ -15,6 +15,7 @@ from chirho.robust.internals.predictive import (
     BatchedLatents,
     BatchedNMCLogPredictiveLikelihood,
     BatchedObservations,
+    PredictiveModel,
 )
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
@@ -27,7 +28,9 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    log_prob = BatchedNMCLogPredictiveLikelihood(model, guide, num_samples=100)
+    log_prob = BatchedNMCLogPredictiveLikelihood(
+        PredictiveModel(model, guide), num_samples=100
+    )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     func_log_prob = reset_rng_state(pyro.util.get_rng_state())(func_log_prob)
 
@@ -47,38 +50,43 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
 
     v = {
         k: torch.ones_like(v).unsqueeze(0)
-        if k != "guide.loc_a"
+        if k != "model.guide.loc_a"
         else torch.zeros_like(v).unsqueeze(0)
         for k, v in log_prob_params.items()
     }
 
     # For this model, fvp for loc_a is zero. See
     # https://github.com/BasisResearch/chirho/issues/427
-    assert fvp(v)["guide.loc_a"].abs().max() == 0
+    assert fvp(v)["model.guide.loc_a"].abs().max() == 0
     assert all(fvp_vk.shape == v[k].shape for k, fvp_vk in fvp(v).items())
 
     solve_one = cg_solver(fvp, v)
     solve_two = cg_solver(fvp, v)
 
-    if solve_one["guide.loc_a"].abs().max() > 1e6:
+    if solve_one["model.guide.loc_a"].abs().max() > 1e6:
         warnings.warn(
             "solve_one['guide.loc_a'] is large (max entry={}).".format(
-                solve_one["guide.loc_a"].abs().max()
+                solve_one["model.guide.loc_a"].abs().max()
             )
         )
 
-    if solve_one["guide.loc_b"].abs().max() > 1e6:
+    if solve_one["model.guide.loc_b"].abs().max() > 1e6:
         warnings.warn(
             "solve_one['guide.loc_b'] is large (max entry={}).".format(
-                solve_one["guide.loc_b"].abs().max()
+                solve_one["model.guide.loc_b"].abs().max()
             )
         )
 
     assert torch.allclose(
-        solve_one["guide.loc_a"], torch.zeros_like(log_prob_params["guide.loc_a"])
+        solve_one["model.guide.loc_a"],
+        torch.zeros_like(log_prob_params["model.guide.loc_a"]),
     )
-    assert torch.allclose(solve_one["guide.loc_a"], solve_two["guide.loc_a"])
-    assert torch.allclose(solve_one["guide.loc_b"], solve_two["guide.loc_b"])
+    assert torch.allclose(
+        solve_one["model.guide.loc_a"], solve_two["model.guide.loc_a"]
+    )
+    assert torch.allclose(
+        solve_one["model.guide.loc_b"], solve_two["model.guide.loc_b"]
+    )
 
 
 link_functions = [
@@ -96,7 +104,7 @@ def test_nmc_likelihood_seeded(link_fn):
     model(), guide()  # initialize
 
     log_prob = BatchedNMCLogPredictiveLikelihood(
-        model, guide, num_samples=3, max_plate_nesting=3
+        PredictiveModel(model, guide), num_samples=3, max_plate_nesting=3
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
 
@@ -115,11 +123,14 @@ def test_nmc_likelihood_seeded(link_fn):
 
     v = {k: torch.ones_like(v) for k, v in log_prob_params.items()}
 
-    assert (fvp(v)["guide.loc_a"].abs().max() + fvp(v)["guide.loc_b"].abs().max()) > 0
+    assert (
+        fvp(v)["model.guide.loc_a"].abs().max()
+        + fvp(v)["model.guide.loc_b"].abs().max()
+    ) > 0
 
     # Check if fvp agrees across multiple calls of same `fvp` object
-    assert torch.allclose(fvp(v)["guide.loc_a"], fvp(v)["guide.loc_a"])
-    assert torch.allclose(fvp(v)["guide.loc_b"], fvp(v)["guide.loc_b"])
+    assert torch.allclose(fvp(v)["model.guide.loc_a"], fvp(v)["model.guide.loc_a"])
+    assert torch.allclose(fvp(v)["model.guide.loc_b"], fvp(v)["model.guide.loc_b"])
 
 
 @pytest.mark.parametrize("pad_dim", [0, 1, 2])
