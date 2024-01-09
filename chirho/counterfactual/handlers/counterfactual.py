@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, Dict, TypeVar
 
 import pyro
@@ -22,10 +24,6 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
     :func:`~chirho.interventional.ops.intervene` by instantiating the primitive operation
     :func:`~chirho.counterfactual.ops.split`, which is then subsequently handled by subclasses
     such as :class:`~chirho.counterfactual.handlers.counterfactual.MultiWorldCounterfactual`.
-
-    In addition, :class:`~chirho.counterfactual.handlers.counterfactual.BaseCounterfactualMessenger`
-    handles :func:`~chirho.counterfactual.ops.preempt` operations by introducing an auxiliary categorical
-    variable at each of the preempted addresses.
     """
 
     @staticmethod

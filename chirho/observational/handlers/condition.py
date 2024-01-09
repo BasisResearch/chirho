@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Callable, Generic, Hashable, Mapping, TypeVar, Union
 
 import pyro

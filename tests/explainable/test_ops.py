@@ -9,9 +9,10 @@ from chirho.counterfactual.handlers import (
     SingleWorldCounterfactual,
 )
 from chirho.counterfactual.ops import split
-from chirho.explainable.ops import consequent_differs, preempt
-from chirho.indexed.ops import IndexSet, gather
-from chirho.observational.handlers.condition import Factors
+from chirho.explainable.handlers import Preemptions
+from chirho.explainable.ops import preempt
+from chirho.indexed.ops import IndexSet, indices_of
+from chirho.interventional.handlers import do
 
 
 def test_preempt_op_singleworld():
@@ -37,45 +38,44 @@ def test_preempt_op_singleworld():
     assert torch.all(tr.nodes["y_"]["value"] == 1.0)
 
 
-@pytest.mark.parametrize("plate_size", [4, 50, 200])
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_consequent_differs(plate_size, event_shape):
-    factors = {
-        "consequent": consequent_differs(
-            antecedents=["split"], event_dim=len(event_shape)
-        )
-    }
+@pytest.mark.parametrize("cf_dim", [-2, -3, None])
+@pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
+def test_cf_handler_preemptions(cf_dim, event_shape):
+    event_dim = len(event_shape)
 
-    @Factors(factors=factors)
-    @pyro.plate("data", size=plate_size, dim=-1)
-    def model_cd():
+    splits = {"x": torch.tensor(0.0)}
+    preemptions = {"y": torch.tensor(1.0)}
+
+    @do(actions=splits)
+    @pyro.plate("data", size=1000, dim=-1)
+    def model():
         w = pyro.sample(
-            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+            "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
-        new_w = w.clone()
-        new_w[1::2] = 10
-        w = split(w, (new_w,), name="split")
-        consequent = pyro.deterministic(
-            "consequent", w * 0.1, event_dim=len(event_shape)
+        x = pyro.sample("x", dist.Normal(w, 1).to_event(len(event_shape)))
+        y = pyro.sample("y", dist.Normal(w + x, 1).to_event(len(event_shape)))
+        z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
+        return dict(w=w, x=x, y=y, z=z)
+
+    preemption_handler = Preemptions(actions=preemptions, bias=0.1, prefix="__split_")
+
+    with MultiWorldCounterfactual(cf_dim), preemption_handler:
+        tr = pyro.poutine.trace(model).get_trace()
+        assert all(f"__split_{k}" in tr.nodes for k in preemptions.keys())
+        assert indices_of(tr.nodes["w"]["value"], event_dim=event_dim) == IndexSet()
+        assert indices_of(tr.nodes["y"]["value"], event_dim=event_dim) == IndexSet(
+            x={0, 1}
         )
-        con_dif = pyro.deterministic(
-            "con_dif", consequent_differs(antecedents=["split"])(consequent)
+        assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(
+            x={0, 1}
         )
-        return con_dif
 
-    with MultiWorldCounterfactual() as mwc:
-        with pyro.poutine.trace() as tr:
-            model_cd()
-
-    tr.trace.compute_log_prob()
-    nd = tr.trace.nodes
-
-    with mwc:
-        int_con_dif = gather(
-            nd["con_dif"]["value"], IndexSet(**{"split": {1}})
-        ).squeeze()
-
-    assert torch.all(int_con_dif[1::2] == 0.0)
-    assert torch.all(int_con_dif[0::2] == -1e8)
-
-    assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
+    for k in preemptions.keys():
+        tst = tr.nodes[f"__split_{k}"]["value"]
+        assert torch.allclose(
+            tr.nodes[f"__split_{k}"]["fn"].log_prob(torch.tensor(0)).exp(),
+            torch.tensor(0.5 - 0.1),
+        )
+        tst_0 = (tst == 0).expand(tr.nodes[k]["fn"].batch_shape)
+        assert torch.all(tr.nodes[k]["value"][~tst_0] == preemptions[k])
+        assert torch.all(tr.nodes[k]["value"][tst_0] != preemptions[k])

@@ -23,6 +23,22 @@ copyright = '2023, Basis'
 author = 'Basis'
 
 
+# -- Type hints configuration ------------------------------------------------
+
+autodoc_type_aliases = {
+    'R': 'R',
+    'State': 'State',
+    'Dynamics': 'Dynamics',
+    'AtomicIntervention': 'AtomicIntervention',
+    'CompoundIntervention': 'CompoundIntervention',
+    'Intervention': 'Intervention',
+    'AtomicObservation': 'AtomicObservation',
+    'CompoundObservation': 'CompoundObservation',
+    'Observation': 'Observation',
+    'Kernel': 'Kernel',
+
+}
+
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
