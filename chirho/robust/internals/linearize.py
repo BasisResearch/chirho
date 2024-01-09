@@ -272,6 +272,7 @@ def linearize(
     **Example usage**:
 
         .. code-block:: python
+
             import pyro
             import pyro.distributions as dist
             import torch
