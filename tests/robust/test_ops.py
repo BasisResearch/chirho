@@ -6,7 +6,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.internals.predictive import PredictiveFunctional
+from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 from chirho.robust.ops import influence_fn
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -57,8 +57,7 @@ def test_nmc_predictive_influence_smoke(
     model(), guide()  # initialize
 
     predictive_eif = influence_fn(
-        model,
-        guide,
+        PredictiveModel(model, guide),
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
@@ -102,8 +101,7 @@ def test_nmc_predictive_influence_vmap_smoke(
     model(), guide()  # initialize
 
     predictive_eif = influence_fn(
-        model,
-        guide,
+        PredictiveModel(model, guide),
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,

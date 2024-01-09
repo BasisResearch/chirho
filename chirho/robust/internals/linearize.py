@@ -5,7 +5,7 @@ import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
-from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
@@ -220,7 +220,6 @@ def make_empirical_fisher_vp(
 
 def linearize(
     model: Callable[P, Any],
-    guide: Callable[P, Any],
     *,
     num_samples_outer: int,
     num_samples_inner: Optional[int] = None,
@@ -231,26 +230,23 @@ def linearize(
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     r"""
     Returns the influence function associated with the parameters
-    of ``guide`` and probabilistic program ``model``. This function
+    of a normalized probabilistic program ``model``. This function
     computes the following quantity at an arbitrary point :math:`x^{\prime}`:
 
     .. math::
 
         \left[-\frac{1}{N} \sum_{n=1}^N \nabla_{\phi}^2 \log \tilde{p}_{\phi}(x_n) \right]
         \nabla_{\phi} \log \tilde{p}_{\phi}(x^{\prime}), \quad
-        \tilde{p}_{\phi}(x) = \int p(x \mid \theta) q_{\phi}(\theta) d\theta,
+        \tilde{p}_{\phi}(x) = \int p_{\phi}(x, \theta) d\theta,
 
     where :math:`\phi` corresponds to ``log_prob_params``,
-    :math:`p(x \mid \theta)` denotes the ``model``, :math:`q_{\phi}` denotes the ``guide``,
+    :math:`p(x, \theta)` denotes the ``model``,
     :math:`\tilde{p}_{\phi}` denotes the predictive distribution ``log_prob`` induced
-    from the ``model`` and ``guide``, and :math:`\{x_n\}_{n=1}^N` are the
+    from the ``model``, and :math:`\{x_n\}_{n=1}^N` are the
     data points drawn iid from the predictive distribution.
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-        Must only contain continuous latent variables.
-    :type guide: Callable[P, Any]
     :param num_samples_outer: number of Monte Carlo samples to
         approximate Fisher information in :func:`make_empirical_fisher_vp`
     :type num_samples_outer: int
@@ -276,10 +272,12 @@ def linearize(
     **Example usage**:
 
         .. code-block:: python
+
             import pyro
             import pyro.distributions as dist
             import torch
 
+            from chirho.robust.handlers.predictive import PredictiveModel
             from chirho.robust.internals.linearize import linearize
 
             pyro.settings.set(module_local_params=True)
@@ -312,8 +310,7 @@ def linearize(
             )
             points = predictive()
             influence = linearize(
-                model,
-                guide,
+                PredictiveModel(model, guide),
                 num_samples_outer=1000,
                 num_samples_inner=1000,
             )
@@ -327,24 +324,22 @@ def linearize(
           can result in different values. To reduce variance, increase ``num_samples_outer`` and
           ``num_samples_inner`` in ``linearize_kwargs``.
 
-        * Currently, ``model`` and ``guide`` cannot contain any ``pyro.param`` statements.
+        * Currently, ``model`` cannot contain any ``pyro.param`` statements.
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
     """
     assert isinstance(model, torch.nn.Module)
-    assert isinstance(guide, torch.nn.Module)
     if num_samples_inner is None:
         num_samples_inner = num_samples_outer**2
 
     predictive = pyro.infer.Predictive(
         model,
-        guide=guide,
         num_samples=num_samples_outer,
         parallel=True,
     )
 
-    batched_log_prob = BatchedNMCLogPredictiveLikelihood(
-        model, guide, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
+    batched_log_prob = BatchedNMCLogMarginalLikelihood(
+        model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())

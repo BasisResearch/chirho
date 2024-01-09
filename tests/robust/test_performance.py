@@ -11,8 +11,9 @@ from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger
 from chirho.observational.handlers import condition
+from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import make_empirical_fisher_vp
-from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.utils import guess_max_plate_nesting, make_functional_call
 from chirho.robust.ops import Point
 
@@ -149,7 +150,7 @@ def test_empirical_fisher_vp_performance_with_likelihood(model_guide):
     )
 
     log2_prob_params, func2_log_prob = make_functional_call(
-        BatchedNMCLogPredictiveLikelihood(model, guide)
+        BatchedNMCLogMarginalLikelihood(PredictiveModel(model, guide))
     )
 
     fisher_hessian_vmapped = make_empirical_fisher_vp(
@@ -160,19 +161,20 @@ def test_empirical_fisher_vp_performance_with_likelihood(model_guide):
         func2_log_prob, log2_prob_params, data
     )
 
-    v = {
+    v1 = {
         k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v)
         for k, v in log1_prob_params.items()
     }
+    v2 = {f"model.{k}": v for k, v in v1.items()}
 
     func2_log_prob(log2_prob_params, data)
 
     start_time = time.time()
-    fisher_hessian_vmapped(v)
+    fisher_hessian_vmapped(v1)
     end_time = time.time()
     print("Hessian vmapped time (s): ", end_time - start_time)
 
     start_time = time.time()
-    fisher_hessian_batched(v)
+    fisher_hessian_batched(v2)
     end_time = time.time()
     print("Hessian manual batched time (s): ", end_time - start_time)

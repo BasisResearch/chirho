@@ -12,27 +12,19 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
+Functional = Callable[[Callable[P, Any]], Callable[P, S]]
 
 
 def influence_fn(
-    model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Functional[P, S],
-    **linearize_kwargs
+    model: Callable[P, Any], functional: Functional[P, S], **linearize_kwargs
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
     Returns the efficient influence function for ``functional``
-    with respect to the parameters of ``guide`` and probabilistic
-    program ``model``.
+    with respect to the parameters of probabilistic program ``model``.
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-        Must only contain continuous latent variables.
-    :type guide: Callable[P, Any]
-    :param functional: model summary of interest, which is a function of the
-        model and guide.
+    :param functional: model summary of interest, which is a function of ``model``
     :type functional: Functional[P, S]
     :return: the efficient influence function for ``functional``
     :rtype: Callable[Concatenate[Point[T], P], S]
@@ -45,6 +37,7 @@ def influence_fn(
             import pyro.distributions as dist
             import torch
 
+            from chirho.robust.handlers.predictive import PredictiveModel
             from chirho.robust.ops import influence_fn
 
             pyro.settings.set(module_local_params=True)
@@ -111,17 +104,17 @@ def influence_fn(
           of this function is stochastic, i.e., evaluating this function on the same ``points``
           can result in different values. To reduce variance, increase ``num_samples_outer`` and
           ``num_samples_inner`` in ``linearize_kwargs``.
-        * Currently, ``model`` and ``guide`` cannot contain any ``pyro.param`` statements.
+        * Currently, ``model`` cannot contain any ``pyro.param`` statements.
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
     """
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized = linearize(model, guide, **linearize_kwargs)
-    target = functional(model, guide)
+    linearized = linearize(model, **linearize_kwargs)
+    target = functional(model)
 
-    # TODO check that target_params == model_params | guide_params
+    # TODO check that target_params == model_params
     assert isinstance(target, torch.nn.Module)
     target_params, func_target = make_functional_call(target)
 
