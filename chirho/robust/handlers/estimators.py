@@ -1,4 +1,4 @@
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from typing_extensions import Concatenate
 
@@ -8,7 +8,7 @@ from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 def one_step_correction(
     model: Callable[P, Any],
     guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
+    functional: Functional[P, S],
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -21,8 +21,8 @@ def one_step_correction(
     :param guide: Python callable containing Pyro primitives.
     :type guide: Callable[P, Any]
     :param functional: model summary of interest, which is a function of the
-        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
-    :type functional: Optional[Functional[P, S]], optional
+        model and guide.
+    :type functional: Functional[P, S]
     :return: function to compute the one-step correction
     :rtype: Callable[Concatenate[Point[T], P], S]
 
