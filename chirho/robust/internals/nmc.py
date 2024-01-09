@@ -109,7 +109,7 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
     points :math:`\{x_n\}_{n=1}^N`.
 
     .. math::
-        \log \left(\frac{1}{M} \sum_{m=1}^M \frac{p(x_n \mid \theta_m) p(\theta_m) \right)}{q_{\phi}(\theta_m)},
+        \log \left(\frac{1}{M} \sum_{m=1}^M \frac{p(x_n \mid \theta_m) p(\theta_m) )}{q_{\phi}(\theta_m)} \right),
         \quad \theta_m \sim q_{\phi}(\theta),
 
     where :math:`q_{\phi}(\theta)` is the guide, and :math:`p(x_n \mid \theta_m) p(\theta_m)`
