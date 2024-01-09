@@ -5,7 +5,7 @@ import pyro
 import torch
 from typing_extensions import Concatenate, ParamSpec
 
-from chirho.robust.internals.nmc import BatchedNMCLogPredictiveLikelihood
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.utils import (
     ParamDict,
     make_flatten_unflatten,
@@ -336,7 +336,7 @@ def linearize(
         parallel=True,
     )
 
-    batched_log_prob = BatchedNMCLogPredictiveLikelihood(
+    batched_log_prob = BatchedNMCLogMarginalLikelihood(
         model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)

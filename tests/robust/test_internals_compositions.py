@@ -7,15 +7,15 @@ import torch
 
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import indices_of
+from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
 from chirho.robust.internals.nmc import (
     BatchedLatents,
-    BatchedNMCLogPredictiveLikelihood,
+    BatchedNMCLogMarginalLikelihood,
     BatchedObservations,
-    PredictiveModel,
 )
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
@@ -28,7 +28,7 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    log_prob = BatchedNMCLogPredictiveLikelihood(
+    log_prob = BatchedNMCLogMarginalLikelihood(
         PredictiveModel(model, guide), num_samples=100
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)
@@ -103,7 +103,7 @@ def test_nmc_likelihood_seeded(link_fn):
     guide = SimpleGuide()
     model(), guide()  # initialize
 
-    log_prob = BatchedNMCLogPredictiveLikelihood(
+    log_prob = BatchedNMCLogMarginalLikelihood(
         PredictiveModel(model, guide), num_samples=3, max_plate_nesting=3
     )
     log_prob_params, func_log_prob = make_functional_call(log_prob)

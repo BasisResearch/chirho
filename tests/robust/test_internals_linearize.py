@@ -8,12 +8,12 @@ import torch
 from pyro.infer.predictive import Predictive
 from typing_extensions import ParamSpec
 
+from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     linearize,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.nmc import PredictiveModel
 
 from .robust_fixtures import (
     BenchmarkLinearModel,
