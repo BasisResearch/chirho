@@ -149,7 +149,7 @@ def test_SearchForExplanation():
                 assert log_probs[step] <= -1e5
 
     witnesses = {}
-    with MultiWorldCounterfactual() as mwc_empty:
+    with MultiWorldCounterfactual():
         with SearchForExplanation(
             antecedents=antecedents,
             witnesses=witnesses,
