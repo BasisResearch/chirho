@@ -147,7 +147,7 @@ def SearchForExplanation(
         prefix=antecedent_prefix,
     )
 
-    witness_handler = Preemptions(
+    witness_handler: Preemptions = Preemptions(
         actions=witnesses, bias=witness_bias, prefix=witness_prefix
     )
 
