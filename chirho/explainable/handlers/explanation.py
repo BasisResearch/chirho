@@ -108,7 +108,7 @@ def SearchForExplanation(
         antecedents_supports = {a: constraints.boolean for a in antecedents.keys()}
         # TODO generalize to non-scalar antecedents
 
-    if isinstance(
+    if witnesses and isinstance(
         next(iter(witnesses.values())),
         constraints.Constraint,
     ):
@@ -116,6 +116,9 @@ def SearchForExplanation(
             w: undo_split(s, antecedents=list(antecedents.keys()))
             for w, s in witnesses.items()
         }
+    
+    else:
+        witnesses = {}
 
     if isinstance(
         next(iter(consequents.values())),
