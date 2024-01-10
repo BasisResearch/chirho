@@ -28,15 +28,15 @@ def SplitSubsets(
 ):
     """
     A context manager used for a stochastic search of minimal but-for causes among potential interventions.
-    On each run, nodes listed in ``actions`` are randomly selected and intervened on with probability ``.5 + bias``
-    (that is, preempted with probability ``.5-bias``). The sampling is achieved by adding stochastic binary preemption
-    nodes associated with intervention candidates. If a given preemption node has value ``0``, the corresponding
-    intervention is executed. See tests in ``tests/explainable/test_handlers_explanation.py`` for examples.
+    On each run, nodes listed in `actions` are randomly selected and intervened on with probability `.5 + bias`
+    (that is, preempted with probability `.5-bias`). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value `0`, the corresponding
+    intervention is executed. See tests in `tests/explainable/test_handlers_explanation.py` for examples.
 
     :param supports: A mapping of sites to their support constraints.
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param prefix: A prefix used for naming additional preemption nodes. Defaults to ``__cause_split_``.
+    :param prefix: A prefix used for naming additional preemption nodes. Defaults to `__cause_split_`.
     """
     preemptions = {
         antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
@@ -106,7 +106,7 @@ def SearchForExplanation(
         antecedents_supports = {a: constraints.boolean for a in antecedents.keys()}
         # TODO generalize to non-scalar antecedents
 
-    if witnesses and isinstance(
+    if isinstance(
         next(iter(witnesses.values())),
         constraints.Constraint,
     ):
