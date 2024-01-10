@@ -1,4 +1,4 @@
-from typing import Any, Callable, Mapping, TypeVar
+from typing import Any, Callable, Mapping, Protocol, TypeVar
 
 import torch
 from typing_extensions import ParamSpec
@@ -7,15 +7,19 @@ from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
-S = TypeVar("S")
+S = TypeVar("S", covariant=True)
 T = TypeVar("T")
 
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Callable[P, Any]], Callable[P, S]]
+
+
+class Functional(Protocol[P, S]):
+    def __call__(self, *models: Callable[P, Any]) -> Callable[P, S]:
+        ...
 
 
 def influence_fn(
-    functional: Functional[P, S], points: Point[T], **linearize_kwargs
+    functional: Functional[P, S], *points: Point[T], **linearize_kwargs
 ) -> Functional[P, S]:
     """
     Returns the efficient influence function for ``functional``
@@ -109,15 +113,23 @@ def influence_fn(
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.utils import make_functional_call
 
-    def _influence_functional(model: Callable[P, Any]) -> Callable[P, S]:
+    if len(points) != 1:
+        raise NotImplementedError(
+            "influence_fn currently only supports unary functionals"
+        )
+
+    def _influence_functional(*models: Callable[P, Any]) -> Callable[P, S]:
         """
         Functional representing the efficient influence function of ``functional`` at ``points`` .
 
         :param model: Python callable containing Pyro primitives.
         :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
-        linearized = linearize(model, **linearize_kwargs)
-        target = functional(model)
+        if len(models) != len(points):
+            raise ValueError("mismatch between number of models and points")
+
+        linearized = linearize(*models, **linearize_kwargs)
+        target = functional(*models)
 
         # TODO check that target_params == model_params
         assert isinstance(target, torch.nn.Module)
@@ -131,7 +143,7 @@ def influence_fn(
             :return: efficient influence function evaluated at each point in ``points`` or averaged
             :rtype: S
             """
-            param_eif = linearized(points, *args, **kwargs)
+            param_eif = linearized(*points, *args, **kwargs)
             return torch.vmap(
                 lambda d: torch.func.jvp(
                     lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
