@@ -104,8 +104,8 @@ def consequent_differs(
     :param support: The support constraint for the consequent site.
     :param antecedents: A list of names of upstream intervened sites to consider when assessing differences.
 
-    :return: A callable which applied to a site value object (`consequent`), returns a tensor where each
-             element indicates whether the corresponding element of `consequent` differs from its factual value.
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor where each
+             element indicates whether the corresponding element of ``consequent`` differs from its factual value.
     """
 
     def _consequent_differs(consequent: T) -> torch.Tensor:
