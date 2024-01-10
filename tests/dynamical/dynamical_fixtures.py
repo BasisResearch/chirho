@@ -24,7 +24,7 @@ class UnifiedFixtureDynamics(pyro.nn.PyroModule):
             self.gamma = pyro.param("gamma", torch.tensor(0.7), constraints.positive)
 
     def forward(self, X: State[torch.Tensor]):
-        dX: State[torch.Tensor] = State()
+        dX: State[torch.Tensor] = dict()
         beta = self.beta * (
             1.0 + 0.1 * torch.sin(0.1 * X["t"])
         )  # beta oscilates slowly in time.
