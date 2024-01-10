@@ -114,9 +114,6 @@ def SearchForExplanation(
             w: undo_split(s, antecedents=list(antecedents.keys()))
             for w, s in witnesses.items()
         }
-    
-    else:
-        witnesses = {}
 
     if isinstance(
         next(iter(consequents.values())),
