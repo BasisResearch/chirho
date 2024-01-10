@@ -22,11 +22,11 @@ def uniform_proposal(
     This function heuristically constructs a probability distribution over a specified
     support. The choice of distribution depends on the type of support provided.
 
-    - If the support is `real`, it creates a wide Normal distribution
-      and standard deviation, defaulting to (0,10).
-    - If the support is `boolean`, it creates a Bernoulli distribution with a fixed logit of 0,
-      corresponding to success probability .5.
-    - If the support is an `interval`, the transformed distribution is centered around the
+    - If the support is ``real``, it creates a wide Normal distribution
+      and standard deviation, defaulting to ``(0,10)``.
+    - If the support is ``boolean``, it creates a Bernoulli distribution with a fixed logit of ``0``,
+      corresponding to success probability ``.5``.
+    - If the support is an ``interval``, the transformed distribution is centered around the
       midpoint of the interval.
 
     :param support: The support used to create the probability distribution.
@@ -70,19 +70,19 @@ def _uniform_proposal_integer(
 @functools.singledispatch
 def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
     """
-    Computes soft equality between two values `v1` and `v2` given a distribution constraint `support`.
+    Computes soft equality between two values ``v1`` and ``v2`` given a distribution constraint ``support``.
     Returns a negative value if there is a difference (the larger the difference, the lower the value)
-    and tends to `Norm(0,1).log_prob(0)` as `v1` and `v2` tend to each other,
-    except for when the support is boolean, in which case it returns `0.0` if the values are equal
-    and a large negative number (`eps`) otherwise.
+    and tends to a low value as ``v1`` and ``v2`` tend to each other.
 
-    :param support: distribution constraint (`real`/`boolean`/`positive`/`interval`).
+    :param support: A distribution constraint.
     :params v1, v2: the values to be compared.
-    :param kwargs: Additional keywords arguments:
-        - for boolean, the function expects `eps` to set a large negative value for.
-        - For interval and real constraints, `scale` adjusts the softness of the inequality.
-    :return: A tensor of log probabilities capturing the soft equality between `v1` and `v2`.
+    :param kwargs: Additional keywords arguments passed further; `scale` adjusts the softness of the inequality.
+    :return: A tensor of log probabilities capturing the soft equality between ``v1`` and ``v2``,
+            depends on the support and scale.
     :raises TypeError: If boolean tensors have different data types.
+
+    Comment: if the support is boolean, setting ``scale = 1e-8`` results in a value close to ``0.0`` if the values
+                are equal and a large negative number ``<=1e-8`` otherwise.
     """
     if not isinstance(v1, torch.Tensor) or not isinstance(v2, torch.Tensor):
         raise NotImplementedError("Soft equality is only implemented for tensors.")
@@ -147,7 +147,7 @@ def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.T
     Tends to `1-log(scale)` as the difference between the value increases, and tends to
     `log(scale)` as `v1` and `v2` tend to each other, summing elementwise over tensors.
 
-    :param support: distribution constraint (`real`/`boolean`/`positive`/`interval`).
+    :param support: A distribution constraint.
     :params v1, v2: the values to be compared.
     :param kwargs: Additional keywords arguments:
         `scale` to adjust the softness of the inequality.
