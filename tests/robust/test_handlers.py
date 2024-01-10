@@ -73,7 +73,7 @@ def test_one_step_correction_smoke(
         cg_iters=cg_iters,
     )(PredictiveModel(model, guide))
 
-    one_step_on_test: Mapping[str, torch.Tensor] = one_step(test_datum)
+    one_step_on_test: Mapping[str, torch.Tensor] = one_step()
     assert len(one_step_on_test) > 0
     for k, v in one_step_on_test.items():
         assert not torch.isnan(v).any(), f"one_step for {k} had nans"
