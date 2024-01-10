@@ -1,5 +1,5 @@
 import contextlib
-from typing import Callable, Mapping, TypeVar, Union, Any
+from typing import Callable, Mapping, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
 import torch
@@ -147,7 +147,7 @@ def SearchForExplanation(
         prefix=antecedent_prefix,
     )
 
-    witness_handler: Any = Preemptions(
+    witness_handler: Preemptions = Preemptions(
         actions=witnesses, bias=witness_bias, prefix=witness_prefix
     )
 
