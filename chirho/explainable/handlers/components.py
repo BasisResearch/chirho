@@ -24,7 +24,7 @@ def random_intervention(
     :param support: The support constraint for the sample site.
     :param name: The name of the auxiliary sample site.
 
-    :return: A function that takes a `torch.Tensor` as input
+    :return: A function that takes a ``torch.Tensor`` as input
         and returns a random sample over the pre-specified support of the same
         event shape as the input tensor.
 
