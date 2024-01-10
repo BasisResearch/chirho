@@ -93,7 +93,7 @@ def SearchForExplanation(
     :param witnesses: A mapping from witness names to interventions or to constraints.
     :param consequents: A mapping from consequent names to factor functions or to constraints.
     """
-    if isinstance(
+    if antecedents and isinstance(
         next(iter(antecedents.values())),
         constraints.Constraint,
     ):
@@ -115,7 +115,7 @@ def SearchForExplanation(
             for w, s in witnesses.items()
         }
 
-    if isinstance(
+    if consequents and isinstance(
         next(iter(consequents.values())),
         constraints.Constraint,
     ):
