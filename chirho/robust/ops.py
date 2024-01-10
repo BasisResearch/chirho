@@ -122,7 +122,7 @@ def influence_fn(
         """
         Functional representing the efficient influence function of ``functional`` at ``points`` .
 
-        :param model: Python callable containing Pyro primitives.
+        :param models: Python callables containing Pyro primitives.
         :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
         if len(models) != len(points):
