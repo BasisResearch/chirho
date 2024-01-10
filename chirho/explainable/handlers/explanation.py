@@ -1,5 +1,6 @@
 import contextlib
 from typing import Callable, Mapping, TypeVar, Union
+
 import pyro.distributions.constraints as constraints
 import torch
 
