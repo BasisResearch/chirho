@@ -23,6 +23,10 @@ Handlers
    :members:
    :undoc-members:
 
+.. automodule:: chirho.robust.handlers.predictive
+   :members:
+   :undoc-members:
+
 Internals
 ---------
 
@@ -34,7 +38,7 @@ Internals
    :members:
    :undoc-members:
 
-.. automodule:: chirho.robust.internals.predictive
+.. automodule:: chirho.robust.internals.nmc
    :members:
    :undoc-members:
 
