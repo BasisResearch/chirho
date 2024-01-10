@@ -148,6 +148,25 @@ def test_SearchForExplanation():
             if bottle_will_shatter:
                 assert log_probs[step] <= -1e5
 
+    witnesses = {}
+    with MultiWorldCounterfactual() as mwc_empty:
+        with SearchForExplanation(
+            antecedents=antecedents,
+            witnesses=witnesses,
+            consequents=consequents,
+            antecedent_bias=0.1,
+            consequent_scale=1e-8,
+        ):
+            with observations_conditioning:
+                with pyro.plate("sample", 200):
+                    with pyro.poutine.trace() as tr_empty:
+                        stones_bayesian_model()
+
+    assert tr_empty.trace.nodes
+
+
+test_SearchForExplanation()
+
 
 def test_SplitSubsets_single_layer():
     observations = {
