@@ -72,12 +72,12 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
     """
     Computes soft equality between two values ``v1`` and ``v2`` given a distribution constraint ``support``.
     Returns a negative value if there is a difference (the larger the difference, the lower the value)
-    and tends to a low value as ``v1`` and ``v2`` tend to each other. 
+    and tends to a low value as ``v1`` and ``v2`` tend to each other.
 
     :param support: A distribution constraint.
     :params v1, v2: the values to be compared.
     :param kwargs: Additional keywords arguments passed further; `scale` adjusts the softness of the inequality.
-    :return: A tensor of log probabilities capturing the soft equality between ``v1`` and ``v2``, 
+    :return: A tensor of log probabilities capturing the soft equality between ``v1`` and ``v2``,
             depends on the support and scale.
     :raises TypeError: If boolean tensors have different data types.
 
