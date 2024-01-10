@@ -56,15 +56,6 @@ def test_one_step_correction_smoke(
     guide = guide(model)
     model(), guide()  # initialize
 
-    one_step = one_step_correction(
-        PredictiveModel(model, guide),
-        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-        max_plate_nesting=max_plate_nesting,
-        num_samples_outer=num_samples_outer,
-        num_samples_inner=num_samples_inner,
-        cg_iters=cg_iters,
-    )
-
     with torch.no_grad():
         test_datum = {
             k: v[0]
@@ -72,6 +63,15 @@ def test_one_step_correction_smoke(
                 model, num_samples=2, return_sites=obs_names, parallel=True
             )().items()
         }
+
+    one_step = one_step_correction(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_datum,
+        max_plate_nesting=max_plate_nesting,
+        num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
+    )(PredictiveModel(model, guide))
 
     one_step_on_test: Mapping[str, torch.Tensor] = one_step(test_datum)
     assert len(one_step_on_test) > 0
