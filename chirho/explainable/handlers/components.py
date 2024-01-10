@@ -7,7 +7,7 @@ import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import soft_neq, uniform_proposal
-from chirho.indexed.ops import IndexSet, cond, gather, indices_of, scatter_n
+from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -98,7 +98,8 @@ def consequent_differs(
 ) -> Callable[[T], torch.Tensor]:
     """
     A helper function for assessing whether values at a site differ from their observed values, assigning
-    a small negative value close to zero if a value differs from its observed state and a large negative value otherwise.
+    a small negative value close to zero if a value differs from its observed state
+    and a large negative value otherwise.
 
     :param support: The support constraint for the consequent site.
     :param antecedents: A list of names of upstream intervened sites to consider when assessing differences.

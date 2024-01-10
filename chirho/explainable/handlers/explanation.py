@@ -1,8 +1,5 @@
-import collections.abc
 import contextlib
-from typing import Callable, Iterable, Mapping, TypeVar, Union
-
-import pyro
+from typing import Callable, Mapping, TypeVar, Union
 import pyro.distributions.constraints as constraints
 import torch
 
