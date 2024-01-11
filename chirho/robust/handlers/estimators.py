@@ -5,8 +5,8 @@ import pyro
 import torch
 from pyro.infer.elbo import ELBO
 from typing_extensions import Concatenate, ParamSpec
-from chirho.robust.internals.utils import make_functional_call
 
+from chirho.robust.internals.utils import make_functional_call
 from chirho.robust.ops import Functional, Point, influence_fn
 
 P = ParamSpec("P")
@@ -16,8 +16,7 @@ T = TypeVar("T")
 
 def tmle(
     model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
+    functional: Functional[P, S],
     *,
     learning_rate: float = 0.01,
     n_steps: int = 10000,
@@ -25,7 +24,7 @@ def tmle(
     num_samples: int = 1000,
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
-    from chirho.robust.internals.predictive import BatchedNMCLogPredictiveLikelihood
+    from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
     def _corrected_negative_log_likelihood(
         flat_epsilon, flat_influence, plug_in_log_likelihood
@@ -42,13 +41,13 @@ def tmle(
         return -torch.sum(log_likelihood_correction + plug_in_log_likelihood)
 
     def _solve_epsilon(
-        test_data: Point[T], prev_guide: Callable[P, Any], *args, **kwargs
+        test_data: Point[T], prev_model: Callable[P, Any], *args, **kwargs
     ) -> S:
         # find epsilon that minimizes the corrected density on test data
 
-        influence_at_test = influence_fn(
-            model, prev_guide, functional, **influence_kwargs
-        )(test_data, *args, **kwargs)
+        influence_at_test = influence_fn(prev_model, functional, **influence_kwargs)(
+            test_data, *args, **kwargs
+        )
 
         flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
             influence_at_test
@@ -57,9 +56,9 @@ def tmle(
         # TODO: Probably remove this?
         # flat_influence_at_test = [inf.detach() for inf in flat_influence_at_test]
 
-        plug_in_log_likelihood_at_test = BatchedNMCLogPredictiveLikelihood(
-            model, prev_guide
-        )(test_data, *args, **kwargs).detach()
+        plug_in_log_likelihood_at_test = BatchedNMCLogMarginalLikelihood(prev_model)(
+            test_data, *args, **kwargs
+        ).detach()
 
         grad_fn = torch.func.grad(_corrected_negative_log_likelihood)
 
@@ -79,63 +78,54 @@ def tmle(
 
         return torch.utils._pytree.tree_unflatten(flat_epsilon, treespec)
 
-    def _solve_guide_projection(
-        epsilon: Point[T], prev_guide: Callable[P, Any], *args, **kwargs
+    def _solve_model_projection(
+        epsilon: Point[T], prev_model: Callable[P, Any], *args, **kwargs
     ) -> Callable[P, Any]:
         # TODO: hope this works ... copying parameters in global scope sounds fishy
         # TODO: This is very very necessary, but segfaults...
-        # new_guide = copy.deepcopy(prev_guide)
-        new_guide = prev_guide
-
-        
-        
-
+        # new_model = copy.deepcopy(prev_model)
+        new_model = prev_model
 
         batched_log_prob = BatchedNMCLogPredictiveLikelihood(
-            model, prev_guide, num_samples=num_samples
+            prev_model, num_samples=num_samples
         )
         log_prob_params, log_p_phi = make_functional_call(batched_log_prob)
 
         flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
 
         def p_epsilon(log_prob_params, x, *args, **kwargs):
-            influence_at_x = influence_fn(
-                model, prev_guide, functional, **influence_kwargs
-            )(x, *args, **kwargs)
-            flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(
-                influence_at_x
+            influence_at_x = influence_fn(prev_model, functional, **influence_kwargs)(
+                x, *args, **kwargs
             )
+            flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(influence_at_x)
 
-            plug_in_log_likelihood_at_x = log_p_phi(
-                log_prob_params, x, *args, **kwargs
-            )
+            plug_in_log_likelihood_at_x = log_p_phi(log_prob_params, x, *args, **kwargs)
 
             return _corrected_negative_log_likelihood(
                 flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
             )
 
-
-        return new_guide
+        return new_model
 
     def _one_step(
-        test_data: Point[T], prev_guide: Callable[P, Any], *args, **kwargs
+        test_data: Point[T], prev_model: Callable[P, Any], *args, **kwargs
     ) -> Callable[P, Any]:
-        # TODO: assert that this does not have side effects on prev_guide
+        # TODO: assert that this does not have side effects on prev_model
 
-        epsilon = _solve_epsilon(test_data, prev_guide, *args, **kwargs)
+        epsilon = _solve_epsilon(test_data, prev_model, *args, **kwargs)
 
-        new_guide = _solve_guide_projection(epsilon, prev_guide, *args, **kwargs)
+        new_model = _solve_model_projection(epsilon, prev_model, *args, **kwargs)
 
-        return new_guide
+        return new_model
 
     def _tmle(test_data: Point[T], *args, **kwargs) -> S:
         # TODO: hope this works ... copying parameters in global scope sounds fishy
-        tmle_guide = guide
+        tmle_model = model
 
         for _ in range(n_tmle_steps):
-            tmle_guide = _one_step(test_data, tmle_guide, *args, **kwargs)
+            tmle_model = _one_step(test_data, tmle_model, *args, **kwargs)
 
-        return functional(model, tmle_guide)(*args, **kwargs)
+        return functional(tmle_model)(*args, **kwargs)
 
     return _tmle
 
