@@ -25,6 +25,7 @@ EXTRAS_REQUIRE = [
 ]
 
 DYNAMICAL_REQUIRE = ["torchdiffeq"]
+ROBUST_REQUIRE = ["torch>2.1"]
 
 setup(
     name="chirho",
@@ -45,6 +46,7 @@ setup(
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
+        "robust": ROBUST_REQUIRE,
         "extras": EXTRAS_REQUIRE,
         "test": EXTRAS_REQUIRE
         + [
