@@ -83,7 +83,9 @@ def test_nmc_predictive_influence_smoke(
         for k, v in test_datum_eif.items():
             assert not torch.isnan(v).any(), f"eif for {k} had nans"
             assert not torch.isinf(v).any(), f"eif for {k} had infs"
-            assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
+            assert not torch.isclose(
+                v, torch.zeros_like(v)
+            ).all(), f"eif for {k} was zero"
 
 
 @pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
