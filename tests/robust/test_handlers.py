@@ -7,7 +7,7 @@ import torch
 from typing_extensions import ParamSpec
 
 from chirho.robust.handlers.estimators import one_step_correction, tmle
-from chirho.robust.internals.predictive import PredictiveFunctional
+from chirho.robust.internals.predictive import PredictiveFunctional, PredictiveModel
 
 from .robust_fixtures import SimpleGuide, SimpleModel
 

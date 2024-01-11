@@ -1,13 +1,17 @@
 import copy
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, TypeVar
 
 import pyro
 import torch
 from pyro.infer.elbo import ELBO
-from typing_extensions import Concatenate
+from typing_extensions import Concatenate, ParamSpec
 from chirho.robust.internals.utils import make_functional_call
 
-from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
+from chirho.robust.ops import Functional, Point, influence_fn
+
+P = ParamSpec("P")
+S = TypeVar("S")
+T = TypeVar("T")
 
 
 def tmle(
@@ -138,8 +142,7 @@ def tmle(
 
 def one_step_correction(
     model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
+    functional: Functional[P, S],
     **influence_kwargs,
 ) -> Callable[Concatenate[Point[T], P], S]:
     """
@@ -149,11 +152,8 @@ def one_step_correction(
 
     :param model: Python callable containing Pyro primitives.
     :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-    :type guide: Callable[P, Any]
-    :param functional: model summary of interest, which is a function of the
-        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
-    :type functional: Optional[Functional[P, S]], optional
+    :param functional: model summary of interest, which is a function of the model.
+    :type functional: Functional[P, S]
     :return: function to compute the one-step correction
     :rtype: Callable[Concatenate[Point[T], P], S]
 
@@ -164,7 +164,7 @@ def one_step_correction(
     """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
-    eif_fn = influence_fn(model, guide, functional, **influence_kwargs_one_step)
+    eif_fn = influence_fn(model, functional, **influence_kwargs_one_step)
 
     def _one_step(test_data: Point[T], *args, **kwargs) -> S:
         return eif_fn(test_data, *args, **kwargs)
