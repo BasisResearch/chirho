@@ -5,6 +5,7 @@ import pyro
 import torch
 from typing_extensions import ParamSpec
 
+from chirho.robust.handlers.predictive import PredictiveFunctional
 from chirho.robust.internals.utils import make_functional_call
 from chirho.robust.ops import Functional, Point, influence_fn
 
@@ -38,11 +39,34 @@ def tmle(
         )
         return -torch.sum(log_likelihood_correction + plug_in_log_likelihood)
 
+    def loss_for_epsilon(
+        flat_epsilon,
+        flat_influence,
+        plug_in_log_likelihood,
+        penalty_strength: float = 10,
+    ):
+        term = 1 + sum(
+            [(influ * eps).sum(-1) for influ, eps in zip(flat_influence, flat_epsilon)]
+        )
+
+        penalty = penalty_strength * torch.relu(-1 * term).sum()
+        if penalty > 0:
+            import pdb
+
+            pdb.set_trace()
+        return (
+            _corrected_negative_log_likelihood(
+                flat_epsilon, flat_influence, plug_in_log_likelihood
+            )
+            + penalty
+        )
+
     def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> S:
         # find epsilon that minimizes the corrected density on test data
 
         influence_at_test = influence_fn(functional, test_point, **influence_kwargs)(
-            prev_model)(*args, **kwargs)
+            prev_model
+        )(*args, **kwargs)
 
         flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
             influence_at_test
@@ -55,7 +79,7 @@ def tmle(
             test_point, *args, **kwargs
         ).detach()
 
-        grad_fn = torch.func.grad(_corrected_negative_log_likelihood)
+        grad_fn = torch.func.grad(loss_for_epsilon)
 
         # Initialize flat epsilon to be zeros of the same shape as the influence_at_test, excluding any leftmost dimensions.
         flat_epsilon = [
@@ -83,7 +107,7 @@ def tmle(
             prev_model, num_samples=num_samples
         )
         prev_params, log_p_phi = make_functional_call(batched_log_prob)
-        prev_params, functional_model = make_functional_call(prev_model)
+        _, functional_model = make_functional_call(PredictiveFunctional(prev_model))
 
         new_params = copy.deepcopy(prev_params)
 
@@ -91,29 +115,33 @@ def tmle(
 
         def log_p_epsilon(params, x, *args, **kwargs):
             influence_at_x = influence_fn(functional, x, **influence_kwargs)(
-                prev_model)(*args, **kwargs)
+                prev_model
+            )(*args, **kwargs)
             flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(influence_at_x)
 
             plug_in_log_likelihood_at_x = log_p_phi(params, x, *args, **kwargs)
 
-            return _corrected_negative_log_likelihood(
+            # import pdb
+
+            # pdb.set_trace()
+
+            return -1 * _corrected_negative_log_likelihood(
                 flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
             )
 
         def loss(new_params, *args, **kwargs):
             # Sample data from the variational approximation
-            with pyro.poutine.trace() as tr:
-                functional_model(new_params, *args, **kwargs)
-
             samples = {
-                k: v["value"]
-                for k, v in tr.trace.nodes.items()
-                if k in test_point.keys()
+                k: v
+                for k, v in functional_model(new_params, *args, **kwargs).items()
+                if k in test_point
             }
+            term1 = log_p_phi(new_params, samples, *args, **kwargs)
+            term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
+            import pdb
 
-            return log_p_phi(new_params, samples, *args, **kwargs) - log_p_epsilon(
-                new_params, samples, *args, **kwargs
-            )
+            pdb.set_trace()
+            return torch.sum(term1) - term2
 
         test_loss = loss(new_params, *args, **kwargs)
 
@@ -123,7 +151,6 @@ def tmle(
 
     def _one_step(prev_model: Callable[P, Any], *args, **kwargs) -> Callable[P, Any]:
         # TODO: assert that this does not have side effects on prev_model
-
         epsilon = _solve_epsilon(prev_model, *args, **kwargs)
 
         new_model = _solve_model_projection(epsilon, prev_model, *args, **kwargs)
@@ -139,6 +166,7 @@ def tmle(
                 tmle_model = _one_step(tmle_model, *args, **kwargs)
 
             return functional(tmle_model)(*args, **kwargs)
+
         return _tmle_inner
 
     return _tmle
