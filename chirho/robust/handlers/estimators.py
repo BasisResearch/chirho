@@ -38,9 +38,7 @@ def tmle(
         )
         return -torch.sum(log_likelihood_correction + plug_in_log_likelihood)
 
-    def _solve_epsilon(
-        prev_model: Callable[P, Any], *args, **kwargs
-    ) -> S:
+    def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> S:
         # find epsilon that minimizes the corrected density on test data
 
         influence_at_test = influence_fn(prev_model, functional, **influence_kwargs)(
@@ -110,7 +108,9 @@ def tmle(
                 functional_model(new_params, *args, **kwargs)
 
             samples = {
-                k: v["value"] for k, v in tr.trace.nodes.items() if k in test_points.keys()
+                k: v["value"]
+                for k, v in tr.trace.nodes.items()
+                if k in test_points.keys()
             }
 
             a = batched_log_prob
@@ -127,16 +127,12 @@ def tmle(
 
         return new_model
 
-    def _one_step(
-        prev_model: Callable[P, Any], *args, **kwargs
-    ) -> Callable[P, Any]:
+    def _one_step(prev_model: Callable[P, Any], *args, **kwargs) -> Callable[P, Any]:
         # TODO: assert that this does not have side effects on prev_model
 
         epsilon = _solve_epsilon(prev_model, *args, **kwargs)
 
-        new_model = _solve_model_projection(
-            epsilon, prev_model, *args, **kwargs
-        )
+        new_model = _solve_model_projection(epsilon, prev_model, *args, **kwargs)
 
         return new_model
 
