@@ -312,6 +312,8 @@ def test_ExtractSupports(event_shape, plate_size):
             dist.LogNormal(0, 1).expand(event_shape).to_event(len(event_shape)),
         )
 
+        return uniform_var, normal_var, bernoulli_var, positive_var
+
     with ExtractSupports() as s:
         mixed_supports_model()
 

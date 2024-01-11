@@ -1,5 +1,5 @@
 import functools
-from typing import List, Mapping, MutableMapping, Optional, TypeVar, Union
+from typing import TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -8,7 +8,6 @@ import torch
 from torch.distributions import biject_to
 
 from chirho.indexed.ops import cond
-from chirho.interventional.ops import Intervention
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -174,32 +173,3 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
     for _ in range(support.reinterpreted_batch_ndims):
         result = torch.sum(result, dim=-1)
     return result
-
-
-class InferSupports(pyro.poutine.messenger.Messenger):
-    """
-    A Pyro Messenger for inferring distribution constraints.
-
-    :return: An instance of InferSupports with a new attribute: ``supports``,
-            a dictionary mapping variable names to constraints for all variables in the model.
-
-    Example:
-
-        >>> def mixed_supports_model():
-        >>>     uniform_var = pyro.sample("uniform_var", dist.Uniform(1, 10))
-        >>>     normal_var = pyro.sample("normal_var", dist.Normal(3, 15))
-        >>> with InferSupports(antecedents=["uniform_var"]) as s:
-        ...      mixed_supports_model()
-        >>> print(s.supports)
-    """
-
-    supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
-
-    def __init__(self):
-        super(InferSupports, self).__init__()
-
-        self.supports = {}
-
-    def _pyro_post_sample(self, msg: dict) -> None:
-        if not pyro.poutine.util.site_is_subsample(msg):
-            self.supports[msg["name"]] = msg["fn"].support

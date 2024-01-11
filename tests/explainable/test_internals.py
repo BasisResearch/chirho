@@ -1,17 +1,10 @@
 import math
 
-import pyro
-import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
-from chirho.explainable.internals.defaults import (
-    InferSupports,
-    soft_eq,
-    soft_neq,
-    uniform_proposal,
-)
+from chirho.explainable.internals.defaults import soft_eq, soft_neq, uniform_proposal
 
 SUPPORT_CASES = [
     constraints.real,
