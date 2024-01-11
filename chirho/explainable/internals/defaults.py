@@ -1,5 +1,5 @@
 import functools
-from typing import TypeVar
+from typing import List, Mapping, MutableMapping, Optional, TypeVar, Union
 
 import pyro
 import pyro.distributions as dist
@@ -8,6 +8,7 @@ import torch
 from torch.distributions import biject_to
 
 from chirho.indexed.ops import cond
+from chirho.interventional.ops import Intervention
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -173,3 +174,65 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
     for _ in range(support.reinterpreted_batch_ndims):
         result = torch.sum(result, dim=-1)
     return result
+
+
+class InferSupports(pyro.poutine.messenger.Messenger):
+    supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
+
+    def __init__(
+        self,
+        antecedents: Optional[
+            Union[
+                List[str],
+                Mapping[str, Intervention[T]],
+                Mapping[str, constraints.Constraint],
+            ]
+        ] = None,
+        witnesses: Optional[
+            Union[
+                List[str],
+                Mapping[str, Intervention[T]],
+                Mapping[str, constraints.Constraint],
+            ]
+        ] = None,
+        consequents: Optional[
+            Union[
+                List[str],
+                Mapping[str, Intervention[T]],
+                Mapping[str, constraints.Constraint],
+            ]
+        ] = None,
+    ):
+        super(InferSupports, self).__init__()
+
+        for group in ["antecedents", "witnesses", "consequents"]:
+            setattr(self, group, self._extract_keys(locals()[group]))
+
+        self.supports = {}
+
+    def _extract_keys(
+        self,
+        input: Union[List[str], Mapping[str, Union[T, constraints.Constraint]]],
+    ) -> Optional[List[str]]:
+        if input is None:
+            return None
+        elif isinstance(input, dict):
+            return list(input.keys())
+        else:
+            return list(input)  # overspecified to pass lint
+
+    def _pyro_post_sample(self, msg: dict) -> None:
+        if not pyro.poutine.util.site_is_subsample(msg):
+            self.supports[msg["name"]] = msg["fn"].support  # t ype: ignore
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        for group in ["antecedents", "witnesses", "consequents"]:
+            keys = getattr(self, group)
+            setattr(self, group, {})    
+            if keys:
+                if not all(key in self.supports for key in keys):
+                    raise ValueError(f"Invalid keys in {group}. Ensure that all keys exist in self.supports.")
+
+                setattr(self, group, {key: self.supports[key] for key in keys})
+
+        return super(InferSupports, self).__exit__(exc_type, exc_value, traceback)
