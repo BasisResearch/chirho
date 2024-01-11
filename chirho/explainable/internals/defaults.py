@@ -180,15 +180,8 @@ class InferSupports(pyro.poutine.messenger.Messenger):
     """
     A Pyro Messenger for inferring distribution constraints.
 
-    :param antecedents: (optional) A list or mapping of antecedent variables or constraints.
-    :param witnesses: (optional) A list or mapping of witness variables or constraints.
-    :param consequents: (optional) A list or mapping of consequent variables or constraints.
-
-    :return: An instance of InferSupports with new attributes: ``supports``, ``antecedents``,
-        ``witnesses``, and ``consequents``. ``supports`` is a dictionary mapping variable names
-        to constraints for all variables in the model, while the other attributes are analogous,
-        restricted to variables mentioned in the optional parameters (empty dictionaries if no
-        optional parameters are provided).
+    :return: An instance of InferSupports with a new attribute: ``supports``,
+            a dictionary mapping variable names to constraints for all variables in the model.
 
     Example:
 
@@ -197,67 +190,16 @@ class InferSupports(pyro.poutine.messenger.Messenger):
         >>>     normal_var = pyro.sample("normal_var", dist.Normal(3, 15))
         >>> with InferSupports(antecedents=["uniform_var"]) as s:
         ...      mixed_supports_model()
-        >>> print(s.supports, s.antecedents)
+        >>> print(s.supports)
     """
 
     supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
 
-    def __init__(
-        self,
-        antecedents: Optional[
-            Union[
-                List[str],
-                Mapping[str, Intervention[T]],
-                Mapping[str, constraints.Constraint],
-            ]
-        ] = None,
-        witnesses: Optional[
-            Union[
-                List[str],
-                Mapping[str, Intervention[T]],
-                Mapping[str, constraints.Constraint],
-            ]
-        ] = None,
-        consequents: Optional[
-            Union[
-                List[str],
-                Mapping[str, Intervention[T]],
-                Mapping[str, constraints.Constraint],
-            ]
-        ] = None,
-    ):
+    def __init__(self):
         super(InferSupports, self).__init__()
-
-        for group in ["antecedents", "witnesses", "consequents"]:
-            setattr(self, group, self._extract_keys(locals()[group]))
 
         self.supports = {}
 
-    def _extract_keys(
-        self,
-        input: Union[List[str], Mapping[str, Union[T, constraints.Constraint]]],
-    ) -> Optional[List[str]]:
-        if input is None:
-            return None
-        elif isinstance(input, dict):
-            return list(input.keys())
-        else:
-            return list(input)  # overspecified to pass lint
-
     def _pyro_post_sample(self, msg: dict) -> None:
         if not pyro.poutine.util.site_is_subsample(msg):
-            self.supports[msg["name"]] = msg["fn"].support  # t ype: ignore
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        for group in ["antecedents", "witnesses", "consequents"]:
-            keys = getattr(self, group)
-            setattr(self, group, {})
-            if keys:
-                if not all(key in self.supports for key in keys):
-                    raise ValueError(
-                        f"Invalid keys in {group}. Ensure that all keys exist in self.supports."
-                    )
-
-                setattr(self, group, {key: self.supports[key] for key in keys})
-
-        return super(InferSupports, self).__exit__(exc_type, exc_value, traceback)
+            self.supports[msg["name"]] = msg["fn"].support

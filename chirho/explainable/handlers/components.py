@@ -1,5 +1,5 @@
 import itertools
-from typing import Callable, Iterable, TypeVar
+from typing import Callable, Iterable, MutableMapping, TypeVar
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -125,3 +125,32 @@ def consequent_differs(
         return diff
 
     return _consequent_differs
+
+
+class ExtractSupports(pyro.poutine.messenger.Messenger):
+    """
+    A Pyro Messenger for inferring distribution constraints.
+
+    :return: An instance of ``ExtractSupports`` with a new attribute: ``supports``,
+            a dictionary mapping variable names to constraints for all variables in the model.
+
+    Example:
+
+        >>> def mixed_supports_model():
+        >>>     uniform_var = pyro.sample("uniform_var", dist.Uniform(1, 10))
+        >>>     normal_var = pyro.sample("normal_var", dist.Normal(3, 15))
+        >>> with ExtractSupports() as s:
+        ...      mixed_supports_model()
+        >>> print(s.supports)
+    """
+
+    supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
+
+    def __init__(self):
+        super(ExtractSupports, self).__init__()
+
+        self.supports = {}
+
+    def _pyro_post_sample(self, msg: dict) -> None:
+        if not pyro.poutine.util.site_is_subsample(msg):
+            self.supports[msg["name"]] = msg["fn"].support
