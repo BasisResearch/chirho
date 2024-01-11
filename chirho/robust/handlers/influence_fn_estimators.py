@@ -1,5 +1,6 @@
 import functools
 from typing import Any, Callable, Optional
+from .preemptions_mod import PreemptOnce
 
 import pyro
 import torch
@@ -62,12 +63,29 @@ class FiniteDifferenceInfluenceEstimator(pyro.poutine.messenger.Messenger):
             # meaning that posterior predictive samples from the perturbed model will sometimes, with probability
             # epsilon, ignore the posterior entirely.
             perturbed_model = KernelPerturbedModel(model, points=points, eps=self.eps, kernel=self.kernel_model)
+
+            # # TODO points need to be sampled from the kernel at local points.
+            # perturbed_model = PreemptOnce(actions=points, bias=self.eps - 0.5)(model)
+
             target_perturbed = functional(perturbed_model, guide)
 
-            # FIXME bdbjdis vmap with func_target etc. here, this is basically just pseudo code right now.
             t_p_eps = target_perturbed(*args, **kwargs)
+
             t_p_hat = target(*args, **kwargs)
-            return (t_p_eps - t_p_hat) / self.eps
+
+            # The KernelPerturbedModel adds a latent variable to the model that sometimes gets returned by functional.
+            t_p_eps.pop("_from_kernel", None)
+
+            t_p_eps_flat, t_p_eps_treespec = torch.utils._pytree.tree_flatten(t_p_eps)
+            t_p_hat_flat, t_p_hat_treespec = torch.utils._pytree.tree_flatten(t_p_hat)
+            assert len(t_p_eps_flat) == len(t_p_hat_flat)
+
+            ret = []
+            for el1, el2 in zip(t_p_eps_flat, t_p_hat_flat):
+                assert el1.shape == el2.shape
+                ret.append((el1 - el2) / self.eps)
+
+            return torch.utils._pytree.tree_unflatten(ret, t_p_eps_treespec)
 
         msg["value"] = _fn
         msg["done"] = True

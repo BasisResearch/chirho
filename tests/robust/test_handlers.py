@@ -7,8 +7,12 @@ import torch
 from typing_extensions import ParamSpec
 
 from chirho.robust.handlers.functional_estimators import one_step_correction
-from chirho.robust.handlers.influence_fn_estimators import MonteCarloInfluenceEstimator
+from chirho.robust.handlers.influence_fn_estimators import (
+    MonteCarloInfluenceEstimator,
+    FiniteDifferenceInfluenceEstimator
+)
 from chirho.robust.internals.predictive import PredictiveFunctional
+from chirho.counterfactual.handlers.counterfactual import Preemptions
 
 from .robust_fixtures import SimpleGuide, SimpleModel
 
@@ -43,7 +47,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 @pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
-def test_one_step_correction_smoke(
+def test_one_step_correction_smoke_mc(
     model,
     guide,
     obs_names,
@@ -61,6 +65,50 @@ def test_one_step_correction_smoke(
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
+    ):
+        one_step = one_step_correction(
+            model,
+            guide,
+            functional=functools.partial(
+                PredictiveFunctional, num_samples=num_predictive_samples
+            ),
+        )
+
+    with torch.no_grad():
+        test_datum = {
+            k: v[0]
+            for k, v in pyro.infer.Predictive(
+                model, num_samples=2, return_sites=obs_names, parallel=True
+            )().items()
+        }
+
+    one_step_on_test: Mapping[str, torch.Tensor] = one_step(test_datum)
+    assert len(one_step_on_test) > 0
+    for k, v in one_step_on_test.items():
+        assert not torch.isnan(v).any(), f"one_step for {k} had nans"
+        assert not torch.isinf(v).any(), f"one_step for {k} had infs"
+        assert not torch.isclose(
+            v, torch.zeros_like(v)
+        ).all(), f"one_step for {k} was zero"
+
+
+# TODO deduplicate code above and below.
+
+@pytest.mark.parametrize("model,guide,obs_names,max_plate_nesting", MODEL_TEST_CASES)
+@pytest.mark.parametrize("num_predictive_samples", [1, 5])
+def test_one_step_correction_smoke_fd(
+    model,
+    guide,
+    obs_names,
+    max_plate_nesting,
+    num_predictive_samples,
+):
+    model = model()
+    guide = guide(model)
+    model(), guide()  # initialize
+    with FiniteDifferenceInfluenceEstimator(
+        eps=torch.tensor(0.01)
+        # TODO try different kernels, right now this just defaults to a delta.
     ):
         one_step = one_step_correction(
             model,

@@ -218,6 +218,69 @@ def test_batched_latents_observations(pad_dim: int):
                     )
 
 
+def test_preempt_as_perturbation():
+    model = SimpleModel()
+    guide = SimpleGuide()
+
+    model(), guide()  # initialize
+
+    predictive = pyro.infer.Predictive(
+        model, num_samples=1, return_sites=["y"]
+    )
+
+    # Unwrap just for this test that operates independently of plating/batching.
+    test_data = dict(y=predictive()['y'][0])
+
+    with pyro.poutine.trace() as model_tr_messenger:
+        model()
+
+    kpmodel1 = KernelPerturbedModel(model, points=test_data, eps=1.0)
+    with kpmodel1.mwc:
+        with pyro.poutine.trace() as kpmodel1_tr_messenger:
+            res = kpmodel1()
+    print("done")
+
+    kpmodel2 = KernelPerturbedModel(model, points=test_data, eps=torch.tensor(0.0))
+    with pyro.poutine.trace() as kpmodel2_tr_messenger:
+        kpmodel2()
+
+    pred_kpmodel1 = PredictiveModel(kpmodel1, guide)
+    with pyro.poutine.trace() as pred_kpmodel1_tr_messenger:
+        pred_kpmodel1()
+
+    pred_kpmodel2 = PredictiveModel(kpmodel2, guide)
+    with pyro.poutine.trace() as pred_kpmodel2_tr_messenger:
+        pred_kpmodel2()
+
+    # Require that kpmodel1, pred_kpmodel1, and test data give the same values for y.
+    assert torch.allclose(
+        kpmodel1_tr_messenger.trace.nodes["y"]["value"],
+        test_data["y"],
+    )
+    assert torch.allclose(
+        pred_kpmodel1_tr_messenger.trace.nodes["y"]["value"],
+        test_data["y"],
+    )
+
+    # Require that model, kpmodel2, pred_kpmodel2, do not give the test data. Check for very high precision match,
+    #  as we want there to basically zero probability of a false equality due to random sample from the model.
+    assert not torch.allclose(
+        model_tr_messenger.trace.nodes["y"]["value"],
+        test_data["y"],
+        atol=1e-9,
+    )
+    assert not torch.allclose(
+        kpmodel2_tr_messenger.trace.nodes["y"]["value"],
+        test_data["y"],
+        atol=1e-9,
+    )
+    assert not torch.allclose(
+        pred_kpmodel2_tr_messenger.trace.nodes["y"]["value"],
+        test_data["y"],
+        atol=1e-9,
+    )
+
+
 def test_kernel_perturbation():
     model = SimpleModel()
     guide = SimpleGuide()
@@ -300,23 +363,20 @@ def test_kernel_perturbation_composition_batched(pad_dim: int):
 
     test_data = predictive()
 
-    def get_trace(_model, incl_kernel_loc=True):
+    def get_trace(_model):
         with IndexPlatesMessenger(first_available_dim=-max_plate_nesting - 1):
             with pyro.poutine.trace() as tr:
                 with BatchedLatents(num_particles=num_particles_latent, name=latent_plate_name):
                     with BatchedObservations(test_data, name=obs_plate_name):
-                        if incl_kernel_loc:
-                            _model(_kernel_loc=test_data)
-                        else:
-                            _model()
+                        _model()
         return tr.trace
 
-    model_trace = get_trace(model, incl_kernel_loc=False)
+    model_trace = get_trace(model)
 
-    kpmodel1 = KernelPerturbedModel(model, eps=torch.tensor(1.0))
+    kpmodel1 = KernelPerturbedModel(model, points=test_data, eps=torch.tensor(1.0))
     kpmodel1_trace = get_trace(kpmodel1)
 
-    kpmodel2 = KernelPerturbedModel(model, eps=torch.tensor(0.0))
+    kpmodel2 = KernelPerturbedModel(model, points=test_data, eps=torch.tensor(0.0))
     kpmodel2_trace = get_trace(kpmodel2)
 
     # test failing see FIXME 2880dhsl in robust/internals/predictive.py

@@ -2,6 +2,7 @@ import collections
 import math
 import typing
 from typing import Any, Callable, Generic, Optional, TypeVar
+from chirho.indexed.ops import IndexSet, cond_n, scatter_n
 
 import pyro
 import torch
@@ -17,6 +18,11 @@ from chirho.robust.internals.utils import (
     unbind_leftmost_dim,
 )
 from chirho.robust.ops import Point
+from ..handlers.preempt_once import PreemptReplayExternalCase, PreemptSampleCaseOnce
+from chirho.counterfactual.handlers.counterfactual import Preemptions, MultiWorldCounterfactual
+from chirho.counterfactual.handlers.selection import SelectCounterfactual
+import pyro.distributions as dist
+from chirho.interventional.handlers import Interventions
 
 pyro.settings.set(module_local_params=True)
 
@@ -163,13 +169,13 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
     model: Callable[P, T]
     points: Point[T]
     kernel: Callable[[Point[T]], Any]
-    eps: torch.Tensor
+    eps: float
 
     def __init__(
         self,
         model: Callable[P, T],
         points: Point[T],
-        eps: torch.Tensor,
+        eps: float,
         kernel: Optional[Callable[[Point[T]], Any]] = None,
     ):
         super().__init__()
@@ -177,16 +183,28 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
         # Define the default kernel as a Delta distribution sitting on the _kernel_loc.
         import pyro.distributions as dist
         if kernel is None:
-            def kernel(_kernel_loc: Point[T]):
-                ret = dict()
-                for name, value in _kernel_loc.items():
-                    ret[name] = pyro.sample(name, dist.Delta(value))
-                return ret
+            def kernel(name: str, _kernel_loc: T):
+                # return pyro.sample(name, dist.Delta(_kernel_loc))
+                return dist.Delta(_kernel_loc).sample()
 
         self.model = model
         self.points = points
         self.kernel = kernel
         self.eps = eps
+        self.mwc = MultiWorldCounterfactual()
+
+
+        # HACK asdfbjh7 moving this here so that user can put their trace inside.
+        prefix = "_kernel_"
+
+        actions = dict()
+        for k, v in self.points.items():
+            actions[k] = lambda obs: self.kernel(f"{prefix}{k}", v)
+
+        self.preemption = Preemptions(actions, prefix="_from" + prefix, bias=self.eps - 0.5)
+        self.interventions = Interventions(actions)
+        # /HACK
+
 
         if not (0 <= self.eps <= 1):
             raise ValueError("eps must be between 0 and 1.")
@@ -197,33 +215,34 @@ class KernelPerturbedModel(Generic[P, T], torch.nn.Module):
 
         # Observed data will be sampled from the kernel with probability epsilon. This induces a mixture that
         #  reflects the small "finite difference" (perturbation) required to approximate the influence function.
-        # This will induce a mixture distribution that includes all variables in each branch, but where the observed
+        # This mixutre includes all variables in each branch, but where the observed
         #  data in the branch that is sampled from the kernel has no dependence on the latents.
         # This serves to disconnect any connection to a guide that might induce a posterior predictive.
-        _from_kernel = pyro.sample("_from_kernel", Categorical(torch.stack([1. - self.eps, self.eps])))
+        # _from_kernel = pyro.sample("_from_kernel", Categorical(torch.stack([1. - self.eps, self.eps])))
 
-        # Default to trivial messenger.
-        replay_from_kernel = pyro.poutine.messenger.Messenger()
-        block_kernel_sample_sites = pyro.poutine.messenger.Messenger()
-        # FIXME 2880dhsl this needs to be vmapped or something to handle vectorized _from_kernel
-        if _from_kernel:
-            with pyro.poutine.trace() as kernel_tr:
-                self.kernel(self.points)
-            replay_from_kernel = pyro.poutine.replay(trace=kernel_tr.trace)
+        # # Evaluate the kernel at all points, but don't propagate that evaluation up to any enclosing traces.
+        # with pyro.poutine.block(hide_all=True):
+        #     with pyro.poutine.trace() as kernel_tr:
+        #         self.kernel(self.points)
 
-            # This prevents any outer traces from seeing the kernel sites twice, once in the kernel and again
-            #  in the model.
-            block_kernel_sample_sites = pyro.poutine.block(
-                hide=[
-                    name
-                    for name, node in kernel_tr.trace.nodes.items()
-                    if node["type"] == "sample"
-                ]
-            )
 
-        with block_kernel_sample_sites:
-            with replay_from_kernel:
-                return self.model(*args, **kwargs)
+
+        # with self.mwc:
+        # with SelectCounterfactual():
+        # with PreemptSampleCaseOnce(actions, case_name="_from_kernel", eps=self.eps, prefix=prefix):
+        # with Preemptions(actions, prefix="_from" + prefix, bias=self.eps - 0.5):
+        #     with Interventions(actions):
+        # HACK asdfbjh7
+        res = self.model(*args, **kwargs)
+        return res
+
+        # # And preempt the model with the kernel samples where _from_kernel is true.
+        # # with self.mwc:
+        # pyro.poutine.replay
+        # # "1 -" because case backward?
+        # with PreemptReplayExternalCase(trace=kernel_tr.trace, case=_from_kernel) as preemption:
+        #     res = self.model(*args, **kwargs)
+        #     return res
 
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
