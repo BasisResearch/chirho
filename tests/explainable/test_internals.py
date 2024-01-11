@@ -1,12 +1,17 @@
 import math
 
-import pyro.distributions as dist
 import pyro
+import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
-from chirho.explainable.internals.defaults import soft_eq, soft_neq, uniform_proposal, InferSupports
+from chirho.explainable.internals.defaults import (
+    InferSupports,
+    soft_eq,
+    soft_neq,
+    uniform_proposal,
+)
 
 SUPPORT_CASES = [
     constraints.real,
@@ -171,9 +176,6 @@ def test_soft_neq_tavares_relaxation():
         assert torch.allclose(scaled_z, torch.tensor(0.0)), "condition iii failed"
 
 
-
-
-
 options = [
     None,
     [],
@@ -181,24 +183,36 @@ options = [
     ["uniform_var", "normal_var", "bernoulli_var"],
     {},
     {"uniform_var": 5.0, "bernoulli_var": 5.0},
-    {"uniform_var": constraints.interval(1, 10), 
-     "bernoulli_var": constraints.interval(0, 1)}, # misspecified on purpose, should make no damage
+    {
+        "uniform_var": constraints.interval(1, 10),
+        "bernoulli_var": constraints.interval(0, 1),
+    },  # misspecified on purpose, should make no damage
 ]
 
-@pytest.mark.parametrize("antecedents",options)
-@pytest.mark.parametrize("witnesses",options)
-@pytest.mark.parametrize("consequents",options)
+
+@pytest.mark.parametrize("antecedents", options)
+@pytest.mark.parametrize("witnesses", options)
+@pytest.mark.parametrize("consequents", options)
 @pytest.mark.parametrize("event_shape", [(), (3, 2)], ids=str)
 @pytest.mark.parametrize("plate_size", [4, 50])
 def test_InferSupports(antecedents, witnesses, consequents, event_shape, plate_size):
-
     @pyro.plate("data", size=plate_size, dim=-1)
     def mixed_supports_model():
-        uniform_var = pyro.sample("uniform_var", dist.Uniform(1, 10).expand(event_shape).to_event(len(event_shape)))
-        normal_var = pyro.sample("normal_var", dist.Normal(3, 15).expand(event_shape).to_event(len(event_shape)))
-        bernoulli_var = pyro.sample("bernoulli_var", dist.Bernoulli(0.5)) # mixing shapes on purpose, should do no damage
-        positive_var = pyro.sample("positive_var", dist.LogNormal(0, 1).expand(event_shape).to_event(len(event_shape)))
-
+        uniform_var = pyro.sample(
+            "uniform_var",
+            dist.Uniform(1, 10).expand(event_shape).to_event(len(event_shape)),
+        )
+        normal_var = pyro.sample(
+            "normal_var",
+            dist.Normal(3, 15).expand(event_shape).to_event(len(event_shape)),
+        )
+        bernoulli_var = pyro.sample(
+            "bernoulli_var", dist.Bernoulli(0.5)
+        )  # mixing shapes on purpose, should do no damage
+        positive_var = pyro.sample(
+            "positive_var",
+            dist.LogNormal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
 
     with InferSupports() as s1:
         mixed_supports_model()
@@ -206,15 +220,15 @@ def test_InferSupports(antecedents, witnesses, consequents, event_shape, plate_s
     with InferSupports(antecedents, witnesses, consequents) as s2:
         mixed_supports_model()
 
-
     if antecedents is not None:
         assert all(key in s2.supports.keys() for key in s2.antecedents)
+        for key in antecedents:
+            assert s2.supports[key] == s2.antecedents[key]
     if witnesses is not None:
         assert all(key in s2.supports.keys() for key in s2.witnesses)
         for key in witnesses:
-            assert isinstance(s2.witnesses[key], constraints.Constraint)
-            assert s2.supports[key] == s2.[key]
-        
-            assert s2.supports[key] == witnesses[key]
+            assert s2.supports[key] == s2.witnesses[key]
     if consequents is not None:
         assert all(key in s2.supports.keys() for key in s2.consequents)
+        for key in consequents:
+            assert s2.supports[key] == s2.consequents[key]

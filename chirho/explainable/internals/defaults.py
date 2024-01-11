@@ -177,6 +177,29 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
 
 
 class InferSupports(pyro.poutine.messenger.Messenger):
+    """
+    A Pyro Messenger for inferring distribution constraints.
+
+    :param antecedents: (optional) A list or mapping of antecedent variables or constraints.
+    :param witnesses: (optional) A list or mapping of witness variables or constraints.
+    :param consequents: (optional) A list or mapping of consequent variables or constraints.
+
+    :return: An instance of InferSupports with new attributes: ``supports``, ``antecedents``,
+        ``witnesses``, and ``consequents``. ``supports`` is a dictionary mapping variable names
+        to constraints for all variables in the model, while the other attributes are analogous,
+        restricted to variables mentioned in the optional parameters (empty dictionaries if no
+        optional parameters are provided).
+
+    Example:
+
+        >>> def mixed_supports_model():
+        >>>     uniform_var = pyro.sample("uniform_var", dist.Uniform(1, 10))
+        >>>     normal_var = pyro.sample("normal_var", dist.Normal(3, 15))
+        >>> with InferSupports(antecedents=["uniform_var"]) as s:
+        ...      mixed_supports_model()
+        >>> print(s.supports, s.antecedents)
+    """
+
     supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
 
     def __init__(
@@ -228,10 +251,12 @@ class InferSupports(pyro.poutine.messenger.Messenger):
     def __exit__(self, exc_type, exc_value, traceback):
         for group in ["antecedents", "witnesses", "consequents"]:
             keys = getattr(self, group)
-            setattr(self, group, {})    
+            setattr(self, group, {})
             if keys:
                 if not all(key in self.supports for key in keys):
-                    raise ValueError(f"Invalid keys in {group}. Ensure that all keys exist in self.supports.")
+                    raise ValueError(
+                        f"Invalid keys in {group}. Ensure that all keys exist in self.supports."
+                    )
 
                 setattr(self, group, {key: self.supports[key] for key in keys})
 
