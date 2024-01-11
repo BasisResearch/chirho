@@ -328,7 +328,7 @@ def linearize(
           https://github.com/BasisResearch/chirho/issues/393.
     """
     if len(models) > 1:
-        raise NotImplementedError("Batched linearization not yet implemented")
+        raise NotImplementedError("Only unary version of linearize is implemented.")
     else:
         (model,) = models
 

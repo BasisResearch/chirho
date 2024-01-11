@@ -14,7 +14,9 @@ Point = Mapping[str, Observation[T]]
 
 
 class Functional(Protocol[P, S]):
-    def __call__(self, *models: Callable[P, Any]) -> Callable[P, S]:
+    def __call__(
+        self, __model: Callable[P, Any], *models: Callable[P, Any]
+    ) -> Callable[P, S]:
         ...
 
 
@@ -22,15 +24,12 @@ def influence_fn(
     functional: Functional[P, S], *points: Point[T], **linearize_kwargs
 ) -> Functional[P, S]:
     """
-    Returns the efficient influence function for ``functional``
-    with respect to the parameters of probabilistic program ``model``.
+    Returns a new functional that computes the efficient influence function for ``functional``
+    at the given ``points`` with respect to the parameters of its probabilistic program arguments.
 
     :param functional: model summary of interest, which is a function of ``model``
-    :type functional: Functional[P, S]
-    :param points: points at which to compute the efficient influence function
-    :type points: Point[T]
-    :return: the efficient influence function for ``functional``
-    :rtype: Callable[Concatenate[Point[T], P], S]
+    :param points: points for each input to ``functional`` at which to compute the efficient influence function
+    :return: functional that computes the efficient influence function for ``functional`` at ``points``
 
     **Example usage**:
 
@@ -141,7 +140,6 @@ def influence_fn(
             point in ``points``.
 
             :return: efficient influence function evaluated at each point in ``points`` or averaged
-            :rtype: S
             """
             param_eif = linearized(*points, *args, **kwargs)
             return torch.vmap(
