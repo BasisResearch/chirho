@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Callable, List, TypeVar
+from typing import Any, Callable, TypeVar
 
 import pyro
 import torch
@@ -15,7 +15,7 @@ T = TypeVar("T")
 
 def tmle(
     functional: Functional[P, S],
-    *test_points: Point,
+    test_point: Point,
     learning_rate: float = 0.01,
     n_steps: int = 10000,
     n_tmle_steps: int = 1,
@@ -41,9 +41,8 @@ def tmle(
     def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> S:
         # find epsilon that minimizes the corrected density on test data
 
-        influence_at_test = influence_fn(prev_model, functional, **influence_kwargs)(
-            test_points, *args, **kwargs
-        )
+        influence_at_test = influence_fn(functional, test_point, **influence_kwargs)(
+            prev_model)(*args, **kwargs)
 
         flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
             influence_at_test
@@ -53,7 +52,7 @@ def tmle(
         # flat_influence_at_test = [inf.detach() for inf in flat_influence_at_test]
 
         plug_in_log_likelihood_at_test = BatchedNMCLogMarginalLikelihood(prev_model)(
-            test_points, *args, **kwargs
+            test_point, *args, **kwargs
         ).detach()
 
         grad_fn = torch.func.grad(_corrected_negative_log_likelihood)
@@ -91,9 +90,8 @@ def tmle(
         flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
 
         def log_p_epsilon(params, x, *args, **kwargs):
-            influence_at_x = influence_fn(prev_model, functional, **influence_kwargs)(
-                x, *args, **kwargs
-            )
+            influence_at_x = influence_fn(functional, x, **influence_kwargs)(
+                prev_model)(*args, **kwargs)
             flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(influence_at_x)
 
             plug_in_log_likelihood_at_x = log_p_phi(params, x, *args, **kwargs)
@@ -110,12 +108,8 @@ def tmle(
             samples = {
                 k: v["value"]
                 for k, v in tr.trace.nodes.items()
-                if k in test_points.keys()
+                if k in test_point.keys()
             }
-
-            a = batched_log_prob
-
-            assert False
 
             return log_p_phi(new_params, samples, *args, **kwargs) - log_p_epsilon(
                 new_params, samples, *args, **kwargs
@@ -136,14 +130,16 @@ def tmle(
 
         return new_model
 
-    def _tmle(model: Callable[P, Any], *args, **kwargs) -> S:
-        # TODO: hope this works ... copying parameters in global scope sounds fishy
-        tmle_model = model
+    def _tmle(model: Callable[P, Any]) -> S:
+        def _tmle_inner(*args, **kwargs):
+            # TODO: hope this works ... copying parameters in global scope sounds fishy
+            tmle_model = model
 
-        for _ in range(n_tmle_steps):
-            tmle_model = _one_step(test_points, tmle_model, *args, **kwargs)
+            for _ in range(n_tmle_steps):
+                tmle_model = _one_step(tmle_model, *args, **kwargs)
 
-        return functional(tmle_model)(*args, **kwargs)
+            return functional(tmle_model)(*args, **kwargs)
+        return _tmle_inner
 
     return _tmle
 

@@ -64,7 +64,7 @@ def test_one_step_correction_smoke(
             )().items()
         }
 
-    one_step = one_step_correction(
+    one_step = tmle(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         test_datum,
         max_plate_nesting=max_plate_nesting,
@@ -72,6 +72,15 @@ def test_one_step_correction_smoke(
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
     )(PredictiveModel(model, guide))
+
+    # one_step = one_step_correction(
+    #     functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+    #     test_datum,
+    #     max_plate_nesting=max_plate_nesting,
+    #     num_samples_outer=num_samples_outer,
+    #     num_samples_inner=num_samples_inner,
+    #     cg_iters=cg_iters,
+    # )(PredictiveModel(model, guide))
 
     one_step_on_test: Mapping[str, torch.Tensor] = one_step()
     assert len(one_step_on_test) > 0
