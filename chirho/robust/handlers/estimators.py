@@ -1,10 +1,9 @@
 import copy
-from typing import Any, Callable, Optional, TypeVar, List
+from typing import Any, Callable, List, TypeVar
 
 import pyro
 import torch
-from pyro.infer.elbo import ELBO
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
 from chirho.robust.internals.utils import make_functional_call
 from chirho.robust.ops import Functional, Point, influence_fn
@@ -23,7 +22,7 @@ def tmle(
     n_tmle_steps: int = 1,
     num_samples: int = 1000,
     **influence_kwargs,
-) -> Callable[Concatenate[Point[T], P], S]:
+) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
     def _corrected_negative_log_likelihood(
@@ -79,7 +78,11 @@ def tmle(
         return torch.utils._pytree.tree_unflatten(flat_epsilon, treespec)
 
     def _solve_model_projection(
-        epsilon: Point[T], prev_model: Callable[P, Any], obs_names: List[str], *args, **kwargs
+        epsilon: Point[T],
+        prev_model: Callable[P, Any],
+        obs_names: List[str],
+        *args,
+        **kwargs,
     ) -> Callable[P, Any]:
         batched_log_prob = BatchedNMCLogMarginalLikelihood(
             prev_model, num_samples=num_samples
@@ -108,13 +111,17 @@ def tmle(
             with pyro.poutine.trace() as tr:
                 functional_model(new_params, *args, **kwargs)
 
-            samples = {k: v['value'] for k, v in tr.trace.nodes.items() if k in obs_names}
+            samples = {
+                k: v["value"] for k, v in tr.trace.nodes.items() if k in obs_names
+            }
 
             a = batched_log_prob
 
             assert False
 
-            return log_p_phi(new_params, samples, *args, **kwargs) - log_p_epsilon(new_params, samples, *args, **kwargs)
+            return log_p_phi(new_params, samples, *args, **kwargs) - log_p_epsilon(
+                new_params, samples, *args, **kwargs
+            )
 
         test_loss = loss(new_params, *args, **kwargs)
 
@@ -129,7 +136,9 @@ def tmle(
 
         epsilon = _solve_epsilon(test_data, prev_model, *args, **kwargs)
 
-        new_model = _solve_model_projection(epsilon, prev_model, list(test_data.keys()), *args, **kwargs)
+        new_model = _solve_model_projection(
+            epsilon, prev_model, list(test_data.keys()), *args, **kwargs
+        )
 
         return new_model
 
