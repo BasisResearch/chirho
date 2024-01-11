@@ -1,5 +1,5 @@
 import copy
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar, List
 
 import pyro
 import torch
@@ -79,31 +79,46 @@ def tmle(
         return torch.utils._pytree.tree_unflatten(flat_epsilon, treespec)
 
     def _solve_model_projection(
-        epsilon: Point[T], prev_model: Callable[P, Any], *args, **kwargs
+        epsilon: Point[T], prev_model: Callable[P, Any], obs_names: List[str], *args, **kwargs
     ) -> Callable[P, Any]:
-        # TODO: hope this works ... copying parameters in global scope sounds fishy
-        # TODO: This is very very necessary, but segfaults...
-        # new_model = copy.deepcopy(prev_model)
-        new_model = prev_model
-
-        batched_log_prob = BatchedNMCLogPredictiveLikelihood(
+        batched_log_prob = BatchedNMCLogMarginalLikelihood(
             prev_model, num_samples=num_samples
         )
-        log_prob_params, log_p_phi = make_functional_call(batched_log_prob)
+        prev_params, log_p_phi = make_functional_call(batched_log_prob)
+        prev_params, functional_model = make_functional_call(prev_model)
+
+        new_params = copy.deepcopy(prev_params)
 
         flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
 
-        def p_epsilon(log_prob_params, x, *args, **kwargs):
+        def log_p_epsilon(params, x, *args, **kwargs):
             influence_at_x = influence_fn(prev_model, functional, **influence_kwargs)(
                 x, *args, **kwargs
             )
             flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(influence_at_x)
 
-            plug_in_log_likelihood_at_x = log_p_phi(log_prob_params, x, *args, **kwargs)
+            plug_in_log_likelihood_at_x = log_p_phi(params, x, *args, **kwargs)
 
             return _corrected_negative_log_likelihood(
                 flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
             )
+
+        def loss(new_params, *args, **kwargs):
+            # Sample data from the variational approximation
+            with pyro.poutine.trace() as tr:
+                functional_model(new_params, *args, **kwargs)
+
+            samples = {k: v['value'] for k, v in tr.trace.nodes.items() if k in obs_names}
+
+            a = batched_log_prob
+
+            assert False
+
+            return log_p_phi(new_params, samples, *args, **kwargs) - log_p_epsilon(new_params, samples, *args, **kwargs)
+
+        test_loss = loss(new_params, *args, **kwargs)
+
+        assert False
 
         return new_model
 
@@ -114,7 +129,7 @@ def tmle(
 
         epsilon = _solve_epsilon(test_data, prev_model, *args, **kwargs)
 
-        new_model = _solve_model_projection(epsilon, prev_model, *args, **kwargs)
+        new_model = _solve_model_projection(epsilon, prev_model, list(test_data.keys()), *args, **kwargs)
 
         return new_model
 
