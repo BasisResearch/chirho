@@ -6,7 +6,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.internals.predictive import PredictiveFunctional
+from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 from chirho.robust.ops import influence_fn
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -56,18 +56,6 @@ def test_nmc_predictive_influence_smoke(
     guide = guide(model)
     model(), guide()  # initialize
 
-    predictive_eif = influence_fn(
-        model,
-        guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
-        max_plate_nesting=max_plate_nesting,
-        num_samples_outer=num_samples_outer,
-        num_samples_inner=num_samples_inner,
-        cg_iters=cg_iters,
-    )
-
     with torch.no_grad():
         test_datum = {
             k: v[0]
@@ -76,7 +64,16 @@ def test_nmc_predictive_influence_smoke(
             )().items()
         }
 
-    test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif(test_datum)
+    predictive_eif = influence_fn(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_datum,
+        max_plate_nesting=max_plate_nesting,
+        num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
+    )(PredictiveModel(model, guide))
+
+    test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_datum_eif) > 0
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -103,24 +100,21 @@ def test_nmc_predictive_influence_vmap_smoke(
 
     model(), guide()  # initialize
 
-    predictive_eif = influence_fn(
-        model,
-        guide,
-        functional=functools.partial(
-            PredictiveFunctional, num_samples=num_predictive_samples
-        ),
-        max_plate_nesting=max_plate_nesting,
-        num_samples_outer=num_samples_outer,
-        num_samples_inner=num_samples_inner,
-        cg_iters=cg_iters,
-    )
-
     with torch.no_grad():
         test_data = pyro.infer.Predictive(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
-    test_data_eif: Mapping[str, torch.Tensor] = predictive_eif(test_data)
+    predictive_eif = influence_fn(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_data,
+        max_plate_nesting=max_plate_nesting,
+        num_samples_outer=num_samples_outer,
+        num_samples_inner=num_samples_inner,
+        cg_iters=cg_iters,
+    )(PredictiveModel(model, guide))
+
+    test_data_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"

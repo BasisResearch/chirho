@@ -102,138 +102,18 @@ class BatchedObservations(Generic[T], Observations[T]):
             msg["args"] = (rv, batch_obs)
 
 
-class PredictiveModel(Generic[P, T], torch.nn.Module):
-    """
-    Given a Pyro model and guide, constructs a new model that behaves as if
-    the latent ``sample`` sites in the original model (i.e. the prior)
-    were replaced by their counterparts in the guide (i.e. the posterior).
-
-    .. note:: Sites that only appear in the model are annotated in traces
-        produced by the predictive model with ``infer={"_model_predictive_site": True}`` .
-
-    :param model: Pyro model.
-    :param guide: Pyro guide.
-    """
-
-    model: Callable[P, T]
-    guide: Callable[P, Any]
-
-    def __init__(
-        self,
-        model: Callable[P, T],
-        guide: Callable[P, Any],
-    ):
-        super().__init__()
-        self.model = model
-        self.guide = guide
-
-    def forward(self, *args: P.args, **kwargs: P.kwargs) -> T:
-        """
-        Returns a sample from the posterior predictive distribution.
-
-        :return: Sample from the posterior predictive distribution.
-        :rtype: T
-        """
-        with pyro.poutine.trace() as guide_tr:
-            self.guide(*args, **kwargs)
-
-        block_guide_sample_sites = pyro.poutine.block(
-            hide=[
-                name
-                for name, node in guide_tr.trace.nodes.items()
-                if node["type"] == "sample"
-            ]
-        )
-
-        with pyro.poutine.infer_config(
-            config_fn=lambda msg: {"_model_predictive_site": True}
-        ):
-            with block_guide_sample_sites:
-                with pyro.poutine.replay(trace=guide_tr.trace):
-                    return self.model(*args, **kwargs)
-
-
-class PredictiveFunctional(Generic[P, T], torch.nn.Module):
-    """
-    Functional that returns a batch of samples from the posterior predictive
-    distribution of a Pyro model given a guide. As with ``pyro.infer.Predictive`` ,
-    the returned values are batched along their leftmost positional dimension.
-
-    Similar to ``pyro.infer.Predictive(model, guide, num_samples, parallel=True)``
-    but uses :class:`~PredictiveModel` to construct the predictive distribution
-    and infer the model ``sample`` sites whose values should be returned,
-    and uses :class:`~BatchedLatents` to parallelize over samples from the guide.
-
-    .. warning:: ``PredictiveFunctional`` currently applies its own internal instance of
-        :class:`~chirho.indexed.handlers.IndexPlatesMessenger` ,
-        so it may not behave as expected if used within another enclosing
-        :class:`~chirho.indexed.handlers.IndexPlatesMessenger` context.
-
-    :param model: Pyro model.
-    :param guide: Pyro guide.
-    :param num_samples: Number of samples to return.
-    """
-
-    model: Callable[P, Any]
-    guide: Callable[P, Any]
-    num_samples: int
-
-    def __init__(
-        self,
-        model: torch.nn.Module,
-        guide: torch.nn.Module,
-        *,
-        num_samples: int = 1,
-        max_plate_nesting: Optional[int] = None,
-        name: str = "__particles_predictive",
-    ):
-        super().__init__()
-        self.model = model
-        self.guide = guide
-        self.num_samples = num_samples
-        self._predictive_model: PredictiveModel[P, Any] = PredictiveModel(model, guide)
-        self._first_available_dim = (
-            -max_plate_nesting - 1 if max_plate_nesting is not None else None
-        )
-        self._mc_plate_name = name
-
-    def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
-        """
-        Returns a batch of samples from the posterior predictive distribution.
-
-        :return: Dictionary of samples from the posterior predictive distribution.
-        :rtype: Point[T]
-        """
-        with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
-            with pyro.poutine.trace() as model_tr:
-                with BatchedLatents(self.num_samples, name=self._mc_plate_name):
-                    self._predictive_model(*args, **kwargs)
-
-            return {
-                name: bind_leftmost_dim(
-                    node["value"],
-                    self._mc_plate_name,
-                    event_dim=len(node["fn"].event_shape),
-                )
-                for name, node in model_tr.trace.nodes.items()
-                if node["type"] == "sample"
-                and not pyro.poutine.util.site_is_subsample(node)
-                and node["infer"].get("_model_predictive_site", False)
-            }
-
-
-class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
+class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
     r"""
-    Approximates the log predictive likelihood induced by ``model`` and ``guide``
-    using Monte Carlo sampling at an arbitrary batch of :math:`N`
+    Approximates the log marginal likelihood induced by ``model`` and ``guide``
+    using importance sampling at an arbitrary batch of :math:`N`
     points :math:`\{x_n\}_{n=1}^N`.
 
     .. math::
-        \log \left(\frac{1}{M} \sum_{m=1}^M p(x_n \mid \theta_m)\right),
+        \log \left(\frac{1}{M} \sum_{m=1}^M \frac{p(x_n \mid \theta_m) p(\theta_m) )}{q_{\phi}(\theta_m)} \right),
         \quad \theta_m \sim q_{\phi}(\theta),
 
-    where :math:`q_{\phi}(\theta)` is the guide and :math:`p(x_n \mid \theta_m)`
-    is the model conditioned on the latents from the guide.
+    where :math:`q_{\phi}(\theta)` is the guide, and :math:`p(x_n \mid \theta_m) p(\theta_m)`
+    is the model joint density of the data and the latents sampled from the guide.
 
     :param model: Python callable containing Pyro primitives.
     :type model: torch.nn.Module
@@ -241,17 +121,17 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         Must only contain continuous latent variables.
     :type guide: torch.nn.Module
     :param num_samples: Number of Monte Carlo draws :math:`M`
-        used to approximate predictive distribution, defaults to 1
+        used to approximate marginal distribution, defaults to 1
     :type num_samples: int, optional
     """
     model: Callable[P, Any]
-    guide: Callable[P, Any]
+    guide: Optional[Callable[P, Any]]
     num_samples: int
 
     def __init__(
         self,
         model: torch.nn.Module,
-        guide: torch.nn.Module,
+        guide: Optional[torch.nn.Module] = None,
         *,
         num_samples: int = 1,
         max_plate_nesting: Optional[int] = None,
@@ -276,10 +156,10 @@ class BatchedNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
 
         :param data: Dictionary of observations.
         :type data: Point[T]
-        :return: Log predictive likelihood at each datapoint.
+        :return: Log marginal likelihood at each datapoint.
         :rtype: torch.Tensor
         """
-        get_nmc_traces = get_importance_traces(PredictiveModel(self.model, self.guide))
+        get_nmc_traces = get_importance_traces(self.model, self.guide)
 
         with IndexPlatesMessenger(first_available_dim=self._first_available_dim):
             with BatchedLatents(self.num_samples, name=self._mc_plate_name):

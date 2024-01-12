@@ -1,41 +1,35 @@
-import functools
-from typing import Any, Callable, Mapping, Optional, TypeVar
+from typing import Any, Callable, Mapping, Protocol, TypeVar
 
 import torch
-from typing_extensions import Concatenate, ParamSpec
+from typing_extensions import ParamSpec
 
 from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
-S = TypeVar("S")
+S = TypeVar("S", covariant=True)
 T = TypeVar("T")
 
 Point = Mapping[str, Observation[T]]
-Functional = Callable[[Callable[P, Any], Callable[P, Any]], Callable[P, S]]
+
+
+class Functional(Protocol[P, S]):
+    def __call__(
+        self, __model: Callable[P, Any], *models: Callable[P, Any]
+    ) -> Callable[P, S]:
+        ...
 
 
 def influence_fn(
-    model: Callable[P, Any],
-    guide: Callable[P, Any],
-    functional: Optional[Functional[P, S]] = None,
-    **linearize_kwargs
-) -> Callable[Concatenate[Point[T], P], S]:
+    functional: Functional[P, S], *points: Point[T], **linearize_kwargs
+) -> Functional[P, S]:
     """
-    Returns the efficient influence function for ``functional``
-    with respect to the parameters of ``guide`` and probabilistic
-    program ``model``.
+    Returns a new functional that computes the efficient influence function for ``functional``
+    at the given ``points`` with respect to the parameters of its probabilistic program arguments.
 
-    :param model: Python callable containing Pyro primitives.
-    :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-        Must only contain continuous latent variables.
-    :type guide: Callable[P, Any]
-    :param functional: model summary of interest, which is a function of the
-        model and guide. If ``None``, defaults to :class:`PredictiveFunctional`.
-    :type functional: Optional[Functional[P, S]], optional
-    :return: the efficient influence function for ``functional``
-    :rtype: Callable[Concatenate[Point[T], P], S]
+    :param functional: model summary of interest, which is a function of ``model``
+    :param points: points for each input to ``functional`` at which to compute the efficient influence function
+    :return: functional that computes the efficient influence function for ``functional`` at ``points``
 
     **Example usage**:
 
@@ -45,6 +39,7 @@ def influence_fn(
             import pyro.distributions as dist
             import torch
 
+            from chirho.robust.handlers.predictive import PredictiveModel
             from chirho.robust.ops import influence_fn
 
             pyro.settings.set(module_local_params=True)
@@ -95,14 +90,13 @@ def influence_fn(
             )
             points = predictive()
             influence = influence_fn(
-                model,
-                guide,
                 SimpleFunctional,
+                points,
                 num_samples_outer=1000,
                 num_samples_inner=1000,
-            )
+            )(PredictiveModel(model, guide))
 
-            influence(points)
+            influence()
 
     .. note::
 
@@ -111,45 +105,51 @@ def influence_fn(
           of this function is stochastic, i.e., evaluating this function on the same ``points``
           can result in different values. To reduce variance, increase ``num_samples_outer`` and
           ``num_samples_inner`` in ``linearize_kwargs``.
-        * Currently, ``model`` and ``guide`` cannot contain any ``pyro.param`` statements.
+        * Currently, ``model`` cannot contain any ``pyro.param`` statements.
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
     """
     from chirho.robust.internals.linearize import linearize
-    from chirho.robust.internals.predictive import PredictiveFunctional
     from chirho.robust.internals.utils import make_functional_call
 
-    linearized = linearize(model, guide, **linearize_kwargs)
+    if len(points) != 1:
+        raise NotImplementedError(
+            "influence_fn currently only supports unary functionals"
+        )
 
-    if functional is None:
-        assert isinstance(model, torch.nn.Module)
-        assert isinstance(guide, torch.nn.Module)
-        target = PredictiveFunctional(model, guide)
-    else:
-        target = functional(model, guide)
-
-    # TODO check that target_params == model_params | guide_params
-    assert isinstance(target, torch.nn.Module)
-    target_params, func_target = make_functional_call(target)
-
-    @functools.wraps(target)
-    def _fn(points: Point[T], *args: P.args, **kwargs: P.kwargs) -> S:
+    def _influence_functional(*models: Callable[P, Any]) -> Callable[P, S]:
         """
-        Evaluates the efficient influence function for ``functional`` at each
-        point in ``points``.
+        Functional representing the efficient influence function of ``functional`` at ``points`` .
 
-        :param points: points at which to compute the efficient influence function
-        :type points: Point[T]
-        :return: efficient influence function evaluated at each point in ``points`` or averaged
-        :rtype: S
+        :param models: Python callables containing Pyro primitives.
+        :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
-        param_eif = linearized(points, *args, **kwargs)
-        return torch.vmap(
-            lambda d: torch.func.jvp(
-                lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
-            )[1],
-            in_dims=0,
-            randomness="different",
-        )(param_eif)
+        if len(models) != len(points):
+            raise ValueError("mismatch between number of models and points")
 
-    return _fn
+        linearized = linearize(*models, **linearize_kwargs)
+        target = functional(*models)
+
+        # TODO check that target_params == model_params
+        assert isinstance(target, torch.nn.Module)
+        target_params, func_target = make_functional_call(target)
+
+        def _fn(*args: P.args, **kwargs: P.kwargs) -> S:
+            """
+            Evaluates the efficient influence function for ``functional`` at each
+            point in ``points``.
+
+            :return: efficient influence function evaluated at each point in ``points`` or averaged
+            """
+            param_eif = linearized(*points, *args, **kwargs)
+            return torch.vmap(
+                lambda d: torch.func.jvp(
+                    lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
+                )[1],
+                in_dims=0,
+                randomness="different",
+            )(param_eif)
+
+        return _fn
+
+    return _influence_functional
