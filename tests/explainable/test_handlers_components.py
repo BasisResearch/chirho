@@ -7,7 +7,11 @@ import torch
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.counterfactual.ops import split
 from chirho.explainable.handlers import random_intervention
-from chirho.explainable.handlers.components import consequent_differs, undo_split
+from chirho.explainable.handlers.components import (
+    ExtractSupports,
+    consequent_differs,
+    undo_split,
+)
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
@@ -273,3 +277,49 @@ def test_consequent_differs(plate_size, event_shape):
 
     assert int_con_dif.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
+
+
+options = [
+    None,
+    [],
+    ["uniform_var"],
+    ["uniform_var", "normal_var", "bernoulli_var"],
+    {},
+    {"uniform_var": 5.0, "bernoulli_var": 5.0},
+    {
+        "uniform_var": constraints.interval(1, 10),
+        "bernoulli_var": constraints.interval(0, 1),
+    },  # misspecified on purpose, should make no damage
+]
+
+
+@pytest.mark.parametrize("event_shape", [(), (3, 2)], ids=str)
+@pytest.mark.parametrize("plate_size", [4, 50])
+def test_ExtractSupports(event_shape, plate_size):
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def mixed_supports_model():
+        uniform_var = pyro.sample(
+            "uniform_var",
+            dist.Uniform(1, 10).expand(event_shape).to_event(len(event_shape)),
+        )
+        normal_var = pyro.sample(
+            "normal_var",
+            dist.Normal(3, 15).expand(event_shape).to_event(len(event_shape)),
+        )
+        bernoulli_var = pyro.sample("bernoulli_var", dist.Bernoulli(0.5))
+        positive_var = pyro.sample(
+            "positive_var",
+            dist.LogNormal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
+
+        return uniform_var, normal_var, bernoulli_var, positive_var
+
+    with ExtractSupports() as s:
+        mixed_supports_model()
+
+    assert list(s.supports.keys()) == [
+        "uniform_var",
+        "normal_var",
+        "bernoulli_var",
+        "positive_var",
+    ]
