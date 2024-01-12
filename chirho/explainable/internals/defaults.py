@@ -143,15 +143,15 @@ def _soft_eq_positive_integer(support, v1: T, v2: T, **kwargs):
 @functools.singledispatch
 def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
     """
-    Computes soft inequality between two values `v1` and `v2` given a distribution constraint `support`.
-    Tends to `1-log(scale)` as the difference between the value increases, and tends to
-    `log(scale)` as `v1` and `v2` tend to each other, summing elementwise over tensors.
+    Computes soft inequality between two values ``v1`` and ``v2`` given a distribution constraint ``support``.
+    Tends to a small value near zero as the difference between the value increases, and tends to
+    a large negative value as `v1` and `v2` tend to each other, summing elementwise over tensors.
 
     :param support: A distribution constraint.
     :params v1, v2: the values to be compared.
     :param kwargs: Additional keywords arguments:
         `scale` to adjust the softness of the inequality.
-    :return: A tensor of log probabilities capturing the soft inequality between `v1` and `v2`.
+    :return: A tensor of log probabilities capturing the soft inequality between ``v1`` and ``v2``.
     :raises TypeError: If boolean tensors have different data types.
     :raises NotImplementedError: If arguments are not tensors.
     """
