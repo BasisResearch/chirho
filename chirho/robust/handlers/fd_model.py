@@ -17,6 +17,15 @@ class ModelWithMarginalDensity(torch.nn.Module):
         raise NotImplementedError()
 
 
+class PrefixMessenger(pyro.poutine.messenger.Messenger):
+
+    def __init__(self, prefix: str):
+        self.prefix = prefix
+
+    def _pyro_sample(self, msg) -> None:
+        msg["name"] = f"{self.prefix}{msg['name']}"
+
+
 class FDModelFunctionalDensity(ModelWithMarginalDensity):
     """
     This class serves to couple the forward sampling model, density, and functional. Finite differencing
@@ -83,12 +92,35 @@ class FDModelFunctionalDensity(ModelWithMarginalDensity):
         return mpart + kpart
 
     def forward(self, model_kwargs: Optional[Dict] = None, kernel_kwargs: Optional[Dict] = None):
+        # _from_kernel = pyro.sample('_mixture_assignment', dist.Categorical(self.mixture_weights))
+        #
+        # if _from_kernel:
+        #     return self.kernel(**(kernel_kwargs or dict()))
+        # else:
+        #     return self.model(**(model_kwargs or dict()))
+
         _from_kernel = pyro.sample('_mixture_assignment', dist.Categorical(self.mixture_weights))
 
-        if _from_kernel:
-            return self.kernel_forward(**(kernel_kwargs or dict()))
-        else:
-            return self.model_forward(**(model_kwargs or dict()))
+        kernel_mask = _from_kernel.bool()  # Convert to boolean mask
+
+        # Apply the respective functions using the masks
+        with PrefixMessenger('kernel_'), pyro.poutine.trace() as kernel_tr:
+            kernel_result = self.kernel(**(kernel_kwargs or dict()))
+        with PrefixMessenger('model_'), pyro.poutine.trace() as model_tr:
+            model_result = self.model(**(model_kwargs or dict()))
+
+        # FIXME to make log likelihoods work properly, the log likelihoods need to be masked/not added
+        #  for particular elements. See e.g. MaskedMixture for a non-general example of how to do this (it
+        #  uses torch distributions instead of arbitrary probabilistic programs.
+        # https://docs.pyro.ai/en/stable/distributions.html?highlight=MaskedMixture#maskedmixture
+        # FIXME ideally the trace would have elements of the same name as well here.
+
+        # FIXME where isn't shape agnostic.
+
+        # Use masks to select the appropriate result for each sample
+        result = torch.where(kernel_mask[:, None], kernel_result, model_result)
+
+        return result
 
     def functional(self, *args, **kwargs):
         # TODO update docstring to this being build_functional instead of just functional

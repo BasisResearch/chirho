@@ -29,14 +29,13 @@ with end_quad.set_kernel_point(dict(x=torch.tensor([1., ] * ndim))), end_quad.se
         for x in xx
     ]
 
-    end_quad.model
-
 
 plt.plot(xx, yy)
 plt.show()
 
 # Sample points from a slightly more entropoic model.
-points = dict(x=torch.linspace(-3, 3, 100))
+# FIXME not generalized for ndim > 1
+points = dict(x=torch.linspace(-3, 3, 100)[:, None])
 
 target_quad = fd_influence_fn(
     model=end_quad,

@@ -73,7 +73,5 @@ class ExpectedNormalDensityMC(_ExpectedNormalDensity):
 
     def functional(self, nmc=1000):
         with pyro.plate('samples', nmc):
-            with pyro.poutine.trace() as tr:
-                self()
-        points = tr.trace.nodes['x']['value']
+            points = self()
         return torch.mean(self.density(model_kwargs=dict(x=points), kernel_kwargs=dict(x=points)))
