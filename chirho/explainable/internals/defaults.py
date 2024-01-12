@@ -4,8 +4,6 @@ from typing import TypeVar
 import pyro
 import torch
 
-from chirho.indexed.ops import cond
-
 S = TypeVar("S")
 T = TypeVar("T")
 
