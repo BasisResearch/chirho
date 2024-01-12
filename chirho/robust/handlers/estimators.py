@@ -36,7 +36,7 @@ def one_step_corrected_estimator(
         plug_in_estimator = functional(model)
         correction_estimator = eif_fn(model)
 
-        def _estimate_model(*args, **kwargs) -> S:
+        def _estimator(*args, **kwargs) -> S:
             plug_in_estimate = plug_in_estimator(*args, **kwargs)
             correction = correction_estimator(*args, **kwargs)
 
@@ -49,6 +49,6 @@ def one_step_corrected_estimator(
                 [a + b for a, b in zip(flat_plug_in_estimate, flat_correction)],
                 treespec,
             )
-        return _estimate_model
+        return _estimator
 
     return _corrected_functional
