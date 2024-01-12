@@ -44,9 +44,11 @@ def one_step_corrected_estimator(
                 plug_in_estimate
             )
             flat_correction, _ = torch.utils._pytree.tree_flatten(correction)
+
             return torch.utils._pytree.tree_unflatten(
                 [a + b for a, b in zip(flat_plug_in_estimate, flat_correction)],
                 treespec,
             )
+        return _estimate_model
 
     return _corrected_functional

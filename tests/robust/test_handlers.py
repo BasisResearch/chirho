@@ -75,11 +75,11 @@ def test_estimator_smoke(
         cg_iters=cg_iters,
     )(PredictiveModel(model, guide))
 
-    one_step_on_test: Mapping[str, torch.Tensor] = estimator()
-    assert len(one_step_on_test) > 0
-    for k, v in one_step_on_test.items():
-        assert not torch.isnan(v).any(), f"one_step for {k} had nans"
-        assert not torch.isinf(v).any(), f"one_step for {k} had infs"
+    estimate_on_test: Mapping[str, torch.Tensor] = estimator()
+    assert len(estimate_on_test) > 0
+    for k, v in estimate_on_test.items():
+        assert not torch.isnan(v).any(), f"{estimation_method} for {k} had nans"
+        assert not torch.isinf(v).any(), f"{estimation_method} for {k} had infs"
         assert not torch.isclose(
             v, torch.zeros_like(v)
         ).all(), f"{estimation_method} estimator for {k} was zero"
