@@ -21,6 +21,7 @@ EXTRAS_REQUIRE = [
     "pytorch-lightning",
     "scikit-image",
     "tensorboard",
+    "typing_extensions",
 ]
 
 DYNAMICAL_REQUIRE = ["torchdiffeq"]
