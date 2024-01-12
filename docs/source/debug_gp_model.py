@@ -232,21 +232,23 @@ class CausalGP(torch.nn.Module):
         self.p = X_train.shape[1]
         self.kernel = kernel
         self.noise = noise
-        alpha, Lff = self._gp_mean_cholesky(self.XA_train, Y_train)
+        alpha, K_inv = self._gp_mean_inverse(self.XA_train, Y_train)
         self.alpha = torch.nn.Parameter(alpha)
-        self.Lff = Lff
+        self.K_inv = K_inv
         if prior_scale is None:
             self.prior_scale = 1 / math.sqrt(self.p)
         else:
             self.prior_scale = prior_scale
 
-    def _gp_mean_cholesky(self, X: torch.Tensor, Y: torch.Tensor):
+    def _gp_mean_inverse(self, X: torch.Tensor, Y: torch.Tensor):
         N = X.size(0)
         Kff = self.kernel(X)
         Kff.view(-1)[:: N + 1] += self.noise  # add noise to diagonal
-        Lff = torch.linalg.cholesky(Kff)
-        alpha = torch.cholesky_solve(Y.unsqueeze(-1), Lff).squeeze()
-        return alpha, Lff
+        # Lff = torch.linalg.cholesky(Kff)
+        # alpha = torch.cholesky_solve(Y.unsqueeze(-1), Lff).squeeze()
+        K_inv = torch.cholesky_inverse(Kff)
+        alpha = torch.einsum("...mn,...n->...m", K_inv, Y).squeeze()
+        return alpha, K_inv
 
     def sample_covariate_loc_scale(self):
         return torch.zeros(self.p), torch.ones(self.p)
@@ -268,15 +270,16 @@ class CausalGP(torch.nn.Module):
             ),
         )
         # Sample Y from GP
-        # print(X.shape, A.shape, A.unsqueeze(-1).shape)
         X = X.expand(A.shape + X.shape[-1:])
         XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
         # XA = XA.unsqueeze(0)
         f_loc = torch.einsum(
             "...mn,...n->...m", self.kernel(XA, self.XA_train), self.alpha
         )
-        cov_train_x = torch.cholesky_solve(self.kernel(self.XA_train, XA), self.Lff)
-        # USE BETTER FORMULA FOR DIAGONAL VARIANCES
+        # cov_train_x = torch.cholesky_solve(self.kernel(self.XA_train, XA), self.Lff)
+        cov_train_x = torch.einsum(
+            "...tn,...nk->...tk", self.K_inv, self.kernel(self.XA_train, XA)
+        )
         f_cov = self.kernel(XA) - torch.einsum(
             "...mn,...nk->...mk", self.kernel(XA, self.XA_train), cov_train_x
         )
@@ -293,11 +296,11 @@ N_datasets = 1
 simulated_datasets = []
 
 # Data configuration
-p = 2
+p = 200
 alpha = 50
 beta = 50
-N_train = 51
-N_test = 6
+N_train = 500
+N_test = 500
 
 true_model = GroundTruthModel(p, alpha, beta)
 
@@ -357,23 +360,17 @@ for i in range(N_datasets):
         kernel=gp_kernel,
     )
     ate_plug_in = functional(fitted_gp_model)()
-    # import pdb
-
-    # pdb.set_trace()
     (
         analytic_correction,
         analytic_eif_at_test_pts,
     ) = closed_form_doubly_robust_ate_correction(D_test, theta_hat)
+    print("here")
     automated_monte_carlo_correction = one_step_correction(
         fitted_gp_model,
         functional,
         num_samples_outer=max(10000, 100 * p),
         num_samples_inner=1,
     )(D_test)
-
-    import pdb
-
-    pdb.set_trace()
 
     plug_in_ates.append(ate_plug_in.detach().item())
     analytic_corrections.append(analytic_correction.detach().item())
