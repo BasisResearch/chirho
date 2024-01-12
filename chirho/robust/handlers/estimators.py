@@ -26,21 +26,7 @@ def tmle(
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
-    def _corrected_negative_log_likelihood(
-        flat_epsilon, flat_influence, plug_in_log_likelihood
-    ):
-        log_likelihood_correction = torch.log(
-            1
-            + sum(
-                [
-                    (influ * eps).sum(-1)
-                    for influ, eps in zip(flat_influence, flat_epsilon)
-                ]
-            )
-        )
-        return -torch.sum(log_likelihood_correction + plug_in_log_likelihood)
-
-    def tmle_scipy_optimize_wrapper(packed_influence, log_scaling=1e-7) -> torch.Tensor:
+    def tmle_scipy_optimize_wrapper(packed_influence, log_jitter=1e-7) -> torch.Tensor:
         import numpy as np
         import scipy
         from scipy.optimize import LinearConstraint
@@ -52,17 +38,17 @@ def tmle(
         def loss(epsilon):
             correction = 1 + D.dot(epsilon)
 
-            return np.sum(np.log(np.maximum(correction, log_scaling)))
+            return np.sum(np.log(np.maximum(correction, log_jitter)))
         
         positive_density_constraint = LinearConstraint(D, -1 * np.ones(N), np.inf * np.ones(N))
 
-        epsilon_solve = scipy.optimize.minimize(loss, np.zeros(L), constraints=positive_density_constraint)
+        epsilon_solve = scipy.optimize.minimize(loss, np.zeros(L, dtype=D.dtype), constraints=positive_density_constraint)
 
         if not epsilon_solve.success:
             raise RuntimeError("TMLE optimization did not converge.")
         
         # Convert epsilon back to torch. This makes us happy... :)
-        packed_epsilon = torch.tensor(epsilon_solve.x)
+        packed_epsilon = torch.tensor(epsilon_solve.x, dtype=packed_influence.dtype)
 
         return packed_epsilon
 
@@ -86,40 +72,36 @@ def tmle(
         return packed_epsilon
 
     def _solve_model_projection(
-        epsilon: Point[T],
+        packed_epsilon: torch.Tensor,
         prev_model: Callable[P, Any],
         *args,
         **kwargs,
     ) -> Callable[P, Any]:
+        
         batched_log_prob = BatchedNMCLogMarginalLikelihood(
             prev_model, num_samples=num_samples
         )
-        prev_params, log_p_phi = make_functional_call(batched_log_prob)
+        prev_params, log_p_phi_pointwise = make_functional_call(batched_log_prob)
+        
+        def log_p_phi(*args, **kwargs) -> torch.Tensor:
+            return torch.sum(log_p_phi_pointwise(*args, **kwargs))
+        
         _, functional_model = make_functional_call(PredictiveFunctional(prev_model))
 
         new_params = copy.deepcopy(prev_params)
 
-        flat_epsilon, _ = torch.utils._pytree.tree_flatten(epsilon)
-
-        def log_p_epsilon(params, x, *args, **kwargs):
-            influence_at_x = influence_fn(functional, x, **influence_kwargs)(
+        def log_p_epsilon(params, x, log_jitter=1e-7, *args, **kwargs):
+            influence = influence_fn(functional, x, **influence_kwargs)(
                 prev_model
             )(*args, **kwargs)
-            flat_influence_at_x, _ = torch.utils._pytree.tree_flatten(influence_at_x)
+            flat_influence, _ = torch.utils._pytree.tree_flatten(influence)
+            N_x = flat_influence[0].shape[0]
 
-            plug_in_log_likelihood_at_x = log_p_phi(params, x, *args, **kwargs)
+            packed_influence = torch.concatenate([i.reshape(N_x, -1) for i in flat_influence])
 
-            # import pdb
+            log_likelihood_correction = torch.sum(torch.log(torch.maximum(1 + packed_influence.mv(packed_epsilon), torch.tensor(log_jitter))))
 
-            # pdb.set_trace()
-
-            return -1 * _corrected_negative_log_likelihood(
-                flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
-            )
-
-        # pdb.set_trace()
-
-        test_output = log_p_epsilon(flat_epsilon, test_point, *args, **kwargs)
+            return log_likelihood_correction + log_p_phi(params, x, *args, **kwargs)
 
         def loss(new_params, *args, **kwargs):
             # Sample data from the variational approximation
@@ -131,10 +113,8 @@ def tmle(
             term1 = log_p_phi(new_params, samples, *args, **kwargs)
             term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
 
-            a = flat_epsilon
-
             # pdb.set_trace()
-            return torch.sum(term1) - term2
+            return term1 - term2
 
         test_loss = loss(new_params, *args, **kwargs)
 
@@ -143,9 +123,6 @@ def tmle(
     def _one_step(prev_model: Callable[P, Any], *args, **kwargs) -> Callable[P, Any]:
         # TODO: assert that this does not have side effects on prev_model
         packed_epsilon = _solve_epsilon(prev_model, *args, **kwargs)
-
-        # pdb.set_trace()
-        assert False
 
         new_model = _solve_model_projection(packed_epsilon, prev_model, *args, **kwargs)
 
