@@ -43,13 +43,15 @@ def tmle(
         flat_epsilon,
         flat_influence,
         plug_in_log_likelihood,
-        penalty_strength: float = 10,
+        penalty_strength: float = 1e6,
     ):
         term = 1 + sum(
             [(influ * eps).sum(-1) for influ, eps in zip(flat_influence, flat_epsilon)]
         )
 
         penalty = penalty_strength * torch.relu(-1 * term).sum()
+        penalty2 = penalty_strength * torch.relu(-1 * term).sum()
+
         if penalty > 0:
             import pdb
 
@@ -71,6 +73,10 @@ def tmle(
         flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
             influence_at_test
         )
+
+        import pdb
+
+        pdb.set_trace()
 
         # TODO: Probably remove this?
         # flat_influence_at_test = [inf.detach() for inf in flat_influence_at_test]
