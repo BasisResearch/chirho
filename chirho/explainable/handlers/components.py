@@ -6,8 +6,9 @@ import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
-from chirho.explainable.internals import soft_neq, uniform_proposal
+from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
+from chirho.observational.handlers import soft_neq
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -104,8 +105,8 @@ def consequent_differs(
     :param support: The support constraint for the consequent site.
     :param antecedents: A list of names of upstream intervened sites to consider when assessing differences.
 
-    :return: A callable which applied to a site value object (`consequent`), returns a tensor where each
-             element indicates whether the corresponding element of `consequent` differs from its factual value.
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor where each
+             element indicates whether the corresponding element of ``consequent`` differs from its factual value.
     """
 
     def _consequent_differs(consequent: T) -> torch.Tensor:
