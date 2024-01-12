@@ -26,21 +26,6 @@ def tmle(
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
-    def _epsilon_log_correction(flat_epsilon, flat_influence, *args, **kwargs):
-        return torch.sum(
-            torch.log(
-                torch.relu(
-                    1
-                    + sum(
-                        [
-                            (influ * eps).sum(-1)
-                            for influ, eps in zip(flat_influence, flat_epsilon)
-                        ]
-                    )
-                )
-            )
-        )
-
     def _corrected_negative_log_likelihood(
         flat_epsilon, flat_influence, plug_in_log_likelihood
     ):
@@ -55,66 +40,50 @@ def tmle(
         )
         return -torch.sum(log_likelihood_correction + plug_in_log_likelihood)
 
-    def loss_for_epsilon(
-        flat_epsilon,
-        flat_influence,
-        influence_norm,
-        penalty_strength: float = 1e6,
-    ):
-        penalty = torch.relu(
-            penalty_strength
-            * (
-                ((torch.concatenate(flat_epsilon, dim=-1) ** 2).sum())
-                - 1 / influence_norm**2
-            )
-        )
+    def tmle_scipy_optimize_wrapper(packed_influence, log_scaling=1e-7) -> torch.Tensor:
+        import numpy as np
+        import scipy
+        from scipy.optimize import LinearConstraint
+        # Turn things into numpy. This makes us sad... :(
+        D = packed_influence.detach().numpy()
 
-        # pdb.set_trace()
+        N, L = D.shape[0], D.shape[1]
 
-        return -1 * _epsilon_log_correction(flat_epsilon, flat_influence) + penalty
+        def loss(epsilon):
+            correction = 1 + D.dot(epsilon)
 
-    def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> S:
+            return np.sum(np.log(np.maximum(correction, log_scaling)))
+        
+        positive_density_constraint = LinearConstraint(D, -1 * np.ones(N), np.inf * np.ones(N))
+
+        epsilon_solve = scipy.optimize.minimize(loss, np.zeros(L), constraints=positive_density_constraint)
+
+        if not epsilon_solve.success:
+            raise RuntimeError("TMLE optimization did not converge.")
+        
+        # Convert epsilon back to torch. This makes us happy... :)
+        packed_epsilon = torch.tensor(epsilon_solve.x)
+
+        return packed_epsilon
+
+    def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> torch.Tensor:
         # find epsilon that minimizes the corrected density on test data
 
         influence_at_test = influence_fn(functional, test_point, **influence_kwargs)(
             prev_model
         )(*args, **kwargs)
 
-        # pdb.set_trace()
-
-        flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
+        flat_influence_at_test, _ = torch.utils._pytree.tree_flatten(
             influence_at_test
         )
 
-        # TODO: Probably remove this?
-        # flat_influence_at_test = [inf.detach() for inf in flat_influence_at_test]
+        N = flat_influence_at_test[0].shape[0]
 
-        # plug_in_log_likelihood_at_test = BatchedNMCLogMarginalLikelihood(prev_model)(
-        #     test_point, *args, **kwargs
-        # ).detach()
+        packed_influence_at_test = torch.concatenate([i.reshape(N, -1) for i in flat_influence_at_test])
 
-        grad_fn = torch.func.grad(loss_for_epsilon)
-        # grad_fn = torch.func.grad(_epsilon_log_correction)
+        packed_epsilon = tmle_scipy_optimize_wrapper(packed_influence_at_test)
 
-        influence_norm = torch.norm(
-            torch.concatenate(flat_influence_at_test, dim=-1), p=2
-        )
-
-        # Initialize flat epsilon to be zeros of the same shape as the influence_at_test, excluding any leftmost dimensions.
-        flat_epsilon = [
-            torch.zeros(i.shape[1:], requires_grad=True) for i in flat_influence_at_test
-        ]
-
-        for i in range(n_steps):
-            # pdb.set_trace()
-            # Maximum likelihood estimation over epsilon
-            grad = grad_fn(flat_epsilon, flat_influence_at_test, influence_norm)
-            # pdb.set_trace()
-            flat_epsilon = [
-                eps - learning_rate * g for eps, g in zip(flat_epsilon, grad)
-            ]
-
-        return torch.utils._pytree.tree_unflatten(flat_epsilon, treespec)
+        return packed_epsilon
 
     def _solve_model_projection(
         epsilon: Point[T],
@@ -148,7 +117,7 @@ def tmle(
                 flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
             )
 
-        pdb.set_trace()
+        # pdb.set_trace()
 
         test_output = log_p_epsilon(flat_epsilon, test_point, *args, **kwargs)
 
@@ -163,28 +132,27 @@ def tmle(
             term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
 
             a = flat_epsilon
-            import pdb
 
-            pdb.set_trace()
+            # pdb.set_trace()
             return torch.sum(term1) - term2
 
         test_loss = loss(new_params, *args, **kwargs)
-
-        assert False
 
         return new_model
 
     def _one_step(prev_model: Callable[P, Any], *args, **kwargs) -> Callable[P, Any]:
         # TODO: assert that this does not have side effects on prev_model
-        epsilon = _solve_epsilon(prev_model, *args, **kwargs)
+        packed_epsilon = _solve_epsilon(prev_model, *args, **kwargs)
 
-        new_model = _solve_model_projection(epsilon, prev_model, *args, **kwargs)
+        # pdb.set_trace()
+        assert False
+
+        new_model = _solve_model_projection(packed_epsilon, prev_model, *args, **kwargs)
 
         return new_model
 
     def _tmle(model: Callable[P, Any]) -> S:
         def _tmle_inner(*args, **kwargs):
-            # TODO: hope this works ... copying parameters in global scope sounds fishy
             tmle_model = model
 
             for _ in range(n_tmle_steps):
