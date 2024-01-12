@@ -2,10 +2,7 @@ import functools
 from typing import TypeVar
 
 import pyro
-import pyro.distributions as dist
-import pyro.distributions.constraints as constraints
 import torch
-from torch.distributions import biject_to
 
 from chirho.indexed.ops import cond
 

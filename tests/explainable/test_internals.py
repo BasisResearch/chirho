@@ -1,5 +1,3 @@
-import math
-
 import pyro.distributions.constraints as constraints
 import pytest
 import torch
