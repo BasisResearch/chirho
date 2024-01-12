@@ -44,6 +44,7 @@ Table of Contents
    dynamical
    robust
    explainable
+   meta
 
 .. toctree::
    :maxdepth: 2
