@@ -32,9 +32,9 @@ def one_step_corrected_estimator(
     influence_kwargs_one_step["pointwise_influence"] = False
     eif_fn = influence_fn(functional, *test_points, **influence_kwargs_one_step)
 
-    def _corrected_functional(model: Callable[P, Any]) -> Callable[P, S]:
-        plug_in_estimator = functional(model)
-        correction_estimator = eif_fn(model)
+    def _corrected_functional(*model: Callable[P, Any]) -> Callable[P, S]:
+        plug_in_estimator = functional(*model)
+        correction_estimator = eif_fn(*model)
 
         def _estimator(*args, **kwargs) -> S:
             plug_in_estimate = plug_in_estimator(*args, **kwargs)
