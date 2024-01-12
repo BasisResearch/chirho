@@ -1,4 +1,5 @@
 import copy
+import pdb
 from typing import Any, Callable, TypeVar
 
 import pyro
@@ -25,6 +26,21 @@ def tmle(
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
+    def _epsilon_log_correction(flat_epsilon, flat_influence, *args, **kwargs):
+        return torch.sum(
+            torch.log(
+                torch.relu(
+                    1
+                    + sum(
+                        [
+                            (influ * eps).sum(-1)
+                            for influ, eps in zip(flat_influence, flat_epsilon)
+                        ]
+                    )
+                )
+            )
+        )
+
     def _corrected_negative_log_likelihood(
         flat_epsilon, flat_influence, plug_in_log_likelihood
     ):
@@ -42,26 +58,20 @@ def tmle(
     def loss_for_epsilon(
         flat_epsilon,
         flat_influence,
-        plug_in_log_likelihood,
+        influence_norm,
         penalty_strength: float = 1e6,
     ):
-        term = 1 + sum(
-            [(influ * eps).sum(-1) for influ, eps in zip(flat_influence, flat_epsilon)]
-        )
-
-        penalty = penalty_strength * torch.relu(-1 * term).sum()
-        penalty2 = penalty_strength * torch.relu(-1 * term).sum()
-
-        if penalty > 0:
-            import pdb
-
-            pdb.set_trace()
-        return (
-            _corrected_negative_log_likelihood(
-                flat_epsilon, flat_influence, plug_in_log_likelihood
+        penalty = torch.relu(
+            penalty_strength
+            * (
+                ((torch.concatenate(flat_epsilon, dim=-1) ** 2).sum())
+                - 1 / influence_norm**2
             )
-            + penalty
         )
+
+        # pdb.set_trace()
+
+        return -1 * _epsilon_log_correction(flat_epsilon, flat_influence) + penalty
 
     def _solve_epsilon(prev_model: Callable[P, Any], *args, **kwargs) -> S:
         # find epsilon that minimizes the corrected density on test data
@@ -70,33 +80,36 @@ def tmle(
             prev_model
         )(*args, **kwargs)
 
+        # pdb.set_trace()
+
         flat_influence_at_test, treespec = torch.utils._pytree.tree_flatten(
             influence_at_test
         )
 
-        import pdb
-
-        pdb.set_trace()
-
         # TODO: Probably remove this?
         # flat_influence_at_test = [inf.detach() for inf in flat_influence_at_test]
 
-        plug_in_log_likelihood_at_test = BatchedNMCLogMarginalLikelihood(prev_model)(
-            test_point, *args, **kwargs
-        ).detach()
+        # plug_in_log_likelihood_at_test = BatchedNMCLogMarginalLikelihood(prev_model)(
+        #     test_point, *args, **kwargs
+        # ).detach()
 
         grad_fn = torch.func.grad(loss_for_epsilon)
+        # grad_fn = torch.func.grad(_epsilon_log_correction)
+
+        influence_norm = torch.norm(
+            torch.concatenate(flat_influence_at_test, dim=-1), p=2
+        )
 
         # Initialize flat epsilon to be zeros of the same shape as the influence_at_test, excluding any leftmost dimensions.
         flat_epsilon = [
             torch.zeros(i.shape[1:], requires_grad=True) for i in flat_influence_at_test
         ]
 
-        for _ in range(n_steps):
+        for i in range(n_steps):
+            # pdb.set_trace()
             # Maximum likelihood estimation over epsilon
-            grad = grad_fn(
-                flat_epsilon, flat_influence_at_test, plug_in_log_likelihood_at_test
-            )
+            grad = grad_fn(flat_epsilon, flat_influence_at_test, influence_norm)
+            # pdb.set_trace()
             flat_epsilon = [
                 eps - learning_rate * g for eps, g in zip(flat_epsilon, grad)
             ]
@@ -135,6 +148,10 @@ def tmle(
                 flat_epsilon, flat_influence_at_x, plug_in_log_likelihood_at_x
             )
 
+        pdb.set_trace()
+
+        test_output = log_p_epsilon(flat_epsilon, test_point, *args, **kwargs)
+
         def loss(new_params, *args, **kwargs):
             # Sample data from the variational approximation
             samples = {
@@ -144,6 +161,8 @@ def tmle(
             }
             term1 = log_p_phi(new_params, samples, *args, **kwargs)
             term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
+
+            a = flat_epsilon
             import pdb
 
             pdb.set_trace()
