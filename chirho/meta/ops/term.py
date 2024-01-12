@@ -1,7 +1,6 @@
-from typing import Iterable, Mapping, ParamSpec, Protocol, TypeVar
-
 import functools
 import typing
+from typing import Iterable, Mapping, ParamSpec, Protocol, TypeVar
 
 from chirho.meta.ops.interpretation import Interpretation, register
 from chirho.meta.ops.operation import Operation, define
@@ -24,13 +23,18 @@ class Term(Protocol[T]):
 def evaluate(term: Term[T]) -> T:
     return term.op(
         *(evaluate(a) if isinstance(a, Term) else a for a in term.args),
-        **{k: (evaluate(v) if isinstance(v, Term) else v) for k, v in term.kwargs.items()}
+        **{
+            k: (evaluate(v) if isinstance(v, Term) else v)
+            for k, v in term.kwargs.items()
+        }
     )
 
 
 def LazyInterpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
     return {
-        op: functools.partial(lambda op, *args, **kwargs: define(Term)(op, args, kwargs), op)
+        op: functools.partial(
+            lambda op, *args, **kwargs: define(Term)(op, args, kwargs), op
+        )
         for op in ops
     }
 

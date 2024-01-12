@@ -6,9 +6,14 @@ from typing import Optional, ParamSpec, TypeVar
 
 import pytest
 
-from chirho.meta.ops.interpretation import Interpretation, bind_result, interpreter, register
-from chirho.meta.ops.operation import Operation, define
 from chirho.meta.ops._utils import value_or_fn
+from chirho.meta.ops.interpretation import (
+    Interpretation,
+    bind_result,
+    interpreter,
+    register,
+)
+from chirho.meta.ops.operation import Operation, define
 
 logger = logging.getLogger(__name__)
 

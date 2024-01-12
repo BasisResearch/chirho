@@ -24,7 +24,8 @@ def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
 
 @typing.overload
 def register(
-    op: Operation[P, T], intp: Optional[Interpretation[T, V]],
+    op: Operation[P, T],
+    intp: Optional[Interpretation[T, V]],
 ) -> Callable[[Callable[Q, V]], Callable[Q, V]]:
     ...
 
@@ -81,7 +82,9 @@ def shallow_interpreter(intp: Interpretation):
         op: active_intp[op] if op in active_intp else op.default for op in intp.keys()
     }
 
-    with interpreter({op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}):
+    with interpreter(
+        {op: interpreter(prev_intp, unset=False)(intp[op]) for op in intp.keys()}
+    ):
         yield intp
 
 
@@ -93,7 +96,6 @@ def _get_result() -> Optional[T]:
 def _set_result(
     fn: Callable[Concatenate[Optional[T], P], T]
 ) -> Callable[Concatenate[Optional[T], P], T]:
-
     @functools.wraps(fn)
     def _wrapper(res: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
         return shallow_interpreter({_get_result: lambda: res})(fn)(res, *args, **kwargs)
@@ -102,10 +104,11 @@ def _set_result(
 
 
 def bind_result(fn: Callable[Concatenate[Optional[T], P], T]) -> Callable[P, T]:
-
     @functools.wraps(fn)
     def _wrapper(*args: P.args, **kwargs: P.kwargs) -> T:
-        return interpreter({_get_result: _get_result.default})(fn)(_get_result(), *args, **kwargs)
+        return interpreter({_get_result: _get_result.default})(fn)(
+            _get_result(), *args, **kwargs
+        )
 
     return _wrapper
 
@@ -116,7 +119,6 @@ Prompt = Operation[[Optional[T]], T]
 def bind_prompts(
     unbound_conts: Mapping[Prompt[S], Callable[P, T]],
 ) -> Callable[[Callable[P, T]], Callable[P, T]]:
-
     LocalState = Tuple[Tuple, Mapping]
 
     @define(Operation)
@@ -124,7 +126,6 @@ def bind_prompts(
         raise ValueError("No args stored")
 
     def _set_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
-
         @functools.wraps(fn)
         def _wrapper(*a: Q.args, **ks: Q.kwargs) -> V:
             return interpreter({_get_local_state: lambda: (a, ks)})(fn)(*a, **ks)
@@ -133,10 +134,13 @@ def bind_prompts(
 
     def _bind_local_state(fn: Callable[Q, V]) -> Callable[Q, V]:
         bound_conts = {
-            p: _set_result(functools.partial(
-                lambda k, _: k(*_get_local_state()[0], **_get_local_state()[1]),
-                unbound_conts[p],
-            )) for p in unbound_conts.keys()
+            p: _set_result(
+                functools.partial(
+                    lambda k, _: k(*_get_local_state()[0], **_get_local_state()[1]),
+                    unbound_conts[p],
+                )
+            )
+            for p in unbound_conts.keys()
         }
         return shallow_interpreter(bound_conts)(_set_local_state(fn))
 

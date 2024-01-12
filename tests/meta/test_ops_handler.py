@@ -5,10 +5,10 @@ from typing import ParamSpec, TypeVar
 
 import pytest
 
+from chirho.meta.ops._utils import value_or_fn
 from chirho.meta.ops.handler import compose, fwd, handler
 from chirho.meta.ops.interpretation import Interpretation, bind_result, interpreter
 from chirho.meta.ops.operation import Operation, define
-from chirho.meta.ops._utils import value_or_fn
 
 logger = logging.getLogger(__name__)
 
@@ -55,8 +55,10 @@ def test_affine_continuation_compose(op, args):
 
     h_twice = define(Interpretation)({op: bind_result(lambda v, *a, **k: fwd(fwd(v)))})
 
-    assert interpreter(defaults(op))(f)() == \
-        interpreter(compose(defaults(op), h_twice))(f)()
+    assert (
+        interpreter(defaults(op))(f)()
+        == interpreter(compose(defaults(op), h_twice))(f)()
+    )
 
 
 @pytest.mark.parametrize("op,args", OPERATION_CASES)

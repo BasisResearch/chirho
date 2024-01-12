@@ -1,7 +1,6 @@
-from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar
-
 import functools
 import weakref
+from typing import Callable, Concatenate, Optional, ParamSpec, TypeVar
 
 P = ParamSpec("P")
 S = TypeVar("S")

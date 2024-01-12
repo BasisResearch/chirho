@@ -1,6 +1,14 @@
-from typing import Callable, ClassVar, Concatenate, Dict, Generic, Iterable, ParamSpec, TypeVar
-
 import functools
+from typing import (
+    Callable,
+    ClassVar,
+    Concatenate,
+    Dict,
+    Generic,
+    Iterable,
+    ParamSpec,
+    TypeVar,
+)
 
 from chirho.meta.ops.operation import Operation
 
@@ -39,9 +47,7 @@ class _StatefulInterpretation(Generic[S, T, V]):
     def __contains__(cls, __op: Operation[..., T]) -> bool:
         return __op in cls._op_intps
 
-    def __getitem__(
-        self, __op: Operation[P, T]
-    ) -> Callable[Q, V]:
+    def __getitem__(self, __op: Operation[P, T]) -> Callable[Q, V]:
         return functools.partial(self._op_intps[__op], self.state)
 
     @classmethod

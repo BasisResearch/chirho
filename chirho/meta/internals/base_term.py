@@ -15,13 +15,15 @@ class _BaseTerm(Generic[T]):
         self,
         __op: Operation[..., T],
         __args: Iterable["_BaseTerm[T]" | T],
-        __kwargs: Mapping[str, "_BaseTerm[T]" | T]
+        __kwargs: Mapping[str, "_BaseTerm[T]" | T],
     ):
         self.op = __op
         self.args = tuple(__args)
         self.kwargs = dict(__kwargs)
 
     def __repr__(self) -> str:
-        return f"{self.op}(" + \
-            f"{', '.join(map(repr, self.args))}," + \
-            f"{', '.join(f'{k}={v}' for k, v in self.kwargs.items())})"
+        return (
+            f"{self.op}("
+            + f"{', '.join(map(repr, self.args))},"
+            + f"{', '.join(f'{k}={v}' for k, v in self.kwargs.items())})"
+        )

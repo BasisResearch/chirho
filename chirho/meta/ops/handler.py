@@ -1,7 +1,12 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.meta.ops.interpretation import Interpretation, Prompt, bind_prompts, interpreter
+from chirho.meta.ops.interpretation import (
+    Interpretation,
+    Prompt,
+    bind_prompts,
+    interpreter,
+)
 from chirho.meta.ops.operation import Operation, define
 
 P = ParamSpec("P")

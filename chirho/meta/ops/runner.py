@@ -1,7 +1,13 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.meta.ops.interpretation import Interpretation, Prompt, bind_prompts, bind_result, interpreter
+from chirho.meta.ops.interpretation import (
+    Interpretation,
+    Prompt,
+    bind_prompts,
+    bind_result,
+    interpreter,
+)
 from chirho.meta.ops.operation import Operation, define
 
 P = ParamSpec("P")
@@ -36,16 +42,18 @@ def product(
     return {
         op: bind_prompts({prompt: interpreter(intp)(op)})(
             interpreter(reflect_intp_ops)(interpreter(intp2)(intp2[op]))
-        ) for op in intp2.keys()
+        )
+        for op in intp2.keys()
     }
 
 
 def handler_prompt_to_runner_prompt(
-    intp: Interpretation[S, T], handler_prompt: Prompt[T], runner_prompt: Prompt[T],
+    intp: Interpretation[S, T],
+    handler_prompt: Prompt[T],
+    runner_prompt: Prompt[T],
 ) -> Interpretation[S, T]:
     return {  # TODO shallow_interpreter?
-        op: interpreter({handler_prompt: runner_prompt})(intp[op])
-        for op in intp.keys()
+        op: interpreter({handler_prompt: runner_prompt})(intp[op]) for op in intp.keys()
     }
 
 
@@ -61,8 +69,9 @@ def runner(
     curr_intp, next_intp = get_interpretation(), intp
 
     if handler_prompt is not None:
-        assert prompt is not handler_prompt, \
-            f"runner prompt and handler prompt must be distinct, but got {handler_prompt}"
+        assert (
+            prompt is not handler_prompt
+        ), f"runner prompt and handler prompt must be distinct, but got {handler_prompt}"
         curr_intp = handler_prompt_to_runner_prompt(curr_intp, handler_prompt, prompt)
         next_intp = handler_prompt_to_runner_prompt(next_intp, handler_prompt, prompt)
 

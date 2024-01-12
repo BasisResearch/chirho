@@ -49,7 +49,6 @@ def apply(
     *args: P.args,
     **kwargs: P.kwargs
 ) -> S:
-
     try:
         interpret = interpretation[op]
     except KeyError:
