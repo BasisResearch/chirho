@@ -6,7 +6,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.estimators import one_step_correction, tmle
+from chirho.robust.handlers.estimators import one_step_corrected_estimator, tmle
 from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 
 from .robust_fixtures import SimpleGuide, SimpleModel
@@ -42,7 +42,8 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 @pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
-def test_one_step_correction_smoke(
+@pytest.mark.parametrize("estimation_method", [one_step_corrected_estimator, tmle])
+def test_estimator_smoke(
     model,
     guide,
     obs_names,
@@ -51,6 +52,7 @@ def test_one_step_correction_smoke(
     num_samples_inner,
     cg_iters,
     num_predictive_samples,
+    estimation_method,
 ):
     model = model()
     guide = guide(model)
@@ -72,11 +74,7 @@ def test_one_step_correction_smoke(
             )().items()
         }
 
-    # import pdb
-
-    # pdb.set_trace()
-
-    one_step = tmle(
+    estimator = estimation_method(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         test_datum,
         max_plate_nesting=max_plate_nesting,
@@ -85,20 +83,11 @@ def test_one_step_correction_smoke(
         cg_iters=cg_iters,
     )(PredictiveModel(model, guide))
 
-    # one_step = one_step_correction(
-    #     functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-    #     test_datum,
-    #     max_plate_nesting=max_plate_nesting,
-    #     num_samples_outer=num_samples_outer,
-    #     num_samples_inner=num_samples_inner,
-    #     cg_iters=cg_iters,
-    # )(PredictiveModel(model, guide))
-
-    one_step_on_test: Mapping[str, torch.Tensor] = one_step()
-    assert len(one_step_on_test) > 0
-    for k, v in one_step_on_test.items():
-        assert not torch.isnan(v).any(), f"one_step for {k} had nans"
-        assert not torch.isinf(v).any(), f"one_step for {k} had infs"
+    estimate_on_test: Mapping[str, torch.Tensor] = estimator()
+    assert len(estimate_on_test) > 0
+    for k, v in estimate_on_test.items():
+        assert not torch.isnan(v).any(), f"{estimation_method} for {k} had nans"
+        assert not torch.isinf(v).any(), f"{estimation_method} for {k} had infs"
         assert not torch.isclose(
             v, torch.zeros_like(v)
-        ).all(), f"one_step for {k} was zero"
+        ).all(), f"{estimation_method} estimator for {k} was zero"

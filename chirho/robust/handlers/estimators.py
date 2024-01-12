@@ -178,7 +178,7 @@ def tmle(
     return _tmle
 
 
-def one_step_correction(
+def one_step_corrected_estimator(
     functional: Functional[P, S],
     *test_points: Point[T],
     **influence_kwargs,
@@ -198,4 +198,26 @@ def one_step_correction(
     """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
-    return influence_fn(functional, *test_points, **influence_kwargs_one_step)
+    eif_fn = influence_fn(functional, *test_points, **influence_kwargs_one_step)
+
+    def _corrected_functional(*model: Callable[P, Any]) -> Callable[P, S]:
+        plug_in_estimator = functional(*model)
+        correction_estimator = eif_fn(*model)
+
+        def _estimator(*args, **kwargs) -> S:
+            plug_in_estimate = plug_in_estimator(*args, **kwargs)
+            correction = correction_estimator(*args, **kwargs)
+
+            flat_plug_in_estimate, treespec = torch.utils._pytree.tree_flatten(
+                plug_in_estimate
+            )
+            flat_correction, _ = torch.utils._pytree.tree_flatten(correction)
+
+            return torch.utils._pytree.tree_unflatten(
+                [a + b for a, b in zip(flat_plug_in_estimate, flat_correction)],
+                treespec,
+            )
+
+        return _estimator
+
+    return _corrected_functional
