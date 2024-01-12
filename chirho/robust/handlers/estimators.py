@@ -49,6 +49,7 @@ def one_step_corrected_estimator(
                 [a + b for a, b in zip(flat_plug_in_estimate, flat_correction)],
                 treespec,
             )
+
         return _estimator
 
     return _corrected_functional
