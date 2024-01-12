@@ -22,15 +22,15 @@ end_time = torch.tensor(10.0)
 logging_times = torch.linspace(start_time + 1, end_time - 2, 10)
 
 # Initial state of the system.
-init_state = State(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
+init_state = dict(S=torch.tensor(50.0), I=torch.tensor(3.0), R=torch.tensor(0.0))
 
 # State at which the dynamic intervention will trigger.
-trigger_state1 = State(R=torch.tensor(30.0))
-trigger_state2 = State(R=torch.tensor(50.0))
+trigger_state1 = dict(R=torch.tensor(30.0))
+trigger_state2 = dict(R=torch.tensor(50.0))
 
 # State we'll switch to when the dynamic intervention triggers.
-intervene_state1 = State(S=torch.tensor(50.0))
-intervene_state2 = State(S=torch.tensor(30.0))
+intervene_state1 = dict(S=torch.tensor(50.0))
+intervene_state2 = dict(S=torch.tensor(30.0))
 
 
 def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int = 0):
@@ -80,11 +80,11 @@ def test_nested_dynamic_intervention_causes_change(
     ) as dt:
         with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
                     simulate(model, init_state, start_time, end_time)
@@ -176,7 +176,7 @@ def test_dynamic_intervention_causes_change(
     ) as dt:
         with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(trigger_state),
+                event_fn=get_state_reached_event_f(trigger_state),
                 intervention=intervene_state,
             ):
                 simulate(model, init_state, start_time, end_time)
@@ -248,11 +248,11 @@ def test_split_twinworld_dynamic_intervention(
     ) as dt:
         with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
                     with TwinWorldCounterfactual() as cf:
@@ -295,11 +295,11 @@ def test_split_multiworld_dynamic_intervention(
     ) as dt:
         with TorchDiffEq():
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts1),
+                event_fn=get_state_reached_event_f(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_f=get_state_reached_event_f(ts2),
+                    event_fn=get_state_reached_event_f(ts2),
                     intervention=is2,
                 ):
                     with MultiWorldCounterfactual() as cf:
@@ -338,11 +338,11 @@ def test_split_twinworld_dynamic_matches_output(
 
     with TorchDiffEq():
         with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
+            event_fn=get_state_reached_event_f(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
+                event_fn=get_state_reached_event_f(ts2),
                 intervention=is2,
             ):
                 with TwinWorldCounterfactual() as cf:
@@ -350,11 +350,11 @@ def test_split_twinworld_dynamic_matches_output(
 
     with TorchDiffEq():
         with DynamicIntervention(
-            event_f=get_state_reached_event_f(ts1),
+            event_fn=get_state_reached_event_f(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_f=get_state_reached_event_f(ts2),
+                event_fn=get_state_reached_event_f(ts2),
                 intervention=is2,
             ):
                 cf_expected = simulate(model, init_state, start_time, end_time)
@@ -396,7 +396,7 @@ def test_split_twinworld_dynamic_matches_output(
 
 def test_grad_of_dynamic_intervention_event_f_params():
     def model(X: State[torch.Tensor]):
-        dX = State()
+        dX = dict()
         dX["x"] = torch.tensor(1.0)
         dX["z"] = X["dz"]
         dX["dz"] = torch.tensor(0.0)  # also a constant, this gets set by interventions.
@@ -407,13 +407,13 @@ def test_grad_of_dynamic_intervention_event_f_params():
 
     param = torch.nn.Parameter(torch.tensor(5.0))
     # Param has to be part of the state in order to take gradients with respect to it.
-    s0 = State(
+    s0 = dict(
         x=torch.tensor(0.0), z=torch.tensor(0.0), dz=torch.tensor(0.0), param=param
     )
 
     dynamic_intervention = DynamicIntervention(
-        event_f=lambda t, s: t - s["param"],
-        intervention=State(dz=torch.tensor(1.0)),
+        event_fn=lambda t, s: t - s["param"],
+        intervention=dict(dz=torch.tensor(1.0)),
     )
 
     # noinspection DuplicatedCode

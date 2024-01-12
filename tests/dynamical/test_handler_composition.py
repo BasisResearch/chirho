@@ -24,7 +24,7 @@ from tests.dynamical.dynamical_fixtures import (
 logger = logging.getLogger(__name__)
 
 # Global variables for tests
-init_state = State(S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
+init_state = dict(S=torch.tensor(10.0), I=torch.tensor(1.0), R=torch.tensor(0.0))
 start_time = torch.tensor(0.0)
 end_time = torch.tensor(1.2)
 logging_times = torch.tensor([0.3, 0.6, 0.9])
@@ -39,7 +39,7 @@ landing_time = 0.3 + 1e-2
 
 ssd = torch.tensor(2.0)
 
-counterfactual = State(
+counterfactual = dict(
     S=lambda s: s - ssd,
     I=lambda i: i + ssd,
 )

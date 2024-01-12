@@ -31,6 +31,7 @@ Table of Contents
    sdid
    dr_learner
    dynamical_intro
+   actual_causality
 
 .. toctree::
    :maxdepth: 2
@@ -42,11 +43,13 @@ Table of Contents
    indexed
    dynamical
    robust
+   explainable
 
 .. toctree::
    :maxdepth: 2
    :caption: For Contributors
 
+   contributing
    design_notes/index
 
 Indices and tables

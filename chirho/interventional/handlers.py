@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import collections
 import functools
 from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar
@@ -41,7 +43,7 @@ def _intervene_atom(
 def _intervene_atom_distribution(
     obs: pyro.distributions.Distribution,
     act: Optional[AtomicIntervention[pyro.distributions.Distribution]] = None,
-    **kwargs
+    **kwargs,
 ) -> pyro.distributions.Distribution:
     """
     Intervene on a distribution in a probabilistic program.
@@ -70,7 +72,7 @@ def _dict_intervene(
 def _intervene_callable(
     obs: collections.abc.Callable,
     act: Optional[CompoundIntervention[T]] = None,
-    **call_kwargs
+    **call_kwargs,
 ) -> Callable[..., T]:
     if act is None:
         return obs
