@@ -244,9 +244,7 @@ class CausalGP(torch.nn.Module):
         N = X.size(0)
         Kff = self.kernel(X)
         Kff.view(-1)[:: N + 1] += self.noise  # add noise to diagonal
-        # Lff = torch.linalg.cholesky(Kff)
-        # alpha = torch.cholesky_solve(Y.unsqueeze(-1), Lff).squeeze()
-        K_inv = torch.cholesky_inverse(Kff)
+        K_inv = torch.inverse(Kff)
         alpha = torch.einsum("...mn,...n->...m", K_inv, Y).squeeze()
         return alpha, K_inv
 
@@ -272,24 +270,42 @@ class CausalGP(torch.nn.Module):
         # Sample Y from GP
         X = X.expand(A.shape + X.shape[-1:])
         XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
-        # XA = XA.unsqueeze(0)
         f_loc = torch.einsum(
             "...mn,...n->...m", self.kernel(XA, self.XA_train), self.alpha
         )
-        # cov_train_x = torch.cholesky_solve(self.kernel(self.XA_train, XA), self.Lff)
         cov_train_x = torch.einsum(
             "...tn,...nk->...tk", self.K_inv, self.kernel(self.XA_train, XA)
         )
         f_cov = self.kernel(XA) - torch.einsum(
             "...mn,...nk->...mk", self.kernel(XA, self.XA_train), cov_train_x
         )
-        # return pyro.sample("Y", dist.MultivariateNormal(f_loc, f_cov))[..., 0, :]p
         return pyro.sample(
             "Y",
             dist.Normal(
                 f_loc[..., 0, :], torch.diagonal(f_cov, dim1=-1, dim2=-2)[..., 0, :]
             ),
         )
+
+
+# Closed form expression
+def closed_form_doubly_robust_ate_correction_gp(
+    X_test, model
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    X = X_test["X"]
+    A = X_test["A"]
+    Y = X_test["Y"]
+    import pdb
+
+    pdb.set_trace()
+    pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
+    mu_X = (
+        X.mv(theta["outcome_weights"])
+        + A * theta["treatment_weight"]
+        + theta["intercept"]
+    )
+    analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
+    analytic_correction = analytic_eif_at_test_pts.mean()
+    return analytic_correction, analytic_eif_at_test_pts
 
 
 N_datasets = 1
@@ -363,7 +379,7 @@ for i in range(N_datasets):
     (
         analytic_correction,
         analytic_eif_at_test_pts,
-    ) = closed_form_doubly_robust_ate_correction(D_test, theta_hat)
+    ) = closed_form_doubly_robust_ate_correction_gp(D_test, fitted_gp_model)
     print("here")
     automated_monte_carlo_correction = one_step_correction(
         fitted_gp_model,
@@ -381,3 +397,7 @@ for i in range(N_datasets):
 plug_in_ates = np.array(plug_in_ates)
 analytic_corrections = np.array(analytic_corrections)
 automated_monte_carlo_corrections = np.array(automated_monte_carlo_corrections)
+
+import pdb
+
+pdb.set_trace()
