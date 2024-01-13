@@ -18,15 +18,17 @@ T = TypeVar("T")
 def tmle(
     functional: Functional[P, S],
     test_point: Point,
-    learning_rate: float = 0.01,
-    n_steps: int = 10000,
+    learning_rate: float = 1e5,
+    n_steps: int = 100,
     n_tmle_steps: int = 1,
-    num_samples: int = 1000,
+    num_nmc_samples: int = 1000,
+    num_grad_samples: int = 100,
+    log_jitter: float = 1e-6,
     **influence_kwargs,
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
-    def tmle_scipy_optimize_wrapper(packed_influence, log_jitter=1e-7) -> torch.Tensor:
+    def tmle_scipy_optimize_wrapper(packed_influence) -> torch.Tensor:
         import numpy as np
         import scipy
         from scipy.optimize import LinearConstraint
@@ -79,25 +81,24 @@ def tmle(
     ) -> Callable[P, Any]:
         
         batched_log_prob = BatchedNMCLogMarginalLikelihood(
-            prev_model, num_samples=num_samples
+            prev_model, num_samples=num_nmc_samples
         )
         prev_params, log_p_phi_pointwise = make_functional_call(batched_log_prob)
+        prev_params = {k: v.detach() for k, v in prev_params.items()}
         
         def log_p_phi(*args, **kwargs) -> torch.Tensor:
             return torch.sum(log_p_phi_pointwise(*args, **kwargs))
         
-        _, functional_model = make_functional_call(PredictiveFunctional(prev_model))
+        _, functional_model = make_functional_call(PredictiveFunctional(prev_model, num_samples=num_grad_samples))
 
         new_params = copy.deepcopy(prev_params)
 
-        def log_p_epsilon(params, x, log_jitter=1e-7, *args, **kwargs):
-            influence = influence_fn(functional, x, **influence_kwargs)(
-                prev_model
-            )(*args, **kwargs)
+        def log_p_epsilon(params, x, *args, **kwargs):
+            influence = influence_fn(functional, x, **influence_kwargs)(prev_model)(*args, **kwargs)
             flat_influence, _ = torch.utils._pytree.tree_flatten(influence)
             N_x = flat_influence[0].shape[0]
 
-            packed_influence = torch.concatenate([i.reshape(N_x, -1) for i in flat_influence])
+            packed_influence = torch.concatenate([i.reshape(N_x, -1) for i in flat_influence]).detach()
 
             log_likelihood_correction = torch.sum(torch.log(torch.maximum(1 + packed_influence.mv(packed_epsilon), torch.tensor(log_jitter))))
 
@@ -105,18 +106,21 @@ def tmle(
 
         def loss(new_params, *args, **kwargs):
             # Sample data from the variational approximation
-            samples = {
-                k: v
-                for k, v in functional_model(new_params, *args, **kwargs).items()
-                if k in test_point
-            }
+            samples = {k: v for k, v in functional_model(new_params, *args, **kwargs).items() if k in test_point}
             term1 = log_p_phi(new_params, samples, *args, **kwargs)
             term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
 
-            # pdb.set_trace()
             return term1 - term2
 
-        test_loss = loss(new_params, *args, **kwargs)
+        grad_fn = torch.func.grad(loss)
+
+        for _ in range(n_steps):
+            print(new_params, prev_params, loss(new_params, *args, **kwargs))
+            grad = grad_fn(new_params, *args, **kwargs)
+
+            new_params = {k: (v - learning_rate * grad[k]) for k, v in new_params.items()}
+
+        # TODO: pack new_params into a callable
 
         return new_model
 
