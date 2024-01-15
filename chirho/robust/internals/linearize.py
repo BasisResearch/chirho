@@ -219,8 +219,7 @@ def make_empirical_fisher_vp(
 
 
 def linearize(
-    model: Callable[P, Any],
-    *,
+    *models: Callable[P, Any],
     num_samples_outer: int,
     num_samples_inner: Optional[int] = None,
     max_plate_nesting: Optional[int] = None,
@@ -328,6 +327,11 @@ def linearize(
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
     """
+    if len(models) > 1:
+        raise NotImplementedError("Only unary version of linearize is implemented.")
+    else:
+        (model,) = models
+
     assert isinstance(model, torch.nn.Module)
     if num_samples_inner is None:
         num_samples_inner = num_samples_outer**2

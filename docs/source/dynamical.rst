@@ -5,6 +5,11 @@ Dynamical
    :members:
    :undoc-members:
 
+Types
+------------
+
+.. include:: dynamical_type_aliases.rst
+
 Operations
 ----------
 
@@ -16,10 +21,6 @@ Handlers
 --------
 
 .. automodule:: chirho.dynamical.handlers
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.dynamical.handlers.event_loop
    :members:
    :undoc-members:
 
