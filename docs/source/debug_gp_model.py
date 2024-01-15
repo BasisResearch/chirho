@@ -16,7 +16,7 @@ from chirho.counterfactual.handlers import MultiWorldCounterfactual
 from chirho.indexed.ops import IndexSet, gather
 from chirho.interventional.handlers import do
 from chirho.robust.internals.utils import ParamDict
-from chirho.robust.handlers.estimators import one_step_correction
+from chirho.robust.handlers.estimators import one_step_corrected_estimator
 from chirho.robust.handlers.predictive import PredictiveModel
 
 pyro.settings.set(module_local_params=True)
@@ -226,18 +226,22 @@ class CausalKernelRidge(torch.nn.Module):
         kernel,
         noise_scale: float = 1.0,
         prior_scale: Optional[float] = None,
+        link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
     ):
         super().__init__()
+        self.X_train = X_train
+        self.A_train = A_train
+        self.Y_train = Y_train
         self.XA_train = torch.concatenate([X_train, A_train.unsqueeze(-1)], dim=-1)
         self.p = X_train.shape[1]
         self.kernel = kernel
         self.noise_scale = noise_scale
-        alpha = self._solve_krr(self.XA_train, Y_train)
-        self.alpha = torch.nn.Parameter(alpha)
+        self.alpha = self._solve_krr(self.XA_train, Y_train)
         if prior_scale is None:
             self.prior_scale = 1 / math.sqrt(self.p)
         else:
             self.prior_scale = prior_scale
+        self.link_fn = link_fn
 
     def _solve_krr(self, X: torch.Tensor, Y: torch.Tensor):
         N = X.size(0)
@@ -273,31 +277,56 @@ class CausalKernelRidge(torch.nn.Module):
         X = X.expand(A.shape + X.shape[-1:])
         XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
         f_loc = self.predict(XA)
-        return pyro.sample("Y", dist.Normal(f_loc[..., 0, :], scale=self.noise_scale))
+
+        return pyro.sample(
+            "Y",
+            self.link_fn(f_loc[..., 0, :]),
+        )
+
+
+class ConditionedCausalKernelRidge(CausalKernelRidge):
+    def forward(self):
+        x_loc, x_scale = self.sample_covariate_loc_scale()
+        propensity_weights = self.sample_propensity_weights()
+        with pyro.plate("__train__", size=self.X_train.shape[0], dim=-1):
+            X = pyro.sample(
+                "X", dist.Normal(x_loc, x_scale).to_event(1), obs=self.X_train
+            )
+            A = pyro.sample(
+                "A",
+                dist.Bernoulli(
+                    logits=torch.einsum("...i,...i->...", X, propensity_weights)
+                ),
+                obs=self.A_train,
+            )
+            X = X.expand(A.shape + X.shape[-1:])
+            XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
+            f_loc = self.predict(XA)
+
+            return pyro.sample(
+                "Y",
+                self.link_fn(f_loc[..., 0, :]),
+                obs=self.Y_train,
+            )
 
 
 # Closed form expression
 def closed_form_doubly_robust_ate_correction_gp(
-    X_test, model
+    X_test, theta, gp_model
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
-    import pdb
-
-    pdb.set_trace()
     pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
-    mu_X = (
-        X.mv(theta["outcome_weights"])
-        + A * theta["treatment_weight"]
-        + theta["intercept"]
-    )
+    X = X.expand(A.shape + X.shape[-1:])
+    XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
+    mu_X = gp_model.predict(XA)
     analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     analytic_correction = analytic_eif_at_test_pts.mean()
     return analytic_correction, analytic_eif_at_test_pts
 
 
-N_datasets = 1
+N_datasets = 25
 simulated_datasets = []
 
 # Data configuration
@@ -306,6 +335,7 @@ alpha = 50
 beta = 50
 N_train = 500
 N_test = 500
+gp_kernel = linear_kernel
 
 true_model = GroundTruthModel(p, alpha, beta)
 
@@ -324,8 +354,11 @@ for i in range(N_datasets):
     D_train = simulated_datasets[i][0]
 
     # Fit model using maximum likelihood
-    conditioned_model = ConditionedCausalGLM(
-        X=D_train["X"], A=D_train["A"], Y=D_train["Y"]
+    conditioned_model = ConditionedCausalKernelRidge(
+        X_train=D_train["X"],
+        A_train=D_train["A"],
+        Y_train=D_train["Y"],
+        kernel=gp_kernel,
     )
 
     guide_train = pyro.infer.autoguide.AutoDelta(conditioned_model)
@@ -345,6 +378,7 @@ for i in range(N_datasets):
     theta_hat = {
         k: v.clone().detach().requires_grad_(True) for k, v in guide_train().items()
     }
+    theta_hat["alpha"] = conditioned_model.alpha.clone().detach().requires_grad_(True)
     fitted_params.append(theta_hat)
 
 # Compute doubly robust ATE estimates using both the automated and closed form expressions
@@ -355,30 +389,33 @@ for i in range(N_datasets):
     theta_hat = fitted_params[i]
     D_train = simulated_datasets[i][0]
     D_test = simulated_datasets[i][1]
-    functional = functools.partial(ATEFunctional, num_monte_carlo=500)
+    mle_guide = MLEGuide(theta_hat)
+    functional = functools.partial(ATEFunctional, num_monte_carlo=10000)
     # gp_kernel = gp.kernels.RBF(input_dim=D_train['X'].shape[1] + 1)
-    gp_kernel = linear_kernel
-    fitted_gp_model = CausalKernelRidge(
+    gp_model = CausalKernelRidge(
         X_train=D_train["X"],
         A_train=D_train["A"],
         Y_train=D_train["Y"],
         kernel=gp_kernel,
     )
-    ate_plug_in = functional(fitted_gp_model)()
+
+    ate_plug_in = functional(PredictiveModel(gp_model, mle_guide))()
     (
         analytic_correction,
         analytic_eif_at_test_pts,
-    ) = closed_form_doubly_robust_ate_correction_gp(D_test, fitted_gp_model)
+    ) = closed_form_doubly_robust_ate_correction_gp(D_test, theta_hat, gp_model)
     print("here")
-    automated_monte_carlo_correction = one_step_correction(
-        fitted_gp_model,
+    automated_monte_carlo_correction = one_step_corrected_estimator(
         functional,
+        D_test,
         num_samples_outer=max(10000, 100 * p),
         num_samples_inner=1,
-    )(D_test)
+    )(PredictiveModel(gp_model, mle_guide))()
 
     plug_in_ates.append(ate_plug_in.detach().item())
-    analytic_corrections.append(analytic_correction.detach().item())
+    analytic_corrections.append(
+        ate_plug_in.detach().item() + analytic_correction.detach().item()
+    )
     automated_monte_carlo_corrections.append(
         automated_monte_carlo_correction.detach().item()
     )
