@@ -1,15 +1,129 @@
+from __future__ import annotations
+
 import functools
 import operator
 from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
+import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import torch
+from torch.distributions import biject_to
+
+from chirho.indexed.ops import cond
 
 T = TypeVar("T")
 
 
 Kernel = Callable[[T, T], torch.Tensor]
+
+
+@functools.singledispatch
+def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
+    """
+    Computes soft equality between two values ``v1`` and ``v2`` given a distribution constraint ``support``.
+    Returns a negative value if there is a difference (the larger the difference, the lower the value)
+    and tends to a low value as ``v1`` and ``v2`` tend to each other.
+
+    :param support: A distribution constraint.
+    :params v1, v2: the values to be compared.
+    :param kwargs: Additional keywords arguments passed further; `scale` adjusts the softness of the inequality.
+    :return: A tensor of log probabilities capturing the soft equality between ``v1`` and ``v2``,
+            depends on the support and scale.
+    :raises TypeError: If boolean tensors have different data types.
+
+    Comment: if the support is boolean, setting ``scale = 1e-8`` results in a value close to ``0.0`` if the values
+                are equal and a large negative number ``<=1e-8`` otherwise.
+    """
+    if not isinstance(v1, torch.Tensor) or not isinstance(v2, torch.Tensor):
+        raise NotImplementedError("Soft equality is only implemented for tensors.")
+    elif support.is_discrete:
+        raise NotImplementedError(
+            "Soft equality is not implemented for arbitrary discrete distributions."
+        )
+    elif support is constraints.real:  # base case
+        scale = kwargs.get("scale", 0.1)
+        return dist.Normal(0.0, scale).log_prob(v1 - v2)
+    else:
+        tfm = biject_to(support)
+        v1_inv = tfm.inv(v1)
+        ldj = tfm.log_abs_det_jacobian(v1_inv, v1)
+        v2_inv = tfm.inv(v2)
+        ldj = ldj + tfm.log_abs_det_jacobian(v2_inv, v2)
+        for _ in range(tfm.codomain.event_dim - tfm.domain.event_dim):
+            ldj = torch.sum(ldj, dim=-1)
+        return soft_eq(tfm.domain, v1_inv, v2_inv, **kwargs) + ldj
+
+
+@soft_eq.register
+def _soft_eq_independent(support: constraints.independent, v1: T, v2: T, **kwargs):
+    result = soft_eq(support.base_constraint, v1, v2, **kwargs)
+    for _ in range(support.reinterpreted_batch_ndims):
+        result = torch.sum(result, dim=-1)
+    return result
+
+
+@soft_eq.register(type(constraints.boolean))
+def _soft_eq_boolean(support, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
+    assert support is constraints.boolean
+    scale = kwargs.get("scale", 0.1)
+    return torch.log(cond(scale, 1 - scale, v1 == v2, event_dim=0))
+
+
+@soft_eq.register
+def _soft_eq_integer_interval(
+    support: constraints.integer_interval, v1: torch.Tensor, v2: torch.Tensor, **kwargs
+):
+    scale = kwargs.get("scale", 0.1)
+    width = support.upper_bound - support.lower_bound + 1
+    return dist.Binomial(total_count=width, probs=scale).log_prob(torch.abs(v1 - v2))
+
+
+@soft_eq.register(type(constraints.integer))
+def _soft_eq_integer(support, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
+    scale = kwargs.get("scale", 0.1)
+    return dist.Poisson(rate=scale).log_prob(torch.abs(v1 - v2))
+
+
+@soft_eq.register(type(constraints.positive_integer))
+@soft_eq.register(type(constraints.nonnegative_integer))
+def _soft_eq_positive_integer(support, v1: T, v2: T, **kwargs):
+    return soft_eq(constraints.integer, v1, v2, **kwargs)
+
+
+@functools.singledispatch
+def soft_neq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Tensor:
+    """
+    Computes soft inequality between two values ``v1`` and ``v2`` given a distribution constraint ``support``.
+    Tends to a small value near zero as the difference between the value increases, and tends to
+    a large negative value as ``v1`` and ``v2`` tend to each other, summing elementwise over tensors.
+
+    :param support: A distribution constraint.
+    :params v1, v2: the values to be compared.
+    :param kwargs: Additional keywords arguments:
+        `scale` to adjust the softness of the inequality.
+    :return: A tensor of log probabilities capturing the soft inequality between ``v1`` and ``v2``.
+    :raises TypeError: If boolean tensors have different data types.
+    :raises NotImplementedError: If arguments are not tensors.
+    """
+    if not isinstance(v1, torch.Tensor) or not isinstance(v2, torch.Tensor):
+        raise NotImplementedError("Soft equality is only implemented for tensors.")
+    elif support.is_discrete:  # for discrete pmf, soft_neq = 1 - soft_eq (in log space)
+        return torch.log(-torch.expm1(soft_eq(support, v1, v2, **kwargs)))
+    elif support is constraints.real:  # base case
+        scale = kwargs.get("scale", 0.1)
+        return torch.log(2 * dist.Normal(0.0, scale).cdf(torch.abs(v1 - v2)) - 1)
+    else:
+        tfm = biject_to(support)
+        return soft_neq(tfm.domain, tfm.inv(v1), tfm.inv(v2), **kwargs)
+
+
+@soft_neq.register
+def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwargs):
+    result = soft_neq(support.base_constraint, v1, v2, **kwargs)
+    for _ in range(support.reinterpreted_batch_ndims):
+        result = torch.sum(result, dim=-1)
+    return result
 
 
 class TorchKernel(torch.nn.Module):
@@ -34,13 +148,7 @@ class SoftEqKernel(TorchKernel):
             self.support = constraints.independent(constraints.boolean, event_dim)
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        eq = (x == y).to(dtype=self.alpha.dtype)
-        return (
-            pyro.distributions.Bernoulli(probs=self.alpha)
-            .expand([1] * self.support.event_dim)
-            .to_event(self.support.event_dim)
-            .log_prob(eq)
-        )
+        return soft_eq(self.support, x, y, scale=self.alpha)
 
 
 class RBFKernel(TorchKernel):

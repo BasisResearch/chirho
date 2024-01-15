@@ -9,7 +9,7 @@ from chirho.dynamical.handlers import (
     StaticIntervention,
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops import simulate
 
 from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match
 
@@ -19,15 +19,13 @@ logger = logging.getLogger(__name__)
 start_time = torch.tensor(1.0)
 end_time = torch.tensor(4.0)
 # Initial state of the system.
-init_state_values = State(
-    S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0)
-)
+init_state_values = dict(S=torch.tensor(10.0), I=torch.tensor(3.0), R=torch.tensor(1.0))
 
 intervene_states = [
-    State(S=torch.tensor(11.0)),
-    State(I=torch.tensor(9.0)),
-    State(S=torch.tensor(10.0), R=torch.tensor(5.0)),
-    State(S=torch.tensor(20.0), I=torch.tensor(11.0), R=torch.tensor(4.0)),
+    dict(S=torch.tensor(11.0)),
+    dict(I=torch.tensor(9.0)),
+    dict(S=torch.tensor(10.0), R=torch.tensor(5.0)),
+    dict(S=torch.tensor(20.0), I=torch.tensor(11.0), R=torch.tensor(4.0)),
 ]
 
 
@@ -168,9 +166,7 @@ def test_noop_dynamic_interruption(
 
     with TorchDiffEq():
         tt = (end_time - start_time) / 2.0
-        with DynamicInterruption(
-            event_f=lambda t, _: torch.where(t < tt, tt - t, 0.0),
-        ):
+        with DynamicInterruption(lambda t, _: torch.where(t < tt, tt - t, 0.0)):
             result_dint = simulate(model, init_state, start_time, end_time)
 
     assert check_states_match(observational_execution_result, result_dint)
