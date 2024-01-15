@@ -58,14 +58,6 @@ def test_estimator_smoke(
     guide = guide(model)
     model(), guide()  # initialize
 
-    # with torch.no_grad():
-    #     test_datum = {
-    #         k: v[0]
-    #         for k, v in pyro.infer.Predictive(
-    #             model, num_samples=2, return_sites=obs_names, parallel=True
-    #         )().items()
-    #     }
-
     with torch.no_grad():
         test_datum = {
             k: v
