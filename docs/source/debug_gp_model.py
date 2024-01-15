@@ -276,6 +276,10 @@ class CausalKernelRidge(torch.nn.Module):
         return pyro.sample("Y", dist.Normal(f_loc[..., 0, :], scale=self.noise_scale))
 
 
+## TODO:
+# - Maybe make alpha a sample statement and create custome guide
+
+
 # Closed form expression
 def closed_form_doubly_robust_ate_correction_gp(
     X_test, model
