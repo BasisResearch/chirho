@@ -22,7 +22,7 @@ def fwd(__result: Optional[T]) -> T:
 
 
 @define(Operation)
-def compose(
+def coproduct(
     intp: Interpretation[S, T],
     *intps: Interpretation[S, T],
     prompt: Prompt[T] = fwd,
@@ -30,7 +30,7 @@ def compose(
     if len(intps) == 0:  # unit
         return intp
     elif len(intps) > 1:  # associativity
-        return compose(intp, compose(*intps, prompt=prompt), prompt=prompt)
+        return coproduct(intp, coproduct(*intps, prompt=prompt), prompt=prompt)
 
     (intp2,) = intps
     return dict(
@@ -47,5 +47,5 @@ def compose(
 def handler(intp: Interpretation[S, T], *, prompt: Prompt[T] = fwd):
     from .runtime import get_interpretation
 
-    with interpreter(compose(get_interpretation(), intp, prompt=prompt)):
+    with interpreter(coproduct(get_interpretation(), intp, prompt=prompt)):
         yield intp

@@ -6,7 +6,7 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from chirho.meta.ops._utils import value_or_fn
-from chirho.meta.ops.handler import compose, fwd, handler
+from chirho.meta.ops.handler import coproduct, fwd, handler
 from chirho.meta.ops.interpretation import Interpretation, bind_result, interpreter
 from chirho.meta.ops.operation import Operation, define
 
@@ -57,7 +57,7 @@ def test_affine_continuation_compose(op, args):
 
     assert (
         interpreter(defaults(op))(f)()
-        == interpreter(compose(defaults(op), h_twice))(f)()
+        == interpreter(coproduct(defaults(op), h_twice))(f)()
     )
 
 
@@ -72,8 +72,8 @@ def test_compose_associative(op, args, n1, n2):
     h1 = times_n_handler(n1, op)
     h2 = times_n_handler(n2, op)
 
-    intp1 = compose(h0, compose(h1, h2))
-    intp2 = compose(compose(h0, h1), h2)
+    intp1 = coproduct(h0, coproduct(h1, h2))
+    intp2 = coproduct(coproduct(h0, h1), h2)
 
     assert interpreter(intp1)(f)() == interpreter(intp2)(f)()
 
@@ -91,8 +91,8 @@ def test_compose_commute_orthogonal(op, args, n1, n2):
     h1 = times_n_handler(n1, op)
     h2 = times_n_handler(n2, new_op)
 
-    intp1 = compose(h0, h1, h2)
-    intp2 = compose(h0, h2, h1)
+    intp1 = coproduct(h0, h1, h2)
+    intp2 = coproduct(h0, h2, h1)
 
     assert interpreter(intp1)(f)() == interpreter(intp2)(f)()
 
@@ -108,15 +108,15 @@ def test_handler_associative(op, args, n1, n2):
     h1 = times_n_handler(n1, op)
     h2 = times_n_handler(n2, op)
 
-    expected = interpreter(compose(h0, h1, h2))(f)()
+    expected = interpreter(coproduct(h0, h1, h2))(f)()
 
     with handler(h0), handler(h1), handler(h2):
         assert f() == expected
 
-    with handler(compose(h0, h1)), handler(h2):
+    with handler(coproduct(h0, h1)), handler(h2):
         assert f() == expected
 
-    with handler(h0), handler(compose(h1, h2)):
+    with handler(h0), handler(coproduct(h1, h2)):
         assert f() == expected
 
 

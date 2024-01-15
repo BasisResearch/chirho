@@ -6,7 +6,7 @@ from typing import ParamSpec, TypeVar
 import pytest
 
 from chirho.meta.ops._utils import value_or_fn
-from chirho.meta.ops.handler import compose, fwd, handler
+from chirho.meta.ops.handler import coproduct, fwd, handler
 from chirho.meta.ops.interpretation import Interpretation, bind_result, interpreter
 from chirho.meta.ops.operation import Operation, define
 from chirho.meta.ops.runner import product, reflect
@@ -76,8 +76,8 @@ def test_product_block_associative(op, args, n1, n2):
         return op(*args)
 
     h0 = defaults(op)
-    h1 = compose(block(op), times_n_handler(n1, op))
-    h2 = compose(block(op), times_n_handler(n2, op))
+    h1 = coproduct(block(op), times_n_handler(n1, op))
+    h2 = coproduct(block(op), times_n_handler(n2, op))
 
     intp1 = product(h0, product(h1, h2))
     intp2 = product(product(h0, h1), h2)
