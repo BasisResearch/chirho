@@ -217,36 +217,34 @@ def linear_kernel(X, Z=None):
     return torch.einsum("...np,...mp->...nm", X, Z)[..., None, :, :]
 
 
-class CausalGP(torch.nn.Module):
+class CausalKernelRidge(torch.nn.Module):
     def __init__(
         self,
         X_train: torch.Tensor,
         A_train: torch.Tensor,
         Y_train: torch.Tensor,
         kernel,
-        noise: float = 1.0,
+        noise_scale: float = 1.0,
         prior_scale: Optional[float] = None,
     ):
         super().__init__()
         self.XA_train = torch.concatenate([X_train, A_train.unsqueeze(-1)], dim=-1)
         self.p = X_train.shape[1]
         self.kernel = kernel
-        self.noise = noise
-        alpha, K_inv = self._gp_mean_inverse(self.XA_train, Y_train)
+        self.noise_scale = noise_scale
+        alpha = self._solve_krr(self.XA_train, Y_train)
         self.alpha = torch.nn.Parameter(alpha)
-        self.K_inv = K_inv
         if prior_scale is None:
             self.prior_scale = 1 / math.sqrt(self.p)
         else:
             self.prior_scale = prior_scale
 
-    def _gp_mean_inverse(self, X: torch.Tensor, Y: torch.Tensor):
+    def _solve_krr(self, X: torch.Tensor, Y: torch.Tensor):
         N = X.size(0)
         Kff = self.kernel(X)
-        Kff.view(-1)[:: N + 1] += self.noise  # add noise to diagonal
-        K_inv = torch.inverse(Kff)
-        alpha = torch.einsum("...mn,...n->...m", K_inv, Y).squeeze()
-        return alpha, K_inv
+        Kff.view(-1)[:: N + 1] += self.noise_scale**2  # add noise to diagonal
+        alpha = torch.einsum("...mn,...n->...m", torch.inverse(Kff), Y).squeeze()
+        return alpha
 
     def sample_covariate_loc_scale(self):
         return torch.zeros(self.p), torch.ones(self.p)
@@ -255,6 +253,11 @@ class CausalGP(torch.nn.Module):
         return pyro.sample(
             "propensity_weights",
             dist.Normal(0.0, self.prior_scale).expand((self.p,)).to_event(1),
+        )
+
+    def predict(self, X_new):
+        return torch.einsum(
+            "...mn,...n->...m", self.kernel(X_new, self.XA_train), self.alpha
         )
 
     def forward(self):
@@ -267,24 +270,10 @@ class CausalGP(torch.nn.Module):
                 logits=torch.einsum("...i,...i->...", X, propensity_weights)
             ),
         )
-        # Sample Y from GP
         X = X.expand(A.shape + X.shape[-1:])
         XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
-        f_loc = torch.einsum(
-            "...mn,...n->...m", self.kernel(XA, self.XA_train), self.alpha
-        )
-        cov_train_x = torch.einsum(
-            "...tn,...nk->...tk", self.K_inv, self.kernel(self.XA_train, XA)
-        )
-        f_cov = self.kernel(XA) - torch.einsum(
-            "...mn,...nk->...mk", self.kernel(XA, self.XA_train), cov_train_x
-        )
-        return pyro.sample(
-            "Y",
-            dist.Normal(
-                f_loc[..., 0, :], torch.diagonal(f_cov, dim1=-1, dim2=-2)[..., 0, :]
-            ),
-        )
+        f_loc = self.predict(XA)
+        return pyro.sample("Y", dist.Normal(f_loc[..., 0, :], scale=self.noise_scale))
 
 
 # Closed form expression
@@ -369,7 +358,7 @@ for i in range(N_datasets):
     functional = functools.partial(ATEFunctional, num_monte_carlo=500)
     # gp_kernel = gp.kernels.RBF(input_dim=D_train['X'].shape[1] + 1)
     gp_kernel = linear_kernel
-    fitted_gp_model = CausalGP(
+    fitted_gp_model = CausalKernelRidge(
         X_train=D_train["X"],
         A_train=D_train["A"],
         Y_train=D_train["Y"],
