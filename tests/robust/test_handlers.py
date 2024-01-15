@@ -80,7 +80,6 @@ def test_estimator_smoke(
         cg_iters=cg_iters,
     )(predictive_model)
 
-
     estimate_on_test: Mapping[str, torch.Tensor] = estimator()
     assert len(estimate_on_test) > 0
     for k, v in estimate_on_test.items():
