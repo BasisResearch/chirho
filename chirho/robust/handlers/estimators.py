@@ -2,6 +2,7 @@ import copy
 from typing import Any, Callable, TypeVar
 
 import torch
+import warnings
 from typing_extensions import ParamSpec
 
 from chirho.robust.handlers.predictive import PredictiveFunctional
@@ -39,7 +40,7 @@ def tmle_scipy_optimize_wrapper(
     )
 
     if not epsilon_solve.success:
-        raise RuntimeError("TMLE optimization did not converge.")
+        warnings.warn("TMLE optimization did not converge.", RuntimeWarning)
 
     # Convert epsilon back to torch. This makes us happy... :)
     packed_epsilon = torch.tensor(epsilon_solve.x, dtype=packed_influence.dtype)
@@ -51,7 +52,7 @@ def tmle(
     functional: Functional[P, S],
     test_point: Point,
     learning_rate: float = 1e5,
-    n_steps: int = 100,
+    n_steps: int = 1,
     n_tmle_steps: int = 1,
     num_nmc_samples: int = 1000,
     num_grad_samples: int = 100,

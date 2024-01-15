@@ -1,3 +1,4 @@
+import copy
 import functools
 from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
 
@@ -66,6 +67,10 @@ def test_estimator_smoke(
             )().items()
         }
 
+    predictive_model = PredictiveModel(model, guide)
+
+    prev_params = copy.deepcopy(dict(predictive_model.named_parameters()))
+
     estimator = estimation_method(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         test_datum,
@@ -73,7 +78,8 @@ def test_estimator_smoke(
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )(PredictiveModel(model, guide))
+    )(predictive_model)
+
 
     estimate_on_test: Mapping[str, torch.Tensor] = estimator()
     assert len(estimate_on_test) > 0
@@ -83,3 +89,8 @@ def test_estimator_smoke(
         assert not torch.isclose(
             v, torch.zeros_like(v)
         ).all(), f"{estimation_method} estimator for {k} was zero"
+
+    # Assert estimator doesn't have side effects on model parameters.
+    new_params = dict(predictive_model.named_parameters())
+    for k, v in prev_params.items():
+        assert torch.allclose(v, new_params[k]), f"{k} was updated"
