@@ -18,6 +18,7 @@ from chirho.interventional.handlers import do
 from chirho.robust.internals.utils import ParamDict
 from chirho.robust.handlers.estimators import one_step_corrected_estimator
 from chirho.robust.handlers.predictive import PredictiveModel
+from chirho.robust.internals.linearize import linearize
 
 pyro.settings.set(module_local_params=True)
 
@@ -236,7 +237,7 @@ class CausalKernelRidge(torch.nn.Module):
         self.p = X_train.shape[1]
         self.kernel = kernel
         self.noise_scale = noise_scale
-        self.alpha = self._solve_krr(self.XA_train, Y_train)
+        self._alpha = self._solve_krr(self.XA_train, Y_train)
         if prior_scale is None:
             self.prior_scale = 1 / math.sqrt(self.p)
         else:
@@ -247,8 +248,7 @@ class CausalKernelRidge(torch.nn.Module):
         N = X.size(0)
         Kff = self.kernel(X)
         Kff.view(-1)[:: N + 1] += self.noise_scale**2  # add noise to diagonal
-        alpha = torch.einsum("...mn,...n->...m", torch.inverse(Kff), Y).squeeze()
-        return alpha
+        return torch.einsum("...mn,...n->...m", torch.inverse(Kff), Y).squeeze()
 
     def sample_covariate_loc_scale(self):
         return torch.zeros(self.p), torch.ones(self.p)
@@ -259,12 +259,13 @@ class CausalKernelRidge(torch.nn.Module):
             dist.Normal(0.0, self.prior_scale).expand((self.p,)).to_event(1),
         )
 
-    def predict(self, X_new):
+    def predict(self, X_new, alpha):
         return torch.einsum(
-            "...mn,...n->...m", self.kernel(X_new, self.XA_train), self.alpha
+            "...mn,...n->...m", self.kernel(X_new, self.XA_train), alpha
         )
 
     def forward(self):
+        alpha = pyro.sample("alpha", dist.Normal(self._alpha, scale=1e-6).to_event(1))
         x_loc, x_scale = self.sample_covariate_loc_scale()
         X = pyro.sample("X", dist.Normal(x_loc, x_scale).to_event(1))
         propensity_weights = self.sample_propensity_weights()
@@ -276,7 +277,7 @@ class CausalKernelRidge(torch.nn.Module):
         )
         X = X.expand(A.shape + X.shape[-1:])
         XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
-        f_loc = self.predict(XA)
+        f_loc = self.predict(XA, alpha)
 
         return pyro.sample(
             "Y",
@@ -286,6 +287,7 @@ class CausalKernelRidge(torch.nn.Module):
 
 class ConditionedCausalKernelRidge(CausalKernelRidge):
     def forward(self):
+        alpha = pyro.sample("alpha", dist.Normal(self._alpha, scale=1e-6).to_event(1))
         x_loc, x_scale = self.sample_covariate_loc_scale()
         propensity_weights = self.sample_propensity_weights()
         with pyro.plate("__train__", size=self.X_train.shape[0], dim=-1):
@@ -301,7 +303,7 @@ class ConditionedCausalKernelRidge(CausalKernelRidge):
             )
             X = X.expand(A.shape + X.shape[-1:])
             XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
-            f_loc = self.predict(XA)
+            f_loc = self.predict(XA, alpha)
 
             return pyro.sample(
                 "Y",
@@ -314,13 +316,14 @@ class ConditionedCausalKernelRidge(CausalKernelRidge):
 def closed_form_doubly_robust_ate_correction_gp(
     X_test, theta, gp_model
 ) -> Tuple[torch.Tensor, torch.Tensor]:
+    assert torch.isclose(theta["alpha"], gp_model._alpha).all()
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
     pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
     X = X.expand(A.shape + X.shape[-1:])
     XA = torch.concatenate([X, A.unsqueeze(-1)], dim=-1)
-    mu_X = gp_model.predict(XA)
+    mu_X = gp_model.predict(XA, theta["alpha"]).squeeze()
     analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     analytic_correction = analytic_eif_at_test_pts.mean()
     return analytic_correction, analytic_eif_at_test_pts
@@ -330,7 +333,7 @@ N_datasets = 25
 simulated_datasets = []
 
 # Data configuration
-p = 200
+p = 2
 alpha = 50
 beta = 50
 N_train = 500
@@ -378,7 +381,7 @@ for i in range(N_datasets):
     theta_hat = {
         k: v.clone().detach().requires_grad_(True) for k, v in guide_train().items()
     }
-    theta_hat["alpha"] = conditioned_model.alpha.clone().detach().requires_grad_(True)
+    # theta_hat["alpha"] = conditioned_model.alpha.clone().detach().requires_grad_(True)
     fitted_params.append(theta_hat)
 
 # Compute doubly robust ATE estimates using both the automated and closed form expressions
@@ -390,7 +393,7 @@ for i in range(N_datasets):
     D_train = simulated_datasets[i][0]
     D_test = simulated_datasets[i][1]
     mle_guide = MLEGuide(theta_hat)
-    functional = functools.partial(ATEFunctional, num_monte_carlo=10000)
+    functional = functools.partial(ATEFunctional, num_monte_carlo=100000)
     # gp_kernel = gp.kernels.RBF(input_dim=D_train['X'].shape[1] + 1)
     gp_model = CausalKernelRidge(
         X_train=D_train["X"],
@@ -405,6 +408,18 @@ for i in range(N_datasets):
         analytic_eif_at_test_pts,
     ) = closed_form_doubly_robust_ate_correction_gp(D_test, theta_hat, gp_model)
     print("here")
+
+    # linearized = linearize(
+    #     PredictiveModel(gp_model, mle_guide),
+    #     num_samples_outer=max(10000, 100 * p),
+    #     num_samples_inner=1,
+    # )
+    # param_eif = linearized(D_test)
+
+    # import pdb
+
+    # pdb.set_trace()
+
     automated_monte_carlo_correction = one_step_corrected_estimator(
         functional,
         D_test,
