@@ -146,6 +146,7 @@ def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: floa
 
         # Length of first value in points mappping.
         len_points = len(list(points.values())[0])
+        eif_vals = []
         for i in range(len_points):
             kernel_point = {k: v[i] for k, v in points.items()}
 
@@ -154,7 +155,8 @@ def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: floa
             with model.set_eps(eps), model.set_lambda(lambda_), model.set_kernel_point(kernel_point):
                 psi_p_eps = model.functional(*args, **kwargs)
 
-            return (psi_p_eps - psi_p) / eps
+            eif_vals.append(-(psi_p_eps - psi_p) / eps)
+        return eif_vals
 
     return _influence_fn
 
