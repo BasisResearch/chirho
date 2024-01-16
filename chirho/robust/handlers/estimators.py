@@ -52,7 +52,7 @@ def tmle_scipy_optimize_wrapper(
 def tmle(
     functional: Functional[P, S],
     test_point: Point,
-    learning_rate: float = 1e5,
+    learning_rate: float = 1e-3,
     n_grad_steps: int = 10,
     n_tmle_steps: int = 1,
     num_nmc_samples: int = 1000,
@@ -125,7 +125,7 @@ def tmle(
 
             return log_likelihood_correction + log_p_phi(params, x, *args, **kwargs)
 
-        def loss(new_params, *args, **kwargs):
+        def loss(new_params, prev_params, *args, **kwargs):
             # Sample data from the variational approximation
             samples = {
                 k: v
@@ -133,7 +133,7 @@ def tmle(
                 if k in test_point
             }
             term1 = log_p_phi(new_params, samples, *args, **kwargs)
-            term2 = log_p_epsilon(new_params, samples, *args, **kwargs)
+            term2 = log_p_epsilon(prev_params, samples, *args, **kwargs)
 
             return term1 - term2
 
@@ -141,8 +141,8 @@ def tmle(
 
         print("Solving model projection...")
         for i in range(n_grad_steps):
-            print(f"inner_iteration_{i}", time.time()-start_time)
-            grad = grad_fn(new_params, *args, **kwargs)
+            grad = grad_fn(new_params, prev_params, *args, **kwargs)
+            # print(f"inner_iteration_{i}", round(time.time() - start_time, 2), grad)
 
             new_params = {
                 k: (v - learning_rate * grad[k]) for k, v in new_params.items()
@@ -163,17 +163,17 @@ def tmle(
             tmle_model = copy.deepcopy(model)
 
             for i in range(n_tmle_steps):
-                print(f"iteration_{i}", time.time() - start_time)
+                print(f"iteration_{i}", round(time.time() - start_time, 2))
 
-                print("Solving epsilon...", time.time() - start_time)
                 packed_epsilon = _solve_epsilon(tmle_model, *args, **kwargs)
+                print("Solved epsilon...", round(time.time() - start_time, 2), packed_epsilon.mean())
 
-                print("Solving model projection...", time.time() - start_time)
                 tmle_model = _solve_model_projection(
                     packed_epsilon, tmle_model, *args, **kwargs
                 )
+                print("Solved model projection...", round(time.time() - start_time, 2))
 
-            print("Evaluating functional...", time.time() - start_time)
+            print("Evaluating functional...", round(time.time() - start_time, 2))
             return functional(tmle_model)(*args, **kwargs)
 
         return _estimator
