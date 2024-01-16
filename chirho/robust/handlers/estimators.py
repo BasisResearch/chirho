@@ -1,5 +1,6 @@
 import copy
 import warnings
+import time  #TODO: remove
 from typing import Any, Callable, TypeVar
 
 import torch
@@ -52,7 +53,7 @@ def tmle(
     functional: Functional[P, S],
     test_point: Point,
     learning_rate: float = 1e5,
-    n_steps: int = 1,
+    n_grad_steps: int = 10,
     n_tmle_steps: int = 1,
     num_nmc_samples: int = 1000,
     num_grad_samples: int = 100,
@@ -60,6 +61,7 @@ def tmle(
     **influence_kwargs,
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
+    start_time = time.time()
 
     def _solve_epsilon(prev_model: torch.nn.Module, *args, **kwargs) -> torch.Tensor:
         # find epsilon that minimizes the corrected density on test data
@@ -137,7 +139,9 @@ def tmle(
 
         grad_fn = torch.func.grad(loss)
 
-        for _ in range(n_steps):
+        print("Solving model projection...")
+        for i in range(n_grad_steps):
+            print(f"inner_iteration_{i}", time.time()-start_time)
             grad = grad_fn(new_params, *args, **kwargs)
 
             new_params = {
@@ -158,13 +162,18 @@ def tmle(
         def _estimator(*args, **kwargs) -> S:
             tmle_model = copy.deepcopy(model)
 
-            for _ in range(n_tmle_steps):
+            for i in range(n_tmle_steps):
+                print(f"iteration_{i}", time.time() - start_time)
+
+                print("Solving epsilon...", time.time() - start_time)
                 packed_epsilon = _solve_epsilon(tmle_model, *args, **kwargs)
 
+                print("Solving model projection...", time.time() - start_time)
                 tmle_model = _solve_model_projection(
                     packed_epsilon, tmle_model, *args, **kwargs
                 )
 
+            print("Evaluating functional...", time.time() - start_time)
             return functional(tmle_model)(*args, **kwargs)
 
         return _estimator
