@@ -1,6 +1,16 @@
 import pyro.distributions as dist
+from docs.examples.robust_paper.models import *
 
-MODELS = ["CausalGLM", "kernel_ridge", "neural_network"]
+DATA_GENERATORS_DICT = {"CausalGLM": DataGeneratorCausalGLM}
+
+MODELS = {
+    "CausalGLM": CausalGLM,
+    "kernel_ridge": KernelRidge,
+    "neural_network": NeuralNetwork,
+}
+
+
+["CausalGLM", "kernel_ridge", "neural_network"]
 LINK_FUNCTIONS_DICT = {
     "normal": lambda mu: dist.Normal(mu, 1.0),
     "bernoulli": lambda mu: dist.Bernoulli(logits=mu),

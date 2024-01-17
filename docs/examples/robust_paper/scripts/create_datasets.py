@@ -7,10 +7,10 @@ import pickle
 import pyro
 from pyro.infer import Predictive
 
-from docs.examples.robust_paper.scripts.statics import LINK_FUNCTIONS_DICT
-from docs.examples.robust_paper.models import DataGeneratorCausalGLM
-
-DATA_GENERATORS_DICT = {"CausalGLM": DataGeneratorCausalGLM}
+from docs.examples.robust_paper.scripts.statics import (
+    LINK_FUNCTIONS_DICT,
+    DATA_GENERATORS_DICT,
+)
 
 
 def uuid_from_config(config_dict):
