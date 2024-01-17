@@ -1,5 +1,10 @@
-MODELS = ["causal_GLM", "kernel_ridge", "neural_network"]
-LINK_FUNCTIONS = ["normal", "bernoulli"]
+import pyro.distributions as dist
+
+MODELS = ["CausalGLM", "kernel_ridge", "neural_network"]
+LINK_FUNCTIONS_DICT = {
+    "normal": lambda mu: dist.Normal(mu, 1.0),
+    "bernoulli": lambda mu: dist.Bernoulli(logits=mu),
+}
 EXPERIMENT_CATEGORIES = ["influence_approx", "estimator_approx", "capstone"]
 DATASET_PATHS = [f"docs/examples/robust_paper/datasets/{i}" for i in range(1, 5)]
 FUNCTIONALS = ["ATE", "ESD", "CATE"]

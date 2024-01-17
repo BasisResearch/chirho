@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, List
 import torch
 import math
 import pyro
@@ -21,6 +21,8 @@ class CausalGLM(pyro.nn.PyroModule):
             self.prior_scale = 1 / math.sqrt(self.p)
         else:
             self.prior_scale = prior_scale
+
+        self.observed_sites = ["X", "A", "Y"]
 
     def sample_outcome_weights(self):
         return pyro.sample(
