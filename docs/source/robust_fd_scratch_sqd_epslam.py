@@ -18,14 +18,12 @@ from typing import List, Dict, Tuple, Optional
 from scipy.stats._multivariate import _squeeze_output
 
 
-# EPS = [0.01, 0.001]
-# LAMBDA = [0.01, 0.001]
-EPS = [0.01]
-LAMBDA = [0.01]
+EPS = [0.01, 0.001]
+LAMBDA = [0.01, 0.001]
 NDIM = [1, 2]
-NDATASETS = 3
+NDATASETS = 30
 NGUESS = 50
-NEIF = 50
+NEIF = 25
 
 
 def analytic_eif(model: FDModelFunctionalDensity, points, funcval=None):
@@ -184,8 +182,8 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
 
         if ndim == 1 and plot_densities:
             # Plot the influence function across the linspace in the same figure.
-            plt.plot(xx, analytic_eif(fd_quad, points=dict(x=xx), funcval=oracle_fval), color='blue')
-            plt.plot(xx, analytic_eif(fd_mc, points=dict(x=xx), funcval=oracle_fval), color='red')
+            plt.plot(xx, analytic_eif(fd_quad, points=dict(x=xx), funcval=quad_guess), color='blue')
+            plt.plot(xx, analytic_eif(fd_mc, points=dict(x=xx), funcval=mc_guess), color='red')
 
         # Quick check that the two have the same density.
         assert np.allclose(
@@ -194,9 +192,9 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
         )
 
         # And compute the analytic corrections.
-        ana_eif_quad = analytic_eif(fd_quad, correction_points, funcval=oracle_fval)
+        ana_eif_quad = analytic_eif(fd_quad, correction_points, funcval=quad_guess)
         ana_cor_quad = ana_eif_quad.mean()
-        ana_eif_mc = analytic_eif(fd_mc, correction_points, funcval=oracle_fval)
+        ana_eif_mc = analytic_eif(fd_mc, correction_points, funcval=mc_guess)
         ana_cor_mc = ana_eif_mc.mean()
 
         print(f"Quad (Ana Correction): {ana_cor_quad}")
@@ -227,7 +225,7 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
                 points=correction_points,
                 eps=eps,
                 # Scale the nmc with epsilon so that the kernel gets seen.
-                lambda_=lambda_)(nmc=(1. / eps) * 100)
+                lambda_=lambda_)(nmc=(1. / eps) * 1000)
             fd_cor_mc = np.mean(fd_eif_mc)
 
             fd_cors_quad[(eps, lambda_)] = fd_cors_quad.get((eps, lambda_), []) + [fd_cor_quad]
@@ -281,4 +279,4 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
 
 
 if __name__ == '__main__':
-    main(plot_densities=True, plot_corrections=True, plot_fd_ana_diag=True)
+    main(plot_densities=False, plot_corrections=False, plot_fd_ana_diag=True)
