@@ -1,0 +1,13 @@
+{
+    "dataset_configs": {
+        "dataset_name": "dataset_1",
+        "dataset_description": "Dataset 1",
+        "dataset_path": "./data/1.csv",
+        "seed": 1
+    },
+    "model_configs": {
+        "model": "causal_GLM",
+        "link_function": "normal",
+        "p": 200
+    }
+}
