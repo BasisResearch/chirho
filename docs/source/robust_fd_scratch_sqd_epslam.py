@@ -18,12 +18,14 @@ from typing import List, Dict, Tuple, Optional
 from scipy.stats._multivariate import _squeeze_output
 
 
-EPS = [0.1, 0.01, 0.001]
-LAMBDA = [0.1, 0.01, 0.001]
+# EPS = [0.01, 0.001]
+# LAMBDA = [0.01, 0.001]
+EPS = [0.01]
+LAMBDA = [0.01]
 NDIM = [1, 2]
-NDATASETS = 15
-NGUESS = 100
-NEIF = 20
+NDATASETS = 3
+NGUESS = 50
+NEIF = 50
 
 
 def analytic_eif(model: FDModelFunctionalDensity, points, funcval=None):
@@ -118,17 +120,21 @@ def skew_unit_norm_dataset_generator(ndim: int, num_datasets: int, nguess: int, 
         shape = np.random.normal(size=ndim, scale=3.)
 
         datadist = ExpectedSkewNormalDensityQuadFunctional(shape, cov)
-        yield datadist.model.rvs_fast(nguess + neif), datadist
+        dataset = datadist.model.rvs_fast(nguess + neif)
+        guess_dataset, correction_dataset = dataset[:nguess], dataset[nguess:]
+        assert len(guess_dataset) == nguess
+        assert len(correction_dataset) == neif
+        yield guess_dataset, correction_dataset, datadist
 
 
-def main2d():
-    for dataset, oracle in skew_unit_norm_dataset_generator(2, NDATASETS, NGUESS):
-
-        print(f"Oracle: {oracle}")
-
-        plt.figure()
-        plt.scatter(dataset[:, 0], dataset[:, 1], alpha=0.5, s=0.2)
-        plt.show()
+# def main2d():
+#     for guess_dataset, correction_dataset, oracle in skew_unit_norm_dataset_generator(2, NDATASETS, NGUESS):
+#
+#         print(f"Oracle: {oracle}")
+#
+#         plt.figure()
+#         plt.scatter(dataset[:, 0], dataset[:, 1], alpha=0.5, s=0.2)
+#         plt.show()
 
 
 def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=True):
@@ -138,7 +144,7 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
     ana_cors_quad = list()
     ana_cors_mc = list()
 
-    for dataset, datadist in skew_unit_norm_dataset_generator(ndim, NDATASETS, NGUESS, NEIF):
+    for guess_dataset, correction_dataset, datadist in skew_unit_norm_dataset_generator(ndim, NDATASETS, NGUESS, NEIF):
 
         oracle_fval = datadist.functional()
         print(f"Oracle: {oracle_fval}")
@@ -146,15 +152,16 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
         if ndim == 1 and plot_densities:
             # Plot a density estimate.
             f1 = plt.figure()
-            plt.hist(dataset[NGUESS:], bins=100, density=True, alpha=0.5)
-            xx = np.linspace(dataset.min(), dataset.max(), 100).reshape(-1, ndim)
+            # Using correction dataset to see where things fall on the influence function curve.
+            plt.hist(correction_dataset, bins=100, density=True, alpha=0.5)
+            xx = np.linspace(correction_dataset.min(), correction_dataset.max(), 100).reshape(-1, ndim)
             yy = datadist.density(dict(x=xx), dict(x=xx))
             plt.plot(xx, yy)
 
         # Train a model on the first nguess points in the dataset. This is a misspecified
         #  model in that it is a normal with no skew.
-        mean = torch.tensor(np.atleast_1d(np.mean(dataset[:NGUESS], axis=0))).float()
-        cov = torch.tensor(np.atleast_2d(np.cov(dataset[:NGUESS], rowvar=False))).float()
+        mean = torch.tensor(np.atleast_1d(np.mean(guess_dataset, axis=0))).float()
+        cov = torch.tensor(np.atleast_2d(np.cov(guess_dataset, rowvar=False))).float()
 
         # Compute the functionals of the unperturbed models.
         fd_quad = ExpectedNormalDensityQuadFunctional(
@@ -173,12 +180,12 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
         print(f"MC: {mc_guess}")
 
         # Compute the analytic eif on the samples after the first nguess.
-        correction_points = dict(x=torch.tensor(dataset[NGUESS:]).float())
+        correction_points = dict(x=torch.tensor(correction_dataset).float())
 
         if ndim == 1 and plot_densities:
             # Plot the influence function across the linspace in the same figure.
-            plt.plot(xx, analytic_eif(fd_quad, points=dict(x=xx), funcval=quad_guess), color='blue')
-            plt.plot(xx, analytic_eif(fd_mc, points=dict(x=xx), funcval=mc_guess), color='red')
+            plt.plot(xx, analytic_eif(fd_quad, points=dict(x=xx), funcval=oracle_fval), color='blue')
+            plt.plot(xx, analytic_eif(fd_mc, points=dict(x=xx), funcval=oracle_fval), color='red')
 
         # Quick check that the two have the same density.
         assert np.allclose(
@@ -187,9 +194,9 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
         )
 
         # And compute the analytic corrections.
-        ana_eif_quad = analytic_eif(fd_quad, correction_points, funcval=quad_guess)
+        ana_eif_quad = analytic_eif(fd_quad, correction_points, funcval=oracle_fval)
         ana_cor_quad = ana_eif_quad.mean()
-        ana_eif_mc = analytic_eif(fd_mc, correction_points, funcval=mc_guess)
+        ana_eif_mc = analytic_eif(fd_mc, correction_points, funcval=oracle_fval)
         ana_cor_mc = ana_eif_mc.mean()
 
         print(f"Quad (Ana Correction): {ana_cor_quad}")
@@ -220,7 +227,7 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
                 points=correction_points,
                 eps=eps,
                 # Scale the nmc with epsilon so that the kernel gets seen.
-                lambda_=lambda_)(nmc=(1. / eps) * 10)
+                lambda_=lambda_)(nmc=(1. / eps) * 100)
             fd_cor_mc = np.mean(fd_eif_mc)
 
             fd_cors_quad[(eps, lambda_)] = fd_cors_quad.get((eps, lambda_), []) + [fd_cor_quad]
@@ -256,7 +263,7 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
     # Plot the finite difference diagonals.
     if plot_fd_ana_diag:
         # Prep gridplot over eps and lambda.
-        f, axes = plt.subplots(len(EPS), len(LAMBDA), figsize=(30, 30))
+        f, axes = plt.subplots(len(EPS), len(LAMBDA), figsize=(30, 20))
         for (eps, lambda_), ax in zip(product(EPS, LAMBDA), axes.flatten()):
             plot_diag(
                 ax=ax,
@@ -274,4 +281,4 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
 
 
 if __name__ == '__main__':
-    main(plot_densities=False, plot_corrections=False, plot_fd_ana_diag=True)
+    main(plot_densities=True, plot_corrections=True, plot_fd_ana_diag=True)
