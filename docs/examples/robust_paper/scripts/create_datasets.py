@@ -7,17 +7,8 @@ import pickle
 import pyro
 from pyro.infer import Predictive
 
-from docs.examples.robust_paper.scripts.statics import (
-    MODELS,
-    LINK_FUNCTIONS_DICT,
-    EXPERIMENT_CATEGORIES,
-    DATASET_PATHS,
-    FUNCTIONALS,
-    ESTIMATORS,
-    INFLUENCE_ESTIMATORS,
-)
+from docs.examples.robust_paper.scripts.statics import LINK_FUNCTIONS_DICT
 from docs.examples.robust_paper.models import DataGeneratorCausalGLM
-
 
 DATA_GENERATORS_DICT = {"CausalGLM": DataGeneratorCausalGLM}
 
@@ -30,43 +21,24 @@ def uuid_from_config(config_dict):
 
 
 def save_config_and_data(
-    seed,
-    sparsity_level,
-    model_str,
-    link_function_str,
-    p,
-    N,
-    data_generator,
-    link_fn,
+    data_generator, config_dict, overwrite=False, **data_generator_kwargs
 ):
-    if model_str == "CausalGLM":
-        misc_kwargs = dict(
-            alpha=math.ceil(sparsity_level * p),
-            beta=math.ceil(sparsity_level * p),
-        )
-    else:
-        misc_kwargs = dict()
-
-    config_dict = {
-        "dataset_configs": {
-            "seed": seed,
-            "sparsity_level": sparsity_level,
-        },
-        "model_configs": {
-            "model": model_str,
-            "link_function": link_function_str,
-            "p": p,
-            "N": N,
-        },
-        "misc": misc_kwargs,
-    }
-
     # Create unique data uuid based on config
     config_uuid = uuid_from_config(config_dict)
 
+    # Check if dataset already exists
+    if (
+        os.path.exists(f"docs/examples/robust_paper/datasets/{config_uuid}/data.pkl")
+        and not overwrite
+    ):
+        print(f"Dataset with uuid {config_uuid} already exists. Skipping.")
+        return
+
+    # Create directory for dataset if it doesn't exist
     if not os.path.exists(f"docs/examples/robust_paper/datasets/{config_uuid}"):
         os.makedirs(f"docs/examples/robust_paper/datasets/{config_uuid}")
 
+    # Save config
     json.dump(
         config_dict,
         open(
@@ -76,8 +48,11 @@ def save_config_and_data(
         indent=4,
     )
 
+    # Simulate data
+    seed = config_dict["dataset_configs"]["seed"]
+    N = config_dict["model_configs"]["N"]
     with pyro.poutine.seed(rng_seed=seed):
-        model = data_generator(p=p, link_fn=link_fn, **misc_kwargs)
+        model = data_generator(**data_generator_kwargs)
         D_train = Predictive(
             model,
             num_samples=N,
@@ -89,6 +64,7 @@ def save_config_and_data(
             return_sites=model.observed_sites,
         )()
 
+    # Save data
     pickle.dump(
         {
             "train": D_train,
@@ -99,84 +75,88 @@ def save_config_and_data(
             "wb",
         ),
     )
+    print(f"Saved dataset with uuid {config_uuid}.")
 
 
-
-def main():
-    n_datasets_simulated = 0
-
-    default_seed = 1
-    default_p = 200
-    default_N = 500
-    default_sparsity_level = 0.25
-    default_link_function_str = "normal"
-    default_link_fn = LINK_FUNCTIONS_DICT[default_link_function_str]
-
-    for model_str, data_generator in DATA_GENERATORS_DICT.items():
-        kwargs = {
-            "seed": default_seed,
-            "sparsity_level": default_sparsity_level,
+def simulate_causal_glm_data(
+    seed,
+    link_function_str,
+    p,
+    N,
+    sparsity_level,
+    treatment_weight,
+    overwrite=False,
+):
+    model_str = "CausalGLM"
+    data_generator = DATA_GENERATORS_DICT[model_str]
+    link_fn = LINK_FUNCTIONS_DICT[link_function_str]
+    alpha = math.ceil(sparsity_level * p)
+    beta = math.ceil(sparsity_level * p)
+    misc_kwargs = dict(
+        alpha=alpha,
+        beta=beta,
+        treatment_weight=treatment_weight,
+        sparsity_level=sparsity_level,
+    )
+    config_dict = {
+        "dataset_configs": {
+            "seed": seed,
+        },
+        "model_configs": {
             "model_str": model_str,
-            "link_function_str": default_link_function_str,
-            "p": default_p,
-            "N": default_N,
-            "data_generator": data_generator,
-            "link_fn": default_link_fn,
-        }
-        # Run default configuration.
-        save_config_and_data(**kwargs)
-
-        # Run with varying p
-        for p in [1, 10, 50, 100, 200, 500, 1000]:
-            if p != default_p
-                p_kwargs = {k: v for k, v in kwargs.items() if k != "p"}
-                p_kwargs["p"] = p
-                save_config_and_data(**p_kwargs)
-
-        for N in [100, 500, 1000, 2000]:
-            if N != default_N:
-                N_kwargs = {k: v for k, v in kwargs.items() if k != "N"}
-                N_kwargs["N"] = N
-
-        
+            "link_function_str": link_function_str,
+            "p": p,
+            "N": N,
+        },
+        "misc": misc_kwargs,
+    }
+    data_generator_kwargs = {
+        "p": p,
+        "link_fn": link_fn,
+        "alpha": alpha,
+        "beta": beta,
+        "treatment_weight": treatment_weight,
+    }
+    save_config_and_data(
+        data_generator, config_dict, overwrite=overwrite, **data_generator_kwargs
+    )
 
 
-        for link_function_str, link_fn in LINK_FUNCTIONS_DICT.items():
-            for p in [1, 10, 50, 100, 200, 500, 1000]:
-                for N in [100, 500, 1000, 2000]:
-                    for sparsity_level in [0.1, 0.25, 0.5]:
-                        print(model_str, link_function_str, p, N, sparsity_level)
-
-                        # Placeholder for now
-                        seed = 1
-                        save_config_and_data(
-                            seed,
-                            sparsity_level,
-                            model_str,
-                            link_function_str,
-                            p,
-                            N,
-                            data_generator,
-                            link_fn,
-                        )
-
-                        n_datasets_simulated += 1
-                        print("n_dataset_simulated: ", n_datasets_simulated)
+def simulate_kernel_ridge_data():
+    pass
 
 
-example_json = {
-    "dataset_configs": {
-        "dataset_name": "dataset_1",
-        "dataset_description": "Dataset 1",
-        "dataset_path": "./dataset/1.csv",
-        "seed": 1,
-    },
-    "model_configs": {
-        "model": "CausalGLM",
-        "link_function": "normal",
-        "p": 200,
-    },
-}
+def simulate_neural_network_data():
+    pass
+
+
+def main_causal_glm(num_datasets_per_config=100, overwrite=False):
+    num_datasets_simulated = 0
+    # Effect of increasing dimensionality
+    for link_function_str in LINK_FUNCTIONS_DICT.keys():
+        for p in [1, 10, 100, 200, 500, 1000]:
+            for N in [500]:
+                for sparsity_level in [0.25]:
+                    for treatment_weight in [0.0, 1.0]:
+                        for seed in range(num_datasets_per_config):
+                            kwargs = {
+                                "seed": seed,
+                                "link_function_str": link_function_str,
+                                "p": p,
+                                "N": N,
+                                "sparsity_level": sparsity_level,
+                                "treatment_weight": treatment_weight,
+                                "overwrite": overwrite,
+                            }
+                            simulate_causal_glm_data(**kwargs)
+                            num_datasets_simulated += 1
+
+    # We can keep adding more configurations on the fly. Due to the `overwrite` flag,
+    # we can run this script multiple times and it will only simulate the datasets that
+    # *don't* already exist.
+
+    print(f"Simulated {num_datasets_simulated} datasets.")
+
 
 if __name__ == "__main__":
-    main()
+    main_causal_glm(100)
