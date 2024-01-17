@@ -1,3 +1,5 @@
+raise NotImplementedError()
+
 from robust_fd.squared_normal_density import ExpectedNormalDensityQuad, ExpectedNormalDensityMC, _ExpectedNormalDensity
 from chirho.robust.handlers.fd_model import fd_influence_fn
 import numpy as np
@@ -91,7 +93,7 @@ def compute_analytic_eif(model: _ExpectedNormalDensity, points):
     funcval = model.functional()
     density = model.density(points, points)
 
-    return 2. * (funcval - density)
+    return 2. * (density - funcval)
 
 
 analytic_eif = compute_analytic_eif(end_quad, points).numpy()

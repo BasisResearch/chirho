@@ -6,16 +6,11 @@ from scipy.stats import multivariate_normal
 from scipy.integrate import nquad
 import numpy as np
 
-# TODO after putting this together, a mixin model would be more appropriate, as we still
-#  want explicit coupling between models and functionals but it can be M:M. I.e. mixin the
-#  functional that could apply to a number of models, and/or mixin the model that could work
-#  with a number of functionals.
 
+class MultivariateNormalwDensity(ModelWithMarginalDensity):
 
-class FDMultivariateNormal(ModelWithMarginalDensity):
-
-    def __init__(self, mean, cov):
-        super().__init__()
+    def __init__(self, mean, cov, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.mean = mean
         self.cov = cov
@@ -27,27 +22,31 @@ class FDMultivariateNormal(ModelWithMarginalDensity):
         return pyro.sample("x", dist.MultivariateNormal(self.mean, self.cov))
 
 
-class _ExpectedNormalDensity(FDModelFunctionalDensity):
+class NormalKernel(FDModelFunctionalDensity):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
     @property
     def kernel(self):
-        try:
-            mean = self._kernel_point['x']
-        except TypeError as e:
-            raise
-        return FDMultivariateNormal(mean, torch.eye(self.ndims) * self._lambda)
+        # TODO agnostic to names.
+        mean = self._kernel_point['x']
+        return MultivariateNormalwDensity(mean, torch.eye(self.ndims) * self._lambda)
+
+
+class PerturbableNormal(FDModelFunctionalDensity):
 
     def __init__(self, *args, mean, cov, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.ndims = mean.shape[-1]
-        self.model = FDMultivariateNormal(mean, cov)
+        self.model = MultivariateNormalwDensity(mean, cov)
 
         self.mean = mean
         self.cov = cov
 
 
-class ExpectedNormalDensityQuad(_ExpectedNormalDensity):
+class ExpectedDensityQuadFunctional(FDModelFunctionalDensity):
     """
     Compute the squared normal density using quadrature.
     """
@@ -57,13 +56,16 @@ class ExpectedNormalDensityQuad(_ExpectedNormalDensity):
 
     def functional(self):
         def integrand(*args):
+            # TODO agnostic to kwarg names.
             model_kwargs = kernel_kwargs = dict(x=np.array(args))
             return self.density(model_kwargs, kernel_kwargs) ** 2
 
-        return nquad(integrand, [[-np.inf, np.inf]] * self.mean.shape[-1])[0]
+        ndim = self._kernel_point['x'].shape[-1]
+
+        return nquad(integrand, [[-np.inf, np.inf]] * ndim)[0]
 
 
-class ExpectedNormalDensityMC(_ExpectedNormalDensity):
+class ExpectedDensityMCFunctional(FDModelFunctionalDensity):
     """
     Compute the squared normal density using Monte Carlo.
     """
@@ -72,6 +74,7 @@ class ExpectedNormalDensityMC(_ExpectedNormalDensity):
         super().__init__(*args, **kwargs)
 
     def functional(self, nmc=1000):
+        # TODO agnostic to kwarg names
         with pyro.plate('samples', nmc):
             points = self()
         return torch.mean(self.density(model_kwargs=dict(x=points), kernel_kwargs=dict(x=points)))

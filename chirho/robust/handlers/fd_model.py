@@ -4,9 +4,13 @@ import pyro.distributions as dist
 from typing import Dict, Optional
 from contextlib import contextmanager
 from chirho.robust.ops import Functional, Point, T
+import numpy as np
 
 
 class ModelWithMarginalDensity(torch.nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
     def density(self, *args, **kwargs):
         # TODO this can probably default to using BatchedNMCLogMarginalLikelihood applied to self,
         #  but providing here to avail of analytic densities. Or have a constructor that takes a
@@ -76,11 +80,13 @@ class FDModelFunctionalDensity(ModelWithMarginalDensity):
         """
         raise NotImplementedError()
 
-    def __init__(self, default_kernel_point: Dict, default_eps=0., default_lambda=0.1):
-        super().__init__()
+    def __init__(self, default_kernel_point: Dict, *args, default_eps=0., default_lambda=0.1, **kwargs):
+        super().__init__(*args, **kwargs)
         self._eps = default_eps
         self._lambda = default_lambda
         self._kernel_point = default_kernel_point
+        # TODO don't assume .shape[-1]
+        self.ndims = np.sum([v.shape[-1] for v in self._kernel_point.values()])
 
     @property
     def mixture_weights(self):
@@ -155,7 +161,7 @@ def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: floa
             with model.set_eps(eps), model.set_lambda(lambda_), model.set_kernel_point(kernel_point):
                 psi_p_eps = model.functional(*args, **kwargs)
 
-            eif_vals.append(-(psi_p_eps - psi_p) / eps)
+            eif_vals.append((psi_p_eps - psi_p) / eps)
         return eif_vals
 
     return _influence_fn
