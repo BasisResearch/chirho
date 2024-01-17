@@ -1,0 +1,27 @@
+{
+    "experiment_configs": {
+        "experiment_name": "influence_approx_41",
+        "experiment_description": "Influence function approximation experiment",
+        "dataset_path": "docs/examples/robust_paper/datasets/1",
+        "results_path": "./results/41/",
+        "seed": 1
+    },
+    "model_configs": {
+        "model": "causal_GLM",
+        "link_function": "normal"
+    },
+    "functional_configs": {
+        "functional": "ATE",
+        "num_monte_carlo": 1000
+    },
+    "estimator_configs": {
+        "estimator": "double_ml"
+    },
+    "influence_estimator_configs": {
+        "influence_estimator": "analytical",
+        "num_samples_outer": 1000,
+        "num_samples_inner": 1000,
+        "cg_iters": null,
+        "residual_tol": 0.0001
+    }
+}
