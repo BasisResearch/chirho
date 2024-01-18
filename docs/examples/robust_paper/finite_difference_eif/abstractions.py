@@ -3,7 +3,7 @@ import pyro
 import pyro.distributions as dist
 from typing import Dict, Optional
 from contextlib import contextmanager
-from chirho.robust.ops import Functional, Point, T
+from chirho.robust.ops import Point, T
 import numpy as np
 
 
@@ -146,7 +146,7 @@ class FDModelFunctionalDensity(ModelWithMarginalDensity):
 # TODO move this to chirho/robust/ops.py and resolve signature mismatches? Maybe. The problem is that the ops
 #  signature (rightly) decouples models and functionals, whereas for finite differencing they must be coupled
 #  because the functional (in many cases) must know about the causal structure of the model.
-def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: float, lambda_: float):
+def fd_influence_fn(fd_coupling: FDModelFunctionalDensity, points: Point[T], eps: float, lambda_: float):
 
     def _influence_fn(*args, **kwargs):
 
@@ -156,11 +156,16 @@ def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: floa
         for i in range(len_points):
             kernel_point = {k: v[i] for k, v in points.items()}
 
-            psi_p = model.functional(*args, **kwargs)
+            # Evaluate the original functional.
+            psi_p = fd_coupling.functional(*args, **kwargs)
 
-            with model.set_eps(eps), model.set_lambda(lambda_), model.set_kernel_point(kernel_point):
-                psi_p_eps = model.functional(*args, **kwargs)
+            # Evaluate the functional of the perturbation.
+            with (fd_coupling.set_eps(eps),
+                  fd_coupling.set_lambda(lambda_),
+                  fd_coupling.set_kernel_point(kernel_point)):
+                psi_p_eps = fd_coupling.functional(*args, **kwargs)
 
+            # Record the finite difference.
             eif_vals.append((psi_p_eps - psi_p) / eps)
         return eif_vals
 
