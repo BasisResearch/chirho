@@ -43,8 +43,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
 @pytest.mark.parametrize("num_samples_outer,num_samples_inner", [(10, None), (10, 100)])
 @pytest.mark.parametrize("cg_iters", [None, 1, 10])
 @pytest.mark.parametrize("num_predictive_samples", [1, 5])
-# @pytest.mark.parametrize("estimation_method", [one_step_corrected_estimator, tmle])
-@pytest.mark.parametrize("estimation_method", [tmle])
+@pytest.mark.parametrize("estimation_method", [one_step_corrected_estimator, tmle])
 def test_estimator_smoke(
     model,
     guide,
