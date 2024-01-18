@@ -1,9 +1,12 @@
 from typing import Callable
+import math
 import torch
 import pyro
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
 from chirho.indexed.ops import IndexSet, gather
 from chirho.interventional.handlers import do
+from chirho.robust.handlers.predictive import PredictiveFunctional
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 
 pyro.settings.set(module_local_params=True)
 
@@ -39,3 +42,21 @@ class ATEFunctional(torch.nn.Module):
         # TODO: if response is scalar, we do we need to average over dim=-1?
         ate = (Y1 - Y0).mean(dim=-2, keepdim=True).mean(dim=-1, keepdim=True).squeeze()
         return pyro.deterministic("ATE", ate)
+
+
+class ExpectedDensity(torch.nn.Module):
+    def __init__(self, model, *, num_monte_carlo: int = 10000):
+        super().__init__()
+        self.model = model
+        self.log_marginal_prob = BatchedNMCLogMarginalLikelihood(model, num_samples=1)
+        self.num_monte_carlo = num_monte_carlo
+
+    def forward(self, *args, **kwargs):
+        with pyro.plate("monte_carlo_functional", self.num_monte_carlo):
+            points = PredictiveFunctional(self.model)(*args, **kwargs)
+
+        log_marginal_prob_at_points = self.log_marginal_prob(points, *args, **kwargs)
+        return torch.exp(
+            torch.logsumexp(log_marginal_prob_at_points, dim=0)
+            - math.log(self.num_monte_carlo)
+        )

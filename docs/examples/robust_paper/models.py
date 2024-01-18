@@ -1,4 +1,4 @@
-from typing import Callable, Optional, List
+from typing import Callable, Optional
 import torch
 import math
 import pyro
@@ -135,6 +135,47 @@ class DataGeneratorCausalGLM(CausalGLM):
 
     def sample_intercept(self):
         return torch.tensor(0.0)
+
+
+class MultivariateNormalModel(pyro.nn.PyroModule):
+    def __init__(self, p: int):
+        super().__init__()
+        self.p = p
+
+    def sample_mean(self):
+        return pyro.sample("mu", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1))
+
+    def sample_scale_tril(self):
+        return pyro.sample("scale_tril", dist.LKJCholesky(self.p))
+
+    def forward(self) -> torch.Tensor:
+        mu = self.sample_mean()
+        scale_tril = self.sample_scale_tril()
+        return pyro.sample("x", dist.MultivariateNormal(loc=mu, scale_tril=scale_tril))
+
+
+class ConditionedMultivariateNormalModel(MultivariateNormalModel):
+    def __init__(self, p: int, X: torch.Tensor):
+        super().__init__(p)
+        self.X = X
+
+    def forward(self):
+        mu = self.sample_mean()
+        scale_tril = self.sample_scale_tril()
+        with pyro.plate("__train__", size=self.X.shape[0], dim=-1):
+            pyro.sample(
+                "x",
+                dist.MultivariateNormal(loc=mu, scale_tril=scale_tril),
+                obs=self.X,
+            )
+
+
+class DataGeneratorMultivariateNormalModel(MultivariateNormalModel):
+    def sample_mean(self):
+        return torch.zeros(self.p)
+
+    def sample_scale_tril(self):
+        return torch.eye(self.p)
 
 
 class kernel_ridge:

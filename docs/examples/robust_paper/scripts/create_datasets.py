@@ -1,7 +1,5 @@
 import os
 import math
-import hashlib
-import uuid
 import json
 import pickle
 import pyro
@@ -9,15 +7,9 @@ from pyro.infer import Predictive
 
 from docs.examples.robust_paper.scripts.statics import (
     LINK_FUNCTIONS_DICT,
-    DATA_GENERATORS_DICT,
+    MODELS,
 )
-
-
-def uuid_from_config(config_dict):
-    serialized_config = json.dumps(config_dict, sort_keys=True)
-    hash_object = hashlib.sha1(serialized_config.encode())
-    hash_digest = hash_object.hexdigest()
-    return uuid.UUID(hash_digest[:32])
+from docs.examples.robust_paper.utils import uuid_from_config
 
 
 def save_config_and_data(
@@ -88,7 +80,7 @@ def simulate_causal_glm_data(
     overwrite=False,
 ):
     model_str = "CausalGLM"
-    data_generator = DATA_GENERATORS_DICT[model_str]
+    data_generator = MODELS[model_str]["data_generator"]
     link_fn = LINK_FUNCTIONS_DICT[link_function_str]
     alpha = math.ceil(sparsity_level * p)
     beta = math.ceil(sparsity_level * p)
@@ -159,4 +151,4 @@ def main_causal_glm(num_datasets_per_config=100, overwrite=False):
 
 
 if __name__ == "__main__":
-    main_causal_glm(100)
+    main_causal_glm(5)
