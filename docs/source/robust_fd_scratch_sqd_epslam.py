@@ -2,7 +2,9 @@ from robust_fd.squared_normal_density import (
     NormalKernel,
     PerturbableNormal,
     ExpectedDensityQuadFunctional,
-    ExpectedDensityMCFunctional
+    ExpectedDensityMCFunctional,
+    ExpectedDensityChirhoFunctional,
+    ChirhoMultivariateNormalwDensity
 )
 from chirho.robust.handlers.fd_model import (
     fd_influence_fn,
@@ -16,14 +18,15 @@ from scipy.stats import multivariate_normal as mvn, norm
 from itertools import product
 from typing import List, Dict, Tuple, Optional
 from scipy.stats._multivariate import _squeeze_output
+from chirho.robust.ops import influence_fn as chirho_influence_fn
 
 
 EPS = [0.01, 0.001]
 LAMBDA = [0.01, 0.001]
 NDIM = [1, 2]
-NDATASETS = 30
+NDATASETS = 15
 NGUESS = 50
-NEIF = 25
+NEIF = 10
 
 
 def analytic_eif(model: FDModelFunctionalDensity, points, funcval=None):
@@ -34,6 +37,7 @@ def analytic_eif(model: FDModelFunctionalDensity, points, funcval=None):
     return 2. * (density - funcval)
 
 
+# TODO use just the DGP in the jordan paper for both squared density and mean potential outcome.
 class MultivariateSkewnormFDModel(ModelWithMarginalDensity):
 
     # From https://gregorygundersen.com/blog/2020/12/29/multivariate-skew-normal/:
@@ -141,6 +145,7 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
     fd_cors_mc = dict()  # type: Dict[Tuple[float, float], List[float]]
     ana_cors_quad = list()
     ana_cors_mc = list()
+    chirho_cors = list()
 
     for guess_dataset, correction_dataset, datadist in skew_unit_norm_dataset_generator(ndim, NDATASETS, NGUESS, NEIF):
 
@@ -167,14 +172,14 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
             mean=mean,
             cov=cov
         )
-        quad_guess = fd_quad.functional()
+        quad_guess = fd_quad.functional() if ndim == 1 else 0.0
         print(f"Quad: {quad_guess}")
         fd_mc = ExpectedNormalDensityMCFunctional(
             default_kernel_point=dict(x=torch.zeros(len(mean))),
             mean=mean,
             cov=cov
         )
-        mc_guess = fd_mc.functional()
+        mc_guess = fd_mc.functional(nmc=100000)
         print(f"MC: {mc_guess}")
 
         # Compute the analytic eif on the samples after the first nguess.
@@ -194,6 +199,9 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
         # And compute the analytic corrections.
         ana_eif_quad = analytic_eif(fd_quad, correction_points, funcval=quad_guess)
         ana_cor_quad = ana_eif_quad.mean()
+        # FIXME mc_guess has noise in it, i.e. both the analytic axis and fd axis of the
+        #  diagonal plots have noise, which is where the worse-than-expected noise scaling
+        #  comes from.
         ana_eif_mc = analytic_eif(fd_mc, correction_points, funcval=mc_guess)
         ana_cor_mc = ana_eif_mc.mean()
 
@@ -213,15 +221,29 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
             plt.plot([0, 1], [mc_guess, mc_guess + ana_cor_mc], color='red', label='MC')
             plt.legend()
 
+        # <Automated via Chirho>
+        # FIXME 270bd;1 skipping perturbable version, going straight to internal predictive model.
+        chirho_model = ChirhoMultivariateNormalwDensity(mean, cov)._model
+        chirho_eif = chirho_influence_fn(
+            ExpectedDensityChirhoFunctional,
+            correction_points,
+            num_samples_outer=10000,
+            num_samples_inner=1
+        # .model gets the underlying non-perturbable model.
+        )(chirho_model)()
+        chirho_cor = chirho_eif.mean()
+        chirho_cors.append(chirho_cor.detach())
+        # </Automated via Chirho>
+
         for eps, lambda_ in product(EPS, LAMBDA):
             fd_eif_quad = fd_influence_fn(
-                model=fd_quad,
+                coupled_model_functional=fd_quad,
                 points=correction_points,
                 eps=eps,
-                lambda_=lambda_)()
+                lambda_=lambda_)() if ndim == 1 else 0.0
             fd_cor_quad = np.mean(fd_eif_quad)
             fd_eif_mc = fd_influence_fn(
-                model=fd_mc,
+                coupled_model_functional=fd_mc,
                 points=correction_points,
                 eps=eps,
                 # Scale the nmc with epsilon so that the kernel gets seen.
@@ -260,18 +282,23 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
 
     # Plot the finite difference diagonals.
     if plot_fd_ana_diag:
+
+        x2swquad = [fd_cors_quad[(eps, lambda_)], fd_cors_mc[(eps, lambda_)], chirho_cors]
+        x2labswquad = ['Quad', 'MC', 'Chirho']
+
         # Prep gridplot over eps and lambda.
         f, axes = plt.subplots(len(EPS), len(LAMBDA), figsize=(30, 20))
         for (eps, lambda_), ax in zip(product(EPS, LAMBDA), axes.flatten()):
             plot_diag(
                 ax=ax,
-                x1=ana_cors_quad,
-                x2s=[fd_cors_quad[(eps, lambda_)], fd_cors_mc[(eps, lambda_)]],
+                x1=ana_cors_mc,
+                x2s=x2swquad if ndim == 1 else x2swquad[1:],
                 x1lab='Analytic Correction',
-                x2labs=['Quad', 'MC'],
+                x2labs=x2labswquad if ndim == 1 else x2labswquad[1:],
                 title=f"Quad (ndim={ndim}, eps={eps}, lambda={lambda_})"
             )
         plt.tight_layout()
+        plt.legend()
         plt.show()
         plt.close(f)
 
@@ -279,4 +306,4 @@ def main(ndim=1, plot_densities=True, plot_corrections=True, plot_fd_ana_diag=Tr
 
 
 if __name__ == '__main__':
-    main(plot_densities=False, plot_corrections=False, plot_fd_ana_diag=True)
+    main(ndim=3, plot_densities=False, plot_corrections=False, plot_fd_ana_diag=True)

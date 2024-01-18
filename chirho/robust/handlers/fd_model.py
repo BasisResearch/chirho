@@ -110,9 +110,9 @@ class FDModelFunctionalDensity(ModelWithMarginalDensity):
         kernel_mask = _from_kernel.bool()  # Convert to boolean mask
 
         # Apply the respective functions using the masks
-        with PrefixMessenger('kernel_'), pyro.poutine.trace() as kernel_tr:
+        with PrefixMessenger('kernel_'):  # , pyro.poutine.trace() as kernel_tr:
             kernel_result = self.kernel(**(kernel_kwargs or dict()))
-        with PrefixMessenger('model_'), pyro.poutine.trace() as model_tr:
+        with PrefixMessenger('model_'):  # , pyro.poutine.trace() as model_tr:
             model_result = self.model(**(model_kwargs or dict()))
 
         # FIXME to make log likelihoods work properly, the log likelihoods need to be masked/not added
@@ -146,7 +146,7 @@ class FDModelFunctionalDensity(ModelWithMarginalDensity):
 # TODO move this to chirho/robust/ops.py and resolve signature mismatches? Maybe. The problem is that the ops
 #  signature (rightly) decouples models and functionals, whereas for finite differencing they must be coupled
 #  because the functional (in many cases) must know about the causal structure of the model.
-def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: float, lambda_: float):
+def fd_influence_fn(coupled_model_functional: FDModelFunctionalDensity, points: Point[T], eps: float, lambda_: float):
 
     def _influence_fn(*args, **kwargs):
 
@@ -156,10 +156,10 @@ def fd_influence_fn(model: FDModelFunctionalDensity, points: Point[T], eps: floa
         for i in range(len_points):
             kernel_point = {k: v[i] for k, v in points.items()}
 
-            psi_p = model.functional(*args, **kwargs)
+            psi_p = coupled_model_functional.functional(*args, **kwargs)
 
-            with model.set_eps(eps), model.set_lambda(lambda_), model.set_kernel_point(kernel_point):
-                psi_p_eps = model.functional(*args, **kwargs)
+            with coupled_model_functional.set_eps(eps), coupled_model_functional.set_lambda(lambda_), coupled_model_functional.set_kernel_point(kernel_point):
+                psi_p_eps = coupled_model_functional.functional(*args, **kwargs)
 
             eif_vals.append((psi_p_eps - psi_p) / eps)
         return eif_vals

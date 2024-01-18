@@ -50,7 +50,7 @@ points = dict(x=torch.linspace(-3, 3, 50)[:, None])
 print(f"Analytic: {((1./(3. - -3.))**2) * (3. - -3.)}")
 
 target_quad = fd_influence_fn(
-    model=end_quad,
+    coupled_model_functional=end_quad,
     points=points,
     eps=eps,
     lambda_=lambda_,
@@ -73,7 +73,7 @@ end_mc = ExpectedNormalDensityMC(
 )
 
 target_mc = fd_influence_fn(
-    model=end_mc,
+    coupled_model_functional=end_mc,
     points=points,
     eps=eps,
     lambda_=lambda_,
