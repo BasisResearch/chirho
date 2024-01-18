@@ -40,3 +40,13 @@ ALL_DATA_CONFIGS = {
     )
     for uuid in ALL_DATA_UUIDS
 }
+
+ALL_EXP_UUIDS = [
+    d for d in os.listdir("docs/examples/robust_paper/experiments/") if d != ".DS_Store"
+]
+ALL_EXP_CONFIGS = {
+    uuid: json.load(
+        open(f"docs/examples/robust_paper/experiments/{uuid}/config.json", "r")
+    )
+    for uuid in ALL_EXP_UUIDS
+}

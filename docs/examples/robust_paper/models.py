@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Callable, Optional, Dict
 import torch
 import math
 import pyro
@@ -70,17 +70,16 @@ class CausalGLM(pyro.nn.PyroModule):
 class ConditionedCausalGLM(CausalGLM):
     def __init__(
         self,
-        X: torch.Tensor,
-        A: torch.Tensor,
-        Y: torch.Tensor,
+        data: Dict[str, torch.Tensor],
+        *,
         link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
         prior_scale: Optional[float] = None,
     ):
         p = X.shape[1]
         super().__init__(p, link_fn, prior_scale)
-        self.X = X
-        self.A = A
-        self.Y = Y
+        self.X = data["X"]
+        self.A = data["A"]
+        self.Y = data["Y"]
 
     def forward(self):
         intercept = self.sample_intercept()
@@ -141,12 +140,18 @@ class MultivariateNormalModel(pyro.nn.PyroModule):
     def __init__(self, p: int):
         super().__init__()
         self.p = p
+        self.observed_sites = ["x"]
 
     def sample_mean(self):
         return pyro.sample("mu", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1))
 
     def sample_scale_tril(self):
-        return pyro.sample("scale_tril", dist.LKJCholesky(self.p))
+        if self.p > 1:
+            return pyro.sample("scale_tril", dist.LKJCholesky(self.p))
+        else:
+            return pyro.sample(
+                "scale_tril", dist.HalfNormal(1.0).expand((self.p, self.p)).to_event(1)
+            )
 
     def forward(self) -> torch.Tensor:
         mu = self.sample_mean()
@@ -155,18 +160,18 @@ class MultivariateNormalModel(pyro.nn.PyroModule):
 
 
 class ConditionedMultivariateNormalModel(MultivariateNormalModel):
-    def __init__(self, p: int, X: torch.Tensor):
+    def __init__(self, data: Dict[str, torch.Tensor], *, p: int):
         super().__init__(p)
-        self.X = X
+        self.x = data["x"]
 
     def forward(self):
         mu = self.sample_mean()
         scale_tril = self.sample_scale_tril()
-        with pyro.plate("__train__", size=self.X.shape[0], dim=-1):
+        with pyro.plate("__train__", size=self.x.shape[0], dim=-1):
             pyro.sample(
                 "x",
                 dist.MultivariateNormal(loc=mu, scale_tril=scale_tril),
-                obs=self.X,
+                obs=self.x,
             )
 
 

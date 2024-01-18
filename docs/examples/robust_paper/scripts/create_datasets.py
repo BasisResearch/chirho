@@ -114,6 +114,34 @@ def simulate_causal_glm_data(
     )
 
 
+def simulate_multivariate_normal(
+    seed,
+    p,
+    N,
+    overwrite=False,
+):
+    model_str = "MultivariateNormalModel"
+    data_generator = MODELS[model_str]["data_generator"]
+    misc_kwargs = dict()
+    config_dict = {
+        "dataset_configs": {
+            "seed": seed,
+        },
+        "model_configs": {
+            "model_str": model_str,
+            "p": p,
+            "N": N,
+        },
+        "misc": misc_kwargs,
+    }
+    data_generator_kwargs = {
+        "p": p,
+    }
+    save_config_and_data(
+        data_generator, config_dict, overwrite=overwrite, **data_generator_kwargs
+    )
+
+
 def simulate_kernel_ridge_data():
     pass
 
@@ -150,5 +178,30 @@ def main_causal_glm(num_datasets_per_config=100, overwrite=False):
     print(f"Simulated {num_datasets_simulated} datasets.")
 
 
+def main_multivariate_normal(num_datasets_per_config=100, overwrite=False):
+    num_datasets_simulated = 0
+    for p in [1, 2, 3]:
+        for N in [50]:
+            for seed in range(num_datasets_per_config):
+                kwargs = {
+                    "seed": seed,
+                    "p": p,
+                    "N": N,
+                    "overwrite": overwrite,
+                }
+                simulate_multivariate_normal(**kwargs)
+                num_datasets_simulated += 1
+    print(f"Simulated {num_datasets_simulated} datasets.")
+
+
+def main_kernel_ridge():
+    pass
+
+
+def main_neural_network():
+    pass
+
+
 if __name__ == "__main__":
     main_causal_glm(5)
+    main_multivariate_normal(100)
