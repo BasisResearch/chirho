@@ -48,6 +48,7 @@ def tmle_scipy_optimize_wrapper(
     return packed_epsilon
 
 
+# TODO: revert influence_estimator to influence_fn and use handlers for influence_fn
 def tmle(
     functional: Functional[P, S],
     test_point: Point,
@@ -58,6 +59,9 @@ def tmle(
     num_grad_samples: int = 1000,
     log_jitter: float = 1e-6,
     verbose: bool = False,
+    influence_estimator: Callable[
+        [Functional[P, S], Point[T]], Functional[P, S]
+    ] = influence_fn,
     **influence_kwargs,
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
@@ -65,9 +69,9 @@ def tmle(
     def _solve_epsilon(prev_model: torch.nn.Module, *args, **kwargs) -> torch.Tensor:
         # find epsilon that minimizes the corrected density on test data
 
-        influence_at_test = influence_fn(functional, test_point, **influence_kwargs)(
-            prev_model
-        )(*args, **kwargs)
+        influence_at_test = influence_estimator(
+            functional, test_point, **influence_kwargs
+        )(prev_model)(*args, **kwargs)
 
         flat_influence_at_test, _ = torch.utils._pytree.tree_flatten(influence_at_test)
 
@@ -105,7 +109,7 @@ def tmle(
 
         _, log_p_phi = make_functional_call(batched_log_prob)
 
-        influence_at_data = influence_fn(functional, data, **influence_kwargs)(
+        influence_at_data = influence_estimator(functional, data, **influence_kwargs)(
             prev_model
         )(*args, **kwargs)
         flat_influence_at_data, _ = torch.utils._pytree.tree_flatten(influence_at_data)
@@ -122,7 +126,7 @@ def tmle(
             )
         )
         if verbose:
-            influence_at_test = influence_fn(
+            influence_at_test = influence_estimator(
                 functional, test_point, **influence_kwargs
             )(prev_model)(*args, **kwargs)
             flat_influence_at_test, _ = torch.utils._pytree.tree_flatten(
@@ -201,8 +205,12 @@ def tmle(
     return _corrected_functional
 
 
+# TODO: revert influence_estimator to influence_fn and use handlers for influence_fn
 def one_step_corrected_estimator(
     functional: Functional[P, S],
+    influence_estimator: Callable[
+        [Functional[P, S], Point[T]], Functional[P, S]
+    ] = influence_fn,
     *test_points: Point[T],
     **influence_kwargs,
 ) -> Functional[P, S]:
@@ -221,7 +229,7 @@ def one_step_corrected_estimator(
     """
     influence_kwargs_one_step = influence_kwargs.copy()
     influence_kwargs_one_step["pointwise_influence"] = False
-    eif_fn = influence_fn(functional, *test_points, **influence_kwargs_one_step)
+    eif_fn = influence_estimator(functional, *test_points, **influence_kwargs_one_step)
 
     def _corrected_functional(*model: Callable[P, Any]) -> Callable[P, S]:
         plug_in_estimator = functional(*model)
