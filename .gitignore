@@ -3,6 +3,10 @@
 # C extensions
 *.so
 
+# Data and experiment folders
+docs/examples/robust_paper/datasets/
+docs/examples/robust_paper/experiments/
+
 # Packages
 *.egg
 *.egg-info
