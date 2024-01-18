@@ -1,5 +1,4 @@
 import copy
-import time  # TODO: remove
 import warnings
 from typing import Any, Callable, TypeVar
 
@@ -30,7 +29,7 @@ def tmle_scipy_optimize_wrapper(
     def loss(epsilon):
         correction = 1 + D.dot(epsilon)
 
-        return np.sum(np.log(np.maximum(correction, log_jitter)))
+        return -np.sum(np.log(np.maximum(correction, log_jitter)))
 
     positive_density_constraint = LinearConstraint(
         D, -1 * np.ones(N), np.inf * np.ones(N)
@@ -53,16 +52,15 @@ def tmle(
     functional: Functional[P, S],
     test_point: Point,
     learning_rate: float = 1e-5,
-    n_grad_steps: int = 10,
+    n_grad_steps: int = 100,
     n_tmle_steps: int = 1,
     num_nmc_samples: int = 1000,
     num_grad_samples: int = 1000,
     log_jitter: float = 1e-6,
+    verbose: bool = False,
     **influence_kwargs,
 ) -> Functional[P, S]:
     from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
-
-    start_time = time.time()
 
     def _solve_epsilon(prev_model: torch.nn.Module, *args, **kwargs) -> torch.Tensor:
         # find epsilon that minimizes the corrected density on test data
@@ -123,6 +121,34 @@ def tmle(
                 torch.tensor(log_jitter),
             )
         )
+        if verbose:
+            influence_at_test = influence_fn(
+                functional, test_point, **influence_kwargs
+            )(prev_model)(*args, **kwargs)
+            flat_influence_at_test, _ = torch.utils._pytree.tree_flatten(
+                influence_at_test
+            )
+            N = flat_influence_at_test[0].shape[0]
+
+            packed_influence_at_test = torch.concatenate(
+                [i.reshape(N, -1) for i in flat_influence_at_test]
+            ).detach()
+
+            log_likelihood_correction_at_test = torch.log(
+                torch.maximum(
+                    1 + packed_influence_at_test.mv(packed_epsilon),
+                    torch.tensor(log_jitter),
+                )
+            )
+
+            print("previous log prob at test", log_p_phi(prev_params, test_point).sum())
+            print(
+                "new log prob at test",
+                (
+                    log_p_phi(prev_params, test_point)
+                    + log_likelihood_correction_at_test
+                ).sum(),
+            )
 
         log_p_epsilon_at_data = log_likelihood_correction + log_p_phi(prev_params, data)
 
@@ -133,11 +159,16 @@ def tmle(
         grad_fn = torch.func.grad(loss)
 
         new_params = copy.deepcopy(prev_params)
-
-        print("Solving model projection...")
         for i in range(n_grad_steps):
             grad = grad_fn(new_params)
-            print(f"inner_iteration_{i}", round(time.time() - start_time, 2), grad)
+            if verbose and i % 100 == 0:
+                print(f"inner_iteration_{i}_loss", loss(new_params))
+                for parameter_name, parameter in prev_model.named_parameters():
+                    parameter.data = new_params[f"model.{parameter_name}"]
+                print(
+                    f"inner_iteration_{i}_estimate",
+                    functional(prev_model)(*args, **kwargs).detach().item(),
+                )
 
             new_params = {
                 k: (v - learning_rate * grad[k]) for k, v in new_params.items()
@@ -157,22 +188,12 @@ def tmle(
         def _estimator(*args, **kwargs) -> S:
             tmle_model = copy.deepcopy(model)
 
-            for i in range(n_tmle_steps):
-                print(f"iteration_{i}", round(time.time() - start_time, 2))
-
+            for _ in range(n_tmle_steps):
                 packed_epsilon = _solve_epsilon(tmle_model, *args, **kwargs)
-                print(
-                    "Solved epsilon...",
-                    round(time.time() - start_time, 2),
-                    packed_epsilon.mean(),
-                )
 
                 tmle_model = _solve_model_projection(
                     packed_epsilon, tmle_model, *args, **kwargs
                 )
-                print("Solved model projection...", round(time.time() - start_time, 2))
-
-            print("Evaluating functional...", round(time.time() - start_time, 2))
             return functional(tmle_model)(*args, **kwargs)
 
         return _estimator
