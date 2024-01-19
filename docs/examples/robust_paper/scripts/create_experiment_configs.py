@@ -1,7 +1,8 @@
 import os
 import json
 from docs.examples.robust_paper.scripts.create_datasets import uuid_from_config
-from docs.examples.robust_paper.utils import get_valid_uuids
+from docs.examples.robust_paper.utils import get_valid_data_uuids
+from docs.examples.robust_paper.scripts.statics import ALL_DATA_CONFIGS
 
 
 def save_experiment_config(experiment_config):
@@ -45,25 +46,25 @@ def influence_approx_experiment_ate():
             }
             valid_configs.append(causal_glm_config_constraints)
 
-    valid_data_uuids = get_valid_uuids(valid_configs)
+    valid_data_uuids = get_valid_data_uuids(valid_configs)
 
     for uuid in valid_data_uuids:
-        for num_samples_outer in [1000, 10000, 100000]:
-            experiment_config = {
-                "experiment_description": "Influence function approximation experiment",
-                "data_uuid": uuid,
-                "functional_str": "average_treatment_effect",
-                "functional_kwargs": {
-                    "num_monte_carlo": 10000,
-                },
-                "monte_carlo_influence_estimator_kwargs": {
-                    "num_samples_outer": num_samples_outer,
-                    "num_samples_inner": 1,
-                    "cg_iters": None,
-                    "residual_tol": 1e-4,
-                },
-            }
-            save_experiment_config(experiment_config)
+        experiment_config = {
+            "experiment_description": "Influence function approximation experiment",
+            "data_uuid": uuid,
+            "functional_str": "average_treatment_effect",
+            "functional_kwargs": {
+                "num_monte_carlo": 10000,
+            },
+            "monte_carlo_influence_estimator_kwargs": {
+                "num_samples_outer": [1000, 10000, 50000, 100000],
+                "num_samples_inner": 1,
+                "cg_iters": None,
+                "residual_tol": 1e-4,
+            },
+            "data_config": ALL_DATA_CONFIGS[uuid],
+        }
+        save_experiment_config(experiment_config)
 
 
 def influence_approx_experiment_expected_density():
@@ -74,24 +75,25 @@ def influence_approx_experiment_expected_density():
         },
     }
     valid_configs.append(mult_normal_config_constraints)
-    valid_data_uuids = get_valid_uuids(valid_configs)
+    valid_data_uuids = get_valid_data_uuids(valid_configs)
     for uuid in valid_data_uuids:
-        for num_samples_outer in [1000, 10000, 100000]:
-            experiment_config = {
-                "experiment_description": "Influence function approximation experiment",
-                "data_uuid": uuid,
-                "functional_str": "expected_density",
-                "functional_kwargs": {
-                    "num_monte_carlo": 10000,
-                },
-                "monte_carlo_influence_estimator_kwargs": {
-                    "num_samples_outer": num_samples_outer,
-                    "num_samples_inner": 1,
-                    "cg_iters": None,
-                    "residual_tol": 1e-4,
-                },
-            }
-            save_experiment_config(experiment_config)
+        data_config = ALL_DATA_CONFIGS[uuid]
+        experiment_config = {
+            "experiment_description": "Influence function approximation experiment",
+            "data_uuid": uuid,
+            "functional_str": "expected_density",
+            "functional_kwargs": {
+                "num_monte_carlo": 10000,
+            },
+            "monte_carlo_influence_estimator_kwargs": {
+                "num_samples_outer": [1000, 10000, 50000, 100000],
+                "num_samples_inner": 1,
+                "cg_iters": None,
+                "residual_tol": 1e-4,
+            },
+            "data_config": data_config,
+        }
+        save_experiment_config(experiment_config)
 
 
 if __name__ == "__main__":
