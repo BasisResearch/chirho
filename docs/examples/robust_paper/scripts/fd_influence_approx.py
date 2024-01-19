@@ -18,7 +18,7 @@ from docs.examples.robust_paper.finite_difference_eif.distributions import (
 import torch
 from itertools import product
 from chirho.robust.ops import Point, T
-from chirho.robust.internals.utils import reset_rng_state
+from docs.examples.robust_paper.utils import rng_seed_context
 import time
 import numpy as np
 
@@ -85,7 +85,7 @@ def compute_fd_correction(
     for eps, lambda_ in epslam:
         result = dict()
 
-        with reset_rng_state(dict(torch=seed, random=seed, numpy=seed)):
+        with rng_seed_context(seed):
             st = time.time()
 
             # TODO HACK nmc depends on eps but only applies when fd_coupling.functional takes that argument.

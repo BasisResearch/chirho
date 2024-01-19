@@ -4,6 +4,7 @@ import uuid
 import json
 import torch
 import pyro
+from contextlib import contextmanager
 
 from chirho.robust.internals.utils import ParamDict
 from docs.examples.robust_paper.scripts.statics import ALL_DATA_CONFIGS, ALL_DATA_UUIDS
@@ -112,3 +113,13 @@ def get_mle_params_and_guide(conditioned_model, n_iters=2000, lr=0.03):
         k: v.clone().detach().requires_grad_(True) for k, v in guide_train().items()
     }
     return theta_hat, MLEGuide(theta_hat)
+
+
+@contextmanager
+def rng_seed_context(seed: int):
+    og_rng_state = pyro.util.get_rng_state()
+    pyro.util.set_rng_seed(seed)
+    try:
+        yield
+    finally:
+        pyro.util.set_rng_state(og_rng_state)
