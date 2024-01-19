@@ -72,10 +72,11 @@ class ConditionedCausalGLM(CausalGLM):
         self,
         data: Dict[str, torch.Tensor],
         *,
+        p: int,
         link_fn: Callable[..., dist.Distribution] = lambda mu: dist.Normal(mu, 1.0),
         prior_scale: Optional[float] = None,
     ):
-        p = X.shape[1]
+        assert data["X"].shape[1] == p
         super().__init__(p, link_fn, prior_scale)
         self.X = data["X"]
         self.A = data["A"]

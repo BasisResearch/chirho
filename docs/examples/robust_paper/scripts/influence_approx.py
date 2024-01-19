@@ -1,15 +1,17 @@
 import functools
+import time
+import torch
 import pickle
 from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.handlers.estimators import one_step_corrected_estimator
+from chirho.robust.ops import influence_fn
 from docs.examples.robust_paper.scripts.statics import (
     LINK_FUNCTIONS_DICT,
     FUNCTIONALS_DICT,
     MODELS,
-    ALL_DATA_CONFIGS,
     ALL_EXP_CONFIGS,
 )
-from docs.examples.robust_paper.utils import get_mle_params_and_guide
+from docs.examples.robust_paper.utils import get_mle_params_and_guide, MLEGuide
 from docs.examples.robust_paper.analytic_eif import (
     analytic_eif_expected_density,
     analytic_eif_ate_causal_glm,
@@ -17,7 +19,12 @@ from docs.examples.robust_paper.analytic_eif import (
 
 
 def run_experiment(exp_config):
-    data_config = ALL_DATA_CONFIGS[exp_config["data_uuid"]]
+    # Results dict
+    results = dict()
+    results["experiment_uuid"] = exp_config["experiment_uuid"]
+
+    # Load in data
+    data_config = exp_config["data_config"]
     data = pickle.load(
         open(
             f"docs/examples/robust_paper/datasets/{exp_config['data_uuid']}/data.pkl",
@@ -27,6 +34,9 @@ def run_experiment(exp_config):
     D_train = data["train"]
     D_test = data["test"]
 
+    print(f"=== Running experiment {exp_config['experiment_uuid']} ===")
+
+    # Load in model
     model_str = data_config["model_configs"]["model_str"]
     if model_str == "MultivariateNormalModel":
         model_kwargs = {
@@ -44,46 +54,170 @@ def run_experiment(exp_config):
     model = MODELS[model_str]["model"](**model_kwargs)
     conditioned_model = MODELS[model_str]["conditioned_model"](D_train, **model_kwargs)
 
+    # Load in functional
     functional_class = FUNCTIONALS_DICT[exp_config["functional_str"]]
     functional = functools.partial(functional_class, **exp_config["functional_kwargs"])
 
-    one_step_estimator = one_step_corrected_estimator(
-        functional, D_test, **exp_config["monte_carlo_influence_estimator_kwargs"]
-    )
-
-    # Run inference
+    # Fit MLE
+    mle_start_time = time.time()
     theta_hat, mle_guide = get_mle_params_and_guide(conditioned_model)
-    plug_in_est = functional(PredictiveModel(model, mle_guide))()
-    automated_monte_carlo_estimator = one_step_estimator(
-        PredictiveModel(model, mle_guide)
-    )()
+    mle_end_time = time.time()
+    mle_time_min = (mle_end_time - mle_start_time) / 60.0
+    results["theta_hat"] = theta_hat
+    results["mle_time_min"] = mle_time_min
 
+    # Get plug-in estimate
+    plug_in_start_time = time.time()
+    plug_in_est = functional(PredictiveModel(model, mle_guide))()
+    plug_in_end_time = time.time()
+    plug_in_time_min = (plug_in_end_time - plug_in_start_time) / 60.0
+    results["plug_in_est"] = plug_in_est
+    results["plug_in_time_min"] = plug_in_time_min
+
+    #### Monte Carlo EIF ####
+    monte_eif_all_kwargs = exp_config["monte_carlo_influence_estimator_kwargs"]
+    num_samples_inner = monte_eif_all_kwargs["num_samples_inner"]
+    cg_iters = monte_eif_all_kwargs["cg_iters"]
+    residual_tol = monte_eif_all_kwargs["residual_tol"]
+    num_monte_carlo_outer_grid = monte_eif_all_kwargs["num_samples_outer"]
+    all_monte_carlo_eif_results = []
+
+    # Keeps erroring out due to https://github.com/BasisResearch/chirho/issues/483
+    for num_monte_carlo_outer in num_monte_carlo_outer_grid:
+        monte_carlo_eif_results = dict()
+        # Hack to avoid https://github.com/BasisResearch/chirho/issues/483
+        theta_hat = {
+            k: v.clone().detach().requires_grad_(True) for k, v in theta_hat.items()
+        }
+        mle_guide = MLEGuide(theta_hat)
+
+        print(f"Running monte carlo eif with {num_monte_carlo_outer} samples")
+        monte_carlo_eif_results["num_monte_carlo_outer"] = num_monte_carlo_outer
+        monte_kwargs = {
+            "num_samples_outer": num_monte_carlo_outer,
+            "num_samples_inner": num_samples_inner,
+            "cg_iters": cg_iters,
+            "residual_tol": residual_tol,
+        }
+
+        # One step estimator
+        monte_one_step_start = time.time()
+        one_step_estimator = one_step_corrected_estimator(
+            functional, D_test, **monte_kwargs
+        )
+        automated_monte_carlo_estimate = one_step_estimator(
+            PredictiveModel(model, mle_guide)
+        )()
+        monte_one_step_end = time.time()
+        monte_one_step_time_min = (monte_one_step_end - monte_one_step_start) / 60.0
+
+        monte_carlo_eif_results["wall_time"] = monte_one_step_time_min
+        monte_carlo_eif_results["correction"] = (
+            automated_monte_carlo_estimate - plug_in_est
+        )
+        monte_carlo_eif_results["corrected_estimate"] = automated_monte_carlo_estimate
+
+        # Hack to avoid https://github.com/BasisResearch/chirho/issues/483
+        theta_hat = {
+            k: v.clone().detach().requires_grad_(True) for k, v in theta_hat.items()
+        }
+        mle_guide = MLEGuide(theta_hat)
+
+        # Pointwise EIF
+        monte_eif_pointwise_start = time.time()
+        monte_eif = influence_fn(functional, D_test, **monte_kwargs)
+        monte_eif_at_test_pts = monte_eif(PredictiveModel(model, mle_guide))()
+        monte_eif_pointwise_end = time.time()
+        monte_eif_pointwise_time_min = (
+            monte_eif_pointwise_end - monte_eif_pointwise_start
+        ) / 60.0
+
+        monte_carlo_eif_results["pointwise_wall_time"] = monte_eif_pointwise_time_min
+        monte_carlo_eif_results["pointwise_eif"] = monte_eif_at_test_pts
+        all_monte_carlo_eif_results.append(monte_carlo_eif_results)
+
+    results["all_monte_carlo_eif_results"] = all_monte_carlo_eif_results
+
+    ### Finite Difference EIF ###
+    # TODO: Andy to add here
+
+    ### Analytic EIF ###
     if model_str == "CausalGLM":
-        # TODO
-        pass
+        analytic_time_start = time.time()
+        analytic_correction, analytic_eif_at_test_pts = analytic_eif_ate_causal_glm(
+            D_test, theta_hat
+        )
+        analytic_time_end = time.time()
+        analytic_time_min = (analytic_time_end - analytic_time_start) / 60.0
     elif model_str == "MultivariateNormalModel":
+        analytic_time_start = time.time()
         analytic_correction, analytic_eif_at_test_pts = analytic_eif_expected_density(
             D_test, plug_in_est, PredictiveModel(model, mle_guide)
         )
+        analytic_time_end = time.time()
+        analytic_time_min = (analytic_time_end - analytic_time_start) / 60.0
     else:
         raise NotImplementedError
 
+    # Can't pickle _to_functional_tensor so convert to vanilla torch tensor
+    analytic_eif_results = dict()
+    analytic_eif_results["wall_time"] = analytic_time_min
+    analytic_eif_results["correction"] = torch.tensor(analytic_correction.item())
+    analytic_eif_results["corrected_estimate"] = (
+        plug_in_est + analytic_correction.item()
+    )
+    analytic_eif_results["pointwise_wall_time"] = analytic_time_min
+    analytic_eif_results["pointwise_eif"] = torch.tensor(
+        [e.item() for e in analytic_eif_at_test_pts]
+    )
+    results["analytic_eif_results"] = analytic_eif_results
+
     # Save results
-    results = {
-        "theta_hat": theta_hat,
-        "automated_monte_carlo_estimator": automated_monte_carlo_estimator,
-        "analytic_correction": analytic_correction,
-        "analytic_eif_at_test_pts": analytic_eif_at_test_pts,
-        "analytic_one_step_estimator": analytic_correction + plug_in_est,
-        "plug_in_est": plug_in_est,
-        "experiment_uuid": exp_config["experiment_uuid"],
-    }
+    pickle.dump(
+        results,
+        open(
+            f"docs/examples/robust_paper/experiments/{exp_config['experiment_uuid']}/results.pkl",
+            "wb",
+        ),
+    )
+    return results
 
 
 if __name__ == "__main__":
-    # expected density
-    exp_config1 = ALL_EXP_CONFIGS["b175a477-1b1a-581b-68b2-d374e292a8e7"]
-    print(exp_config1)
-    run_experiment(exp_config1)
+    from docs.examples.robust_paper.utils import get_valid_exp_uuids
 
-    # exp_config2 = ""
+    # expected density
+    expected_density_config = {
+        "experiment_description": "Influence function approximation experiment",
+        "functional_str": "expected_density",
+        "data_config": {
+            "model_configs": {
+                "model_str": "MultivariateNormalModel",
+            },
+        },
+    }
+
+    # Run all expected density experiments
+    exp_uuids_for_density = get_valid_exp_uuids([expected_density_config])
+    for exp_uuid in exp_uuids_for_density:
+        exp_config = ALL_EXP_CONFIGS[exp_uuid]
+        print(run_experiment(exp_config))
+        break
+
+    # Run all ATE experiments
+    ate_config = {
+        "experiment_description": "Influence function approximation experiment",
+        "functional_str": "average_treatment_effect",
+        "data_config": {
+            "model_configs": {
+                "model_str": "CausalGLM",
+            },
+        },
+    }
+
+    # Run all ate experiments
+    exp_uuids_for_ate = get_valid_exp_uuids([ate_config])
+    for exp_uuid in exp_uuids_for_ate:
+        exp_config = ALL_EXP_CONFIGS[exp_uuid]
+        print(run_experiment(exp_config))
+        break
