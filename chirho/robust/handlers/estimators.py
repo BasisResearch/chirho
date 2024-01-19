@@ -211,10 +211,10 @@ def tmle(
 # TODO: revert influence_estimator to influence_fn and use handlers for influence_fn
 def one_step_corrected_estimator(
     functional: Functional[P, S],
+    *test_points: Point[T],
     influence_estimator: Callable[
         [Functional[P, S], Point[T]], Functional[P, S]
     ] = influence_fn,
-    *test_points: Point[T],
     **influence_kwargs,
 ) -> Functional[P, S]:
     """
