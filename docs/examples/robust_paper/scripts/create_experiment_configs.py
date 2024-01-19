@@ -96,6 +96,51 @@ def influence_approx_experiment_expected_density():
         save_experiment_config(experiment_config)
 
 
+def quality_experiment_causal_glm():
+    valid_configs = []
+    for seed in range(100):
+        for p in [10, 100, 200, 500]:
+            for N in []:
+                causal_glm_config_constraints = {
+                    "dataset_configs": {
+                        "seed": seed,
+                    },
+                    "model_configs": {
+                        "model_str": "CausalGLM",
+                        "link_function_str": "normal",
+                        "N": N,
+                        "p": p,
+                    },
+                    "misc": {
+                        "sparsity_level": 0.25,
+                        "treatment_weight": 0.0,
+                    },
+                }
+                valid_configs.append(causal_glm_config_constraints)
+
+    valid_data_uuids = get_valid_data_uuids(valid_configs)
+
+    for uuid in valid_data_uuids:
+        data_config = ALL_DATA_CONFIGS[uuid]
+        p = data_config["model_configs"]["p"]
+        experiment_config = {
+            "experiment_description": "Influence function inference quality experiment",
+            "data_uuid": uuid,
+            "functional_str": "average_treatment_effect",
+            "functional_kwargs": {
+                "num_monte_carlo": 10000,
+            },
+            "monte_carlo_influence_estimator_kwargs": {
+                "num_samples_outer": max(10000, 200 * p),
+                "num_samples_inner": 1,
+                "cg_iters": None,
+                "residual_tol": 1e-4,
+            },
+            "data_config": ALL_DATA_CONFIGS[uuid],
+        }
+        save_experiment_config(experiment_config)
+
+
 if __name__ == "__main__":
     influence_approx_experiment_ate()
     influence_approx_experiment_expected_density()
