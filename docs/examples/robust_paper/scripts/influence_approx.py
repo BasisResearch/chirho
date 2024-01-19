@@ -221,9 +221,3 @@ if __name__ == "__main__":
         exp_config = ALL_EXP_CONFIGS[exp_uuid]
         print(run_experiment(exp_config))
         break
-
-    # exp_config1 = ALL_EXP_CONFIGS["b175a477-1b1a-581b-68b2-d374e292a8e7"]
-    # print(exp_config1)
-    # run_experiment(exp_config1)
-
-    # exp_config2 = ""
