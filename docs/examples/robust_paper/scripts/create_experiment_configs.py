@@ -91,6 +91,12 @@ def influence_approx_experiment_expected_density():
                 "cg_iters": None,
                 "residual_tol": 1e-4,
             },
+            "fd_influence_estimator_kwargs": {
+                "lambdas": [0.1, 0.01, 0.001],
+                "epss": [0.1, 0.01, 0.001, 0.0001],
+                "num_samples_scaling": 100,
+                "seed": 0,
+            },
             "data_config": data_config,
         }
         save_experiment_config(experiment_config)
