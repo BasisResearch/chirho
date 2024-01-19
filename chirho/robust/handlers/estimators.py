@@ -169,9 +169,12 @@ def tmle(
                 print(f"inner_iteration_{i}_loss", loss(new_params))
                 for parameter_name, parameter in prev_model.named_parameters():
                     parameter.data = new_params[f"model.{parameter_name}"]
+
+                estimate = functional(prev_model)(*args, **kwargs)
+                assert isinstance(estimate, torch.Tensor)
                 print(
                     f"inner_iteration_{i}_estimate",
-                    functional(prev_model)(*args, **kwargs).detach().item(),
+                    estimate.detach().item(),
                 )
 
             new_params = {
