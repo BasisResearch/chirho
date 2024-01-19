@@ -6,7 +6,12 @@ import torch
 import pyro
 
 from chirho.robust.internals.utils import ParamDict
-from docs.examples.robust_paper.scripts.statics import ALL_DATA_CONFIGS, ALL_DATA_UUIDS
+from docs.examples.robust_paper.scripts.statics import (
+    ALL_DATA_CONFIGS,
+    ALL_DATA_UUIDS,
+    ALL_EXP_UUIDS,
+    ALL_EXP_CONFIGS,
+)
 
 
 pyro.settings.set(module_local_params=True)
@@ -60,13 +65,24 @@ def any_is_subset(superset: Dict, subset: List[Dict]) -> bool:
     return False
 
 
-def get_valid_uuids(valid_configs: List[Dict]) -> List[str]:
+def get_valid_data_uuids(valid_configs: List[Dict]) -> List[str]:
     """
-    Gets the valid uuids for a given set of configs.
+    Gets the valid data uuids for a given set of configs.
     """
     valid_uuids = []
     for uuid in ALL_DATA_UUIDS:
         if any_is_subset(ALL_DATA_CONFIGS[uuid], valid_configs):
+            valid_uuids.append(uuid)
+    return valid_uuids
+
+
+def get_valid_exp_uuids(valid_configs: List[Dict]) -> List[str]:
+    """
+    Gets the valid experiment uuids for a given set of configs.
+    """
+    valid_uuids = []
+    for uuid in ALL_EXP_UUIDS:
+        if any_is_subset(ALL_EXP_CONFIGS[uuid], valid_configs):
             valid_uuids.append(uuid)
     return valid_uuids
 
