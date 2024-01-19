@@ -155,7 +155,7 @@ def main_causal_glm(num_datasets_per_config=100, overwrite=False):
     # Effect of increasing dimensionality
     for link_function_str in LINK_FUNCTIONS_DICT.keys():
         for p in [1, 10, 100, 200, 500, 1000]:
-            for N in [500]:
+            for N in [100, 500, 1000]:
                 for sparsity_level in [0.25]:
                     for treatment_weight in [0.0, 1.0]:
                         for seed in range(num_datasets_per_config):
