@@ -71,16 +71,22 @@ def test_estimator_smoke(
 
     prev_params = copy.deepcopy(dict(predictive_model.named_parameters()))
 
+    if estimation_method == tmle:
+        estimator_kwargs = {"n_tmle_steps": 1,
+                            "n_grad_steps": 2,
+                            "num_nmc_samples": 10,
+                            "num_grad_samples": 10,}
+    else:
+        estimator_kwargs = {}
+
     estimator = estimation_method(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         test_datum,
-        n_grad_steps=2,
-        num_nmc_samples=10,
-        num_grad_samples=10,
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
+        **estimator_kwargs,
     )(predictive_model)
 
     estimate_on_test: Mapping[str, torch.Tensor] = estimator()
