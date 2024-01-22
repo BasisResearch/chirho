@@ -155,7 +155,9 @@ def tmle(
                 ).sum(),
             )
 
-        log_p_epsilon_at_data = (log_likelihood_correction + log_p_phi(prev_params, data)).detach()
+        log_p_epsilon_at_data = (
+            log_likelihood_correction + log_p_phi(prev_params, data)
+        ).detach()
 
         def loss(new_params):
             log_p_phi_at_data = log_p_phi(new_params, data)
@@ -163,7 +165,9 @@ def tmle(
 
         grad_fn = torch.func.grad(loss)
 
-        new_params = {k: v.clone().detach().requires_grad_(True) for k, v in prev_params.items()}
+        new_params = {
+            k: v.clone().detach().requires_grad_(True) for k, v in prev_params.items()
+        }
 
         optimizer = torchopt.adam(lr=learning_rate)
 
@@ -182,7 +186,9 @@ def tmle(
                     f"inner_iteration_{i}_estimate",
                     estimate.detach().item(),
                 )
-            updates, optimizer_state = optimizer.update(grad, optimizer_state, inplace=False)
+            updates, optimizer_state = optimizer.update(
+                grad, optimizer_state, inplace=False
+            )
             new_params = torchopt.apply_updates(new_params, updates)
 
         for parameter_name, parameter in prev_model.named_parameters():
