@@ -43,7 +43,7 @@ class ExpectedNormalDensityMCFunctional(
 
 
 def compute_fd_correction_sqd_mvn_quad(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mean'].detach()
+    mean = theta_hat['mu'].detach()
     scale_tril = theta_hat['scale_tril'].detach()
 
     fd_coupling = ExpectedNormalDensityQuadFunctional(
@@ -57,7 +57,7 @@ def compute_fd_correction_sqd_mvn_quad(*, theta_hat: Point[T], **kwargs) -> List
 
 
 def compute_fd_correction_sqd_mvn_mc(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mean'].detach()
+    mean = theta_hat['mu'].detach()
     scale_tril = theta_hat['scale_tril'].detach()
 
     fd_coupling = ExpectedNormalDensityMCFunctional(
@@ -136,12 +136,12 @@ if __name__ == "__main__":
         # Runtime
         for ndim in [1, 2]:
             theta_hat = th = dict(
-                mean=torch.zeros(ndim),
+                mu=torch.zeros(ndim),
                 scale_tril=torch.linalg.cholesky(torch.eye(ndim))
             )
 
             test_data = dict(
-                x=dist.MultivariateNormal(loc=th['mean'], scale_tril=th['scale_tril']).sample((20,))
+                x=dist.MultivariateNormal(loc=th['mu'], scale_tril=th['scale_tril']).sample((20,))
             )
 
             mc_correction = compute_fd_correction_sqd_mvn_mc(
