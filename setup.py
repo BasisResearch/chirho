@@ -25,6 +25,7 @@ EXTRAS_REQUIRE = [
 ]
 
 DYNAMICAL_REQUIRE = ["torchdiffeq"]
+ROBUST_REQUIRE = ["torchopt"]
 
 setup(
     name="chirho",
@@ -45,8 +46,9 @@ setup(
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
+        "robust": ROBUST_REQUIRE,
         "extras": EXTRAS_REQUIRE,
-        "test": EXTRAS_REQUIRE + DYNAMICAL_REQUIRE
+        "test": EXTRAS_REQUIRE + DYNAMICAL_REQUIRE + ROBUST_REQUIRE
         + [
             "pytest",
             "pytest-cov",
