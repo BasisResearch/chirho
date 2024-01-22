@@ -43,7 +43,7 @@ class ExpectedNormalDensityMCFunctional(
 
 
 def compute_fd_correction_sqd_mvn_quad(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mu'].detach()
+    mean = theta_hat['mean'].detach()
     scale_tril = theta_hat['scale_tril'].detach()
 
     fd_coupling = ExpectedNormalDensityQuadFunctional(
@@ -57,7 +57,7 @@ def compute_fd_correction_sqd_mvn_quad(*, theta_hat: Point[T], **kwargs) -> List
 
 
 def compute_fd_correction_sqd_mvn_mc(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mu'].detach()
+    mean = theta_hat['mean'].detach()
     scale_tril = theta_hat['scale_tril'].detach()
 
     fd_coupling = ExpectedNormalDensityMCFunctional(
