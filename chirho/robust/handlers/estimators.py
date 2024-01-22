@@ -3,6 +3,7 @@ import warnings
 from typing import Any, Callable, TypeVar
 
 import torch
+import torchopt
 from typing_extensions import ParamSpec
 
 from chirho.robust.handlers.predictive import PredictiveFunctional
@@ -124,7 +125,7 @@ def tmle(
                 1 + packed_influence_at_data.mv(packed_epsilon),
                 torch.tensor(log_jitter),
             )
-        )
+        ).detach()
         if verbose:
             influence_at_test = influence_estimator(
                 functional, test_point, **influence_kwargs
@@ -154,7 +155,7 @@ def tmle(
                 ).sum(),
             )
 
-        log_p_epsilon_at_data = log_likelihood_correction + log_p_phi(prev_params, data)
+        log_p_epsilon_at_data = (log_likelihood_correction + log_p_phi(prev_params, data)).detach()
 
         def loss(new_params):
             log_p_phi_at_data = log_p_phi(new_params, data)
@@ -162,7 +163,12 @@ def tmle(
 
         grad_fn = torch.func.grad(loss)
 
-        new_params = copy.deepcopy(prev_params)
+        new_params = {k: v.clone().detach().requires_grad_(True) for k, v in prev_params.items()}
+
+        optimizer = torchopt.adam(lr=learning_rate)
+
+        optimizer_state = optimizer.init(new_params)
+
         for i in range(n_grad_steps):
             grad = grad_fn(new_params)
             if verbose and i % 100 == 0:
@@ -176,10 +182,8 @@ def tmle(
                     f"inner_iteration_{i}_estimate",
                     estimate.detach().item(),
                 )
-
-            new_params = {
-                k: (v - learning_rate * grad[k]) for k, v in new_params.items()
-            }
+            updates, optimizer_state = optimizer.update(grad, optimizer_state, inplace=False)
+            new_params = torchopt.apply_updates(new_params, updates)
 
         for parameter_name, parameter in prev_model.named_parameters():
             parameter.data = new_params[f"model.{parameter_name}"]
