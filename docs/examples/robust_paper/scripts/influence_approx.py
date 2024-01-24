@@ -16,6 +16,10 @@ from docs.examples.robust_paper.analytic_eif import (
     analytic_eif_expected_density,
     analytic_eif_ate_causal_glm,
 )
+from fd_influence_approx import (
+    compute_fd_correction_sqd_mvn_mc,
+    compute_fd_correction_sqd_mvn_quad
+)
 
 
 def run_experiment(exp_config):
@@ -55,7 +59,8 @@ def run_experiment(exp_config):
     conditioned_model = MODELS[model_str]["conditioned_model"](D_train, **model_kwargs)
 
     # Load in functional
-    functional_class = FUNCTIONALS_DICT[exp_config["functional_str"]]
+    functional_str = exp_config["functional_str"]
+    functional_class = FUNCTIONALS_DICT[functional_str]
     functional = functools.partial(functional_class, **exp_config["functional_kwargs"])
 
     # Fit MLE
@@ -139,7 +144,23 @@ def run_experiment(exp_config):
     results["all_monte_carlo_eif_results"] = all_monte_carlo_eif_results
 
     ### Finite Difference EIF ###
-    # TODO: Andy to add here
+    if model_str == "MultivariateNormalModel" and functional_str == "expected_density":
+        fd_kwargs = exp_config["fd_influence_estimator_kwargs"]
+        fd_mc_eif_results = compute_fd_correction_sqd_mvn_mc(
+            theta_hat=theta_hat,
+            test_data=D_test,
+            **fd_kwargs
+        )
+        results["fd_mc_eif_results"] = fd_mc_eif_results
+
+        # Maybe run this for 2d if you're having too good of a day, and need it to get worse.
+        if theta_hat["mu"].shape[-1] == 1:
+            fd_quad_eif_results = compute_fd_correction_sqd_mvn_quad(
+                theta_hat=theta_hat,
+                test_data=D_test,
+                **fd_kwargs
+            )
+            results["fd_quad_eif_results"] = fd_quad_eif_results
 
     ### Analytic EIF ###
     if model_str == "CausalGLM":
