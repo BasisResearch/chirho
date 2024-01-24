@@ -3,6 +3,7 @@ import json
 import pyro.distributions as dist
 from docs.examples.robust_paper.models import *
 from docs.examples.robust_paper.functionals import *
+from docs.examples.robust_paper.finite_difference_eif.distributions import PerturbableNormal
 
 
 MODELS = {
@@ -15,6 +16,7 @@ MODELS = {
         "data_generator": DataGeneratorMultivariateNormalModel,
         "model": MultivariateNormalModel,
         "conditioned_model": ConditionedMultivariateNormalModel,
+        "fd_perturbable_model": PerturbableNormal
     },
 }
 
