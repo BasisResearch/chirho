@@ -6,21 +6,33 @@ import pyro.distributions as dist
 from docs.examples.robust_paper.finite_difference_eif.mixins import (
     NormalKernel,
     ExpectedDensityMCFunctional,
-    ExpectedDensityQuadFunctional
+    ExpectedDensityQuadFunctional,
 )
 from docs.examples.robust_paper.finite_difference_eif.abstractions import (
     fd_influence_fn,
-    FDModelFunctionalDensity
+    FDModelFunctionalDensity,
 )
 from docs.examples.robust_paper.finite_difference_eif.distributions import (
-    PerturbableNormal
+    PerturbableNormal,
 )
 import torch
 from itertools import product
 from chirho.robust.ops import Point, T
-from docs.examples.robust_paper.utils import rng_seed_context
+
+# from docs.examples.robust_paper.utils import rng_seed_context
 import time
 import numpy as np
+from contextlib import contextmanager
+
+
+@contextmanager
+def rng_seed_context(seed: int):
+    og_rng_state = pyro.util.get_rng_state()
+    pyro.util.set_rng_seed(seed)
+    try:
+        yield
+    finally:
+        pyro.util.set_rng_state(og_rng_state)
 
 
 # Couple together perturbation kernels, perturbable models and functionals.
@@ -43,40 +55,40 @@ class ExpectedNormalDensityMCFunctional(
 
 
 def compute_fd_correction_sqd_mvn_quad(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mu'].detach()
-    scale_tril = theta_hat['scale_tril'].detach()
+    mean = theta_hat["mu"].detach()
+    scale_tril = theta_hat["scale_tril"].detach()
 
     fd_coupling = ExpectedNormalDensityQuadFunctional(
         # TODO agnostic to names
         default_kernel_point=dict(x=mean),
         mean=mean,
-        scale_tril=scale_tril
+        scale_tril=scale_tril,
     )
 
     return compute_fd_correction(fd_coupling, **kwargs)
 
 
 def compute_fd_correction_sqd_mvn_mc(*, theta_hat: Point[T], **kwargs) -> List[Dict]:
-    mean = theta_hat['mu'].detach()
-    scale_tril = theta_hat['scale_tril'].detach()
+    mean = theta_hat["mu"].detach()
+    scale_tril = theta_hat["scale_tril"].detach()
 
     fd_coupling = ExpectedNormalDensityMCFunctional(
         # TODO agnostic to names
         default_kernel_point=dict(x=mean),
         mean=mean,
-        scale_tril=scale_tril
+        scale_tril=scale_tril,
     )
 
     return compute_fd_correction(fd_coupling, **kwargs)
 
 
 def compute_fd_correction(
-        fd_coupling: FDModelFunctionalDensity,
-        test_data: Point[T],
-        lambdas: List[float],
-        epss: List[float],
-        num_samples_scaling: int,
-        seed: int,
+    fd_coupling: FDModelFunctionalDensity,
+    test_data: Point[T],
+    lambdas: List[float],
+    epss: List[float],
+    num_samples_scaling: int,
+    seed: int,
 ) -> List[Dict]:
     epslam = product(epss, lambdas)
 
@@ -92,23 +104,20 @@ def compute_fd_correction(
             #  Better ways to abstract this.
             functional_kwargs = dict()
             if isinstance(fd_coupling, ExpectedDensityMCFunctional):
-                functional_kwargs['nmc'] = int(num_samples_scaling / eps)
+                functional_kwargs["nmc"] = int(num_samples_scaling / eps)
 
             pointwise = fd_influence_fn(
-                fd_coupling=fd_coupling,
-                points=test_data,
-                eps=eps,
-                lambda_=lambda_
+                fd_coupling=fd_coupling, points=test_data, eps=eps, lambda_=lambda_
             )(**functional_kwargs)
 
-            result['wall_time'] = time.time() - st
+            result["wall_time"] = time.time() - st
 
-        result['eps'] = eps
-        result['lambda'] = lambda_
-        result['pointwise'] = [
+        result["eps"] = eps
+        result["lambda"] = lambda_
+        result["pointwise"] = [
             y if isinstance(y, float) else y.item() for y in pointwise
         ]
-        result['correction'] = np.mean(pointwise)
+        result["correction"] = np.mean(pointwise)
 
         results.append(result)
 
@@ -116,7 +125,6 @@ def compute_fd_correction(
 
 
 if __name__ == "__main__":
-
     import matplotlib.pyplot as plt
     import json
 
@@ -130,30 +138,27 @@ if __name__ == "__main__":
             lambdas=[0.001],
             epss=[0.01, 0.001],
             num_samples_scaling=10000,
-            seed=0
+            seed=0,
         )
 
         # Runtime
         for ndim in [1, 2]:
             theta_hat = th = dict(
-                mu=torch.zeros(ndim),
-                scale_tril=torch.linalg.cholesky(torch.eye(ndim))
+                mu=torch.zeros(ndim), scale_tril=torch.linalg.cholesky(torch.eye(ndim))
             )
 
             test_data = dict(
-                x=dist.MultivariateNormal(loc=th['mu'], scale_tril=th['scale_tril']).sample((20,))
+                x=dist.MultivariateNormal(
+                    loc=th["mu"], scale_tril=th["scale_tril"]
+                ).sample((20,))
             )
 
             mc_correction = compute_fd_correction_sqd_mvn_mc(
-                theta_hat=theta_hat,
-                test_data=test_data,
-                **fd_kwargs
+                theta_hat=theta_hat, test_data=test_data, **fd_kwargs
             )
 
             quad_correction = compute_fd_correction_sqd_mvn_quad(
-                theta_hat=theta_hat,
-                test_data=test_data,
-                **fd_kwargs
+                theta_hat=theta_hat, test_data=test_data, **fd_kwargs
             )
 
             # print("MC Correction")
@@ -165,12 +170,12 @@ if __name__ == "__main__":
             for mc, qu in zip(mc_correction, quad_correction):
                 plt.figure()
                 plt.suptitle(f"D={ndim}, eps={mc['eps']}, lambda={mc['lambda']}")
-                plt.plot(mc['pointwise'], qu['pointwise'], 'o')
+                plt.plot(mc["pointwise"], qu["pointwise"], "o")
                 plt.xlabel("MC Correction")
                 plt.ylabel("Quad Correction")
                 # Set xlim and ylim to the same range.
-                xymin = min(min(mc['pointwise']), min(qu['pointwise'])) - 0.1
-                xymax = max(max(mc['pointwise']), max(qu['pointwise'])) + 0.1
+                xymin = min(min(mc["pointwise"]), min(qu["pointwise"])) - 0.1
+                xymax = max(max(mc["pointwise"]), max(qu["pointwise"])) + 0.1
                 plt.xlim(xymin, xymax)
                 plt.ylim(xymin, xymax)
                 plt.show()
