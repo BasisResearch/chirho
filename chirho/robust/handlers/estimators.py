@@ -98,6 +98,10 @@ def tmle(
         prev_params = {k: v.detach() for k, v in prev_params.items()}
 
         # Sample data from the model. Note that we only sample once during projection.
+        with torch.no_grad():
+            data: Point[T] = functional_model(prev_params, *args, **kwargs)
+            data = {k: v.detach() for k, v in data.items() if k in test_point}
+
         data = {
             k: v
             for k, v in functional_model(prev_params, *args, **kwargs).items()
