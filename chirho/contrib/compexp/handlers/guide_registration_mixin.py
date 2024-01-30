@@ -5,13 +5,32 @@ from pyro.infer.autoguide import AutoGuide
 from ..typedecs import ModelType, KWType
 from ..composeable_expectation.composed_expectation import ComposedExpectation
 from ..composeable_expectation.expectation_atom import ExpectationAtom
+from collections import OrderedDict
 
 
 class _GuideRegistrationMixin:
     def __init__(self):
-        self.pseudo_densities = dict()
-        self.guides = dict()
+        self.pseudo_densities = OrderedDict()
+        self.guides = OrderedDict()
+        self._lazy_optimizers_elbos = OrderedDict()
         self.registered_model = None
+
+    def _lazily_init_optimizer(self, k: str, lr):
+
+        if not len(self.keys()):
+            raise ValueError("No guides registered. Did you call "
+                             f"{_GuideRegistrationMixin.__name__}.register_guides?")
+        if k not in self._lazy_optimizers_elbos:
+            pseudo_density = self.pseudo_densities[k]
+            guide = self.guides[k]
+
+            elbo = pyro.infer.Trace_ELBO()(pseudo_density, guide)
+            elbo()
+            optim = torch.optim.SGD(elbo.parameters(), lr=lr)
+
+            self._lazy_optimizers_elbos[k] = (optim, elbo)
+
+        return self._lazy_optimizers_elbos[k], (self.pseudo_densities[k], self.guides[k])
 
     def optimize_guides(self, lr: float, n_steps: int,
                         adjust_grads_: Callable[[torch.nn.Parameter, ...], None] = None,
@@ -24,17 +43,9 @@ class _GuideRegistrationMixin:
         losses = dict()
 
         for k in self.keys() if keys is None else keys:
-            pseudo_density = self.pseudo_densities[k]
-            guide = self.guides[k]
             losses[k] = []
 
-            # print("Training guide: ", k)
-
-            # noinspection PyTypeChecker
-            elbo = pyro.infer.Trace_ELBO()(pseudo_density, guide)
-            elbo()  # Call to surface parameters for optimizer.
-            # optim = torch.optim.ASGD(elbo.parameters(), lr=lr)
-            optim = torch.optim.Adam(elbo.parameters(), lr=lr)
+            (optim, elbo), _ = self._lazily_init_optimizer(k, lr)
 
             for i in range(n_steps):
 
@@ -104,8 +115,9 @@ class _GuideRegistrationMixin:
         return frozenset(self.pseudo_densities.keys())
 
     def clear_guides(self):
-        self.pseudo_densities = dict()
-        self.guides = dict()
+        self.pseudo_densities = OrderedDict()
+        self.guides = OrderedDict()
+        self._lazy_optimizers_elbos = OrderedDict()
         self.registered_model = None
 
     def _get_pq(self, ea: "ExpectationAtom", p: ModelType) -> Tuple[ModelType, ModelType]:

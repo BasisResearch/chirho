@@ -42,10 +42,11 @@ class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
     within the context, the same sample will still be used!
     """
 
-    def __init__(self, num_samples: int, shared_q: ModelType):
+    def __init__(self, num_samples: int, shared_q: ModelType, callback):
         super().__init__()
         self.num_samples = num_samples
         self.shared_q = shared_q
+        self.callback = callback
 
         self._qtr_ptr_s = None
 
@@ -63,6 +64,7 @@ class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
                 ptr = pyro.poutine.trace(pyro.poutine.replay(p, trace=qtr)).get_trace()
                 s = kft(qtr)
                 self._qtr_ptr_s.append((qtr, ptr, s))
+                self.callback()
         return self._qtr_ptr_s
 
     def _pyro__compute_expectation_atom(self, msg) -> None:

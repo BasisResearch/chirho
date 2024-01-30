@@ -1,6 +1,6 @@
 import torch
 import chirho.contrib.experiments.closed_form as cfe
-from chirho.contrib.experiments.decision_optimizer import DecisionOptimizer
+from chirho.contrib.experiments.decision_optimizer import DecisionOptimizer, DecisionOptimizerHandlerPerPartial
 import pyro.distributions as dist
 from torch import tensor as tnsr
 import numpy as np
@@ -25,6 +25,9 @@ pyro.settings.set(module_local_params=True)
 
 
 MOD = 1
+
+# TODO hyperparam for ahsa?
+SVI_LR = 5e-3
 
 
 def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
@@ -101,7 +104,7 @@ def get_decayed_lr(original_lr: float, decay_at_max_steps: float, max_steps: int
 class Hyperparams:
 
     def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float,
-                 burnin: int, convergence_check_window: int, ray: bool, n: int):
+                 burnin: int, convergence_check_window: int, ray: bool, n: int, unnorm_const: float):
         self.lr = lr
         self.clip = clip
         self.num_steps = num_steps
@@ -111,13 +114,22 @@ class Hyperparams:
         self.convergence_check_window = convergence_check_window
         self.ray = ray
         self.n = n
+        self.unnorm_const = unnorm_const
 
     @property
     def mc_num_samples(self):
-        # *2 from the positive and negative components
+        # *3 from the positive, negative and denominating components
         # *4 from the conservative estimate that each backward pass takes 3x as long as the 1x forward pass.
         # *n for the n different estimation problems TABI is responsible for.
         return self.tabi_num_samples * 2 * 4 * self.n
+
+    @property
+    def snis_num_samples(self):
+        # SNIS does the same work as TABI except only fits a single guide instead of 3.
+        return self.tabi_num_samples * 3
+
+    # TODO counts for Bai baseline? Basically just divide mc by self.n. So maybe
+    #  a bool or something that dictates the simplified proposal structure?
 
 
 class OptimizerFnRet:
@@ -200,6 +212,8 @@ def do_loop(
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # TODO FIXME see tag d78107gkl
     def model():
+        # Leave this normalized just to simplify. This essentially says we're assuming
+        #  that e.g. MC is using a guide that is perpetually converged to the true posterior.
         return OrderedDict(z=problem.model())
 
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
@@ -229,11 +243,12 @@ def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
 
 
-def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
-    # TODO FIXME see tag d78107gkl
     def model():
+        # Forcing this to be denormalized to see how well SNIS handles it.
+        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
         return OrderedDict(z=problem.model())
 
     scaled_risk = ep.E(
@@ -242,7 +257,85 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     scaled_risk._is_positive_everywhere = True
 
-    # FIXME needing to stitch this together manually so that targeting
+    # FIXME b52l9gspp
+    # Splitting atoms here a la TABI is equivalent to SNIS as long as the proposal
+    #  is shared across the decomposition. See below.
+    scaled_risk_grad = scaled_risk.grad(params=theta, split_atoms=True)
+
+    def cost_grad(m):
+        srg = scaled_risk_grad(m)
+        return torch.autograd.grad(theta @ theta, theta)[0] + srg
+
+    # Construct the guide registry for snis with analytic optimal guides (proposals)
+    #  (up to normalizing constant) known.
+    gr = cfe.build_guide_registry_for_snis_grads(
+        model=model,
+        problem=problem,
+        params=theta,
+        auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
+        # Note: this initializes to the non-grad tabi optimal, though burnin should move
+        #  the proposal to the SNIS optimal.
+        init_scale=problem.q.item(),
+        init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
+    )
+
+    def guide_step_callback(k):
+        # Update just the guide registered under name k for one step.
+        gr.optimize_guides(
+            lr=SVI_LR,
+            n_steps=1,
+            keys=[k]
+        )
+
+    # A set of IS handlers that will share the same proposal across all atoms.
+    handlers = tuple(
+        ep.ImportanceSamplingExpectationHandlerAllShared(
+            num_samples=hparams.snis_num_samples,
+            shared_q=guide,
+            # This callback fires each time an importance sample is evaluated. This parallels the TABI
+            #  single stage algorithm in that each estimate improves the next (though it still differs
+            #  from TABI SS in that two forward evals are required — one for estimate and another
+            #  for the elbo, whereas tabi conforms the elbo into the estimate).
+            callback=lambda: guide_step_callback(k)
+        ) for k, guide in gr.guides.items()
+    )
+
+    # Construct a decision optimizer that uses a different handler
+    #  for each element of the partial.
+    do = DecisionOptimizerHandlerPerPartial(
+        flat_dparams=theta,
+        model=model,
+        cost=None,  # setting cost grad manully below.
+        expectation_handlers=handlers,
+        lr=1.  # Not using the lr here.
+    )
+    do.cost_grad = cost_grad
+
+    return do_loop(
+        pref="SGD SNIS",
+        problem=problem,
+        do=do,
+        theta=theta,
+        hparams=hparams
+    )
+
+
+def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    # TODO FIXME see tag d78107gkl
+    def model():
+        # Forcing this to be denormalized to see how well TABI handls it
+        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        return OrderedDict(z=problem.model())
+
+    scaled_risk = ep.E(
+        f=lambda s: problem.scaled_risk(theta, s['z']).squeeze(),
+        name='risk'
+    )
+    scaled_risk._is_positive_everywhere = True
+
+    # FIXME b52l9gspp needing to stitch this together manually so that targeting
     #  just operates on the risk gradient.
     scaled_risk_grad = scaled_risk.grad(params=theta, split_atoms=True)
 
@@ -250,18 +343,9 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         srg = scaled_risk_grad(m)
         return torch.autograd.grad(theta @ theta, theta)[0] + srg
 
-    # <Denominator is Always 1.0>
-    # This is because 1) the decision does not affect p(z) and 2) because in this case
-    #  p(z) is normalized
-    for part in scaled_risk_grad.parts:
-        if "den" in part.name:
-            part.swap_self_for_other_child(other=ep.Constant(tnsr(1.0).double()))
-    scaled_risk_grad.recursively_refresh_parts()
-    # </Denominator>
-
     eh = ep.ProposalTrainingLossHandler(
         num_samples=hparams.tabi_num_samples,
-        lr=5e-3  # learning rate of svi.
+        lr=SVI_LR,
     )
 
     eh.register_guides(
@@ -269,6 +353,9 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         model=model,
         auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
         auto_guide_kwargs=dict(
+            # Note: this is the tabi optimal for positive numerator of non grad. Burnin
+            #  should be able to move the numerating proposals to their grad components
+            #  and the denominator the posterior.
             init_scale=problem.q.item(),
             init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
         )

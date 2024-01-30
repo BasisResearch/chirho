@@ -18,3 +18,7 @@ from .optimize_sgd_fns import (
     meta_optimize_design,
 )
 from .deserialize_from_ray import deserialize_from_ray
+from .snis_ana_pseuddensities import (
+    build_guide_registry_for_snis_grads,
+    build_guide_registry_for_snis_grads
+)

@@ -2,11 +2,9 @@ from .cost_risk_problem import CostRiskProblem
 import torch
 from chirho.contrib.compexp.handlers.guide_registration_mixin import _GuideRegistrationMixin
 from chirho.contrib.compexp.typedecs import ModelType, KWType
-from typing import Callable, Optional
+from typing import Callable, Optional, Type
 import pyro
 from pyro.infer.autoguide import AutoGuide
-from .risk_curve import risk_curve
-from .full_ana_exp_risk import full_ana_exp_risk
 
 
 # In this file, we analytically specify the unnormalized optimal proposals for SNIS.
@@ -46,13 +44,19 @@ def _build_partial_grad(f, params: torch.Tensor, pi: int):
 
 
 def _build_grad_exp_risk(problem: CostRiskProblem, params: torch.Tensor, pi: int):
-    f = full_ana_exp_risk(theta=params, Q=problem.Q, Sigma=problem.Sigma)
-    return _build_partial_grad(f, params, pi)
+    return _build_partial_grad(
+        lambda: problem.scaled_exp_risk(theta=params),
+        params,
+        pi
+    )
 
 
 def _build_grad_risk(problem: CostRiskProblem, params: torch.Tensor, pi: int):
-    f = lambda stochastics: risk_curve(theta=params, Q=problem.Q, z=stochastics)
-    return _build_partial_grad(f, params, pi)
+    return _build_partial_grad(
+        lambda s: problem.scaled_risk(theta=params, z=s['z']),
+        params,
+        pi
+    )
 
 
 def _build_opt_snis_grad_proposal_f(problem: CostRiskProblem, params: torch.Tensor, pi: int):
@@ -60,16 +64,16 @@ def _build_opt_snis_grad_proposal_f(problem: CostRiskProblem, params: torch.Tens
     grad_risk = _build_grad_risk(problem, params, pi)
     grad_exp_risk = _build_grad_exp_risk(problem, params, pi)
 
-    def f(stochastics: KWType):
-        return torch.abs(grad_risk(stochastics) - grad_exp_risk(stochastics))
+    def f(s: KWType):
+        return torch.abs(grad_risk(s['z']) - grad_exp_risk())
 
     return f
 
 
 def _build_opt_snis_proposal_f(problem: CostRiskProblem, params: torch.Tensor, pi: int):
     # The non grad version of the above. This will make SNIS target the risk curve itself.
-    exp_risk = lambda: full_ana_exp_risk(theta=params, Q=problem.Q, Sigma=problem.Sigma)
-    risk = lambda stochastics: risk_curve(theta=params, Q=problem.Q, z=stochastics)
+    exp_risk = lambda: problem.scaled_exp_risk(theta=params)
+    risk = lambda s: problem.scaled_risk(theta=params, z=s['z'])
 
     def f(stochastics: KWType):
         return torch.abs(risk(stochastics) - exp_risk())
@@ -92,7 +96,7 @@ def build_guide_registry_for_snis_grads(
         model: ModelType,
         problem: CostRiskProblem,
         params: torch.nn.Parameter,
-        auto_guide: AutoGuide,
+        auto_guide: Type[AutoGuide],
         auto_guide_model_wrap: Optional[Callable] = None,
         **auto_guide_kwargs
 ) -> _GuideRegistrationMixin:

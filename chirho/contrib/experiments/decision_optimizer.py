@@ -1,5 +1,6 @@
 import torch
 import chirho.contrib.compexp as ep
+from typing import Tuple
 
 
 class DecisionOptimizer:
@@ -45,3 +46,30 @@ class DecisionOptimizer:
     def step(self):
         grad_estimate = self.estimate_grad()
         self.step_grad(grad_estimate)
+
+
+class DecisionOptimizerHandlerPerPartial(DecisionOptimizer):
+    """
+    A quick, hacky version of the decision optimizer that takes multiple handlers, one for each dimension,
+    where those handlers are presumed to be ...AllShared handlers with set guides where relevant.
+    """
+    def __init__(
+            self,
+            *args,
+            expectation_handlers: Tuple[ep.ExpectationHandler],
+            **kwargs):
+        super().__init__(*args, expectation_handler=None, **kwargs)
+        self.expectation_handlers = expectation_handlers
+
+    def estimate_grad(self):
+        self.optim.zero_grad()
+        self.flat_dparams.grad = None
+
+        grad_estimates = []
+        for i, handler in enumerate(self.expectation_handlers):
+            with handler:
+                # This is the quick, hacky part — evaluate the whole gradient with this handler
+                #  but only take the partial that its proposal is (presumably) targeting.
+                grad_estimates.append(self.cost_grad(self.model)[i])
+
+        return torch.stack(grad_estimates)

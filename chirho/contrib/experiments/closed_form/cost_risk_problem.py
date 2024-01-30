@@ -97,5 +97,8 @@ class CostRiskProblem:
     def scaled_risk(self, theta, z):
         return self.c * cfe.risk_curve(theta=theta, Q=self.Q, z=z)
 
+    def scaled_exp_risk(self, theta):
+        return self.c * cfe.full_ana_exp_risk(theta=theta, Q=self.Q, Sigma=self.Sigma)
+
     def model(self):
         return pyro.sample('z', dist.MultivariateNormal(loc=torch.zeros(self.n).double(), covariance_matrix=self.Sigma))
