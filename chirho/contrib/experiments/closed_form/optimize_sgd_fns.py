@@ -229,7 +229,7 @@ def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         flat_dparams=theta,
         model=model,
         cost=None,
-        expectation_handler=ep.MonteCarloExpectationHandler(hparams.mc_num_samples),
+        expectation_handler=ep.MonteCarloExpectationHandlerAllShared(hparams.mc_num_samples),
         lr=1.  # Not using the lr here.
     )
     do.cost_grad = cost_grad
