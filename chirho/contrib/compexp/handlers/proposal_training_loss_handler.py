@@ -51,6 +51,10 @@ class ProposalTrainingLossHandler(ExpectationHandler, _GuideRegistrationMixin):
         return self._lazy_optimizers_elbos[k], (self.pseudo_densities[k], self.guides[k])
 
     # def _pyro_srelu(self, msg) -> None:
+    #     TODO implementation likely wants a block_srelu handler or something.
+    #     TODO for paper we could just assume a biased function that's being evaluated?
+    #      and not worry about this? eh this isn't that hard, and it's a good way to show
+    #      that in general the fitting procedure can change and not bias the results.
     #     raise NotImplementedError("ProposalTrainingLossHandler currently doesn't support "
     #                               "estimation with RELU"
     #                               " softening, but future implementations likely will by"

@@ -90,6 +90,7 @@ class ExpectationAtom(ComposedExpectation):
         """
         Define a pseudo-density curve that convolutes the passed model p with the stochastic function
          of interest for this atom.
+        Utilizes the expectation programming concept of Reichelt et al. (2022).
         """
 
         if not self._is_positive_everywhere:
