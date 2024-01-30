@@ -33,3 +33,50 @@ class ImportanceSamplingExpectationHandler(ExpectationHandler, _GuideRegistratio
             fpqvals.append(torch.exp(fpqval))
 
         msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
+
+
+class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
+    """
+    A quick, hacky version of importance sampling that shares the exact same sample (and proposal)
+    across all atoms being evaluated in the context. Note that if the expectation is executed twice
+    within the context, the same sample will still be used!
+    """
+
+    def __init__(self, num_samples: int, shared_q: ModelType):
+        super().__init__()
+        self.num_samples = num_samples
+        self.shared_q = shared_q
+
+        self._qtr_ptr_s = None
+
+    def __enter__(self):
+        super().__enter__()
+        # Clear the cached sample on entrance.
+        self._qtr_ptr_s = None
+        return self
+
+    def _lazy_qtr_ptr_s(self, p, q):
+        if self._qtr_ptr_s is None:
+            self._qtr_ptr_s = []
+            for _ in range(self.num_samples):
+                qtr = pyro.poutine.trace(q).get_trace()
+                ptr = pyro.poutine.trace(pyro.poutine.replay(p, trace=qtr)).get_trace()
+                s = kft(qtr)
+                self._qtr_ptr_s.append((qtr, ptr, s))
+        return self._qtr_ptr_s
+
+    def _pyro__compute_expectation_atom(self, msg) -> None:
+        super()._pyro_compute_expectation_atom(msg)
+
+        kwargs = msg_args_kwargs_to_kwargs(msg)
+        ea: ExpectationAtom = kwargs.pop("ea")
+        p: ModelType = kwargs["p"]
+        q: ModelType = self.shared_q
+
+        fpqvals = []
+
+        for qtr, ptr, s in self._lazy_qtr_ptr_s(p, q):
+            fpqval = ptr.log_prob_sum() + torch.log(ea.log_fac_eps + ea.f(s)) - qtr.log_prob_sum()
+            fpqvals.append(torch.exp(fpqval))
+
+        msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
