@@ -1,27 +1,15 @@
 import argparse
-import torch
 import chirho.contrib.experiments.closed_form as cfe
-from chirho.contrib.experiments.decision_optimizer import DecisionOptimizer, DecisionOptimizerHandlerPerPartial
-import pyro.distributions as dist
-from torch import tensor as tnsr
-import numpy as np
-import chirho.contrib.compexp as ep
-import pyro
-from typing import List, Callable, Dict, Optional
-from collections import OrderedDict
-from pyro.infer.autoguide.initialization import init_to_value
+from typing import Dict
 from ray import tune
-from ray.air import session
 from ray.tune.schedulers import ASHAScheduler
-import warnings
 import os
 import pickle
 from copy import copy
 from pyro.util import set_rng_seed
-from itertools import product
 import pyro
-import functools
 import os.path as osp
+import torch
 
 pyro.settings.set(module_local_params=True)
 
@@ -129,6 +117,16 @@ def main(
     # Also pickle result.results_df, a dataframe summarizing each trial.
     with open(osp.join(result.experiment_path, 'results_df.pkl'), 'wb') as f:
         pickle.dump(result.results_df, f)
+
+    # Evaluate the scipy optimal solution.
+    set_rng_seed(problem_setting_kwargs.pop('seed'))
+    problem = cfe.CostRiskProblem(
+        **problem_setting_kwargs
+    )
+    cfe.opt_ana_with_scipy(problem)
+    opt = problem.ana_loss(torch.tensor(problem.ana_opt_traj[-1])).item()
+    with open(osp.join(result.experiment_path, 'scipy_optimal.pkl'), 'wb') as f:
+        pickle.dump(dict(opt=opt, traj=problem.ana_opt_traj), f)
 
     # Write the results_df to a csv in the same location.
     result.results_df.to_csv(os.path.join(result.experiment_path, 'results_df.csv'))

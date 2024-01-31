@@ -236,9 +236,12 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
     def model():
+        # TODO vsd087265ml reenable after fixing issue with factor in trace.
+        if not np.isclose(hparams.unnorm_const, 1.):
+            raise ValueError("SNIS implementation not yet ready for denormalized problems.")
         # Forcing this to be denormalized to see how well SNIS handles it.
-        # TODO reenable
         # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+
         return OrderedDict(z=problem.model())
 
     scaled_risk = ep.E(
@@ -331,9 +334,12 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     # TODO FIXME see tag d78107gkl
     def model():
-        # Forcing this to be denormalized to see how well TABI handls it
-        # TODO WIP reenable
+        # TODO vsd087265ml reenable after fixing issue with factor in trace.
+        if not np.isclose(hparams.unnorm_const, 1.):
+            raise ValueError("TABI implementation not yet ready for denormalized problems.")
+        # Forcing this to be denormalized to see how well TABI handles it.
         # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+
         return OrderedDict(z=problem.model())
 
     scaled_risk = ep.E(
