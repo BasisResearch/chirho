@@ -17,58 +17,11 @@ import os
 import pickle
 from copy import copy
 from pyro.util import set_rng_seed
-from chirho.contrib.experiments.grouped_asha import GroupedASHA
 from itertools import product
 import pyro
 import functools
 
 pyro.settings.set(module_local_params=True)
-
-MOD = 1
-
-# TODO hyperparam for ahsa?
-SVI_LR = 5e-3
-
-
-def get_tolerance(problem: cfe.CostRiskProblem, num_samples: int, neighborhood_r: float):
-    """
-    Get the tolerance for the problem. This is the average degree of sub-optimality of points close to the optimal
-        parameters.
-    :param problem:
-    :param num_samples: The number of samples to use to compute the tolerance.
-    :param neighborhood_r: The radius of the hypersphere around the optimal parameters.
-    :return: The tolerance.
-    """
-
-    if problem.early_stop_tol is not None:
-        return problem.early_stop_tol
-
-    opt = cfe.opt_ana_with_scipy(problem)[-1]
-
-    # Sample a bunch of points on a hypersphere some eps away from the optimal parameters.
-    # noinspection PyTypeChecker
-    neighborhood = dist.Normal(torch.zeros(problem.n), torch.ones(problem.n)).sample((num_samples,))
-    neighborhood = neighborhood / neighborhood.norm(dim=-1, keepdim=True) * neighborhood_r
-    neighborhood = neighborhood + opt
-
-    losses = torch.stack([problem.ana_loss(theta) for theta in neighborhood]).squeeze()
-    opt = problem.ana_loss(torch.tensor(problem.ana_opt_traj[-1])).squeeze()
-
-    mean_diff = (losses - opt).abs().mean()
-
-    problem.early_stop_tol = mean_diff.item()
-
-    return problem.early_stop_tol
-
-
-def sgd_convergence_check(sgd_losses: List[float], problem: cfe.CostRiskProblem, recent: int, less_recent: int):
-    assert len(sgd_losses) > (recent + less_recent)
-
-    atol = get_tolerance(problem, 1000, 1e-2)
-
-    last_recent = sgd_losses[-recent:]
-    last_less_recent = sgd_losses[-less_recent - recent:-recent]
-    return np.allclose(np.mean(last_recent), np.mean(last_less_recent), atol=atol)
 
 
 def _loss(problem: cfe.CostRiskProblem, theta: np.ndarray) -> float:
@@ -111,10 +64,10 @@ class Hyperparams:
             tabi_num_samples: int,
             decay_at_max_steps: float,
             burnin: int,
-            convergence_check_window: int,
             ray: bool,
             n: int,
-            unnorm_const: float
+            unnorm_const: float,
+            svi_lr: float
     ):
         self.lr = lr
         self.clip = clip
@@ -122,10 +75,10 @@ class Hyperparams:
         self.tabi_num_samples = tabi_num_samples
         self.decay_at_max_steps = decay_at_max_steps
         self.burnin = burnin
-        self.convergence_check_window = convergence_check_window
         self.ray = ray
         self.n = n
         self.unnorm_const = unnorm_const
+        self.svi_lr = svi_lr
 
     @property
     def mc_num_samples(self):
@@ -198,7 +151,7 @@ def do_loop(
         losses.append(_loss(problem, traj[-1]))
 
         # Short detour to report to ray.
-        if hparams.ray and i % MOD == 0:
+        if hparams.ray:
             report = dict(
                 recent_loss_mean=np.mean(losses[-500:]),
                 loss=losses[-1],
@@ -212,13 +165,6 @@ def do_loop(
                     report[k] = v.detach().clone().numpy()
             session.report(report)
 
-        # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
-        #  from some preceding scores.
-        recent = less_recent = hparams.convergence_check_window
-
-        if len(traj) > (recent + less_recent) and sgd_convergence_check(
-                losses, problem, recent=recent, less_recent=less_recent):
-            break
     if not hparams.ray:
         print()  # to clear the \r with an \n
 
@@ -328,7 +274,7 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     def guide_step_callback(k):
         # Update just the guide registered under name k for one step.
         gr.optimize_guides(
-            lr=SVI_LR,
+            lr=hparams.svi_lr,
             # Note the way that the callback is used in ...AllShared handler — this will end up
             #  taking a step for each of the snis_num_samples samples.
             n_steps=1,
@@ -338,7 +284,7 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # A set of IS handlers that will share the same proposal across all atoms.
     handlers = tuple(
         ep.ImportanceSamplingExpectationHandlerAllShared(
-            num_samples=hparams.snis_num_samples * 10,  # TODO giving SNIS a big boost here.
+            num_samples=hparams.snis_num_samples,
             shared_q=guide,
             # This callback fires each time an importance sample is evaluated. This parallels the TABI
             #  single stage algorithm in that each estimate improves the next (though it still differs
@@ -406,7 +352,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     eh = ep.ProposalTrainingLossHandler(
         num_samples=hparams.tabi_num_samples,
-        lr=SVI_LR,
+        lr=hparams.svi_lr,
     )
 
     eh.register_guides(
@@ -447,99 +393,3 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
 
 OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]
-
-
-def meta_optimize_design(
-        problem_setting_kwargs: Dict,  # everything for params plus a 'seed'
-        hparam_consts: Dict,
-        tune_kwargs: Dict
-):
-    # Get the folder that raytune will be writing to.
-
-    hparam_space = dict(
-        lr=tune.loguniform(1e-4, 1e-1),
-        clip=tune.loguniform(1e-2, 1e1),
-        # FIXME this is actually 1 - decay at max steps. TODO Rename.
-        decay_at_max_steps=tune.uniform(0.1, 1.),
-        optimize_fn_name=tune.grid_search([opt_with_mc_sgd.__name__, opt_with_ss_tabi_sgd.__name__]),
-        tabi_num_samples=tune.grid_search([1, 3])
-    )
-
-    # Extend the hparams space with the ranges for the problem settings.
-    for k, v in problem_setting_kwargs.items():
-        hparam_space[k] = tune.grid_search(v)
-
-    burnin_ = hparam_consts.pop('burnin')
-
-    def configgabble_optimize_fn(config: Dict):
-        pyro.clear_param_store()
-        config = copy(config)  # Because pop modifies in place, which messes up ray.
-        optimize_fn_name = config.pop('optimize_fn_name')
-
-        if optimize_fn_name == opt_with_mc_sgd.__name__:
-            burnin = 0  # No burnin for MC.
-            optimize_fn = opt_with_mc_sgd
-        elif optimize_fn_name == opt_with_ss_tabi_sgd.__name__:
-            burnin = burnin_
-            optimize_fn = opt_with_ss_tabi_sgd
-        else:
-            raise NotImplementedError(f"Unknown optimize_fn_name {optimize_fn_name}")
-
-        q = config.pop('q')
-        n = config.pop('n')
-        rstar = config.pop('rstar')
-        theta0_rstar_delta = config.pop('theta0_rstar_delta')
-        seed = config.pop('seed')
-
-        set_rng_seed(seed)
-        problem = cfe.CostRiskProblem(
-            q=q, n=n, rstar=rstar, theta0_rstar_delta=theta0_rstar_delta
-        )
-
-        hparams = Hyperparams(
-            # The only things left in config are hyperparam arguments.
-            **config, **hparam_consts, ray=True, burnin=burnin, n=n
-        )
-
-        return optimize_fn(problem, hparams)
-
-    scheduler_kwargs = dict(
-        metric="recent_loss_mean",
-        mode="min",
-        grace_period=500 // MOD,
-        # Probs overkill to make sure it doesn't
-        max_t=hparam_consts['num_steps'] + 1,
-        stop_last_trials=False)
-
-    scheduler = GroupedASHA(
-        config=hparam_space,
-        **scheduler_kwargs
-    )
-
-    result = tune.run(
-        configgabble_optimize_fn,
-        config=hparam_space,
-        scheduler=scheduler,
-        **tune_kwargs
-    )
-
-    # Save metadata for the experiment.
-    metadata = dict(
-        hparam_consts=hparam_consts
-    )
-    with open(os.path.join(result.experiment_path, 'metadata.pkl'), 'wb') as f:
-        pickle.dump(metadata, f)
-
-    # Also pickle the trial dataframes, cz that's easier to work with than all the serialized results that tensorboard
-    #  uses. result.trial_dataframes is a dict of dataframes.
-    with open(os.path.join(result.experiment_path, 'trial_dataframes.pkl'), 'wb') as f:
-        pickle.dump(result.trial_dataframes, f)
-
-    # Also pickle result.results_df, a dataframe summarizing each trial.
-    with open(os.path.join(result.experiment_path, 'results_df.pkl'), 'wb') as f:
-        pickle.dump(result.results_df, f)
-
-    # Write the results_df to a csv in the same location.
-    result.results_df.to_csv(os.path.join(result.experiment_path, 'results_df.csv'))
-
-    return result
