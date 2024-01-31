@@ -20,9 +20,9 @@ from pyro.util import set_rng_seed
 from chirho.contrib.experiments.grouped_asha import GroupedASHA
 from itertools import product
 import pyro
+import functools
 
 pyro.settings.set(module_local_params=True)
-
 
 MOD = 1
 
@@ -103,8 +103,19 @@ def get_decayed_lr(original_lr: float, decay_at_max_steps: float, max_steps: int
 
 class Hyperparams:
 
-    def __init__(self, lr: float, clip: float, num_steps: int, tabi_num_samples: int, decay_at_max_steps: float,
-                 burnin: int, convergence_check_window: int, ray: bool, n: int, unnorm_const: float):
+    def __init__(
+            self,
+            lr: float,
+            clip: float,
+            num_steps: int,
+            tabi_num_samples: int,
+            decay_at_max_steps: float,
+            burnin: int,
+            convergence_check_window: int,
+            ray: bool,
+            n: int,
+            unnorm_const: float
+    ):
         self.lr = lr
         self.clip = clip
         self.num_steps = num_steps
@@ -145,7 +156,9 @@ def do_loop(
         problem: cfe.CostRiskProblem,
         do: DecisionOptimizer,
         theta: torch.Tensor,
-        hparams: Hyperparams) -> OptimizerFnRet:
+        hparams: Hyperparams,
+        callback: Optional[Callable[[int, np.ndarray], None]] = lambda *args: None
+) -> OptimizerFnRet:
     traj = [theta.detach().clone().numpy()]
     losses = [_loss(problem, traj[-1])]
     grad_ests = []
@@ -159,11 +172,15 @@ def do_loop(
         if not hparams.ray:
             print(f"{pref} {i:05d}/{total_steps}", end="\r")
         grad_est = do.estimate_grad()
+
+        callback(i, theta.detach().clone().numpy())
+
         if (~torch.isfinite(grad_est)).any():
             warnings.warn("non-finite est in grad_est, skipping step")
             continue
         if i < burnin:
             continue
+
         grad_ests.append(grad_est.detach().clone().numpy())
 
         lrs.append(
@@ -192,7 +209,7 @@ def do_loop(
             # FIXME hack to maybe fix memory issues?
             for k, v in report.items():
                 if isinstance(v, torch.Tensor):
-                    report[k] = v.detach().numpy()
+                    report[k] = v.detach().clone().numpy()
             session.report(report)
 
         # Stop early if the mean of the last bit of scores are within tolerance of the mean of the scores
@@ -207,6 +224,32 @@ def do_loop(
 
     if not hparams.ray:
         return OptimizerFnRet(np.array(traj)[:-1], np.array(losses)[:-1], np.array(grad_ests), np.array(lrs))
+
+
+class GuideTrack:
+    problem: cfe.CostRiskProblem
+    guide_means: OrderedDict[str, List[np.ndarray]]
+    guide_scale_trils: OrderedDict[str, List[np.ndarray]]
+    thetas: List[np.ndarray]
+
+
+def _build_track_guide_callback(guide_dict, problem):
+
+    gt = GuideTrack()
+    gt.problem = problem
+    gt.guide_means = OrderedDict()
+    gt.guide_scale_trils = OrderedDict()
+    gt.thetas = []
+
+    def track_guide_callback(i, theta):
+        for k, guide in guide_dict.items():
+            pseudoposterior = guide.get_posterior()
+            gt.guide_means.setdefault(k, []).append(pseudoposterior.loc.detach().clone().numpy())
+            gt.guide_scale_trils.setdefault(k, []).append(pseudoposterior.scale_tril.detach().clone().numpy())
+        assert isinstance(theta, np.ndarray)
+        gt.thetas.append(theta)
+
+    return track_guide_callback, gt
 
 
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
@@ -248,7 +291,8 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     def model():
         # Forcing this to be denormalized to see how well SNIS handles it.
-        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        # TODO reenable
+        # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
         return OrderedDict(z=problem.model())
 
     scaled_risk = ep.E(
@@ -264,25 +308,29 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     def cost_grad(m):
         srg = scaled_risk_grad(m)
-        return torch.autograd.grad(theta @ theta, theta)[0] + srg
+        return problem.cost_grad(theta) + srg
 
     # Construct the guide registry for snis with analytic optimal guides (proposals)
     #  (up to normalizing constant) known.
+    init_loc = tnsr(problem.theta0.detach().clone().numpy() / 2.)  # overzealously avoiding reference bugs...
     gr = cfe.build_guide_registry_for_snis_grads(
-        model=model,
         problem=problem,
         params=theta,
         auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
-        # Note: this initializes to the non-grad tabi optimal, though burnin should move
-        #  the proposal to the SNIS optimal.
-        init_scale=problem.q.item(),
-        init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
+        # Initialization for SNIS needs to roughly approximate its optimal proposal, which covers both the
+        #  posterior and the risk curve.
+        # Half the distance to the init_loc, so origin and risk curve will be at 2 stdevs
+        init_scale=(init_loc.norm() / 2.).item(),
+        # Halfway between the origin and risk curve.
+        init_loc_fn=init_to_value(values=dict(z=init_loc))
     )
 
     def guide_step_callback(k):
         # Update just the guide registered under name k for one step.
         gr.optimize_guides(
             lr=SVI_LR,
+            # Note the way that the callback is used in ...AllShared handler — this will end up
+            #  taking a step for each of the snis_num_samples samples.
             n_steps=1,
             keys=[k]
         )
@@ -290,13 +338,13 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # A set of IS handlers that will share the same proposal across all atoms.
     handlers = tuple(
         ep.ImportanceSamplingExpectationHandlerAllShared(
-            num_samples=hparams.snis_num_samples,
+            num_samples=hparams.snis_num_samples * 10,  # TODO giving SNIS a big boost here.
             shared_q=guide,
             # This callback fires each time an importance sample is evaluated. This parallels the TABI
             #  single stage algorithm in that each estimate improves the next (though it still differs
             #  from TABI SS in that two forward evals are required — one for estimate and another
             #  for the elbo, whereas tabi conforms the elbo into the estimate).
-            callback=lambda: guide_step_callback(k)
+            callback=functools.partial(guide_step_callback, k)
         ) for k, guide in gr.guides.items()
     )
 
@@ -311,13 +359,25 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     do.cost_grad = cost_grad
 
-    return do_loop(
+    track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
+
+    opfnret = do_loop(
         pref="SGD SNIS",
         problem=problem,
         do=do,
         theta=theta,
-        hparams=hparams
+        hparams=hparams,
+        callback=track_guide_callback
     )
+
+    # # <FIXME REMOVE>
+    # cfe.v2d.animate_guides_snis_grad_from_guide_track(
+    #     problem=problem,
+    #     guide_track=guide_track,
+    # )
+    # # </FIXME REMOVE>
+
+    return opfnret
 
 
 def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
@@ -326,7 +386,8 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # TODO FIXME see tag d78107gkl
     def model():
         # Forcing this to be denormalized to see how well TABI handls it
-        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        # TODO WIP reenable
+        # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
         return OrderedDict(z=problem.model())
 
     scaled_risk = ep.E(
@@ -341,7 +402,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     def cost_grad(m):
         srg = scaled_risk_grad(m)
-        return torch.autograd.grad(theta @ theta, theta)[0] + srg
+        return problem.cost_grad(theta) + srg
 
     eh = ep.ProposalTrainingLossHandler(
         num_samples=hparams.tabi_num_samples,
@@ -371,13 +432,18 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     do.cost_grad = cost_grad
 
-    return do_loop(
+    track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
+
+    optfnret = do_loop(
         pref="SGD SS TABI",
         problem=problem,
         hparams=hparams,
         do=do,
         theta=theta,
+        callback=track_guide_callback
     )
+
+    return optfnret
 
 
 OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]
@@ -388,7 +454,6 @@ def meta_optimize_design(
         hparam_consts: Dict,
         tune_kwargs: Dict
 ):
-
     # Get the folder that raytune will be writing to.
 
     hparam_space = dict(

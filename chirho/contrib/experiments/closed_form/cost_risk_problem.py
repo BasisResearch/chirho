@@ -94,6 +94,10 @@ class CostRiskProblem:
     def cost(theta):
         return theta @ theta
 
+    @staticmethod
+    def cost_grad(theta):
+        return torch.autograd.grad(CostRiskProblem.cost(theta), theta)[0]
+
     def scaled_risk(self, theta, z):
         return self.c * cfe.risk_curve(theta=theta, Q=self.Q, z=z)
 

@@ -26,7 +26,7 @@ class _GuideRegistrationMixin:
 
             elbo = pyro.infer.Trace_ELBO()(pseudo_density, guide)
             elbo()
-            optim = torch.optim.SGD(elbo.parameters(), lr=lr)
+            optim = torch.optim.Adam(elbo.parameters(), lr=lr)
 
             self._lazy_optimizers_elbos[k] = (optim, elbo)
 

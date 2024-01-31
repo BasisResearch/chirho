@@ -5,6 +5,7 @@ from chirho.contrib.compexp.typedecs import ModelType, KWType
 from typing import Callable, Optional, Type
 import pyro
 from pyro.infer.autoguide import AutoGuide
+from collections import OrderedDict
 
 
 # In this file, we analytically specify the unnormalized optimal proposals for SNIS.
@@ -45,7 +46,8 @@ def _build_partial_grad(f, params: torch.Tensor, pi: int):
 
 def _build_grad_exp_risk(problem: CostRiskProblem, params: torch.Tensor, pi: int):
     return _build_partial_grad(
-        lambda: problem.scaled_exp_risk(theta=params),
+        # Squeezing because a 1x1 "matrix"
+        lambda: problem.scaled_exp_risk(theta=params).squeeze(),
         params,
         pi
     )
@@ -53,30 +55,31 @@ def _build_grad_exp_risk(problem: CostRiskProblem, params: torch.Tensor, pi: int
 
 def _build_grad_risk(problem: CostRiskProblem, params: torch.Tensor, pi: int):
     return _build_partial_grad(
-        lambda s: problem.scaled_risk(theta=params, z=s['z']),
+        # Squeezing because a 1x1 "matrix"
+        lambda s: problem.scaled_risk(theta=params, z=s['z']).squeeze(),
         params,
         pi
     )
 
 
-def _build_opt_snis_grad_proposal_f(problem: CostRiskProblem, params: torch.Tensor, pi: int):
+def build_opt_snis_grad_proposal_f(problem: CostRiskProblem, params: torch.Tensor, pi: int):
 
     grad_risk = _build_grad_risk(problem, params, pi)
     grad_exp_risk = _build_grad_exp_risk(problem, params, pi)
 
     def f(s: KWType):
-        return torch.abs(grad_risk(s['z']) - grad_exp_risk())
+        return torch.abs(grad_risk(s) - grad_exp_risk())
 
     return f
 
 
-def _build_opt_snis_proposal_f(problem: CostRiskProblem, params: torch.Tensor, pi: int):
+def build_opt_snis_proposal_f(problem: CostRiskProblem, params: torch.Tensor):
     # The non grad version of the above. This will make SNIS target the risk curve itself.
     exp_risk = lambda: problem.scaled_exp_risk(theta=params)
     risk = lambda s: problem.scaled_risk(theta=params, z=s['z'])
 
-    def f(stochastics: KWType):
-        return torch.abs(risk(stochastics) - exp_risk())
+    def f(s: KWType):
+        return torch.abs(risk(s) - exp_risk())
 
     return f
 
@@ -93,7 +96,6 @@ def build_snis_pseudo_density(p: ModelType, f: Callable[[KWType], torch.Tensor],
 
 
 def build_guide_registry_for_snis_grads(
-        model: ModelType,
         problem: CostRiskProblem,
         params: torch.nn.Parameter,
         auto_guide: Type[AutoGuide],
@@ -106,6 +108,8 @@ def build_guide_registry_for_snis_grads(
     Reason for this hack is largely around the need to use non-general, problem-specific analytic results
     to actually get the SNIS optimal proposal.
     """
+    model = lambda: OrderedDict(z=problem.model())
+
     gr = _GuideRegistrationMixin()
     gr.registered_model = model
 
@@ -116,14 +120,13 @@ def build_guide_registry_for_snis_grads(
         name = f"snis_opt_grad_{pi}"
 
         gr.guides[name] = auto_guide(auto_guide_model_wrap(model), **auto_guide_kwargs)
-        f = _build_opt_snis_grad_proposal_f(problem, params, pi)
-        gr.pseudo_densities[name] = build_snis_pseudo_density(gr.guides[name], f, name)
+        f = build_opt_snis_grad_proposal_f(problem, params, pi)
+        gr.pseudo_densities[name] = build_snis_pseudo_density(model, f, name)
 
     return gr
 
 
 def build_guide_registry_for_snis_nograd(
-        model: ModelType,
         problem: CostRiskProblem,
         params: torch.nn.Parameter,
         auto_guide: AutoGuide,
@@ -133,6 +136,8 @@ def build_guide_registry_for_snis_nograd(
     """
     Builds a registry of just one guide that targets the risk curve itself. Used for the Bai baseline.
     """
+    model = lambda: OrderedDict(z=problem.model())
+
     gr = _GuideRegistrationMixin()
     gr.registered_model = model
 
@@ -141,7 +146,7 @@ def build_guide_registry_for_snis_nograd(
 
     name = f"snis_opt_nograd"
     gr.guides[name] = auto_guide(auto_guide_model_wrap(model), **auto_guide_kwargs)
-    f = _build_opt_snis_proposal_f(problem, params, 0)
+    f = build_opt_snis_proposal_f(problem, params, 0)
     gr.pseudo_densities[name] = build_snis_pseudo_density(gr.guides[name], f, name)
 
     return gr

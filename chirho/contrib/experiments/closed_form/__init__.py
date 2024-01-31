@@ -9,6 +9,7 @@ from .optimize_ana_fns import opt_ana_with_scipy, opt_opt_tabi_with_scipy
 from .optimize_sgd_fns import (
     opt_with_mc_sgd,
     opt_with_ss_tabi_sgd,
+    opt_with_snis_sgd,
     get_tolerance,
     sgd_convergence_check,
     adjust_grads_,
@@ -16,9 +17,13 @@ from .optimize_sgd_fns import (
     Hyperparams,
     OptimizerFnRet,
     meta_optimize_design,
+    GuideTrack
 )
 from .deserialize_from_ray import deserialize_from_ray
 from .snis_ana_pseuddensities import (
     build_guide_registry_for_snis_grads,
-    build_guide_registry_for_snis_grads
+    build_guide_registry_for_snis_grads,
+    build_opt_snis_proposal_f,
+    build_opt_snis_grad_proposal_f
 )
+from . import visualize_2d as v2d
