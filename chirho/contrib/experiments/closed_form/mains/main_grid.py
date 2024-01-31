@@ -9,11 +9,14 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description="Run grid experiments")
     # High-level arguments
     parser.add_argument("--verbose", type=int, help="Verbosity level")
+    # See default in main_one.py
     parser.add_argument("--storage_path", type=str, default=None, help="Path to store results")
-    parser.add_argument("--num_samples", type=int, default=None, help="Number of samples for hyperparameter tuning")
-    parser.add_argument("--max_concurrent_grid_cell_trials", type=int, default=4,
+    # See default in main_one.py
+    parser.add_argument("--num_samples", type=int, default=None,
+                        help="Number of samples for hyperparameter tuning")
+    parser.add_argument("--max_concurrent_grid_cell_trials", type=int, default=1,
                         help="Maximum number of concurrent grid cell trials")
-    parser.add_argument("--max_concurrent_hyperparam_trials", type=int, default=None,
+    parser.add_argument("--max_concurrent_hyperparam_trials", type=int,
                         help="Maximum number of concurrent hyperparameter tuning trials within an experiment")
 
     # Grid definition arguments with nargs='+' to accept multiple values
@@ -25,7 +28,8 @@ def parse_arguments():
                         help="Delta, in standard deviations to initialize the parameters.")
     parser.add_argument("--seed", nargs='+', type=int, help="Values for seed")
     parser.add_argument("--optimize_fn_name", nargs='+', type=str, help="Values for optimize_fn_name")
-    parser.add_argument("--unnorm_const", nargs='+', type=float, default=None, help="Values for unnorm_const")
+    parser.add_argument("--unnorm_const", nargs='+', type=float,
+                        default=None, help="Values for unnorm_const")
 
     args = parser.parse_args()
 

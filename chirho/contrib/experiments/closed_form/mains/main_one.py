@@ -10,6 +10,7 @@ from pyro.util import set_rng_seed
 import pyro
 import os.path as osp
 import torch
+import uuid
 
 pyro.settings.set(module_local_params=True)
 
@@ -99,6 +100,7 @@ def main(
         configgabble_optimize_fn,
         config=hparam_space,
         scheduler=scheduler,
+        name=uuid.uuid4().hex,
         **tune_kwargs
     )
 
