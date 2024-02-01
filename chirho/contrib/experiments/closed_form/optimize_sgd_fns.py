@@ -1,6 +1,11 @@
 import torch
 import chirho.contrib.experiments.closed_form as cfe
-from chirho.contrib.experiments.decision_optimizer import DecisionOptimizer, DecisionOptimizerHandlerPerPartial
+from chirho.contrib.experiments.decision_optimizer import (
+    DecisionOptimizer,
+    DecisionOptimizerHandlerPerPartial,
+    DecisionOptimizerAnalyticCFE,
+    DecisionOptimizerAbstract
+)
 import pyro.distributions as dist
 from torch import tensor as tnsr
 import numpy as np
@@ -107,7 +112,7 @@ class OptimizerFnRet:
 def do_loop(
         pref: str,
         problem: cfe.CostRiskProblem,
-        do: DecisionOptimizer,
+        do: DecisionOptimizerAbstract,
         theta: torch.Tensor,
         hparams: Hyperparams,
         callback: Optional[Callable[[int, np.ndarray], None]] = lambda *args: None
@@ -198,6 +203,25 @@ def _build_track_guide_callback(guide_dict, problem):
     return track_guide_callback, gt
 
 
+def opt_with_zerovar_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    do = DecisionOptimizerAnalyticCFE(
+        flat_dparams=theta,
+        lr=1.,  # Not using the lr here.
+        problem=problem
+    )
+
+    return do_loop(
+        pref="SGD ZV",
+        problem=problem,
+        do=do,
+        theta=theta,
+        hparams=hparams
+    )
+
+
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # TODO FIXME see tag d78107gkl
     def model():
@@ -236,11 +260,8 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
     def model():
-        # TODO vsd087265ml reenable after fixing issue with factor in trace.
-        if not np.isclose(hparams.unnorm_const, 1.):
-            raise ValueError("SNIS implementation not yet ready for denormalized problems.")
         # Forcing this to be denormalized to see how well SNIS handles it.
-        # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
 
         return OrderedDict(z=problem.model())
 
@@ -334,11 +355,8 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     # TODO FIXME see tag d78107gkl
     def model():
-        # TODO vsd087265ml reenable after fixing issue with factor in trace.
-        if not np.isclose(hparams.unnorm_const, 1.):
-            raise ValueError("TABI implementation not yet ready for denormalized problems.")
         # Forcing this to be denormalized to see how well TABI handles it.
-        # pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
 
         return OrderedDict(z=problem.model())
 

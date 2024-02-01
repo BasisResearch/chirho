@@ -1,9 +1,37 @@
 import torch
 import chirho.contrib.compexp as ep
 from typing import Tuple
+import chirho.contrib.experiments.closed_form as cfe
 
 
-class DecisionOptimizer:
+class DecisionOptimizerAbstract:
+    optim: torch.optim.Optimizer
+    _lr: float
+    flat_dparams: torch.nn.Parameter
+
+    @property
+    def lr(self):
+        return self._lr
+
+    @lr.setter
+    def lr(self, lr):
+        self._lr = lr
+        for g in self.optim.param_groups:
+            g['lr'] = lr
+
+    def estimate_grad(self):
+        raise NotImplementedError()
+
+    def step_grad(self, grad_estimate_):
+        self.flat_dparams.grad = grad_estimate_
+        self.optim.step()
+
+    def step(self):
+        grad_estimate = self.estimate_grad()
+        self.step_grad(grad_estimate)
+
+
+class DecisionOptimizer(DecisionOptimizerAbstract):
     def __init__(
             self,
             flat_dparams: torch.nn.Parameter,
@@ -20,16 +48,6 @@ class DecisionOptimizer:
 
         self.optim = torch.optim.SGD((self.flat_dparams,), lr=self._lr)
 
-    @property
-    def lr(self):
-        return self._lr
-
-    @lr.setter
-    def lr(self, lr):
-        self._lr = lr
-        for g in self.optim.param_groups:
-            g['lr'] = lr
-
     def estimate_grad(self):
         self.optim.zero_grad()
         self.flat_dparams.grad = None
@@ -39,13 +57,28 @@ class DecisionOptimizer:
 
         return grad_estimate_
 
-    def step_grad(self, grad_estimate_):
-        self.flat_dparams.grad = grad_estimate_
-        self.optim.step()
 
-    def step(self):
-        grad_estimate = self.estimate_grad()
-        self.step_grad(grad_estimate)
+class DecisionOptimizerAnalyticCFE(DecisionOptimizerAbstract):
+    # TODO this belongs inside the closed_form folder.
+    def __init__(
+            self,
+            flat_dparams: torch.nn.Parameter,
+            lr: float,
+            problem: "cfe.CostRiskProblem"
+    ):
+        self.flat_dparams = flat_dparams
+        self._lr = lr
+        self.problem = problem
+
+        self.optim = torch.optim.SGD((self.flat_dparams,), lr=self._lr)
+
+    def estimate_grad(self):
+        self.optim.zero_grad()
+        self.flat_dparams.grad = None
+
+        grad_estimate_ = self.problem.ana_loss_grad(self.flat_dparams)
+
+        return grad_estimate_
 
 
 class DecisionOptimizerHandlerPerPartial(DecisionOptimizer):
