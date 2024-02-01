@@ -12,6 +12,7 @@ from .optimize_sgd_fns import (
     opt_with_snis_sgd,
     opt_with_zerovar_sgd,
     opt_with_pais_sgd,
+    opt_with_nograd_tabi_sgd,
     adjust_grads_,
     clip_norm_,
     Hyperparams,

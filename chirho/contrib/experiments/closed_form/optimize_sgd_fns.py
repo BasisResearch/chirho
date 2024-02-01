@@ -105,6 +105,11 @@ class Hyperparams:
         #  we say it only does half the work that TABI does (so multiply by 2).
         return self.tabi_num_samples * 2
 
+    @property
+    def nograd_tabi_num_samples(self):
+        # This is the same as TABI but doesn't scale with dimension.
+        return self.tabi_num_samples * self.n
+
     # TODO counts for Bai baseline? Basically just divide mc by self.n. So maybe
     #  a bool or something that dictates the simplified proposal structure?
 
@@ -518,6 +523,77 @@ def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     return optfnret
 
+
+def opt_with_nograd_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    # This baseline uses TABI but targets the risk curve instead of the gradients, meaning the complexity of the
+    #  TABI problem won't scale with dimension.
+
+    raise NotImplementedError("This is wrong still, because the pseudo-densities need"
+                              " to reflect the risk curve and not the grad risk, which they do now."
+                              "Actually just the positive pseudo-densities need to be updated, which"
+                              " I think we can do manually.")
+
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
+
+    # There is only one positive guide that targets the full risk curve.
+    pos_guide = pyro.infer.autoguide.AutoMultivariateNormal(
+        model=model,
+        init_scale=problem.q.item(),
+        init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
+    )
+    # And one negative guide that targets the posterior.
+    den_guide = pyro.infer.autoguide.AutoMultivariateNormal(
+        model=model,
+        init_scale=1.,
+        init_loc_fn=init_to_value(values=dict(z=torch.zeros(problem.n)))
+    )
+
+    for part in scaled_risk_grad.parts:
+        if "pos" in part.name:
+            part.guide = pos_guide
+        elif "den" in part.name:
+            part.guide = den_guide
+        elif "neg" in part.name:
+            # No negative component.
+            part.swap_self_for_other_child(other=ep.Constant(tnsr(0.0).double()))
+        else:
+            raise ValueError(f"Unexpected part name {part.name}")
+    scaled_risk_grad.recursively_refresh_parts()
+
+    # Instead of the normal handler, we use a special handler that tracks guide objects and only samples
+    #  each one once per context entrance.
+    eh = ep.ProposalTrainingLossHandlerSharedPerGuide(
+        num_samples=hparams.nograd_tabi_num_samples,
+        lr=hparams.svi_lr,
+    )
+
+    # No need to pass default guides because everything is already specified.
+    eh.register_guides(
+        ce=scaled_risk_grad,
+        model=model,
+        auto_guide=None
+    )
+
+    do = DecisionOptimizer(
+        flat_dparams=theta,
+        model=model,
+        cost=None,
+        expectation_handler=eh,
+        lr=1.  # Not using the lr here.
+    )
+    do.cost_grad = cost_grad
+
+    optfnret = do_loop(
+        pref="SGD NG TABI",
+        problem=problem,
+        hparams=hparams,
+        do=do,
+        theta=theta
+    )
+
+    return optfnret
 
 
 OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]

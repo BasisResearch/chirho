@@ -14,6 +14,10 @@ from .typedecs import StochasticFunction, ExpectationFunction
 from .handlers.relu_softeners.fill_relu_at_level_exp import FillReluAtLevelExp
 from .handlers.relu_softeners.fill_relu_at_level import FillReluAtLevel
 from .ops import srelu
-from .handlers.proposal_training_loss_handler import ProposalTrainingLossHandler
+from .handlers.proposal_training_loss_handler import (
+    ProposalTrainingLossHandler,
+    ProposalTrainingLossHandlerSharedPerGuide
+)
+
 E = ExpectationAtom
 C = Constant
