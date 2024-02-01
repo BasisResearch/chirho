@@ -25,6 +25,7 @@ from pyro.util import set_rng_seed
 from itertools import product
 import pyro
 import functools
+from chirho.contrib.compexp.handlers.guide_registration_mixin import _GuideRegistrationMixin
 
 pyro.settings.set(module_local_params=True)
 
@@ -90,12 +91,19 @@ class Hyperparams:
         # *3 from the positive, negative and denominating components
         # *4 from the conservative estimate that each backward pass takes 3x as long as the 1x forward pass.
         # *n for the n different estimation problems TABI is responsible for.
-        return self.tabi_num_samples * 2 * 4 * self.n
+        return self.tabi_num_samples * 3 * 4 * self.n
 
     @property
     def snis_num_samples(self):
         # SNIS does the same work as TABI except only fits a single guide instead of 3.
         return self.tabi_num_samples * 3
+
+    @property
+    def approx_posterior_is_num_samples(self):
+        # This does the same work as TABI, except it only fits two numerating guides and uses
+        #  a pre-learned posterior. I.e. it does 2/3 the work that TABI does. As an approximation,
+        #  we say it only does half the work that TABI does (so multiply by 2).
+        return self.tabi_num_samples * 2
 
     # TODO counts for Bai baseline? Basically just divide mc by self.n. So maybe
     #  a bool or something that dictates the simplified proposal structure?
@@ -256,11 +264,10 @@ def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
 
 
-def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
-    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
-
+def _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta):
+    # TODO FIXME see tag d78107gkl
     def model():
-        # Forcing this to be denormalized to see how well SNIS handles it.
+        # Forcing this to be denormalized to emulate conditioning.
         pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
 
         return OrderedDict(z=problem.model())
@@ -271,14 +278,21 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     scaled_risk._is_positive_everywhere = True
 
-    # FIXME b52l9gspp
-    # Splitting atoms here a la TABI is equivalent to SNIS as long as the proposal
-    #  is shared across the decomposition. See below.
+    # FIXME b52l9gspp needing to stitch this together manually so that targeting
+    #  just operates on the risk gradient.
     scaled_risk_grad = scaled_risk.grad(params=theta, split_atoms=True)
 
     def cost_grad(m):
         srg = scaled_risk_grad(m)
         return problem.cost_grad(theta) + srg
+
+    return cost_grad, scaled_risk_grad, model
+
+
+def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
 
     # Construct the guide registry for snis with analytic optimal guides (proposals)
     #  (up to normalizing constant) known.
@@ -353,26 +367,18 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
-    # TODO FIXME see tag d78107gkl
-    def model():
-        # Forcing this to be denormalized to see how well TABI handles it.
-        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+    cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
 
-        return OrderedDict(z=problem.model())
-
-    scaled_risk = ep.E(
-        f=lambda s: problem.scaled_risk(theta, s['z']).squeeze(),
-        name='risk'
-    )
-    scaled_risk._is_positive_everywhere = True
-
-    # FIXME b52l9gspp needing to stitch this together manually so that targeting
-    #  just operates on the risk gradient.
-    scaled_risk_grad = scaled_risk.grad(params=theta, split_atoms=True)
-
-    def cost_grad(m):
-        srg = scaled_risk_grad(m)
-        return problem.cost_grad(theta) + srg
+    # Manually specify guides for denominators to init them closer to the posterior, instead of as below, which
+    #  inits them to the TABI optimal guides for the (non grad) risk curve (which roughly contain the optimal
+    #  guides for the grad risk curve).
+    for part in scaled_risk_grad.parts:
+        if "den" in part.name:
+            part.guide = pyro.infer.autoguide.AutoMultivariateNormal(
+                model=model,
+                init_scale=1.,
+                init_loc_fn=init_to_value(values=dict(z=torch.zeros(problem.n)))
+            )
 
     eh = ep.ProposalTrainingLossHandler(
         num_samples=hparams.tabi_num_samples,
@@ -414,6 +420,104 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
 
     return optfnret
+
+
+def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    # pais = Posterior Approximation Importance Sampling
+    # This baseline first fits a (misspecfied) guide (diag normal) to the true posterior (non diag normal).
+    # Then it uses TABI but where it assumes the denominator is already known.
+    # This reflects the case where you use some misspecified variational family to approximate the posterior, and
+    #  then use that approximation as if it were the true, normalized posterior.
+
+    # Specify an unnormalized model just like the others.
+    def orig_model():
+        pyro.factor("denormalization_factor", torch.log(torch.tensor(hparams.unnorm_const)))
+        return OrderedDict(z=problem.model())
+
+    # Construct a one-time-use guide registry just to fit the original posterior approximation.
+    gr_posterior_approx = _GuideRegistrationMixin()
+    gr_posterior_approx.guides["posterior_approx"] = pyro.infer.autoguide.AutoDiagonalNormal(
+        orig_model,
+        # Init mean to zero.
+        init_loc_fn=init_to_value(values=dict(z=torch.zeros(problem.n))),
+        # Init scale to 1., as in this problem set the true posterior is transformed from a standard normal.
+        init_scale=1.
+    )
+    gr_posterior_approx.pseudo_densities["posterior_approx"] = orig_model
+    # Optimize the guide for burnin + num_steps — this guarantees that this setting gets at least as much
+    #  posterior approximation time as the alternatives.
+    gr_posterior_approx.optimize_guides(
+        lr=hparams.svi_lr,
+        n_steps=hparams.num_steps + hparams.burnin
+    )
+
+    posterior_approx = gr_posterior_approx.guides["posterior_approx"].get_posterior().base_dist
+    # Doing this to detach the graph.
+    posterior_loc = posterior_approx.loc.detach().clone()
+    print(f"posterior_loc: {posterior_loc}")
+    posterior_scale = posterior_approx.scale.detach().clone()
+    print(f"posterior_scale: {posterior_scale}")
+
+    # Create a new normalized "model" that uses the fitted, but misspecified guide.
+    def approx_model():
+        return OrderedDict(z=pyro.sample("z", dist.Normal(posterior_loc, posterior_scale).to_event(1)))
+
+    # Now, we'll do standard TABI but where we fix the denominator to just be 1 — the known normalizing constant of the
+    #  approximate posterior.
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
+
+    # <Denominator is Always 1.0>
+    # This is because 1) the decision does not affect p(z) and 2) because in this case
+    #  p(z) is normalized
+    for part in scaled_risk_grad.parts:
+        if "den" in part.name:
+            part.swap_self_for_other_child(other=ep.Constant(tnsr(1.0).double()))
+    scaled_risk_grad.recursively_refresh_parts()
+    # </Denominator>
+
+    eh = ep.ProposalTrainingLossHandler(
+        num_samples=hparams.approx_posterior_is_num_samples,
+        lr=hparams.svi_lr,
+    )
+
+    eh.register_guides(
+        ce=scaled_risk_grad,
+        model=approx_model,
+        auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
+        auto_guide_kwargs=dict(
+            # Note: this is the tabi optimal for positive numerator of non grad. Burnin
+            #  should be able to move the numerating proposals to their grad components
+            #  and the denominator the posterior.
+            init_scale=problem.q.item(),
+            init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
+        )
+    )
+
+    do = DecisionOptimizer(
+        flat_dparams=theta,
+        model=approx_model,
+        cost=None,
+        expectation_handler=eh,
+        # expectation_handler=ep.MonteCarloExpectationHandler(num_samples=kwargs['num_samples']),
+        lr=1.  # Not using the lr here.
+    )
+    do.cost_grad = cost_grad
+
+    track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
+
+    optfnret = do_loop(
+        pref="SGD PAIS",
+        problem=problem,
+        hparams=hparams,
+        do=do,
+        theta=theta,
+        callback=track_guide_callback
+    )
+
+    return optfnret
+
 
 
 OFN = Callable[[cfe.CostRiskProblem, Hyperparams], OptimizerFnRet]
