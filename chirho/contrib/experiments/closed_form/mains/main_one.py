@@ -102,6 +102,8 @@ def main(
         **scheduler_kwargs
     )
 
+    keep_per_trial_folders = tune_kwargs.pop('keep_per_trial_folders')
+
     result = tune.run(
         configgabble_optimize_fn,
         config=hparam_space,
@@ -141,6 +143,15 @@ def main(
     # Write the results_df to a csv in the same location.
     result.results_df.to_csv(os.path.join(result.experiment_path, 'results_df.csv'))
 
+    if not keep_per_trial_folders:
+        # Remove every folder that starts with configgabble_optimize_fn.__name__
+        for d in os.listdir(result.experiment_path):
+            if d.startswith(configgabble_optimize_fn.__name__):
+                pth = os.path.join(result.experiment_path, d)
+                assert result.experiment_path in pth
+                assert configgabble_optimize_fn.__name__ in pth
+                os.system(f'rm -rf {pth}')
+
 
 def parse():
     problem_setting_kwargs = dict(
@@ -164,7 +175,8 @@ def parse():
         verbose=None,
         storage_path=os.path.expanduser('~/ray_results/'),
         # For memory concerns, adjust based on machine.
-        max_concurrent_trials=None
+        max_concurrent_trials=None,
+        keep_per_trial_folders=True
     )
 
     # Use argparse to pull in arguments for everything set to None above. Default to what is set above if present.
@@ -189,6 +201,7 @@ def parse():
     parser.add_argument("--verbose", type=int)
     parser.add_argument("--storage_path", type=str, default=tune_kwargs['storage_path'])
     parser.add_argument("--max_concurrent_trials", type=int)
+    parser.add_argument("--keep_per_trial_folders", action='store_true')
 
     # Now fill in dicts with the parsed arguments.
     args = parser.parse_args()
