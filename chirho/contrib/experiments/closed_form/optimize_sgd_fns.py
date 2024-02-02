@@ -459,9 +459,9 @@ def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     posterior_approx = gr_posterior_approx.guides["posterior_approx"].get_posterior().base_dist
     # Doing this to detach the graph.
     posterior_loc = posterior_approx.loc.detach().clone()
-    print(f"posterior_loc: {posterior_loc}")
+    # print(f"posterior_loc: {posterior_loc}")
     posterior_scale = posterior_approx.scale.detach().clone()
-    print(f"posterior_scale: {posterior_scale}")
+    # print(f"posterior_scale: {posterior_scale}")
 
     # Create a new normalized "model" that uses the fitted, but misspecified guide.
     def approx_model():

@@ -13,10 +13,12 @@ import pyro
 from typing import Callable, List, Tuple, Optional
 from collections import OrderedDict
 from pyro.infer.autoguide.initialization import init_to_value
+import warnings
 
 
 def wishart_mindet(n: int, dfnp: int, mindet: float):
-    X = dist.Wishart(covariance_matrix=torch.eye(n), df=tnsr(n + dfnp)).sample()
+    with warnings.catch_warnings(action="ignore"):  # singular sample is not a problem because we will resample.
+        X = dist.Wishart(covariance_matrix=torch.eye(n), df=tnsr(n + dfnp)).sample()
     if torch.linalg.det(X) < mindet:
         return wishart_mindet(n, dfnp, mindet)
     return X
