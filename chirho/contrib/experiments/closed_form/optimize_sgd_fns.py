@@ -348,7 +348,7 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     do.cost_grad = cost_grad
 
-    track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
+    # track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
 
     opfnret = do_loop(
         pref="SGD SNIS",
@@ -356,7 +356,7 @@ def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         do=do,
         theta=theta,
         hparams=hparams,
-        callback=track_guide_callback
+        # callback=track_guide_callback
     )
 
     # # <FIXME REMOVE>
@@ -413,7 +413,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     do.cost_grad = cost_grad
 
-    track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
+    # track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
 
     optfnret = do_loop(
         pref="SGD SS TABI",
@@ -421,7 +421,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         hparams=hparams,
         do=do,
         theta=theta,
-        callback=track_guide_callback
+        # callback=track_guide_callback
     )
 
     return optfnret
@@ -510,7 +510,7 @@ def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
     do.cost_grad = cost_grad
 
-    track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
+    # track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
 
     optfnret = do_loop(
         pref="SGD PAIS",
@@ -518,7 +518,7 @@ def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         hparams=hparams,
         do=do,
         theta=theta,
-        callback=track_guide_callback
+        # callback=track_guide_callback
     )
 
     return optfnret
