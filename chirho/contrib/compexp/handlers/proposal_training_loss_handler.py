@@ -42,7 +42,7 @@ class ProposalTrainingLossHandler(ExpectationHandler, _GuideRegistrationMixin):
     #                               " estimating with the unsoftened values.")
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
-        super()._pyro_compute_expectation_atom(msg)
+        super()._pyro__compute_expectation_atom(msg)
 
         kwargs = msg_args_kwargs_to_kwargs(msg)
 
@@ -75,41 +75,3 @@ class ProposalTrainingLossHandler(ExpectationHandler, _GuideRegistrationMixin):
             optim.step()
 
         msg["value"] = torch.mean(torch.exp(-torch.stack(losses)), dim=0)
-
-
-class ProposalTrainingLossHandlerSharedPerGuide(ProposalTrainingLossHandler):
-    # TODO replace maybe all of the other AllShared with this one?
-    """
-    A quick, hacky version of a handler that detects if a guide is being re-used for multiple expectation
-     atoms, and only samples from each of them one time per guide per context.
-    This may be the way to go in future implementations, as it the original implementation is just a
-     special case where every atom has a different guide.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self._guide_ests = dict()
-
-    def __enter__(self):
-        super().__enter__()
-        # Clear the cached sample on entrance.
-        self._guide_ests = dict()
-        return self
-
-    def _pyro__compute_expectation_atom(self, msg) -> None:
-        # Get the guide for this atom.
-        kwargs = msg_args_kwargs_to_kwargs(msg)
-
-        ea: ExpectationAtom = kwargs.pop("ea")
-        p: ModelType = kwargs["p"]
-        p, q = self._get_pq(ea, p)
-
-        # If it has been evaluated before, use the same sample.
-        if q in self._guide_ests:
-            msg["value"] = self._guide_ests[q]
-            return
-
-        # Otherwise, evaluate it and cache the result.
-        super()._pyro__compute_expectation_atom(msg)
-        self._guide_ests[q] = msg["value"]

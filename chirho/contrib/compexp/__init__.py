@@ -4,7 +4,8 @@ from .composeable_expectation.constant import Constant
 from .handlers.expectation_handler import ExpectationHandler
 from .handlers.importance_sampling_expectation_handler import (
     ImportanceSamplingExpectationHandler,
-    ImportanceSamplingExpectationHandlerAllShared
+    ImportanceSamplingExpectationHandlerAllShared,
+    ImportanceSamplingExpectationHandlerSharedPerGuide
 )
 from .handlers.montecarlo_expectation_handler import (
     MonteCarloExpectationHandler,
@@ -15,8 +16,7 @@ from .handlers.relu_softeners.fill_relu_at_level_exp import FillReluAtLevelExp
 from .handlers.relu_softeners.fill_relu_at_level import FillReluAtLevel
 from .ops import srelu
 from .handlers.proposal_training_loss_handler import (
-    ProposalTrainingLossHandler,
-    ProposalTrainingLossHandlerSharedPerGuide
+    ProposalTrainingLossHandler
 )
 
 E = ExpectationAtom

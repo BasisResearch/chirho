@@ -14,7 +14,7 @@ class ImportanceSamplingExpectationHandler(ExpectationHandler, _GuideRegistratio
         self.num_samples = num_samples
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
-        super()._pyro_compute_expectation_atom(msg)
+        super()._pyro__compute_expectation_atom(msg)
 
         kwargs = msg_args_kwargs_to_kwargs(msg)
 
@@ -68,12 +68,62 @@ class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
         return self._qtr_ptr_s
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
-        super()._pyro_compute_expectation_atom(msg)
+        super()._pyro__compute_expectation_atom(msg)
 
         kwargs = msg_args_kwargs_to_kwargs(msg)
         ea: ExpectationAtom = kwargs.pop("ea")
         p: ModelType = kwargs["p"]
         q: ModelType = self.shared_q
+
+        fpqvals = []
+
+        for qtr, ptr, s in self._lazy_qtr_ptr_s(p, q):
+            fpqval = ptr.log_prob_sum() + torch.log(ea.log_fac_eps + ea.f(s)) - qtr.log_prob_sum()
+            fpqvals.append(torch.exp(fpqval))
+
+        msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
+
+
+class ImportanceSamplingExpectationHandlerSharedPerGuide(ExpectationHandler, _GuideRegistrationMixin):
+    # TODO this sort of generalizes the AllShared above. Combine or inherit or something. Or change
+    #  implementations using AllShared to use this one. Deduplicate code.
+
+    def __init__(self, num_samples: int, callback):
+        super().__init__()
+        self.num_samples = num_samples
+        self.callback = callback
+
+    def __enter__(self):
+        super().__enter__()
+        # Clear the cached sample on entrance.
+        self._guide_qtr_ptr_s = dict()
+        return self
+
+    def _lazy_qtr_ptr_s(self, p, q):
+
+        if q in self._guide_qtr_ptr_s:
+            return self._guide_qtr_ptr_s[q]
+
+        qtr_ptr_s = []
+        for _ in range(self.num_samples):
+            qtr = pyro.poutine.trace(q).get_trace()
+            ptr = pyro.poutine.trace(pyro.poutine.replay(p, trace=qtr)).get_trace()
+            s = kft(qtr)
+            qtr_ptr_s.append((qtr, ptr, s))
+            # TODO HACK this differs from the callback signature in AllShared.
+            self.callback(q)
+
+        self._guide_qtr_ptr_s[q] = qtr_ptr_s
+        return qtr_ptr_s
+
+    def _pyro__compute_expectation_atom(self, msg) -> None:
+        super()._pyro__compute_expectation_atom(msg)
+
+        kwargs = msg_args_kwargs_to_kwargs(msg)
+
+        ea: ExpectationAtom = kwargs.pop("ea")
+        p: ModelType = kwargs["p"]
+        p, q = self._get_pq(ea, p)
 
         fpqvals = []
 

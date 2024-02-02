@@ -528,17 +528,15 @@ def opt_with_nograd_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams)
     # This baseline uses TABI but targets the risk curve instead of the gradients, meaning the complexity of the
     #  TABI problem won't scale with dimension.
 
-    raise NotImplementedError("This is wrong still, because the pseudo-densities need"
-                              " to reflect the risk curve and not the grad risk, which they do now."
-                              "Actually just the positive pseudo-densities need to be updated, which"
-                              " I think we can do manually.")
+    # TODO HACK A lot of hackiness here, similar to the SNIS baseline, in getting around the fact that the
+    #  target curves aren't what we're trying to train guides for.
 
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
     cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
 
-    # There is only one positive guide that targets the full risk curve.
-    pos_guide = pyro.infer.autoguide.AutoMultivariateNormal(
+    # There is only one guide that targets the full risk curve.
+    risk_curve_guide = pyro.infer.autoguide.AutoMultivariateNormal(
         model=model,
         init_scale=problem.q.item(),
         init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
@@ -550,29 +548,63 @@ def opt_with_nograd_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams)
         init_loc_fn=init_to_value(values=dict(z=torch.zeros(problem.n)))
     )
 
+    # Manually specify a guide registry because we're fitting guides for something besides their target curves.
+    gr = _GuideRegistrationMixin()
+
+    gr.guides["risk_curve_guide"] = risk_curve_guide
+    gr.guides["den_guide"] = den_guide
+
+    # This is the TABI expectation programming factor addition for the risk curve, but we're using it here
+    #  in an expectation handler for the gradients.
+    def opt_risk_curve_guide():
+        stochastics = model()
+        pyro.factor("risk_curve_factor", torch.log(problem.scaled_risk(theta, **stochastics)))
+        return stochastics
+    # Register the pseudo_densities that the guides will try to approximate.
+    gr.pseudo_densities["risk_curve_guide"] = opt_risk_curve_guide
+    gr.pseudo_densities["den_guide"] = model
+
+    # Now distribute those manually specified/optimized guides into the composite expectation of interest.
     for part in scaled_risk_grad.parts:
-        if "pos" in part.name:
-            part.guide = pos_guide
-        elif "den" in part.name:
-            part.guide = den_guide
-        elif "neg" in part.name:
-            # No negative component.
-            part.swap_self_for_other_child(other=ep.Constant(tnsr(0.0).double()))
+        if ("pos" in part.name) or ("neg" in part.name):
+            # This same guide is used for both the positive and the negative parts. This is equivalent
+            #  to doing vanilla importance sampling that targets |f(z)|.
+            part.guide = gr.guides["risk_curve_guide"]
+        elif "den" in part.name:  # denominator of tabi decomp.
+            part.guide = gr.guides["den_guide"]
         else:
             raise ValueError(f"Unexpected part name {part.name}")
-    scaled_risk_grad.recursively_refresh_parts()
+
+    # Now we need a callback that will train these guides manually according to when the expectation
+    #  handler lazily samples them.
+    def guide_step_callback(q):
+        # Identify the guide name and just optimize that one. TODO HACK
+        if q is gr.guides["risk_curve_guide"]:
+            k = "risk_curve_guide"
+        elif q is gr.guides["den_guide"]:
+            k = "den_guide"
+        else:
+            raise ValueError(f"Unexpected guide {id(q)}."
+                             f"Should be either"
+                             f"{id(gr.guides['risk_curve_guide'])} "
+                             f"or {id(gr.guides['den_guide'])}")
+        gr.optimize_guides(
+            lr=hparams.svi_lr,
+            n_steps=1,
+            keys=[k]
+        )
 
     # Instead of the normal handler, we use a special handler that tracks guide objects and only samples
     #  each one once per context entrance.
-    eh = ep.ProposalTrainingLossHandlerSharedPerGuide(
+    eh = ep.ImportanceSamplingExpectationHandlerSharedPerGuide(
+        # This doesn't scale with dimension, so has a larger number of samples.
         num_samples=hparams.nograd_tabi_num_samples,
-        lr=hparams.svi_lr,
+        callback=guide_step_callback
     )
-
-    # No need to pass default guides because everything is already specified.
     eh.register_guides(
         ce=scaled_risk_grad,
         model=model,
+        # No auto_guide because all the guides have been manually paired with their respective atoms.
         auto_guide=None
     )
 

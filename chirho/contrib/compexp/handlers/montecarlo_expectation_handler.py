@@ -16,7 +16,7 @@ class MonteCarloExpectationHandler(ExpectationHandler):
                                   "Try running SVI and then calling the expectation with the guide.")
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
-        super()._pyro_compute_expectation_atom(msg)
+        super()._pyro__compute_expectation_atom(msg)
 
         kwargs = msg_args_kwargs_to_kwargs(msg)
         ea: ExpectationAtom = kwargs.pop("ea")
@@ -53,7 +53,7 @@ class MonteCarloExpectationHandlerAllShared(MonteCarloExpectationHandler):
         return self._samples
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
-        super()._pyro_compute_expectation_atom(msg)
+        super()._pyro__compute_expectation_atom(msg)
 
         kwargs = msg_args_kwargs_to_kwargs(msg)
         ea: ExpectationAtom = kwargs.pop("ea")
