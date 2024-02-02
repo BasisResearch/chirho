@@ -53,13 +53,19 @@ class CostRiskProblem:
 
         c = cfe.compute_ana_c(q, rstar, n)
 
-        # Generate a uniformly random direction on the unit hypersphere.
-        theta0 = dist.Normal(torch.zeros(n), torch.ones(n)).sample()
-        # Rescale to the desired radius.
-        theta0 = theta0 / theta0.norm() * (rstar + theta0_rstar_delta)
-        # And transform according to Sigma. This ensures that the initial theta does indeed sit on the rstar +
-        # theta0_rstar_delta contour of p(z), as opposed to just the unit normal.
-        theta0 = torch.linalg.cholesky(Sigma) @ theta0
+        # HACK to get something far away. There's an analytic way to do this but eh.
+        theta0_candidates = []
+        for _ in range(100):
+            # Generate a uniformly random direction on the unit hypersphere.
+            theta0 = dist.Normal(torch.zeros(n), torch.ones(n)).sample()
+            # Rescale to the desired radius.
+            theta0 = theta0 / theta0.norm() * (rstar + theta0_rstar_delta)
+            # And transform according to Sigma. This ensures that the initial theta does indeed sit on the rstar +
+            # theta0_rstar_delta contour of p(z), as opposed to just the unit normal.
+            theta0 = torch.linalg.cholesky(Sigma) @ theta0
+            theta0_candidates.append(theta0)
+        # Pick the one that's furthest to the origin.
+        theta0 = max(theta0_candidates, key=lambda x: x.norm())
 
         self.Sigma = Sigma.double()
         self.Q = Q.double()
