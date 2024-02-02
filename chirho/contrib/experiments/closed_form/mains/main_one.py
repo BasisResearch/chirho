@@ -11,6 +11,13 @@ import pyro
 import os.path as osp
 import torch
 import uuid
+import json
+from chirho.contrib.experiments.closed_form.mains.utils import (
+    load_metadata_from_dir,
+    dict_is_subset,
+    metadata_is_subset,
+    check_results_df_matches_num_samples
+)
 
 pyro.settings.set(module_local_params=True)
 
@@ -215,12 +222,42 @@ def parse():
     # Stuff that doesn't support any configurability.
     tune_kwargs['resources_per_trial'] = dict(cpu=1, gpu=0)  # GIL, so no need for more than 1 cpu.
 
-    return dict(
+    metadata = dict(
         problem_setting_kwargs=problem_setting_kwargs,
         hparam_consts=hparam_consts,
         tune_kwargs=tune_kwargs
     )
 
+    metadata_already_run = load_metadata_from_dir(tune_kwargs['storage_path'])
+
+    print("--------------------------------------------")
+    # Check to see if the experiment we want to run has already run.
+    # Check only problem_setting_kwargs, hparam_consts,
+    #  but also num_samples in tune_kwargs.
+    for metadata_ in metadata_already_run:
+        if metadata_is_subset(subset=metadata_, superset=metadata):
+            if check_results_df_matches_num_samples(metadata_):
+                print("Experiment already run, skipping.")
+                print("Requested:")
+                print(json.dumps(metadata, indent=2))
+                print("Already run:")
+                print(json.dumps(metadata_, indent=2))
+                return None
+            else:
+                print("Experiment already run, but results_df does not have the requested num_samples.")
+                print(" It may have prematurely terminated.")
+                print("Requested:")
+                print(json.dumps(metadata, indent=2))
+                print("Already run:")
+                print(json.dumps(metadata_, indent=2))
+
+    print("Running Metadata:")
+    print(json.dumps(metadata, indent=2))
+
+    return metadata
+
 
 if __name__ == "__main__":
-    main(**parse())
+    main_kwargs = parse()
+    if main_kwargs is not None:
+        main(**main_kwargs)
