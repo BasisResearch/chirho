@@ -2,6 +2,9 @@ import torch
 import chirho.contrib.compexp as ep
 from typing import Tuple
 import chirho.contrib.experiments.closed_form as cfe
+from typing import Callable
+from chirho.contrib.compexp.typedecs import ModelType
+import pyro
 
 
 class DecisionOptimizerAbstract:
@@ -79,6 +82,33 @@ class DecisionOptimizerAnalyticCFE(DecisionOptimizerAbstract):
         grad_estimate_ = self.problem.ana_loss_grad(self.flat_dparams)
 
         return grad_estimate_
+
+
+class DecisionOptimizationManualMC(DecisionOptimizerAbstract):
+    def __init__(
+            self,
+            flat_dparams: torch.nn.Parameter,
+            lr: float,
+            num_samples: int,
+            model: ModelType,
+            cost_grad_manual: Callable):
+        super().__init__()
+
+        self.flat_dparams = flat_dparams
+        self._lr = lr
+        self.cost_grad_manual = cost_grad_manual
+        self.num_samples = num_samples
+        self.model = model
+        self.optim = torch.optim.SGD((self.flat_dparams,), lr=self._lr)
+
+    def estimate_grad(self):
+        self.optim.zero_grad()
+        self.flat_dparams.grad = None
+
+        with pyro.plate("samples", self.num_samples):
+            stochastics = self.model()
+
+        return self.cost_grad_manual(stochastics)
 
 
 class DecisionOptimizerHandlerPerPartial(DecisionOptimizer):

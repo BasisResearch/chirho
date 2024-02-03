@@ -4,7 +4,8 @@ from chirho.contrib.experiments.decision_optimizer import (
     DecisionOptimizer,
     DecisionOptimizerHandlerPerPartial,
     DecisionOptimizerAnalyticCFE,
-    DecisionOptimizerAbstract
+    DecisionOptimizerAbstract,
+    DecisionOptimizationManualMC
 )
 import pyro.distributions as dist
 from torch import tensor as tnsr
@@ -244,21 +245,35 @@ def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
 
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
-    # TODO include an MC that estimates one grad from one z? This will implicitly split it up.
-    cost = ep.E(
-        f=lambda s: (problem.cost(theta) + problem.scaled_risk(theta, s['z'])).squeeze(),
-        name="cost"
-    )
-    cost_grad = cost.grad(theta)
+    def combined_obj_grad(stochastics):
+        z = stochastics['z']
 
-    do = DecisionOptimizer(
+        risks = problem.c * cfe.risk_curve(
+            theta=theta[None, None, :],
+            Q=problem.Q[None, :, :],
+            z=z[:, None, :]
+        )
+        est_risk = risks.mean()
+
+        risk_grad, = torch.autograd.grad(
+            outputs=est_risk,
+            inputs=theta,
+            retain_graph=True,
+            create_graph=True,
+            allow_unused=True,
+        )
+
+        cost_grad = problem.cost_grad(theta)
+
+        return (cost_grad + risk_grad).detach()
+
+    do = DecisionOptimizationManualMC(
         flat_dparams=theta,
+        num_samples=hparams.mc_num_samples,
         model=model,
-        cost=None,
-        expectation_handler=ep.MonteCarloExpectationHandlerAllShared(hparams.mc_num_samples),
-        lr=1.  # Not using the lr here.
+        cost_grad_manual=combined_obj_grad,
+        lr=1.,  # Not using the lr here.
     )
-    do.cost_grad = cost_grad
 
     return do_loop(
         pref="SGD MC",
