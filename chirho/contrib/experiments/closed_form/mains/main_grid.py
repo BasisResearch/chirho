@@ -18,6 +18,9 @@ def parse_arguments():
                         help="Maximum number of concurrent grid cell trials")
     parser.add_argument("--max_concurrent_hyperparam_trials", type=int,
                         help="Maximum number of concurrent hyperparameter tuning trials within an experiment")
+    parser.add_argument("--tabi_num_samples", type=int, default=1)
+    parser.add_argument("--num_steps", type=int, default=1700)
+    parser.add_argument("--burnin", type=int, default=250)
 
     # Grid definition arguments with nargs='+' to accept multiple values
     parser.add_argument("--q", nargs='+', type=float, help="Size of the risk curve.")
@@ -73,6 +76,12 @@ def main():
         high_level_args += ['--num_samples', str(args.num_samples)]
     if args.max_concurrent_hyperparam_trials is not None:
         high_level_args += ['--max_concurrent_trials', str(args.max_concurrent_hyperparam_trials)]
+    if args.tabi_num_samples is not None:
+        high_level_args += ['--tabi_num_samples', str(args.tabi_num_samples)]
+    if args.num_steps is not None:
+        high_level_args += ['--num_steps', str(args.num_steps)]
+    if args.burnin is not None:
+        high_level_args += ['--burnin', str(args.burnin)]
 
     # List to store the commands
     commands = []
