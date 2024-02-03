@@ -59,24 +59,27 @@ def metadata_is_subset(subset, superset):
     :param subset:
     """
 
-    sub_psk = subset["problem_setting_kwargs"]
-    super_psk = superset["problem_setting_kwargs"]
-    if not dict_is_subset(sub_psk, super_psk):
-        return False
+    if "problem_setting_kwargs" in subset:
+        sub_psk = subset["problem_setting_kwargs"]
+        super_psk = superset["problem_setting_kwargs"]
+        if not dict_is_subset(sub_psk, super_psk):
+            return False
 
-    sub_hpc = subset["hparam_consts"]
-    super_hpc = superset["hparam_consts"]
-    if not dict_is_subset(sub_hpc, super_hpc):
-        return False
+    if "hparam_consts" in subset:
+        sub_hpc = subset["hparam_consts"]
+        super_hpc = superset["hparam_consts"]
+        if not dict_is_subset(sub_hpc, super_hpc):
+            return False
 
     # TODO HACK ideally kwargs that affect the optimization
     #  shouldn't be scattered about.
     # And finally, check only the num_samples of the tune_kwargs.
     # The other tune_kwargs are only parallelism/irrelevant settings.
-    sub_tk = subset["tune_kwargs"]
-    super_tk = superset["tune_kwargs"]
-    if not dict_is_subset(sub_tk, super_tk, "num_samples"):
-        return False
+    if "tune_kwargs" in subset:
+        sub_tk = subset["tune_kwargs"]
+        super_tk = superset["tune_kwargs"]
+        if not dict_is_subset(sub_tk, super_tk, "num_samples"):
+            return False
 
     return True
 
