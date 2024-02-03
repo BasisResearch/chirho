@@ -99,16 +99,16 @@ def main():
 
         commands.append(command)
 
-    # # Execute commands with a limit on the number of concurrent grid cell trials
-    # with ProcessPoolExecutor(max_workers=args.max_concurrent_grid_cell_trials) as executor:
-    #     futures = [executor.submit(run_experiment, command) for command in commands]
-    #     for future in as_completed(futures):
-    #         future.result()  # You can handle exceptions here if you want
+    # Execute commands with a limit on the number of concurrent grid cell trials
+    with ProcessPoolExecutor(max_workers=args.max_concurrent_grid_cell_trials) as executor:
+        futures = [executor.submit(run_experiment, command) for command in commands]
+        for future in as_completed(futures):
+            future.result()  # You can handle exceptions here if you want
 
-    # Execute the commands serially.
-    assert args.max_concurrent_grid_cell_trials == 1, "This is a serial execution now."
-    for command in commands:
-        run_experiment(command)
+    # # Execute the commands serially.
+    # assert args.max_concurrent_grid_cell_trials == 1, "This is a serial execution now."
+    # for command in commands:
+    #     run_experiment(command)
 
 
 if __name__ == "__main__":
