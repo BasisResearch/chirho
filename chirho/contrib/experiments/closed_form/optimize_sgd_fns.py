@@ -405,6 +405,11 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         lr=hparams.svi_lr,
     )
 
+    mu_star, Sigma_star = cfe.optimal_tabi_proposal_nongrad(
+        theta=theta,
+        Q=problem.Q,
+        Sigma=problem.Sigma
+    )
     eh.register_guides(
         ce=scaled_risk_grad,
         model=model,
@@ -413,8 +418,8 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
             # Note: this is the tabi optimal for positive numerator of non grad. Burnin
             #  should be able to move the numerating proposals to their grad components
             #  and the denominator the posterior.
-            init_scale=problem.q.item(),
-            init_loc_fn=init_to_value(values=dict(z=tnsr(problem.theta0.detach().clone().numpy())))
+            init_scale=torch.sqrt(torch.linalg.det(Sigma_star)).item(),
+            init_loc_fn=init_to_value(values=dict(z=tnsr(mu_star.detach().clone().numpy())))
         )
     )
 
