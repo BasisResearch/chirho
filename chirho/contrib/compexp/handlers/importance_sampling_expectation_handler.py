@@ -4,7 +4,9 @@ from .guide_registration_mixin import _GuideRegistrationMixin
 import pyro
 import torch
 from ..utils import msg_args_kwargs_to_kwargs, kft
-from ..typedecs import ModelType
+from ..typedecs import ModelType, KWType
+from typing import List, Dict, Tuple, Optional
+from collections import OrderedDict
 
 
 class ImportanceSamplingExpectationHandler(ExpectationHandler, _GuideRegistrationMixin):
@@ -35,6 +37,15 @@ class ImportanceSamplingExpectationHandler(ExpectationHandler, _GuideRegistratio
         msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
 
 
+CACHED_QPS = Tuple[torch.Tensor, torch.Tensor, KWType]
+
+
+def _detach_qps(qps: CACHED_QPS):
+    # Overkill attempt to address mystery memory leak.
+    qlp, plp, s = qps
+    return qlp.detach(), plp.detach(), OrderedDict((k, v.detach()) for k, v in s.items())
+
+
 class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
     """
     A quick, hacky version of importance sampling that shares the exact same sample (and proposal)
@@ -48,24 +59,25 @@ class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
         self.shared_q = shared_q
         self.callback = callback
 
-        self._qtr_ptr_s = None
+        self._qlp_plp_s = None  # type: Optional[List[CACHED_QPS]]
 
     def __enter__(self):
         super().__enter__()
         # Clear the cached sample on entrance.
-        self._qtr_ptr_s = None
+        self._qlp_plp_s = None
         return self
 
-    def _lazy_qtr_ptr_s(self, p, q):
-        if self._qtr_ptr_s is None:
-            self._qtr_ptr_s = []
+    def _lazy_qlp_plp_s(self, p, q):
+        if self._qlp_plp_s is None:
+            self._qlp_plp_s = []
             for _ in range(self.num_samples):
                 qtr = pyro.poutine.trace(q).get_trace()
                 ptr = pyro.poutine.trace(pyro.poutine.replay(p, trace=qtr)).get_trace()
                 s = kft(qtr)
-                self._qtr_ptr_s.append((qtr, ptr, s))
+                qlp, plp = qtr.log_prob_sum(), ptr.log_prob_sum()
+                self._qlp_plp_s.append(_detach_qps((qlp, plp, s)))
                 self.callback()
-        return self._qtr_ptr_s
+        return self._qlp_plp_s
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
         super()._pyro__compute_expectation_atom(msg)
@@ -77,8 +89,8 @@ class ImportanceSamplingExpectationHandlerAllShared(ExpectationHandler):
 
         fpqvals = []
 
-        for qtr, ptr, s in self._lazy_qtr_ptr_s(p, q):
-            fpqval = ptr.log_prob_sum() + torch.log(ea.log_fac_eps + ea.f(s)) - qtr.log_prob_sum()
+        for qlp, plp, s in self._lazy_qlp_plp_s(p, q):
+            fpqval = plp + torch.log(ea.log_fac_eps + ea.f(s).detach()) - qlp
             fpqvals.append(torch.exp(fpqval))
 
         msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
@@ -96,25 +108,26 @@ class ImportanceSamplingExpectationHandlerSharedPerGuide(ExpectationHandler, _Gu
     def __enter__(self):
         super().__enter__()
         # Clear the cached sample on entrance.
-        self._guide_qtr_ptr_s = dict()
+        self._guide_qlp_plp_s = dict()  # type: Dict[int, List[CACHED_QPS]]
         return self
 
-    def _lazy_qtr_ptr_s(self, p, q):
+    def _lazy_qlp_plp_s(self, p, q):
 
-        if q in self._guide_qtr_ptr_s:
-            return self._guide_qtr_ptr_s[q]
+        if id(q) in self._guide_qlp_plp_s:
+            return self._guide_qlp_plp_s[id(q)]
 
-        qtr_ptr_s = []
+        qlp_plp_s = []
         for _ in range(self.num_samples):
             qtr = pyro.poutine.trace(q).get_trace()
             ptr = pyro.poutine.trace(pyro.poutine.replay(p, trace=qtr)).get_trace()
             s = kft(qtr)
-            qtr_ptr_s.append((qtr, ptr, s))
+            qlp, plp = qtr.log_prob_sum(), ptr.log_prob_sum()
+            qlp_plp_s.append(_detach_qps((qlp, plp, s)))
             # TODO HACK this differs from the callback signature in AllShared.
             self.callback(q)
 
-        self._guide_qtr_ptr_s[q] = qtr_ptr_s
-        return qtr_ptr_s
+        self._guide_qlp_plp_s[id(q)] = qlp_plp_s
+        return qlp_plp_s
 
     def _pyro__compute_expectation_atom(self, msg) -> None:
         super()._pyro__compute_expectation_atom(msg)
@@ -127,8 +140,8 @@ class ImportanceSamplingExpectationHandlerSharedPerGuide(ExpectationHandler, _Gu
 
         fpqvals = []
 
-        for qtr, ptr, s in self._lazy_qtr_ptr_s(p, q):
-            fpqval = ptr.log_prob_sum() + torch.log(ea.log_fac_eps + ea.f(s)) - qtr.log_prob_sum()
+        for qlp, plp, s in self._lazy_qlp_plp_s(p, q):
+            fpqval = plp + torch.log(ea.log_fac_eps + ea.f(s).detach()) - qlp
             fpqvals.append(torch.exp(fpqval))
 
         msg["value"] = torch.mean(torch.stack(fpqvals), dim=0)
