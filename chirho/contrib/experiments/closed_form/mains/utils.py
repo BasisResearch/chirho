@@ -3,6 +3,7 @@ import pickle
 from typing import List, Dict
 import os
 import numpy as np
+import shutil
 import pandas as pd
 
 
@@ -97,3 +98,23 @@ def check_results_df_matches_num_samples(loaded_metadata: Dict) -> bool:
 
     # Return whether the row count matches tune_kwargs num_samples
     return results_df.shape[0] == loaded_metadata["tune_kwargs"]["num_samples"]
+
+
+def zip_complete_experiments(dir_path: str, output_path: str):
+
+    complete_experiment_metadata = load_metadata_from_dir(dir_path)
+
+    if not len(complete_experiment_metadata):
+        raise ValueError("No complete experiments found in directory.")
+
+    subdirs_to_zip = [metadata["directory"] for metadata in complete_experiment_metadata]
+
+    # Create a directory at the output path.
+    os.makedirs(output_path, exist_ok=False)
+
+    # Copy the subdirectories to the new output directory.
+    for subdir in subdirs_to_zip:
+        shutil.copytree(subdir, osp.join(output_path, osp.basename(subdir)))
+
+    # And zip the output directory, adding the .zip extension. Leave both the directory and the zip file.
+    shutil.make_archive(output_path, 'zip', output_path)
