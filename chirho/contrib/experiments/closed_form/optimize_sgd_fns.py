@@ -5,7 +5,8 @@ from chirho.contrib.experiments.decision_optimizer import (
     DecisionOptimizerHandlerPerPartial,
     DecisionOptimizerAnalyticCFE,
     DecisionOptimizerAbstract,
-    DecisionOptimizationManualMC
+    DecisionOptimizationManualMC,
+    DecisionOptimizationManualSNISNoGrad
 )
 import pyro.distributions as dist
 from torch import tensor as tnsr
@@ -98,6 +99,10 @@ class Hyperparams:
     def snis_num_samples(self):
         # SNIS does the same work as TABI except only fits a single guide instead of 3.
         return self.tabi_num_samples * 3
+
+    @property
+    def snis_nograd_num_samples(self):
+        return self.snis_num_samples * self.n
 
     @property
     def approx_posterior_is_num_samples(self):
@@ -235,7 +240,6 @@ def opt_with_zerovar_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         hparams=hparams
     )
 
-
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # TODO FIXME see tag d78107gkl
     def model():
@@ -307,6 +311,77 @@ def _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta):
         return problem.cost_grad(theta) + srg
 
     return cost_grad, scaled_risk_grad, model
+
+
+def opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+
+    _, _, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
+
+    # Construct guide registry for SNIS with analytic optimal guide (proposals) known.
+    init_loc = tnsr(problem.theta0.detach().clone().numpy() / 2.)  # overzealously avoiding reference bugs...
+    gr = cfe.build_guide_registry_for_snis_nograd(
+        problem=problem,
+        params=theta,
+        auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
+        # Initialization for SNIS needs be roughly approximate its optimal proposal, which covers both the
+        #  posterior and the risk curve.
+        # Half the distance to the init_loc, so origin and risk curve will be at 2 stdevs
+        init_scale=(init_loc.norm() / 2.).item() * 2.,
+        # Halfway between the origin and risk curve.
+        init_loc_fn=init_to_value(values=dict(z=init_loc))
+    )
+
+    def ele_obj_grad(stochastics):
+        z = stochastics['z']
+
+        # TODO deduplicate with mc obj grad that sums stuff.
+
+        def frisks(theta_):
+            return problem.c * cfe.risk_curve(
+                theta=theta_[None, None, :],
+                Q=problem.Q[None, :, :],
+                z=z[:, None, :]
+            ).squeeze()
+
+        risk_grad = torch.autograd.functional.jacobian(frisks, theta)
+
+        cost_grad = problem.cost_grad(theta)
+
+        return (cost_grad[None, :] + risk_grad).detach()
+
+    # Following a manual approach like with MC above. Note that this does differ slightly from other methods in that
+    #  after every estimate draw, the guide is updated. Here, after all estimate draws, the guide is updated with
+    #  that number of steps. Importantly, the guide is still updated between every gradient step.
+    do = DecisionOptimizationManualSNISNoGrad(
+        flat_dparams=theta,
+        lr=1.,  # Not using the lr here.
+        num_samples=hparams.snis_nograd_num_samples,
+        model=model,
+        gr=gr,
+        cost_grad_manual=ele_obj_grad
+    )
+
+    track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
+
+    optfnret = do_loop(
+        pref="SGD SNIS NG",
+        problem=problem,
+        do=do,
+        theta=theta,
+        hparams=hparams,
+        callback=track_guide_callback
+    )
+
+    # <FIXME REMOVE>
+    cfe.v2d.animate_guides_snis_nograd_from_guide_track(
+        problem=problem,
+        guide_track=guide_track,
+        trajis=tuple(range(0, len(guide_track.thetas), 50))
+    )
+    # </FIXME REMOVE>
+
+    return optfnret
 
 
 def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):

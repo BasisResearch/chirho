@@ -129,7 +129,7 @@ def build_guide_registry_for_snis_grads(
 def build_guide_registry_for_snis_nograd(
         problem: CostRiskProblem,
         params: torch.nn.Parameter,
-        auto_guide: AutoGuide,
+        auto_guide: Type[AutoGuide],
         auto_guide_model_wrap: Optional[Callable] = None,
         **auto_guide_kwargs
 ) -> _GuideRegistrationMixin:
@@ -146,7 +146,7 @@ def build_guide_registry_for_snis_nograd(
 
     name = f"snis_opt_nograd"
     gr.guides[name] = auto_guide(auto_guide_model_wrap(model), **auto_guide_kwargs)
-    f = build_opt_snis_proposal_f(problem, params, 0)
+    f = build_opt_snis_proposal_f(problem, params)
     gr.pseudo_densities[name] = build_snis_pseudo_density(gr.guides[name], f, name)
 
     return gr

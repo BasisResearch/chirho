@@ -5,6 +5,8 @@ import chirho.contrib.experiments.closed_form as cfe
 from typing import Callable
 from chirho.contrib.compexp.typedecs import ModelType
 import pyro
+from chirho.contrib.compexp.utils import kft
+import warnings
 
 
 class DecisionOptimizerAbstract:
@@ -109,6 +111,90 @@ class DecisionOptimizationManualMC(DecisionOptimizerAbstract):
             stochastics = self.model()
 
         return self.cost_grad_manual(stochastics)
+
+
+class DecisionOptimizationManualSNISNoGrad(DecisionOptimizerAbstract):
+    SITES = ["z", "denormalization_factor"]  # TODO HACK 2789hfd cz we need elementwise logprobs
+
+    def __init__(
+            self,
+            flat_dparams: torch.nn.Parameter,
+            lr: float,
+            num_samples: int,
+            model: ModelType,
+            gr,
+            cost_grad_manual: Callable,
+    ):
+        super().__init__()
+
+        self.flat_dparams = flat_dparams
+        self._lr = lr
+        self.cost_grad_manual = cost_grad_manual
+        self.num_samples = num_samples
+        self.model = model
+        self.gr = gr
+        all_guides = list(self.gr.guides.values())
+        assert len(all_guides) == 1, "SNIS no grad guide registry should only have one guide."
+        self.guide = all_guides[0]
+        self.optim = torch.optim.SGD((self.flat_dparams,), lr=self._lr)
+
+    # TODO HACK 2789hfd cz we need elementwise logprobs
+    def elementwise_log_probs_for_model(self, tr):
+        ele_log_prob = torch.tensor(0.)
+        for site_name in self.SITES:
+            site = tr.nodes[site_name]
+            elp = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+            ele_log_prob = elp + ele_log_prob
+        return ele_log_prob
+
+    # TODO HACK 2789hfd cz we need elementwise logprobs
+    def elementwise_log_probs_for_guide(self, tr):
+        ele_log_prob = torch.tensor(0.)
+        for name, site in tr.nodes.items():
+            if name.endswith("_latent"):
+                elp = site["fn"].log_prob(site["value"], *site["args"], **site["kwargs"])
+                ele_log_prob = elp + ele_log_prob
+        return ele_log_prob
+
+    def opt_guides(self):
+        self.gr.optimize_guides(
+            # lr=hparams.svi_lr, # TODO WIP
+            lr=3e-5,
+            # Note the way that the callback is used in ...AllShared handler — this will end up
+            #  taking a step for each of the snis_num_samples samples.
+            n_steps=self.num_samples
+        )
+
+    def estimate_grad(self):
+        self.optim.zero_grad()
+        self.flat_dparams.grad = None
+
+        with warnings.catch_warnings(action="ignore"):  # TODO WIP hunting a warning...
+            self.opt_guides()
+
+        with pyro.poutine.trace() as qtr:
+            with pyro.plate("samples", self.num_samples):
+                self.guide()
+        qtr = qtr.get_trace()
+        ptr = pyro.poutine.trace(pyro.poutine.replay(self.model, trace=qtr)).get_trace()
+        stochastics = kft(qtr, "z")  # TODO HACK assumes we want z.
+
+        grad_estimate_ = self.cost_grad_manual(stochastics)
+
+        plp = self.elementwise_log_probs_for_model(ptr)
+        qlp = self.elementwise_log_probs_for_guide(qtr)
+
+        lw = plp - qlp
+        lf_pos = lw[:, None] + torch.log(1e-25 + torch.relu(grad_estimate_))
+        lf_neg = lw[:, None] + torch.log(1e-25 + torch.relu(-grad_estimate_))
+
+        log_pos_num = torch.logsumexp(lf_pos, dim=0)
+        log_neg_num = torch.logsumexp(lf_neg, dim=0)
+        log_denominator = torch.logsumexp(lw, dim=0)
+
+        est = (log_pos_num.exp() - log_neg_num.exp()) / log_denominator.exp()
+
+        return est.detach()
 
 
 class DecisionOptimizerHandlerPerPartial(DecisionOptimizer):

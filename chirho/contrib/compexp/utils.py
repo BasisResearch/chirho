@@ -14,10 +14,16 @@ def msg_args_kwargs_to_kwargs(msg):
 
 
 # Keyword arguments From Trace
-def kft(trace) -> KWType:
+def kft(trace, *whitelist: str) -> KWType:
     # Copy the ordereddict.
     new_trace = OrderedDict(trace.nodes.items())
-    # Remove the _INPUT and _RETURN nodes.
-    del new_trace["_INPUT"]
-    del new_trace["_RETURN"]
+
+    # If a whitelist is provided, only include the keys in the whitelist.
+    if whitelist:
+        new_trace = OrderedDict([(k, v) for k, v in new_trace.items() if k in whitelist])
+    else:
+        # Remove the _INPUT and _RETURN nodes, if present.
+        new_trace.pop("_INPUT", None)
+        new_trace.pop("_RETURN", None)
+
     return OrderedDict(zip(new_trace.keys(), [v["value"] for v in new_trace.values()]))
