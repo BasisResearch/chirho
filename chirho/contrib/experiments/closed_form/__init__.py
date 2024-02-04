@@ -13,6 +13,7 @@ from .optimize_sgd_fns import (
     opt_with_zerovar_sgd,
     opt_with_pais_sgd,
     opt_with_nograd_tabi_sgd,
+    opt_with_nograd_snis_sgd,
     adjust_grads_,
     clip_norm_,
     Hyperparams,
@@ -22,7 +23,7 @@ from .optimize_sgd_fns import (
 from .deserialize_from_ray import deserialize_from_ray
 from .snis_ana_pseuddensities import (
     build_guide_registry_for_snis_grads,
-    build_guide_registry_for_snis_grads,
+    build_guide_registry_for_snis_nograd,
     build_opt_snis_proposal_f,
     build_opt_snis_grad_proposal_f
 )
