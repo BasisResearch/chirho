@@ -27,9 +27,9 @@ def _build_snis_opt_proposal_density_grad(
     return qstar_snis
 
 
-def plot_f_contours_on_ax(ax, f, xlim, ylim, n=40):
-    x = np.linspace(-xlim, xlim, n)
-    y = np.linspace(-ylim, ylim, n)
+def plot_f_contours_on_ax(ax, f, xlim, ylim, n=40, contourf=True, **kwargs):
+    x = np.linspace(*xlim, n)
+    y = np.linspace(*ylim, n)
     X, Y = np.meshgrid(x, y)
     Z = np.zeros_like(X)
     # TODO vectorize
@@ -38,8 +38,12 @@ def plot_f_contours_on_ax(ax, f, xlim, ylim, n=40):
             t = torch.tensor(np.array([X[i, j], Y[i, j]])).double()
             # Note Z is meshgrid syntax that differs from z, our syntax for rv.
             Z[i, j] = f({'z': t}).detach().numpy()
-    # A filled contour.
-    ax.contourf(X, Y, Z, cmap='Blues', levels=20)
+    if contourf:
+        # A filled contour.
+        ax.contourf(X, Y, Z, **kwargs)
+    else:
+        # A line contour.
+        ax.contour(X, Y, Z, **kwargs)
     return ax
 
 
@@ -59,29 +63,31 @@ def plot_mvn_contours_on_ax(ax, loc, scale_tril, n=40, **kwargs):
 def animate_guides_snis_grad(
         problem: cfe.CostRiskProblem,
         theta,
-        guide_loc,
-        guide_scale_tril,
-        pi: int # parameter index
+        pi: int,  # parameter index
+        guide_loc=None,
+        guide_scale_tril=None,
+        ax=None,
+        res=100,
+        xlim=(-4., 4.),
+        ylim=(-4., 4.),
+        **kwargs
 ):
-    # TODO unfix
-    RES = 100
-    XLIM = 4
-    YLIM = 4
 
     theta = torch.tensor(theta).double().requires_grad_()
 
     qstar = _build_snis_opt_proposal_density_grad(problem, theta, pi)
 
-    # with large dpi
-    fig, ax = plt.subplots(dpi=300)
-    ax.set_title(f"pi: {pi}")
+    if ax is None:
+        fig, ax = plt.subplots(dpi=300)
+        ax.set_title(f"pi: {pi}")
     # TODO can help resolution by targeting the relevant bits with the xlim ylim
-    plot_f_contours_on_ax(ax, qstar, XLIM, YLIM, n=RES)
+    plot_f_contours_on_ax(ax, qstar, xlim, ylim, n=res, **kwargs)
 
     # With small linewidth
-    plot_mvn_contours_on_ax(
-        ax, guide_loc, guide_scale_tril, cmap='Greens', n=RES, linewidths=0.5
-    )
+    if guide_loc is not None and guide_scale_tril is not None:
+        plot_mvn_contours_on_ax(
+            ax, guide_loc, guide_scale_tril, cmap='Greens', n=res, linewidths=0.5
+        )
 
 
 def animate_guides_snis_grad_from_guide_track(problem: cfe.CostRiskProblem, guide_track: cfe.GuideTrack):
@@ -91,4 +97,4 @@ def animate_guides_snis_grad_from_guide_track(problem: cfe.CostRiskProblem, guid
             guide_loc = list(guide_track.guide_means.values())[pi][traji]
             guide_scale_tril = list(guide_track.guide_scale_trils.values())[pi][traji]
 
-            animate_guides_snis_grad(problem, theta, guide_loc, guide_scale_tril, pi)
+            animate_guides_snis_grad(problem, theta, pi, guide_loc, guide_scale_tril)

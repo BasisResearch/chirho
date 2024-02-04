@@ -236,12 +236,15 @@ def opt_with_zerovar_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     )
 
 
-def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams, approx_model=None):
     # TODO FIXME see tag d78107gkl
     def model():
         # Leave this normalized just to simplify. This essentially says we're assuming
         #  that e.g. MC is using a guide that is perpetually converged to the true posterior.
         return OrderedDict(z=problem.model())
+
+    if approx_model is not None:
+        model = approx_model
 
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
@@ -394,7 +397,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     #  guides for the grad risk curve).
     for part in scaled_risk_grad.parts:
         if "den" in part.name:
-            part.guide = pyro.infer.autoguide.AutoMultivariateNormal(
+            part.guide = pyro.infer.autoguide.AutoDiagonalNormal(
                 model=model,
                 init_scale=1.,
                 init_loc_fn=init_to_value(values=dict(z=torch.zeros(problem.n)))
@@ -541,7 +544,7 @@ def opt_with_pais_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         # callback=track_guide_callback
     )
 
-    return optfnret
+    return optfnret, approx_model
 
 
 def opt_with_nograd_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
