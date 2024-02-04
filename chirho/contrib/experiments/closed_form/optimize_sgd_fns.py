@@ -240,6 +240,7 @@ def opt_with_zerovar_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         hparams=hparams
     )
 
+
 def opt_with_mc_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # TODO FIXME see tag d78107gkl
     def model():
@@ -359,6 +360,7 @@ def opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams)
         num_samples=hparams.snis_nograd_num_samples,
         model=model,
         gr=gr,
+        svi_lr=hparams.svi_lr,
         cost_grad_manual=ele_obj_grad
     )
 
@@ -373,13 +375,13 @@ def opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams)
         callback=track_guide_callback
     )
 
-    # <FIXME REMOVE>
-    cfe.v2d.animate_guides_snis_nograd_from_guide_track(
-        problem=problem,
-        guide_track=guide_track,
-        trajis=tuple(range(0, len(guide_track.thetas), 50))
-    )
-    # </FIXME REMOVE>
+    # # <FIXME REMOVE>
+    # cfe.v2d.animate_guides_snis_nograd_from_guide_track(
+    #     problem=problem,
+    #     guide_track=guide_track,
+    #     trajis=tuple(range(0, len(guide_track.thetas), 50))
+    # )
+    # # </FIXME REMOVE>
 
     return optfnret
 

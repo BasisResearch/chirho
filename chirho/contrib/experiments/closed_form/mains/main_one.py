@@ -47,6 +47,8 @@ def adjust_config_and_get_optimize_fn(config: Dict):
         optimize_fn = cfe.opt_with_nograd_tabi_sgd
     elif optimize_fn_name == cfe.opt_with_zerovar_sgd.__name__:
         optimize_fn = cfe.opt_with_zerovar_sgd
+    elif optimize_fn_name == cfe.opt_with_nograd_snis_sgd.__name__:
+        optimize_fn = cfe.opt_with_nograd_snis_sgd
     else:
         raise NotImplementedError(f"Unknown optimize_fn_name {optimize_fn_name}")
 
