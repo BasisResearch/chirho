@@ -21,6 +21,7 @@ def parse_arguments():
     parser.add_argument("--tabi_num_samples", type=int, default=1)
     parser.add_argument("--num_steps", type=int, default=1700)
     parser.add_argument("--burnin", type=int, default=250)
+    parser.add_argument("--use_asha", action='store_true')
 
     # Grid definition arguments with nargs='+' to accept multiple values
     parser.add_argument("--q", nargs='+', type=float, help="Size of the risk curve.")
@@ -82,6 +83,8 @@ def main():
         high_level_args += ['--num_steps', str(args.num_steps)]
     if args.burnin is not None:
         high_level_args += ['--burnin', str(args.burnin)]
+    if args.use_asha:
+        high_level_args += ['--use_asha']
 
     # List to store the commands
     commands = []

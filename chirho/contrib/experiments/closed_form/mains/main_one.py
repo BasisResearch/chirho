@@ -2,7 +2,7 @@ import argparse
 import chirho.contrib.experiments.closed_form as cfe
 from typing import Dict
 from ray import tune
-from ray.tune.schedulers import ASHAScheduler
+from ray.tune.schedulers import ASHAScheduler, FIFOScheduler
 import os
 import pickle
 from copy import copy
@@ -64,7 +64,7 @@ def main(
         tune_kwargs: Dict
 ):
     """
-    Run a single experiment with a single configuration, but with AHSA for hyperparameter tuning.
+    Run a single experiment with a single configuration, but with hyperparameter search.
     """
 
     # Set up the hyperparameter space.
@@ -111,9 +111,13 @@ def main(
         max_t=hparam_consts['num_steps'] + 1,
         stop_last_trials=False)
 
-    scheduler = ASHAScheduler(
-        **scheduler_kwargs
-    )
+    use_asha = tune_kwargs.pop('use_asha')
+    if use_asha:
+        scheduler = ASHAScheduler(
+            **scheduler_kwargs
+        )
+    else:
+        scheduler = FIFOScheduler()
 
     keep_per_trial_folders = tune_kwargs.pop('keep_per_trial_folders')
 
@@ -189,7 +193,8 @@ def parse():
         storage_path=os.path.expanduser('~/ray_results/'),
         # For memory concerns, adjust based on machine.
         max_concurrent_trials=None,
-        keep_per_trial_folders=True
+        keep_per_trial_folders=True,
+        use_asha=False
     )
 
     # Use argparse to pull in arguments for everything set to None above. Default to what is set above if present.
@@ -215,6 +220,7 @@ def parse():
     parser.add_argument("--storage_path", type=str, default=tune_kwargs['storage_path'])
     parser.add_argument("--max_concurrent_trials", type=int)
     parser.add_argument("--keep_per_trial_folders", action='store_true')
+    parser.add_argument("--use_asha", action='store_true')
 
     # Now fill in dicts with the parsed arguments.
     args = parser.parse_args()
