@@ -136,27 +136,28 @@ class _GuideRegistrationMixin:
         return p, q
 
     @staticmethod
-    def _evaluate_unnorm_likelihoods(p, samples, rv_names: List[str]):
+    def _evaluate_unnorm_likelihoods(p, samples, rv_name: str):
         # TODO how to vectorize this?
         log_likelihoods = []
         for sample in samples:
-            with pyro.poutine.condition(data={n: torch.tensor(s) for n, s in zip(rv_names, sample)}):
+            with pyro.poutine.condition(data={rv_name: torch.tensor(sample)}):
                 log_likelihood = pyro.poutine.trace(p).get_trace().log_prob_sum()
                 log_likelihoods.append(log_likelihood)
 
         return torch.tensor(log_likelihoods).exp().detach()
 
-    def _gen_samples(self, p, n: int, rv_names: List[str]):
+    def _gen_samples(self, p, n: int, stochastic_indexers: List[Callable]):
         samples = []
         for _ in range(n):
             sample = p()
-            samples.append([sample[k].item() for k in rv_names])
+            samples.append([stochastic_indexer(sample) for stochastic_indexer in stochastic_indexers])
         return samples
 
     # TODO change the 1d plotter plot_guide_pseudo_likelihood to also take an ax and single key,
     #  and then plot to the ax.
     def plot_guide_pseudo_likelihood_2d(
-            self, rv1_name, rv2_name, ax, key: str, n: int = 1000, resolution: int = 5,
+            self, stochastic_indexer1: Callable, stochastic_indexer2: Callable, rv_name: str,
+            ax, key: str, n: int = 1000, resolution: int = 5,
             guide_kde_kwargs=None, guide_scatter_kwargs=None, model_contour_kwargs=None):
 
         if not len(self.keys()):
@@ -171,13 +172,19 @@ class _GuideRegistrationMixin:
 
         # Generate samples from the model to compute bounds.
         samples = np.array(
-            self._gen_samples(self.registered_model, n, [rv1_name, rv2_name]))
+            self._gen_samples(self.registered_model, n, [stochastic_indexer1, stochastic_indexer2]))
 
         rv1_ls = np.linspace(0.00, 1.0, resolution)
         rv2_ls = np.linspace(0.00, 1.0, resolution)
 
-        rv1_ls = rv1_ls * (samples[:, 0].max() - samples[:, 0].min()) + samples[:, 0].min()
-        rv2_ls = rv2_ls * (samples[:, 1].max() - samples[:, 1].min()) + samples[:, 1].min()
+        # xmin, xmax = samples[:, 0].min(), samples[:, 0].max()
+        # ymin, ymax = samples[:, 1].min(), samples[:, 1].max()
+        # FIXME DEBUG HACK
+        xmin, xmax = -3., 3.
+        ymin, ymax = -6., 6.
+
+        rv1_ls = rv1_ls * (xmax - xmin) + xmin
+        rv2_ls = rv2_ls * (ymax - ymin) + ymin
 
         X, Y = np.meshgrid(rv1_ls, rv2_ls, indexing='ij')
         xy = np.vstack([X.ravel(), Y.ravel()]).T
@@ -187,15 +194,15 @@ class _GuideRegistrationMixin:
         # FIXME 901dksk This doesn't work with guides for some reason.
         # guide_y = self._evaluate_unnorm_likelihoods(guide, xy, [rv1_name, rv2_name])
         # guide_y = np.array(guide_y).reshape(X.shape)
-        guide_samples = np.array(self._gen_samples(guide, n, [rv1_name, rv2_name]))
+        guide_samples = np.array(self._gen_samples(guide, n, [stochastic_indexer1, stochastic_indexer2]))
 
-        pseudo_density_y = self._evaluate_unnorm_likelihoods(pseudo_density, xy, [rv1_name, rv2_name])
+        pseudo_density_y = self._evaluate_unnorm_likelihoods(pseudo_density, xy, rv_name)
         pseudo_density_y = np.array(pseudo_density_y).reshape(X.shape)
         # TODO lazily do this one?
-        model_y = self._evaluate_unnorm_likelihoods(self.registered_model, xy, [rv1_name, rv2_name])
+        model_y = self._evaluate_unnorm_likelihoods(self.registered_model, xy, rv_name)
         model_y = np.array(model_y).reshape(X.shape)
 
-        ax.contourf(X, Y, pseudo_density_y, levels=15)
+        ax.contourf(X, Y, pseudo_density_y, levels=30)
         # FIXME 901dksk
         # ax.contour(X, Y, guide_y, colors='orange', levels=4)
         guide_scatter_kwargs = guide_scatter_kwargs or dict(color='orange', alpha=0.5)
@@ -204,7 +211,7 @@ class _GuideRegistrationMixin:
         ax.contour(X, Y, model_y, **model_contour_kwargs)
 
     def plot_guide_pseudo_likelihood(
-            self, rv_name: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,
+            self, stochastics_indexer: Callable, rv: str, guide_kde_kwargs, pseudo_density_plot_kwargs, keys: List[str] = None,
             n: int = 1000
     ):
         # TODO move this to a separate class and inherit or something, just so plotting code doesn't clutter
@@ -225,20 +232,20 @@ class _GuideRegistrationMixin:
             pseudo_density = self.pseudo_densities[k]
             guide = self.guides[k]
 
-            if self.registered_model()[rv_name].ndim != 0:
+            if stochastics_indexer(self.registered_model()).ndim != 0:
                 raise ValueError("Can only plot pseudo likelihood/guide comparisons for univariates.")
 
             fig, ax = plt.subplots(1, 1)
-            sns.kdeplot([guide()[rv_name].item() for _ in range(n)], label="guide", **guide_kde_kwargs)
+            sns.kdeplot([stochastics_indexer(guide()).item() for _ in range(n)], label="guide", **guide_kde_kwargs)
 
             tax = ax.twinx()
 
-            model_samples = torch.tensor([self.registered_model()[rv_name] for _ in range(n)])
+            model_samples = torch.tensor([stochastics_indexer(self.registered_model()) for _ in range(n)])
             xx = torch.linspace(model_samples.min(), model_samples.max(), n).detach()
 
             lps = []
             for x in xx:
-                cm = pyro.poutine.condition(pseudo_density, data={rv_name: x})
+                cm = pyro.poutine.condition(pseudo_density, data={rv: x})
                 lp = pyro.poutine.trace(cm).get_trace().log_prob_sum()
                 lps.append(lp)
             lps = torch.tensor(lps).exp().detach().numpy()
@@ -246,7 +253,7 @@ class _GuideRegistrationMixin:
             # This will be squiggly if there are other latents. TODO smooth?
             tax.plot(xx, lps, label="pseudo-density", **pseudo_density_plot_kwargs)
 
-            ax.set_title(f"q and pseudo-p for {rv_name} and part {k}")
+            ax.set_title(f"q and pseudo-p for {rv} and part {k}")
 
             # Add single legend for both.
             lines, labels = ax.get_legend_handles_labels()

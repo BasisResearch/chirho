@@ -107,10 +107,16 @@ class CostRiskProblem:
         return torch.autograd.grad(CostRiskProblem.cost(theta), theta)[0]
 
     def scaled_risk(self, theta, z):
-        return self.c * cfe.risk_curve(theta=theta, Q=self.Q, z=z)
+        return self.c * self.risk(theta, z)
 
     def scaled_exp_risk(self, theta):
-        return self.c * cfe.full_ana_exp_risk(theta=theta, Q=self.Q, Sigma=self.Sigma)
+        return self.c * self.exp_risk(theta)
+
+    def risk(self, theta, z):
+        return cfe.risk_curve(theta=theta, Q=self.Q, z=z)
+
+    def exp_risk(self, theta):
+        return cfe.full_ana_exp_risk(theta=theta, Q=self.Q, Sigma=self.Sigma)
 
     def model(self):
         return pyro.sample('z', dist.MultivariateNormal(loc=torch.zeros(self.n).double(), covariance_matrix=self.Sigma))

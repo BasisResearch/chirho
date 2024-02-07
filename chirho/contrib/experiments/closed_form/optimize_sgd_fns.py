@@ -28,6 +28,8 @@ from itertools import product
 import pyro
 import functools
 from chirho.contrib.compexp.handlers.guide_registration_mixin import _GuideRegistrationMixin
+from pyro.nn.module import PyroModule, PyroParam
+import functools
 
 pyro.settings.set(module_local_params=True)
 
@@ -203,6 +205,20 @@ class GuideTrack:
     thetas: List[np.ndarray]
 
 
+@functools.singledispatch
+def _get_locs_and_scale_trils(guide):
+    raise NotImplementedError()
+
+
+@_get_locs_and_scale_trils.register(pyro.infer.autoguide.AutoMultivariateNormal)
+def _get_locs_and_scale_trils_autonormal(guide):
+    pseudoposterior = guide.get_posterior()
+    loc = pseudoposterior.loc.detach().clone().numpy()
+    scale_tril = pseudoposterior.scale_tril.detach().clone().numpy()
+    raise NotImplementedError("Haven't tested this since refactoring for the mixture guide.")
+    return loc.unsqueeze(0), scale_tril.unsqueeze(0)
+
+
 def _build_track_guide_callback(guide_dict, problem):
 
     gt = GuideTrack()
@@ -213,9 +229,9 @@ def _build_track_guide_callback(guide_dict, problem):
 
     def track_guide_callback(i, theta):
         for k, guide in guide_dict.items():
-            pseudoposterior = guide.get_posterior()
-            gt.guide_means.setdefault(k, []).append(pseudoposterior.loc.detach().clone().numpy())
-            gt.guide_scale_trils.setdefault(k, []).append(pseudoposterior.scale_tril.detach().clone().numpy())
+            locs, scale_trils = _get_locs_and_scale_trils(guide)
+            gt.guide_means.setdefault(k, []).append(locs)
+            gt.guide_scale_trils.setdefault(k, []).append(scale_trils)
         assert isinstance(theta, np.ndarray)
         gt.thetas.append(theta)
 
@@ -314,23 +330,108 @@ def _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta):
     return cost_grad, scaled_risk_grad, model
 
 
-def opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+def opt_with_unimodal_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
-
     _, _, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
 
-    # Construct guide registry for SNIS with analytic optimal guide (proposals) known.
+    # Initialization for SNIS needs be roughly approximate its optimal proposal, which covers both the
+    #  posterior and the risk curve.
     init_loc = tnsr(problem.theta0.detach().clone().numpy() / 2.)  # overzealously avoiding reference bugs...
-    gr = cfe.build_guide_registry_for_snis_nograd(
-        problem=problem,
-        params=theta,
-        auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
-        # Initialization for SNIS needs be roughly approximate its optimal proposal, which covers both the
-        #  posterior and the risk curve.
+    guide = pyro.infer.autoguide.AutoMultivariateNormal(
+        model=model,
         # Half the distance to the init_loc, so origin and risk curve will be at 2 stdevs
         init_scale=(init_loc.norm() / 2.).item() * 2.,
         # Halfway between the origin and risk curve.
         init_loc_fn=init_to_value(values=dict(z=init_loc))
+    )
+
+    return _opt_with_nograd_snis_sgd(
+        problem=problem,
+        hparams=hparams,
+        guide=guide,
+        model=model,
+        theta=theta
+    )
+
+
+# TODO generalize for arbitrary elements.
+class MixtureGuide(PyroModule):
+    def __init__(self, loc1, loc2, scale1, scale2, problem: cfe.CostRiskProblem = None):
+        super().__init__()
+        self.mixture_weights = PyroParam(
+            torch.ones(2,).double(),
+            constraint=dist.constraints.simplex)
+
+        scale_tril1 = torch.linalg.cholesky(torch.eye(len(loc1)) * scale1)
+        scale_tril2 = torch.linalg.cholesky(torch.eye(len(loc1)) * scale2)
+
+        self.scale_tril_params = PyroParam(
+            torch.stack([scale_tril1, scale_tril2]).detach().clone().double(),
+            constraint=dist.constraints.lower_cholesky)
+
+        self.problem = problem
+
+        self.loc_params = PyroParam(
+            torch.stack([loc1, loc2]).detach().clone().double(),
+            constraint=dist.constraints.real)
+
+    def forward(self, *args, **kwargs):
+        z = pyro.sample("z", dist.MixtureSameFamily(
+            # FIXME DEBUG not optimizing wrt this for now to see if bug.
+            mixture_distribution=dist.Categorical(self.mixture_weights),
+            component_distribution=dist.MultivariateNormal(
+                loc=self.loc_params,
+                scale_tril=self.scale_tril_params
+            )
+        ))
+        return OrderedDict(z=z)
+
+
+@_get_locs_and_scale_trils.register(MixtureGuide)
+def _get_locs_and_scale_trils_mixture_guide(guide):
+    locs = guide.loc_params.detach().clone().numpy()
+    scale_trils = guide.scale_tril_params.detach().clone().numpy()
+    return locs, scale_trils
+
+
+def opt_with_multimodal_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
+    _, _, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
+
+    # Initialization for multimodal SNIS needs to cover the risk curve and the posterior separately.
+    mu_star, _ = cfe.optimal_tabi_proposal_nongrad(
+        theta=theta,
+        Q=problem.Q,
+        Sigma=problem.Sigma
+    )
+    loc1 = mu_star.clone().detach()
+    init_scale1 = problem.q.item()
+
+    loc2 = torch.zeros(problem.n)
+    init_scale2 = 1.
+
+    return _opt_with_nograd_snis_sgd(
+        problem=problem,
+        hparams=hparams,
+        guide=MixtureGuide(
+            loc1=loc1,
+            loc2=loc2,
+            scale1=init_scale1,
+            scale2=init_scale2
+        ),
+        model=model,
+        theta=theta
+    )
+
+
+def _opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams, guide, model, theta):
+
+    # Construct guide registry for SNIS with analytic optimal guide (proposals) known.
+    gr = cfe.build_guide_registry_for_snis_nograd(
+        problem=problem,
+        params=theta,
+        guide=guide,
+        model=model
     )
 
     def ele_obj_grad(stochastics):
@@ -387,23 +488,22 @@ def opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams)
 
 
 def opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    raise NotImplementedError("Needs refactor still — guide inits needed like the multimodal"
+                              " guide version like with nograd_snis.")
+
+
+def _opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams, guide):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
     cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
 
     # Construct the guide registry for snis with analytic optimal guides (proposals)
     #  (up to normalizing constant) known.
-    init_loc = tnsr(problem.theta0.detach().clone().numpy() / 2.)  # overzealously avoiding reference bugs...
     gr = cfe.build_guide_registry_for_snis_grads(
         problem=problem,
         params=theta,
-        auto_guide=pyro.infer.autoguide.AutoMultivariateNormal,
-        # Initialization for SNIS needs to roughly approximate its optimal proposal, which covers both the
-        #  posterior and the risk curve.
-        # Half the distance to the init_loc, so origin and risk curve will be at 2 stdevs
-        init_scale=(init_loc.norm() / 2.).item(),
-        # Halfway between the origin and risk curve.
-        init_loc_fn=init_to_value(values=dict(z=init_loc))
+        guide=guide,
+        model=model
     )
 
     def guide_step_callback(k):
@@ -482,7 +582,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
         lr=hparams.svi_lr,
     )
 
-    mu_star, Sigma_star = cfe.optimal_tabi_proposal_nongrad(
+    mu_star, _ = cfe.optimal_tabi_proposal_nongrad(
         theta=theta,
         Q=problem.Q,
         Sigma=problem.Sigma
@@ -495,7 +595,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
             # Note: this is the tabi optimal for positive numerator of non grad. Burnin
             #  should be able to move the numerating proposals to their grad components
             #  and the denominator the posterior.
-            init_scale=torch.sqrt(torch.linalg.det(Sigma_star)).item(),
+            init_scale=problem.q.item(),
             init_loc_fn=init_to_value(values=dict(z=tnsr(mu_star.detach().clone().numpy())))
         )
     )

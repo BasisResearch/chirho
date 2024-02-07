@@ -106,6 +106,7 @@ def animate_guides_snis_grad_from_guide_track(
         problem: cfe.CostRiskProblem, guide_track: cfe.GuideTrack, trajis=(0, -1)):
     for pi in [0, 1]:  # parameter index:
         for traji in trajis:
+            raise NotImplementedError("needs to be adjusted to handle multiple mixture elements per")
             theta = torch.tensor(guide_track.thetas[traji]).double().requires_grad_()
             guide_loc = list(guide_track.guide_means.values())[pi][traji]
             guide_scale_tril = list(guide_track.guide_scale_trils.values())[pi][traji]
@@ -116,8 +117,8 @@ def animate_guides_snis_grad_from_guide_track(
 def animate_guides_snis_nograd(
         problem: cfe.CostRiskProblem,
         theta,
-        guide_loc,
-        guide_scale_tril
+        guide_locs,
+        guide_scale_trils
 ):
     # TODO deduplicate code from animate_guides_snis_grad
 
@@ -126,7 +127,10 @@ def animate_guides_snis_nograd(
     XLIM = 6
     YLIM = 6
 
-    theta = torch.tensor(theta).double().requires_grad_()
+    if not isinstance(theta, torch.Tensor):
+        theta = torch.tensor(theta).double().requires_grad_()
+    else:
+        theta = theta.detach().clone().requires_grad_()
 
     qstar = _build_snis_opt_proposal_density_nograd(problem, theta)
 
@@ -138,9 +142,10 @@ def animate_guides_snis_nograd(
     plot_f_contours_on_ax(ax, qstar, XLIM, YLIM, n=RES)
 
     # With small linewidth
-    plot_mvn_contours_on_ax(
-        ax, guide_loc, guide_scale_tril, cmap='Greens', n=RES, linewidths=0.5
-    )
+    for guide_loc, guide_scale_tril in zip(guide_locs, guide_scale_trils):
+        plot_mvn_contours_on_ax(
+            ax, guide_loc, guide_scale_tril, cmap='Greens', n=RES, linewidths=0.5
+        )
 
     return fig
 
@@ -150,10 +155,10 @@ def animate_guides_snis_nograd_from_guide_track(
     # TODO deduplicate code from animate_guides_snis_grad_from_guide_track
     for traji in trajis:
         theta = torch.tensor(guide_track.thetas[traji]).double().requires_grad_()
-        guide_loc = list(guide_track.guide_means.values())[0][traji]
-        guide_scale_tril = list(guide_track.guide_scale_trils.values())[0][traji]
+        guide_locs = list(guide_track.guide_means.values())[0][traji]
+        guide_scale_trils = list(guide_track.guide_scale_trils.values())[0][traji]
 
-        fig = animate_guides_snis_nograd(problem, theta, guide_loc, guide_scale_tril)
+        fig = animate_guides_snis_nograd(problem, theta, guide_locs, guide_scale_trils)
 
         # TODO hack saving manually here.
         # fig.savefig(f"/Users/azane/Downloads/snistechnicallyunbiased2/{traji}_snis_nograd.png")

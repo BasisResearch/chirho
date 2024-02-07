@@ -161,8 +161,6 @@ class DecisionOptimizationManualSNISNoGrad(DecisionOptimizerAbstract):
     def opt_guides(self):
         self.gr.optimize_guides(
             lr=self.svi_lr,
-            # Note the way that the callback is used in ...AllShared handler — this will end up
-            #  taking a step for each of the snis_num_samples samples.
             n_steps=self.num_samples
         )
 
@@ -170,15 +168,7 @@ class DecisionOptimizationManualSNISNoGrad(DecisionOptimizerAbstract):
         self.optim.zero_grad()
         self.flat_dparams.grad = None
 
-        with warnings.catch_warnings(record=True) as w:
-            self.opt_guides()
-
-            if len(w) == 1:
-                assert issubclass(w[0].category, UserWarning)
-                assert "Found auxiliary vars in the model" in str(w[0].message)
-            # TODO don't fail just "reraise" the warning.
-            assert len(w) <= 1, f"Got unexpected warnings {w}"
-
+        self.opt_guides()
 
         with pyro.poutine.trace() as qtr:
             with pyro.plate("samples", self.num_samples):
