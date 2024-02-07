@@ -77,7 +77,8 @@ class Hyperparams:
             ray: bool,
             n: int,
             unnorm_const: float,
-            svi_lr: float
+            svi_lr: float,
+            relu_softening: float
     ):
         self.lr = lr
         self.clip = clip
@@ -89,6 +90,7 @@ class Hyperparams:
         self.n = n
         self.unnorm_const = unnorm_const
         self.svi_lr = svi_lr
+        self.relu_softening = relu_softening
 
     @property
     def mc_num_samples(self):
@@ -99,16 +101,17 @@ class Hyperparams:
 
     @property
     def snis_num_samples(self):
-        # SNIS does the same work as TABI except only fits a single guide instead of 3.
+        # SNIS does the same work as TABI except only fits a single guide per partial instead of 3.
         return self.tabi_num_samples * 3
 
     @property
     def snis_nograd_num_samples(self):
+        # The no grad version just targets the risk curve, so doesn't scale with dimension.
         return self.snis_num_samples * self.n
 
     @property
     def approx_posterior_is_num_samples(self):
-        # This does the same work as TABI, except it only fits two numerating guides and uses
+        # This does the same work as TABI, except it only fits two numerating guides per partial and uses
         #  a pre-learned posterior. I.e. it does 2/3 the work that TABI does. As an approximation,
         #  we say it only does half the work that TABI does (so multiply by 2).
         return self.tabi_num_samples * 2
@@ -117,9 +120,6 @@ class Hyperparams:
     def nograd_tabi_num_samples(self):
         # This is the same as TABI but doesn't scale with dimension.
         return self.tabi_num_samples * self.n
-
-    # TODO counts for Bai baseline? Basically just divide mc by self.n. So maybe
-    #  a bool or something that dictates the simplified proposal structure?
 
 
 class OptimizerFnRet:
@@ -562,6 +562,12 @@ def _opt_with_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams, guide
 
 
 def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
+    hparams_ = copy(hparams)
+    hparams_.relu_softening = torch.tensor(0.0)
+    return opt_with_ss_tabi_srelu_sgd(problem, hparams_)
+
+
+def opt_with_ss_tabi_srelu_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     theta = torch.nn.Parameter(problem.theta0.detach().clone().requires_grad_(True))
 
     cost_grad, scaled_risk_grad, model = _build_cost_grad_scaled_risk_grad_model(problem, hparams, theta)
@@ -580,6 +586,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     eh = ep.ProposalTrainingLossHandler(
         num_samples=hparams.tabi_num_samples,
         lr=hparams.svi_lr,
+        relu_softening=hparams.relu_softening
     )
 
     mu_star, _ = cfe.optimal_tabi_proposal_nongrad(
@@ -613,7 +620,7 @@ def opt_with_ss_tabi_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams):
     # track_guide_callback, guide_track = _build_track_guide_callback(eh.guides, problem)
 
     optfnret = do_loop(
-        pref="SGD SS TABI",
+        pref="SGD SS TABI" if hparams.relu_softening < 1e-6 else "SGD SS TABI SReLU",
         problem=problem,
         hparams=hparams,
         do=do,

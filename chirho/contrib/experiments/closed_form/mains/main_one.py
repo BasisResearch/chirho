@@ -46,9 +46,12 @@ def adjust_config_and_get_optimize_fn(config: Dict):
     elif optimize_fn_name == cfe.opt_with_nograd_tabi_sgd.__name__:
         optimize_fn = cfe.opt_with_nograd_tabi_sgd
     elif optimize_fn_name == cfe.opt_with_zerovar_sgd.__name__:
+        config['burnin'] = 0
         optimize_fn = cfe.opt_with_zerovar_sgd
-    elif optimize_fn_name == cfe.opt_with_nograd_snis_sgd.__name__:
-        optimize_fn = cfe.opt_with_nograd_snis_sgd
+    elif optimize_fn_name == cfe.opt_with_multimodal_nograd_snis_sgd.__name__:
+        optimize_fn = cfe.opt_with_multimodal_nograd_snis_sgd
+    elif optimize_fn_name == cfe.opt_with_ss_tabi_srelu_sgd.__name__:
+        optimize_fn = cfe.opt_with_ss_tabi_srelu_sgd
     else:
         raise NotImplementedError(f"Unknown optimize_fn_name {optimize_fn_name}")
 
@@ -66,11 +69,12 @@ def main(
 
     # Set up the hyperparameter space.
     hparam_space = dict(
-        lr=tune.loguniform(1e-4, 1e-1),
-        clip=tune.loguniform(1e-2, 1e1),
+        lr=tune.loguniform(1e-4, 1e-2),
+        clip=tune.loguniform(1e-2, 10.),
         # FIXME this is actually 1 - decay at max steps. TODO Rename.
         decay_at_max_steps=tune.uniform(0.1, 1.),
         svi_lr=tune.loguniform(1e-4, 1e-2),
+        relu_softening=tune.loguniform(1e-2, 1e1)
     )
 
     # This makes everything go through config, and also get recorded by ray.

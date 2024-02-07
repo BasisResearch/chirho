@@ -8,6 +8,7 @@ from .cost_risk_problem import CostRiskProblem
 from .optimize_ana_fns import opt_ana_with_scipy, opt_opt_tabi_with_scipy
 from .optimize_sgd_fns import (
     opt_with_mc_sgd,
+    opt_with_ss_tabi_srelu_sgd,
     opt_with_ss_tabi_sgd,
     opt_with_snis_sgd,
     opt_with_zerovar_sgd,
