@@ -77,6 +77,11 @@ def main(
         relu_softening=tune.loguniform(1e-2, 1e1)
     )
 
+    use_asha = tune_kwargs.pop('use_asha')
+    if not use_asha:
+        hparam_space['sgd_seed'] = tune.randint(0, 999999)
+
+
     # This makes everything go through config, and also get recorded by ray.
     extend_hparam_space_with_dict_(hparam_space, hparam_consts)
     extend_hparam_space_with_dict_(hparam_space, problem_setting_kwargs)
@@ -92,16 +97,19 @@ def main(
         theta0_rstar_delta = config.pop('theta0_rstar_delta')
         seed = config.pop('seed')
 
-        set_rng_seed(seed)
+        set_rng_seed(seed)  # problem generation seed.
         problem = cfe.CostRiskProblem(
             q=q, n=n, rstar=rstar, theta0_rstar_delta=theta0_rstar_delta
         )
 
+        sgd_seed = config.pop('sgd_seed', None)
         hparams = cfe.Hyperparams(
             # The only things left in config are hyperparam arguments.
             **config, ray=True, n=n
         )
 
+        if sgd_seed is not None:
+            set_rng_seed(sgd_seed)  # optimization seed.
         return optimize_fn(problem, hparams)
 
     scheduler_kwargs = dict(
@@ -111,7 +119,6 @@ def main(
         max_t=hparam_consts['num_steps'] + 1,
         stop_last_trials=False)
 
-    use_asha = tune_kwargs.pop('use_asha')
     if use_asha:
         scheduler = ASHAScheduler(
             **scheduler_kwargs

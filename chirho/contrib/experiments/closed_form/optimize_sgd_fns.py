@@ -465,7 +465,7 @@ def _opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams
         cost_grad_manual=ele_obj_grad
     )
 
-    track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
+    # track_guide_callback, guide_track = _build_track_guide_callback(gr.guides, problem)
 
     optfnret = do_loop(
         pref="SGD SNIS NG",
@@ -473,7 +473,7 @@ def _opt_with_nograd_snis_sgd(problem: cfe.CostRiskProblem, hparams: Hyperparams
         do=do,
         theta=theta,
         hparams=hparams,
-        callback=track_guide_callback
+        # callback=track_guide_callback
     )
 
     # # <FIXME REMOVE>
