@@ -14,7 +14,6 @@ from typing import (
 import pyro
 import torch
 
-from chirho.interpretable.internals import AbstractModel
 from chirho.interventional.handlers import Interventions
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import Observations
@@ -33,47 +32,6 @@ Alignment = Mapping[str, Tuple[Set[str], _AlignmentFn[S, T]]]
 
 # TODO find a better encoding of this effect type
 _Model = Callable[P, Optional[T]]
-
-
-def apply_alignment(
-    alignment: Alignment[S, T],
-    data: Mapping[str, Union[None, S, Intervention[S], Observation[S]]],
-) -> Mapping[str, Union[None, T, Intervention[T], Observation[T]]]:
-    """
-    Apply an :class:`Alignment` to a set of low-level observations and interventions
-    to produce a set of high-level observations and interventions.
-    """
-    return {
-        var_h: fn_h({var_l: data.get(var_l, None) for var_l in vars_l})
-        for var_h, (vars_l, fn_h) in alignment.items()
-    }
-
-
-@contextlib.contextmanager
-def abstract_query(
-    alignment: Alignment[S, T],
-    data: Mapping[str, Observation[S]] = {},
-    actions: Mapping[str, Intervention[S]] = {},
-):
-    """
-    Apply an :class:`Alignment` to a set of low-level observations and interventions
-    to produce a set of high-level observations and interventions.
-    """
-    with Observations(data=apply_alignment(alignment, data)), Interventions(
-        actions=apply_alignment(alignment, actions)
-    ):
-        yield
-
-
-@contextlib.contextmanager
-def concrete_query(
-    alignment: Alignment[S, T],
-    data: Mapping[str, Observation[S]] = {},
-    actions: Mapping[str, Intervention[S]] = {},
-):
-    with AbstractModel(alignment):
-        with Observations(data=data), Interventions(actions=actions):
-            yield
 
 
 def abstraction_distance(
@@ -127,8 +85,15 @@ def abstraction_distance(
     :param actions: low-level interventions (if any)
     :return: a loss function quantifying the causal abstraction distance between the models
     """
-    if alignment is None:
-        raise NotImplementedError("default alignment not yet supported")
+    from chirho.interpretable.internals import AbstractModel, apply_alignment
+
+    @contextlib.contextmanager
+    def Query(
+        data: Mapping[str, Observation[S]] = {},
+        actions: Mapping[str, Intervention[S]] = {},
+    ):
+        with Observations(data=data), Interventions(actions=actions):
+            yield
 
     if len(data) > 0:
         # TODO normalize abstracted_intervened_model_l before loss computation when given data
@@ -137,17 +102,19 @@ def abstraction_distance(
             f"abstraction_distance() does not yet support conditioning, but got {data}"
         )
 
-    from chirho.interpretable.internals import _validate_alignment
-
-    _validate_alignment(alignment, data=data, actions=actions)
+    if alignment is None:
+        raise NotImplementedError("default alignment not yet supported")
 
     # path 1: intervene, then abstract
-    query_l = concrete_query(alignment=alignment, data=data, actions=actions)
-    abstracted_model_l: _Model[P, T] = query_l(model_l)
+    query_l = Query(data=data, actions=actions)
+    abstracted_model_l: _Model[P, T] = AbstractModel(alignment)(query_l(model_l))
 
     # path 2: abstract, then intervene
     # model_h is given, rather than being the result of AbstractModel applied to model_l
-    query_h = abstract_query(alignment=alignment, data=data, actions=actions)
+    query_h = Query(
+        data=apply_alignment(alignment, data),
+        actions=apply_alignment(alignment, actions),
+    )
     intervened_model_h: _Model[P, T] = query_h(model_h)
 
     # TODO expose any PyTorch parameters of models and alignment correctly in loss

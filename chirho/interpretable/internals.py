@@ -1,6 +1,6 @@
 import collections
 import typing
-from typing import Dict, Generic, Mapping, Optional, Set, TypeVar
+from typing import Dict, Generic, Mapping, Optional, Set, TypeVar, Union
 
 import pyro
 
@@ -12,7 +12,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-def _validate_alignment(
+def validate_alignment(
     alignment: Alignment[S, T],
     *,
     data: Optional[Mapping[str, Observation[S]]] = None,
@@ -40,6 +40,20 @@ def _validate_alignment(
         )
 
 
+def apply_alignment(
+    alignment: Alignment[S, T],
+    data: Mapping[str, Union[Intervention[S], Observation[S]]],
+) -> Mapping[str, Union[Intervention[T], Observation[T]]]:
+    """
+    Apply an :class:`Alignment` to a set of low-level observations and interventions
+    to produce a set of high-level observations and interventions.
+    """
+    return {
+        var_h: fn_h({var_l: data.get(var_l, None) for var_l in vars_l})
+        for var_h, (vars_l, fn_h) in alignment.items()
+    }
+
+
 class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     """
     A :class:`pyro.poutine.messenger.Messenger` that applies an :class:`Alignment`
@@ -55,9 +69,9 @@ class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     _values_l: Mapping[str, Dict[str, Optional[S]]]
 
     def __init__(self, alignment: Alignment[S, T]):
-        from chirho.interpretable.internals import _validate_alignment
+        from chirho.interpretable.internals import validate_alignment
 
-        _validate_alignment(alignment)
+        validate_alignment(alignment)
         self.alignment = alignment
         self._vars_l2h = {
             var_l: var_h for var_h, (vars_l, _) in alignment.items() for var_l in vars_l
