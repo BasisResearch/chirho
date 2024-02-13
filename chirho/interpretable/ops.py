@@ -1,14 +1,5 @@
 import contextlib
-from typing import (
-    Callable,
-    Mapping,
-    Optional,
-    ParamSpec,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Callable, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -24,21 +15,21 @@ T = TypeVar("T")
 
 
 # TODO separate Observation and Intervention types?
-_AlignmentFn = Callable[
-    [Mapping[str, Union[None, S, Intervention[S], Observation[S]]]], T
+Alignment = Mapping[
+    str,
+    Tuple[
+        Set[str],
+        Callable[[Mapping[str, Union[None, S, Intervention[S], Observation[S]]]], T],
+    ],
 ]
-Alignment = Mapping[str, Tuple[Set[str], _AlignmentFn[S, T]]]
-
-# TODO find a better encoding of this effect type
-_Model = Callable[P, Optional[T]]
 
 
 def abstraction_distance(
-    model_l: _Model[P, S],
-    model_h: _Model[P, T],
+    model_l: Callable[P, S],
+    model_h: Callable[P, T],
     *,
     loss: Callable[
-        [_Model[P, T], _Model[P, T]], Callable[P, torch.Tensor]
+        [Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]
     ] = pyro.infer.Trace_ELBO(),
     alignment: Optional[Alignment[S, T]] = None,
     data: Mapping[str, Observation[S]] = {},
@@ -106,7 +97,7 @@ def abstraction_distance(
 
     # path 1: intervene, then abstract
     query_l = Query(data=data, actions=actions)
-    abstracted_model_l: _Model[P, T] = AbstractModel(alignment)(query_l(model_l))
+    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(query_l(model_l))
 
     # path 2: abstract, then intervene
     # model_h is given, rather than being the result of AbstractModel applied to model_l
@@ -114,7 +105,7 @@ def abstraction_distance(
         data=apply_alignment(alignment, data),
         actions=apply_alignment(alignment, actions),
     )
-    intervened_model_h: _Model[P, T] = query_h(model_h)
+    intervened_model_h: Callable[P, T] = query_h(model_h)
 
     # TODO expose any PyTorch parameters of models and alignment correctly in loss
     return loss(intervened_model_h, abstracted_model_l)
