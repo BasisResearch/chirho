@@ -1,4 +1,5 @@
-from typing import Callable, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar, Union
+from typing import Callable, Mapping, Optional, Set, Tuple, TypeVar, Union
+from typing_extensions import ParamSpec
 
 import pyro
 import torch
