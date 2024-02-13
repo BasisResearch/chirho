@@ -1,8 +1,8 @@
 from typing import Callable, Mapping, Optional, Set, Tuple, TypeVar, Union
-from typing_extensions import ParamSpec
 
 import pyro
 import torch
+from typing_extensions import ParamSpec
 
 from chirho.interventional.handlers import Interventions
 from chirho.interventional.ops import Intervention
@@ -32,8 +32,8 @@ def abstraction_distance(
         [Callable[P, T], Callable[P, T]], Callable[P, torch.Tensor]
     ] = pyro.infer.Trace_ELBO(),
     alignment: Optional[Alignment[S, T]] = None,
-    data: Mapping[str, Observation[S]] = {},
     actions: Mapping[str, Intervention[S]] = {},
+    data: Mapping[str, Observation[S]] = {},
 ) -> Callable[P, torch.Tensor]:
     """
     Defines the causal abstraction distance between a low-level model and a high-level model
@@ -76,7 +76,11 @@ def abstraction_distance(
     :param actions: low-level interventions (if any)
     :return: a loss function quantifying the causal abstraction distance between the models
     """
-    from chirho.interpretable.internals import AbstractModel, apply_alignment
+    from chirho.interpretable.internals import (
+        AbstractModel,
+        apply_alignment,
+        validate_alignment,
+    )
 
     if len(data) > 0:
         # TODO normalize abstracted_intervened_model_l before loss computation when given data
@@ -88,16 +92,18 @@ def abstraction_distance(
     if alignment is None:
         raise NotImplementedError("default alignment not yet supported")
 
+    validate_alignment(alignment, data=data, actions=actions)
+
     # path 1: intervene, then abstract
-    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(
-        Observations(data)(Interventions(actions)(model_l))
+    abstracted_model_l: Callable[P, T] = AbstractModel[S, T](alignment)(
+        Observations[S](data)(Interventions[S](actions)(model_l))
     )
 
     # path 2: abstract, then intervene
     # model_h is given, rather than being the result of AbstractModel applied to model_l
-    intervened_model_h: Callable[P, T] = Observations(apply_alignment(alignment, data))(
-        Interventions(apply_alignment(alignment, actions))(model_h)
-    )
+    intervened_model_h: Callable[P, T] = Observations[T](
+        apply_alignment(alignment, data)
+    )(Interventions[T](apply_alignment(alignment, actions))(model_h))
 
     # TODO expose any PyTorch parameters of models and alignment correctly in loss
     return loss(intervened_model_h, abstracted_model_l)
