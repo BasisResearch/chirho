@@ -16,8 +16,7 @@ Point = Mapping[str, Observation[T]]
 class Functional(Protocol[P, S]):
     def __call__(
         self, __model: Callable[P, Any], *models: Callable[P, Any]
-    ) -> Callable[P, S]:
-        ...
+    ) -> Callable[P, S]: ...
 
 
 def influence_fn(
@@ -127,7 +126,7 @@ def influence_fn(
         if len(models) != len(points):
             raise ValueError("mismatch between number of models and points")
 
-        linearized = linearize(*models, **linearize_kwargs)
+        linearized = linearize(*models, **linearize_kwargs)  # type: ignore
         target = functional(*models)
 
         # TODO check that target_params == model_params
