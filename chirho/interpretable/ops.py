@@ -19,7 +19,7 @@ Alignment = Mapping[
     str,
     Tuple[
         Set[str],
-        Callable[[Mapping[str, Union[None, S, Intervention[S], Observation[S]]]], T],
+        Callable[[Mapping[str, Optional[Union[Intervention[S], Observation[S]]]]], T],
     ],
 ]
 
@@ -38,8 +38,6 @@ def abstraction_distance(
     """
     Defines the causal abstraction distance between a low-level model and a high-level model
     according to a given :class:`Alignment` and higher-order loss function ``loss`` .
-    When ``loss`` is an :class:`pyro.infer.elbo.ELBO` instance, this returns an ELBO estimator
-    that uses the abstracted, intervened low-level model as a guide for the intervened high-level model.
 
     Conceptually, we may think of ``model_h`` as an approximate abstraction of ``model_l``
     in the sense that, when ``abstraction_distance(alignment, model_l, model_h)`` is minimized,
@@ -53,6 +51,9 @@ def abstraction_distance(
           .     intervene o        |
           v    abstract_query      v
         model_h --------> intervened_model_h
+
+    .. note:: When ``loss`` is an :class:`pyro.infer.elbo.ELBO` instance, this returns an ELBO estimator
+        that uses the abstracted, intervened low-level model as a guide for the intervened high-level model.
 
     .. warning:: :func:`abstraction_distance` assumes that no variable names are shared across both models.
         Instead, ``alignment`` explicitly maps some low-level variables to some different high-level variables,
@@ -77,14 +78,6 @@ def abstraction_distance(
     """
     from chirho.interpretable.internals import AbstractModel, apply_alignment
 
-    @contextlib.contextmanager
-    def Query(
-        data: Mapping[str, Observation[S]] = {},
-        actions: Mapping[str, Intervention[S]] = {},
-    ):
-        with Observations(data=data), Interventions(actions=actions):
-            yield
-
     if len(data) > 0:
         # TODO normalize abstracted_intervened_model_l before loss computation when given data
         # TODO also necessary to normalize intervened_model_h before loss computation?
@@ -96,16 +89,15 @@ def abstraction_distance(
         raise NotImplementedError("default alignment not yet supported")
 
     # path 1: intervene, then abstract
-    query_l = Query(data=data, actions=actions)
-    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(query_l(model_l))
+    abstracted_model_l: Callable[P, T] = AbstractModel(alignment)(
+        Observations(data)(Interventions(actions)(model_l))
+    )
 
     # path 2: abstract, then intervene
     # model_h is given, rather than being the result of AbstractModel applied to model_l
-    query_h = Query(
-        data=apply_alignment(alignment, data),
-        actions=apply_alignment(alignment, actions),
+    intervened_model_h: Callable[P, T] = Observations(apply_alignment(alignment, data))(
+        Interventions(apply_alignment(alignment, actions))(model_h)
     )
-    intervened_model_h: Callable[P, T] = query_h(model_h)
 
     # TODO expose any PyTorch parameters of models and alignment correctly in loss
     return loss(intervened_model_h, abstracted_model_l)
