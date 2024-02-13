@@ -261,7 +261,7 @@ def test_fisher_grad_smoke(data_config):
     N_monte_carlo = 10000
     data = Predictive(GaussianModel(cov_mat), num_samples=N_monte_carlo)(loc)
     empirical_fisher_vp_func = make_empirical_fisher_vp(
-        func_log_prob, log_prob_params, data, cov_mat=cov_mat
+        func_log_prob, log_prob_params, data, detach=False, cov_mat=cov_mat
     )
 
     v = 0.5 * torch.ones(cov_mat.shape[1], requires_grad=True)

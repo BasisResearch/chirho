@@ -112,6 +112,7 @@ def make_empirical_fisher_vp(
     batched_func_log_prob: Callable[Concatenate[ParamDict, Point[T], P], torch.Tensor],
     log_prob_params: ParamDict,
     data: Point[T],
+    detach: bool = True,
     *args: P.args,
     **kwargs: P.kwargs,
 ) -> Callable[[ParamDict], ParamDict]:
@@ -213,7 +214,11 @@ def make_empirical_fisher_vp(
 
         # Perlmutter's trick
         vjp_fn = torch.func.vjp(jvp_fn, log_prob_params)[1]
-        return vjp_fn(-1 * mean_vector)[0]  # Fisher = -E[Hessian]
+        val = vjp_fn(-1 * mean_vector)[0]  # Fisher = -E[Hessian]
+        # Detach to memory leak if we do not need to backpropagate
+        # through the Fisher vector product:
+        # https://github.com/BasisResearch/chirho/issues/516
+        return {k: v.detach() if detach else v for k, v in val.items()}
 
     return _empirical_fisher_vp
 
@@ -226,6 +231,7 @@ def linearize(
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-4,
     pointwise_influence: bool = True,
+    detach: bool = True,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     r"""
     Returns the influence function associated with the parameters
@@ -364,7 +370,7 @@ def linearize(
             data: Point[T] = predictive(*args, **kwargs)
             data = {k: data[k] for k in points.keys()}
         fvp = make_empirical_fisher_vp(
-            batched_func_log_prob, log_prob_params, data, *args, **kwargs
+            batched_func_log_prob, log_prob_params, data, detach, *args, **kwargs
         )
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
         pinned_fvp_batched = torch.func.vmap(
@@ -382,6 +388,8 @@ def linearize(
             N_pts = points[next(iter(points))].shape[0]  # type: ignore
             point_scores = score_fn(1 / N_pts * torch.ones(N_pts))[0]
             point_scores = {k: v.unsqueeze(0) for k, v in point_scores.items()}
+        if detach:
+            point_scores = {k: v.detach() for k, v in point_scores.items()}
         return cg_solver(pinned_fvp_batched, point_scores)
 
     return _fn
