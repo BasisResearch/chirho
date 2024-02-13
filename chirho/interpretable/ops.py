@@ -1,4 +1,3 @@
-import contextlib
 from typing import Callable, Mapping, Optional, ParamSpec, Set, Tuple, TypeVar, Union
 
 import pyro
