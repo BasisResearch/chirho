@@ -35,6 +35,20 @@ Alignment = Mapping[str, Tuple[Set[str], _AlignmentFn[S, T]]]
 _Model = Callable[P, Optional[T]]
 
 
+def apply_alignment(
+    alignment: Alignment[S, T],
+    data: Mapping[str, Union[None, S, Intervention[S], Observation[S]]],
+) -> Mapping[str, Union[None, T, Intervention[T], Observation[T]]]:
+    """
+    Apply an :class:`Alignment` to a set of low-level observations and interventions
+    to produce a set of high-level observations and interventions.
+    """
+    return {
+        var_h: fn_h({var_l: data.get(var_l, None) for var_l in vars_l})
+        for var_h, (vars_l, fn_h) in alignment.items()
+    }
+
+
 @contextlib.contextmanager
 def abstract_query(
     alignment: Alignment[S, T],
@@ -45,22 +59,18 @@ def abstract_query(
     Apply an :class:`Alignment` to a set of low-level observations and interventions
     to produce a set of high-level observations and interventions.
     """
-    aligned_data = {
-        var_h: fn_h({var_l: data.get(var_l, None) for var_l in vars_l})
-        for var_h, (vars_l, fn_h) in alignment.items()
-    }
-
-    aligned_actions = {
-        var_h: fn_h({var_l: actions.get(var_l, None) for var_l in vars_l})
-        for var_h, (vars_l, fn_h) in alignment.items()
-    }
-
-    with Observations(data=aligned_data), Interventions(actions=aligned_actions):
-        yield aligned_data, aligned_actions
+    with Observations(data=apply_alignment(alignment, data)), Interventions(
+        actions=apply_alignment(alignment, actions)
+    ):
+        yield
 
 
 @contextlib.contextmanager
-def concrete_query(alignment, data, actions):
+def concrete_query(
+    alignment: Alignment[S, T],
+    data: Mapping[str, Observation[S]] = {},
+    actions: Mapping[str, Intervention[S]] = {},
+):
     with AbstractModel(alignment):
         with Observations(data=data), Interventions(actions=actions):
             yield
