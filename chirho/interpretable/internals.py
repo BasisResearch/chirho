@@ -69,8 +69,6 @@ class AbstractModel(Generic[S, T], pyro.poutine.messenger.Messenger):
     _values_l: Mapping[str, Dict[str, Optional[S]]]
 
     def __init__(self, alignment: Alignment[S, T]):
-        from chirho.interpretable.internals import validate_alignment
-
         validate_alignment(alignment)
         self.alignment = alignment
         self._vars_l2h = {
