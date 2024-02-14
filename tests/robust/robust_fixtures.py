@@ -228,3 +228,17 @@ def closed_form_ate_correction(
     analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     analytic_correction = analytic_eif_at_test_pts.mean()
     return analytic_correction, analytic_eif_at_test_pts
+
+
+def humansize(nbytes):
+    # Taken from:
+    # https://stackoverflow.com/questions/61462876/macos-activity-monitor-commands-cached-files-in-python
+    """Appends prefix to bytes for human readability."""
+
+    suffixes = ["B", "KB", "MB", "GB", "TB", "PB"]
+    i = 0
+    while nbytes >= 1024 and i < len(suffixes) - 1:
+        nbytes /= 1024.0
+        i += 1
+    f = ("%.2f" % nbytes).rstrip("0").rstrip(".")
+    return "%s %s" % (f, suffixes[i])
