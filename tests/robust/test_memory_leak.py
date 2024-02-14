@@ -124,27 +124,27 @@ def test_linearize_does_not_leak_memory_no_grad():
     Y_pts = torch.sort(Y_pts).values
 
     free_memory = []
-    with torch.no_grad():
-        for i in range(25):
-            mem = psutil.virtual_memory()
+    for i in range(25):
+        mem = psutil.virtual_memory()
 
-            theta_true = {
-                "mu": torch.tensor(mu_true, requires_grad=True),
-                "sd": torch.tensor(sd_true, requires_grad=True),
-            }
-            model = ToyNormal()
-            guide = MLEGuide(theta_true)
+        theta_true = {
+            "mu": torch.tensor(mu_true, requires_grad=True),
+            "sd": torch.tensor(sd_true, requires_grad=True),
+        }
+        model = ToyNormal()
+        guide = MLEGuide(theta_true)
 
-            # Linearize model
+        # Linearize model
+        with torch.no_grad():
             monte_eif = linearize(
                 PredictiveModel(model, guide),
                 num_samples_outer=10000,
                 num_samples_inner=1,
                 detach=False,
             )({"Y": Y_pts})
-            free_memory.append(mem.free)
-            memory_size = humansize(mem.free)
-            print(f"Iteration: {i}, Detached: {True}, Free Memory: {memory_size}")
+        free_memory.append(mem.free)
+        memory_size = humansize(mem.free)
+        print(f"Iteration: {i}, Detached: {True}, Free Memory: {memory_size}")
 
     # Free memory should not be more than 10x different than the initial free memory
     assert math.fabs((free_memory[-1] - free_memory[1])) / free_memory[1] < 0.1
