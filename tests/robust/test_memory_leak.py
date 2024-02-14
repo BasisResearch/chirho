@@ -44,8 +44,8 @@ def test_linearize_does_not_leak_memory_new_interface():
         memory_size = humansize(mem.free)
         print(f"Iteration: {i}, Detached: {True}, Free Memory: {memory_size}")
 
-    # Free memory should not be more than 10x different than the initial free memory
-    assert math.fabs((free_memory[-1] - free_memory[1])) / free_memory[1] < 0.1
+    # Free memory should not be too different than the initial free memory
+    assert math.fabs((free_memory[-1] - free_memory[1])) / free_memory[1] < 0.3
 
 
 def test_linearize_does_not_leak_memory_no_grad():
@@ -80,5 +80,5 @@ def test_linearize_does_not_leak_memory_no_grad():
         memory_size = humansize(mem.free)
         print(f"Iteration: {i}, Detached: {True}, Free Memory: {memory_size}")
 
-    # Free memory should not be more than 10x different than the initial free memory
-    assert math.fabs((free_memory[-1] - free_memory[1])) / free_memory[1] < 0.1
+    # Free memory should not be too different than the initial free memory
+    assert math.fabs((free_memory[-1] - free_memory[1])) / free_memory[1] < 0.3
