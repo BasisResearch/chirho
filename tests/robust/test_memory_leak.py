@@ -10,32 +10,9 @@ from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import linearize
 from chirho.robust.internals.utils import ParamDict
 
-from .robust_fixtures import MLEGuide, humansize
+from .robust_fixtures import GroundTruthToyNormal, MLEGuide, ToyNormal, humansize
 
 pyro.settings.set(module_local_params=True)
-
-
-class ToyNormal(pyro.nn.PyroModule):
-    def forward(self):
-        mu = pyro.sample("mu", dist.Normal(0.0, 1.0))
-        sd = pyro.sample("sd", dist.HalfNormal(1.0))
-        return pyro.sample(
-            "Y",
-            dist.Normal(mu, scale=sd),
-        )
-
-
-class GroundTruthToyNormal(pyro.nn.PyroModule):
-    def __init__(self, mu_true, sd_true):
-        super().__init__()
-        self.mu_true = mu_true
-        self.sd_true = sd_true
-
-    def forward(self):
-        return pyro.sample(
-            "Y",
-            dist.Normal(self.mu_true, scale=self.sd_true),
-        )
 
 
 def test_linearize_does_not_leak_memory_new_interface():

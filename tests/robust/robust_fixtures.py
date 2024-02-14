@@ -187,6 +187,29 @@ class BenchmarkLinearModel(HighDimLinearModel):
         return torch.zeros(self.p), torch.ones(self.p)
 
 
+class ToyNormal(pyro.nn.PyroModule):
+    def forward(self):
+        mu = pyro.sample("mu", dist.Normal(0.0, 1.0))
+        sd = pyro.sample("sd", dist.HalfNormal(1.0))
+        return pyro.sample(
+            "Y",
+            dist.Normal(mu, scale=sd),
+        )
+
+
+class GroundTruthToyNormal(pyro.nn.PyroModule):
+    def __init__(self, mu_true, sd_true):
+        super().__init__()
+        self.mu_true = mu_true
+        self.sd_true = sd_true
+
+    def forward(self):
+        return pyro.sample(
+            "Y",
+            dist.Normal(self.mu_true, scale=self.sd_true),
+        )
+
+
 class MLEGuide(torch.nn.Module):
     def __init__(self, mle_est: ParamDict):
         super().__init__()
@@ -232,7 +255,7 @@ def closed_form_ate_correction(
 
 def humansize(nbytes):
     # Taken from:
-    # https://stackoverflow.com/questions/61462876/macos-activity-monitor-commands-cached-files-in-python
+    # https://stackoverflow.com/questions/61462876/
     """Appends prefix to bytes for human readability."""
 
     suffixes = ["B", "KB", "MB", "GB", "TB", "PB"]
