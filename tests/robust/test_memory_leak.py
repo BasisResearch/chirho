@@ -2,13 +2,11 @@ import math
 
 import psutil
 import pyro
-import pyro.distributions as dist
 import torch
 from pyro.infer import Predictive
 
 from chirho.robust.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import linearize
-from chirho.robust.internals.utils import ParamDict
 
 from .robust_fixtures import GroundTruthToyNormal, MLEGuide, ToyNormal, humansize
 
