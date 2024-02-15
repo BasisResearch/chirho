@@ -10,6 +10,63 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+class TorchDyn(Solver[torch.Tensor]):
+    """
+    A dynamical systems solver backend for ordinary differential equations using
+    `torchdyn <https://github.com/DiffEqML/torchdyn>`_.
+    When used in conjunction with :func:`simulate <chirho.dynamical.ops.simulate>`, as below, this backend will take
+    responsibility for simulating the dynamical system defined by the arguments
+    to :func:`simulate <chirho.dynamical.ops.simulate>`
+
+    .. code-block:: python
+
+        with TorchDyn():
+            simulate(dynamics, initial_state, start_time, end_time)
+
+    Additional details on the arguments below can be found in the
+    TODO.
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def _pyro_simulate_point(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdyn import torchdyn_simulate_point
+
+        dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["value"] = torchdyn_simulate_point(
+            dynamics, initial_state, start_time, end_time
+        )
+        msg["done"] = True
+
+    def _pyro_simulate_trajectory(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdyn import (
+            torchdyn_simulate_trajectory,
+        )
+
+        dynamics, initial_state, timespan = msg["args"]
+        msg["value"] = torchdyn_simulate_trajectory(dynamics, initial_state, timespan)
+        msg["done"] = True
+
+    def _pyro_simulate_to_interruption(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdyn import (
+            torchdyn_simulate_to_interruption,
+        )
+
+        interruptions, dynamics, initial_state, start_time, end_time = msg["args"]
+        msg["value"] = torchdyn_simulate_to_interruption(
+            interruptions, dynamics, initial_state, start_time, end_time
+        )
+        msg["done"] = True
+
+    def _pyro_check_dynamics(self, msg) -> None:
+        from chirho.dynamical.internals.backends.torchdyn import torchdyn_check_dynamics
+
+        dynamics, initial_state, start_time, end_time = msg["args"]
+        torchdyn_check_dynamics(dynamics, initial_state, start_time, end_time)
+        msg["done"] = True
+
+
 class TorchDiffEq(Solver[torch.Tensor]):
     """
     A dynamical systems solver backend for ordinary differential equations using

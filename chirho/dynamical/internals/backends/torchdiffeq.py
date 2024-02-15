@@ -1,24 +1,17 @@
 import functools
 from typing import Callable, List, Optional, Tuple, TypeVar
 
-import pyro
 import torch
 import torchdiffeq
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
+from chirho.dynamical.internals.backends.ode import ODERuntimeCheck
 from chirho.dynamical.internals.solver import Interruption, simulate_point
 from chirho.dynamical.ops import Dynamics, State
 from chirho.indexed.ops import IndexSet, gather, get_index_plates
 
 S = TypeVar("S")
 T = TypeVar("T")
-
-
-class TorchdiffeqRuntimeCheck(pyro.poutine.messenger.Messenger):
-    def _pyro_sample(self, msg):
-        raise ValueError(
-            "TorchDiffEq only supports ODE models, and thus does not allow `pyro.sample` calls."
-        )
 
 
 def torchdiffeq_check_dynamics(
@@ -28,7 +21,7 @@ def torchdiffeq_check_dynamics(
     end_time: torch.Tensor,
     **kwargs,
 ) -> None:
-    with TorchdiffeqRuntimeCheck():
+    with ODERuntimeCheck():
         dynamics(initial_state)
 
 

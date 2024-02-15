@@ -24,7 +24,7 @@ EXTRAS_REQUIRE = [
     "typing_extensions",
 ]
 
-DYNAMICAL_REQUIRE = ["torchdiffeq"]
+DYNAMICAL_REQUIRE = ["torchdiffeq", "torchdyn"]
 
 setup(
     name="chirho",
