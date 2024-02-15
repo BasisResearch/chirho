@@ -118,4 +118,9 @@ class Interventions(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
 
-do = pyro.poutine.handlers._make_handler(Interventions)[1]
+if isinstance(pyro.poutine.handlers._make_handler(Interventions), tuple):
+    do = pyro.poutine.handlers._make_handler(Interventions)[1]
+else:
+    @pyro.poutine.handlers._make_handler(Interventions)
+    def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]):
+        ...
