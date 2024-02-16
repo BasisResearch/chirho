@@ -123,3 +123,21 @@ def test_nmc_predictive_influence_vmap_smoke(
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
         assert not torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} was zero"
+
+
+def test_influence_raises_no_grad_warning_correctly():
+    model = SimpleModel()
+    guide = SimpleGuide()
+    predictive = pyro.infer.Predictive(
+        model, guide=guide, num_samples=10, return_sites=["y"]
+    )
+    points = predictive()
+    influence = influence_fn(
+        PredictiveFunctional,
+        points,
+        num_samples_outer=10,
+        num_samples_inner=10,
+    )(PredictiveModel(model, guide))
+
+    with pytest.warns(UserWarning, match="torch.no_grad"):
+        influence()
