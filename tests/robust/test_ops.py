@@ -28,11 +28,14 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
         SimpleModel,
-        pyro.infer.autoguide.AutoNormal,
+        lambda m: pyro.infer.autoguide.AutoNormal(pyro.poutine.block(hide=["y"])(m)),
         {"y"},
         1,
-        marks=pytest.mark.xfail(
-            reason="torch.func autograd doesnt work with PyroParam"
+        marks=(
+            [pytest.mark.xfail(reason="torch.func autograd doesnt work with PyroParam")]
+            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3]))
+            <= (1, 8, 6)
+            else []
         ),
     ),
 ]
