@@ -1,3 +1,4 @@
+import warnings
 from typing import Any, Callable, Mapping, Protocol, TypeVar
 
 import torch
@@ -67,19 +68,14 @@ def influence_fn(
 
 
             class SimpleFunctional(torch.nn.Module):
-                def __init__(self, model, guide, num_monte_carlo=1000):
+                def __init__(self, model, num_monte_carlo=1000):
                     super().__init__()
                     self.model = model
-                    self.guide = guide
                     self.num_monte_carlo = num_monte_carlo
 
                 def forward(self):
                     with pyro.plate("monte_carlo_functional", size=self.num_monte_carlo, dim=-2):
-                        posterior_guide_samples = pyro.poutine.trace(self.guide).get_trace()
-                        model_at_theta = pyro.poutine.replay(trace=posterior_guide_samples)(
-                            self.model
-                        )
-                        model_samples = pyro.poutine.trace(model_at_theta).get_trace()
+                        model_samples = pyro.poutine.trace(self.model).get_trace()
                     return model_samples.nodes["b"]["value"].mean(axis=0)
 
 
@@ -96,7 +92,8 @@ def influence_fn(
                 num_samples_inner=1000,
             )(PredictiveModel(model, guide))
 
-            influence()
+            with torch.no_grad():  # Avoids memory leak (see notes below)
+                influence()
 
     .. note::
 
@@ -108,6 +105,11 @@ def influence_fn(
         * Currently, ``model`` cannot contain any ``pyro.param`` statements.
           This issue will be addressed in a future release:
           https://github.com/BasisResearch/chirho/issues/393.
+        * There are memory leaks when calling this function multiple times due to ``torch.func``.
+          See issue:
+          https://github.com/BasisResearch/chirho/issues/516.
+          To avoid this issue, use ``torch.no_grad()`` as shown in the example above.
+
     """
     from chirho.robust.internals.linearize import linearize
     from chirho.robust.internals.utils import make_functional_call
@@ -141,6 +143,11 @@ def influence_fn(
 
             :return: efficient influence function evaluated at each point in ``points`` or averaged
             """
+            if torch.is_grad_enabled():
+                warnings.warn(
+                    "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
+                    "Please use torch.no_grad() to avoid this issue. See example in the docstring."
+                )
             param_eif = linearized(*points, *args, **kwargs)
             return torch.vmap(
                 lambda d: torch.func.jvp(
