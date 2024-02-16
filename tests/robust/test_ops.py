@@ -1,4 +1,5 @@
 import functools
+import warnings
 from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
 
 import pyro
@@ -141,3 +142,9 @@ def test_influence_raises_no_grad_warning_correctly():
 
     with pytest.warns(UserWarning, match="torch.no_grad"):
         influence()
+
+    with pytest.warns() as record:
+        with torch.no_grad():
+            influence()
+        assert len(record) == 0
+        warnings.warn("Dummy warning.")
