@@ -123,4 +123,5 @@ if isinstance(pyro.poutine.handlers._make_handler(Interventions), tuple):
 else:
 
     @pyro.poutine.handlers._make_handler(Interventions)
-    def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]): ...
+    def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]):
+        ...
