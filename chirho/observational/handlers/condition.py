@@ -110,10 +110,5 @@ class Observations(Generic[T], ObserveNameMessenger):
                 self._current_site = None
 
 
-if isinstance(pyro.poutine.handlers._make_handler(Observations), tuple):
-    # backwards compatibility
-    condition = pyro.poutine.handlers._make_handler(Observations)[1]
-else:
-
-    @pyro.poutine.handlers._make_handler(Observations)
-    def condition(fn: Callable, data: Mapping[str, Observation[T]]): ...
+@pyro.poutine.handlers._make_handler(Observations)
+def condition(fn: Callable, data: Mapping[str, Observation[T]]): ...
