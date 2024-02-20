@@ -1,4 +1,5 @@
 import numbers
+import typing
 from typing import Dict, Hashable, Optional, TypeVar, Union
 
 import pyro
@@ -48,7 +49,9 @@ def _gather_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        index_plates = get_index_plates()
+        assert index_plates is not None
+        name_to_dim = {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
 
     result = value
     for name, indices in indexset.items():
@@ -104,7 +107,9 @@ def _scatter_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        index_plates = get_index_plates()
+        assert index_plates is not None
+        name_to_dim = {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -113,10 +118,11 @@ def _scatter_tensor(
 
     if result is None:
         index_plates = get_index_plates()
+        assert index_plates is not None
         result_shape = list(
             torch.broadcast_shapes(
                 value.shape,
-                (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
+                (1,) * max([event_dim - typing.cast(int, f.dim) for f in index_plates.values()] + [0]),
             )
         )
         for name, indices in indexset.items():
@@ -163,10 +169,12 @@ def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
 
 @indices_of.register
 def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
+    index_plates = get_index_plates()
+    assert index_plates is not None
     name_to_dim = (
         kwargs["name_to_dim"]
         if "name_to_dim" in kwargs
-        else {name: f.dim for name, f in get_index_plates().items()}
+        else {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(
@@ -185,7 +193,7 @@ def _indices_of_tensor(value: torch.Tensor, **kwargs) -> IndexSet:
 
 @indices_of.register
 def _indices_of_distribution(
-    value: pyro.distributions.Distribution, **kwargs
+    value: pyro.distributions.TorchDistribution, **kwargs
 ) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
@@ -248,7 +256,7 @@ class _LazyPlateMessenger(IndepMessenger):
 
 
 def get_sample_msg_device(
-    dist: pyro.distributions.Distribution,
+    dist: pyro.distributions.TorchDistribution,
     value: Optional[Union[torch.Tensor, float, int, bool]],
 ) -> torch.device:
     # some gross code to infer the device of the obs_mask tensor
