@@ -116,5 +116,4 @@ if isinstance(pyro.poutine.handlers._make_handler(Observations), tuple):
 else:
 
     @pyro.poutine.handlers._make_handler(Observations)
-    def condition(fn: Callable, data: Mapping[str, Observation[T]]):
-        ...
+    def condition(fn: Callable, data: Mapping[str, Observation[T]]): ...
