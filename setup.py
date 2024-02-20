@@ -2,7 +2,7 @@ import sys
 
 from setuptools import find_packages, setup
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 
 try:
     long_description = open("README.rst", encoding="utf-8").read()
@@ -41,7 +41,7 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/source/requirements.txt`
-        "pyro-ppl>=1.8.5",
+        "pyro-ppl>=1.9.0",
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
