@@ -1,8 +1,10 @@
 import functools
+import typing
 from typing import TypeVar
 
 import pyro
 import pyro.distributions as dist
+import pyro.poutine.indep_messenger
 import torch
 
 from chirho.counterfactual.handlers.selection import (
@@ -23,21 +25,25 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
     """
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg) -> None:
         # expand latent values to include all index plates
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
             rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
             index_plates = get_index_plates()
+            if typing.TYPE_CHECKING:
+                assert index_plates is not None
 
             new_shape = list(value.shape)
             for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
                 dim = index_plates[k].dim
+                if typing.TYPE_CHECKING:
+                    assert isinstance(dim, int)
                 new_shape = [1] * ((event_dim - dim) - len(new_shape)) + new_shape
                 new_shape[dim - event_dim] = rv.batch_shape[dim]
 
             msg["value"] = value.expand(tuple(new_shape))
 
-    def _pyro_observe(self, msg: dict) -> None:
+    def _pyro_observe(self, msg) -> None:
         if "name" not in msg["kwargs"]:
             msg["kwargs"]["name"] = msg["name"]
 
@@ -55,7 +61,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     @_dispatched_observe.register(dist.FoldedDistribution)
     @_dispatched_observe.register(dist.Distribution)
     def _observe_dist(
-        self, rv: dist.Distribution, obs: torch.Tensor, name: str
+        self, rv: dist.TorchDistribution, obs: torch.Tensor, name: str
     ) -> torch.Tensor:
         with pyro.poutine.infer_config(config_fn=no_ambiguity):
             with SelectFactual():
@@ -74,7 +80,10 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
 
     @_dispatched_observe.register
     def _observe_tfmdist(
-        self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
+        self,
+        rv: dist.TransformedDistribution,  # type: ignore
+        value: torch.Tensor,
+        name: str,
     ) -> torch.Tensor:
         tfm = (
             rv.transforms[-1]
@@ -88,7 +97,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         # factual world
         with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
-            new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
+            new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)  # type: ignore
             obs_noise = pyro.sample(
                 name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
             )
@@ -104,7 +113,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         # counterfactual world
         with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
-            cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)
+            cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)  # type: ignore
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
 
         # merge

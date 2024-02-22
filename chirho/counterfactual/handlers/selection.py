@@ -1,3 +1,4 @@
+import typing
 from typing import Optional
 
 import pyro
@@ -16,7 +17,10 @@ def get_factual_indices() -> IndexSet:
 
     :return: IndexSet corresponding to the factual world.
     """
-    return IndexSet(**{name: {0} for name in get_index_plates().keys()})
+    index_plates = get_index_plates()
+    if typing.TYPE_CHECKING:
+        assert index_plates is not None
+    return IndexSet(**{name: {0} for name in index_plates.keys()})
 
 
 class SelectCounterfactual(DependentMaskMessenger):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import typing
 from typing import Tuple, TypeVar
 
 import pyro
@@ -39,4 +40,7 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     for i, act in enumerate(acts):
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    return scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))
+    result = scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))
+    if typing.TYPE_CHECKING:
+        assert result is not None
+    return result
