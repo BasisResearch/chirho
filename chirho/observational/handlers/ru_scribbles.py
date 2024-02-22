@@ -54,12 +54,6 @@ def discrete_scm_1():
     Y = pyro.deterministic("y", X + Z + 1, event_dim=0)
     return Z, X, Y
 
-
-#@pytest.mark.parametrize("use_auto", [True, False])
-#@pytest.mark.parametrize("scale,alpha", [(0.6, 0.6)])
-#@pytest.mark.parametrize("x_obs", [1.5, None])
-#@pytest.mark.parametrize("y_obs", [2.5, None])
-#@pytest.mark.parametrize("z_obs", [3.5, None])
 def test_soft_conditioning_smoke_continuous_1(
     scale, alpha, x_obs, y_obs, z_obs
 ):
