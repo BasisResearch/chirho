@@ -106,7 +106,8 @@ def _batched_odeint(
     event_dim = 0  # assume states are batches of values of rank event_dim
 
     # Call deriv once to get the shape of the output.
-    dy0 = func(t[..., 0], y0)
+    t0 = t.unsqueeze(0) if t.ndim == 0 else t[..., 0]
+    dy0 = func(t0, y0)
 
     y0_batch_shape = torch.broadcast_shapes(
         *(dy0_.shape[: len(dy0_.shape) - event_dim] for dy0_ in dy0)
