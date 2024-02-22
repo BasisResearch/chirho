@@ -39,4 +39,3 @@ def test_torchdiffeq_broadcasting():
             result = simulate(sir, init_state, start_time, end_time)
 
     assert result is not None
-
