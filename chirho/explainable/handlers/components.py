@@ -1,4 +1,5 @@
 import itertools
+import typing
 from typing import Callable, Iterable, MutableMapping, TypeVar
 
 import pyro
@@ -79,7 +80,7 @@ def undo_split(
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-        return scatter_n(
+        result = scatter_n(
             {
                 IndexSet(
                     **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}
@@ -88,6 +89,9 @@ def undo_split(
             },
             event_dim=support.event_dim,
         )
+        if typing.TYPE_CHECKING:
+            assert result is not None
+        return result
 
     return _undo_split
 
@@ -152,6 +156,6 @@ class ExtractSupports(pyro.poutine.messenger.Messenger):
 
         self.supports = {}
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg) -> None:
         if not pyro.poutine.util.site_is_subsample(msg):
             self.supports[msg["name"]] = msg["fn"].support
