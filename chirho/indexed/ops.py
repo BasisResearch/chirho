@@ -1,7 +1,18 @@
 import functools
 import operator
 import typing
-from typing import Dict, Hashable, Iterable, List, Mapping, Optional, Set, Tuple, TypeVar, Union
+from typing import (
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch

@@ -3,6 +3,7 @@ import typing
 from typing import Dict, Hashable, Optional, TypeVar, Union
 
 import pyro
+import pyro.distributions
 import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
@@ -51,7 +52,9 @@ def _gather_tensor(
     if name_to_dim is None:
         index_plates = get_index_plates()
         assert index_plates is not None
-        name_to_dim = {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
+        name_to_dim = {
+            name: typing.cast(int, f.dim) for name, f in index_plates.items()
+        }
 
     result = value
     for name, indices in indexset.items():
@@ -109,7 +112,9 @@ def _scatter_tensor(
     if name_to_dim is None:
         index_plates = get_index_plates()
         assert index_plates is not None
-        name_to_dim = {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
+        name_to_dim = {
+            name: typing.cast(int, f.dim) for name, f in index_plates.items()
+        }
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -122,7 +127,11 @@ def _scatter_tensor(
         result_shape = list(
             torch.broadcast_shapes(
                 value.shape,
-                (1,) * max([event_dim - typing.cast(int, f.dim) for f in index_plates.values()] + [0]),
+                (1,)
+                * max(
+                    [event_dim - typing.cast(int, f.dim) for f in index_plates.values()]
+                    + [0]
+                ),
             )
         )
         for name, indices in indexset.items():
@@ -245,7 +254,7 @@ class _LazyPlateMessenger(IndepMessenger):
             name=self.name, dim=self.dim, size=self.size, counter=0
         )
 
-    def _process_message(self, msg):
+    def _process_message(self, msg) -> None:
         if msg["type"] not in ("sample",) or pyro.poutine.util.site_is_subsample(msg):
             return
         if self._orig_name in union(

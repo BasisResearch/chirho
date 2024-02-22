@@ -5,13 +5,18 @@ import operator
 from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
-import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
+import pyro.distributions.torch as dist
+import pyro.infer
+import pyro.infer.reparam
+import pyro.infer.reparam.reparam
 import torch
 from torch.distributions import biject_to
+from typing_extensions import ParamSpec
 
 from chirho.indexed.ops import cond
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 
@@ -167,7 +172,7 @@ class RBFKernel(TorchKernel):
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return (
-            pyro.distributions.Normal(loc=0.0, scale=self.scale)
+            dist.Normal(loc=0.0, scale=self.scale)
             .expand([1] * self.support.event_dim)
             .to_event(self.support.event_dim)
             .log_prob(x - y)
@@ -178,13 +183,6 @@ class _MaskedDelta(Protocol):
     base_dist: pyro.distributions.Delta
     event_dim: int
     _mask: Union[bool, torch.Tensor]
-
-
-class _DeterministicReparamMessage(TypedDict):
-    name: str
-    fn: _MaskedDelta
-    value: torch.Tensor
-    is_observed: Literal[True]
 
 
 class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
@@ -216,13 +214,13 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
         self.kernel = kernel
         super().__init__()
 
-    def apply(
-        self, msg: _DeterministicReparamMessage
-    ) -> pyro.infer.reparam.reparam.ReparamResult:
+    def apply(self, msg) -> pyro.infer.reparam.reparam.ReparamResult:
         name = msg["name"]
-        event_dim = msg["fn"].event_dim
-        observed_value = msg["value"]
-        computed_value = msg["fn"].base_dist.v
+        fn: _MaskedDelta = msg["fn"]
+        is_observed: Literal[True] = msg["is_observed"]
+        event_dim = fn.event_dim
+        observed_value: torch.Tensor = msg["value"]
+        computed_value: torch.Tensor = msg["fn"].base_dist.v
 
         if observed_value is not computed_value:  # fast path for trivial case
             approx_log_prob = self.kernel(computed_value, observed_value)
@@ -231,7 +229,7 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
         new_fn = pyro.distributions.Delta(observed_value, event_dim=event_dim).mask(
             False
         )
-        return {"fn": new_fn, "value": observed_value, "is_observed": True}
+        return {"fn": new_fn, "value": observed_value, "is_observed": is_observed}
 
 
 class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
@@ -262,14 +260,12 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
     @staticmethod
     def site_is_deterministic(msg: pyro.infer.reparam.reparam.ReparamMessage) -> bool:
         return (
-            msg["is_observed"]
+            bool(msg["is_observed"])
             and isinstance(msg["fn"], pyro.distributions.MaskedDistribution)
             and isinstance(msg["fn"].base_dist, pyro.distributions.Delta)
         )
 
-    def configure(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
-    ) -> Optional[pyro.infer.reparam.reparam.Reparam]:
+    def configure(self, msg) -> Optional[pyro.infer.reparam.reparam.Reparam]:
         if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None
 

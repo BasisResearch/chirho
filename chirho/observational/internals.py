@@ -29,12 +29,12 @@ def _observe_deterministic(rv: T, obs: Optional[AtomicObservation[T]] = None, **
 @observe.register(pyro.distributions.Distribution)
 @pyro.poutine.runtime.effectful(type="observe")
 def _observe_distribution(
-    rv: pyro.distributions.Distribution,
-    obs: Optional[AtomicObservation[T]] = None,
+    rv: pyro.distributions.TorchDistribution,
+    obs: Optional[AtomicObservation[torch.Tensor]] = None,
     *,
     name: Optional[str] = None,
     **kwargs,
-) -> T:
+) -> torch.Tensor:
     if name is None:
         raise ValueError("name must be specified when observing a distribution")
 
