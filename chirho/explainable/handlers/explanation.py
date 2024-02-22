@@ -58,7 +58,7 @@ def SearchForExplanation(
         Mapping[str, Intervention[T]], Mapping[str, constraints.Constraint]
     ],
     consequents: Union[
-        Mapping[str, Callable[[T], Union[float, torch.Tensor]]],
+        Mapping[str, Callable[[T], torch.Tensor]],
         Mapping[str, constraints.Constraint],
     ],
     *,
@@ -100,7 +100,7 @@ def SearchForExplanation(
         antecedents_supports = {a: s for a, s in antecedents.items()}
         antecedents = {
             a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
-            for a, s in antecedents.items()
+            for a, s in antecedents_supports.items()
         }
     else:
         antecedents_supports = {a: constraints.boolean for a in antecedents.keys()}
