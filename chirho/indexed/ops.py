@@ -15,6 +15,7 @@ from typing import (
 )
 
 import pyro
+import pyro.poutine.indep_messenger
 import torch
 
 T = TypeVar("T")
