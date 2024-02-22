@@ -79,7 +79,10 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
         while start_time < end_time:
-            for h in get_new_interruptions():
+            new_interruptions = get_new_interruptions()
+            if typing.TYPE_CHECKING:
+                assert new_interruptions is not None
+            for h in new_interruptions:
                 if isinstance(h.predicate, StaticEvent) and h.predicate.time > end_time:
                     warnings.warn(
                         f"{Interruption.__name__} {h} with time={h.predicate.time} "
@@ -106,14 +109,19 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
-            state, start_time, next_interruption = simulate_to_interruption(
-                possible_interruptions,
-                dynamics,
-                state,
-                start_time,
-                end_time,
-                **msg["kwargs"],
+            _next_int_state: Optional[Tuple[State[T], R, Optional[Interruption[T]]]] = (
+                simulate_to_interruption(
+                    possible_interruptions,
+                    dynamics,
+                    state,
+                    start_time,
+                    end_time,
+                    **msg["kwargs"],
+                )
             )
+            if typing.TYPE_CHECKING:
+                assert _next_int_state is not None
+            state, start_time, next_interruption = _next_int_state
 
             if next_interruption is not None:
                 dynamics, state = next_interruption.callback(dynamics, state)
@@ -139,7 +147,7 @@ def simulate_point(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError("No default behavior for simulate_point")
+    raise NotImplementedError("No default behavior for simulate_point")  # type: ignore
 
 
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
@@ -152,7 +160,7 @@ def simulate_trajectory(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError("No default behavior for simulate_trajectory")
+    raise NotImplementedError("No default behavior for simulate_trajectory")  # type: ignore
 
 
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
@@ -170,13 +178,14 @@ def simulate_to_interruption(
     :returns: the final state
     """
     if len(interruption_stack) == 0:
-        return (
-            simulate_point(dynamics, start_state, start_time, end_time, **kwargs),
-            end_time,
-            None,
+        result: Optional[State[T]] = simulate_point(
+            dynamics, start_state, start_time, end_time, **kwargs
         )
+        if typing.TYPE_CHECKING:
+            assert result is not None
+        return (result, end_time, None)
 
-    raise NotImplementedError("No default behavior for simulate_to_interruption")
+    raise NotImplementedError("No default behavior for simulate_to_interruption")  # type: ignore
 
 
 @pyro.poutine.runtime.effectful(type="check_dynamics")

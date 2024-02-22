@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numbers
+import typing
 from typing import Callable, Mapping, Optional, Tuple, TypeVar, Union
 
 import pyro
@@ -48,7 +49,12 @@ def simulate(
 
     if pyro.settings.get("validate_dynamics"):
         check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
-    return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
+    result: Optional[State[T]] = simulate_point(
+        dynamics, initial_state, start_time, end_time, **kwargs
+    )
+    if typing.TYPE_CHECKING:
+        assert result is not None
+    return result
 
 
 def on(
