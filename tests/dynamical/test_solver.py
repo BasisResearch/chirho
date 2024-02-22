@@ -30,3 +30,13 @@ def test_backend_arg():
     with TorchDiffEq():
         result = simulate(sir, init_state, start_time, end_time)
     assert result is not None
+
+
+def test_torchdiffeq_broadcasting():
+    with pyro.plate("plate", 3):
+        sir = bayes_sir_model()
+        with TorchDiffEq():
+            result = simulate(sir, init_state, start_time, end_time)
+
+    assert result is not None
+
