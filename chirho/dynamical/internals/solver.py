@@ -31,7 +31,7 @@ class Interruption(Generic[T], ShallowMessenger):
         self.predicate = predicate
         self.callback = callback
 
-    def _pyro_get_new_interruptions(self, msg: dict) -> None:
+    def _pyro_get_new_interruptions(self, msg: pyro.poutine.runtime.Message) -> None:
         if msg["value"] is None:
             msg["value"] = []
         assert isinstance(msg["value"], list)
@@ -44,7 +44,7 @@ def get_new_interruptions() -> List[Interruption]:
     """
     Install the active interruptions into the context.
     """
-    return []
+    return typing.cast(List[Interruption], [])
 
 
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
@@ -60,11 +60,11 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg) -> None:
+    def _pyro_simulate(self, msg: pyro.poutine.runtime.Message) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
-        dynamics: Dynamics[T] = msg["args"][0]
-        state: State[T] = msg["args"][1]
+        dynamics: Dynamics[T] = typing.cast(Dynamics[T], msg["args"][0])
+        state: State[T] = typing.cast(State[T], msg["args"][1])
         start_time: R = msg["args"][2]
         end_time: R = msg["args"][3]
 

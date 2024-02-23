@@ -266,6 +266,9 @@ def scatter(
 
 def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]:
 
+    if not typing.TYPE_CHECKING:
+        return fn
+
     @functools.wraps(fn)
     def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
         result = fn(*args, **kwargs)
@@ -348,7 +351,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
 def get_index_plates() -> (
     Mapping[str, pyro.poutine.indep_messenger.CondIndepStackFrame]
 ):
-    return {}
+    return {}  # type: ignore
 
 
 def indexset_as_mask(
