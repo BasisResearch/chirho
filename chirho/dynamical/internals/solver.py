@@ -119,7 +119,8 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                dynamics, state = next_interruption.callback(dynamics, state)
+                # TODO reenable this check once we figure out why mypy is inferring "Never"s
+                dynamics, state = next_interruption.callback(dynamics, state)  # type: ignore
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
