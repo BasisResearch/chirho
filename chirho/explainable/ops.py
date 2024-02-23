@@ -3,7 +3,7 @@ from typing import Optional, Tuple, TypeVar
 
 import pyro
 
-from chirho.indexed.ops import IndexSet, cond_n, gather
+from chirho.indexed.ops import IndexSet, cond_n
 from chirho.interventional.ops import Intervention, intervene
 
 S = TypeVar("S")
@@ -35,12 +35,8 @@ def preempt(
         return obs
 
     name = kwargs.get("name", None)
-    obs_idx = IndexSet(**{name: {0}})
-    act_values = {obs_idx: gather(obs, obs_idx, **kwargs)}
+    act_values = {IndexSet(**{name: {0}}): obs}
     for i, act in enumerate(acts):
-        act_idx = IndexSet(**{name: {i + 1}})
-        act_values[act_idx] = gather(
-            intervene(act_values[obs_idx], act, **kwargs), act_idx, **kwargs
-        )
+        act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
     return cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))
