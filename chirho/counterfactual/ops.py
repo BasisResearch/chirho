@@ -40,7 +40,4 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     for i, act in enumerate(acts):
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    result = scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))
-    if typing.TYPE_CHECKING:
-        assert result is not None
-    return result
+    return scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))

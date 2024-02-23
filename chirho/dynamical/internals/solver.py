@@ -12,6 +12,7 @@ import torch
 
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
+from chirho.indexed.ops import _just
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
@@ -37,6 +38,7 @@ class Interruption(Generic[T], ShallowMessenger):
         msg["value"].append(self)
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
 def get_new_interruptions() -> List[Interruption]:
     """
@@ -58,7 +60,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg: dict) -> None:
+    def _pyro_simulate(self, msg) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
         dynamics: Dynamics[T] = msg["args"][0]
@@ -79,10 +81,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         )
 
         while start_time < end_time:
-            new_interruptions = get_new_interruptions()
-            if typing.TYPE_CHECKING:
-                assert new_interruptions is not None
-            for h in new_interruptions:
+            for h in get_new_interruptions():
                 if isinstance(h.predicate, StaticEvent) and h.predicate.time > end_time:
                     warnings.warn(
                         f"{Interruption.__name__} {h} with time={h.predicate.time} "
@@ -109,19 +108,15 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
-            _next_int_state: Optional[Tuple[State[T], R, Optional[Interruption[T]]]] = (
-                simulate_to_interruption(
-                    possible_interruptions,
-                    dynamics,
-                    state,
-                    start_time,
-                    end_time,
-                    **msg["kwargs"],
-                )
+            next_interruption: Optional[Interruption[T]]
+            state, start_time, next_interruption = simulate_to_interruption(
+                possible_interruptions,
+                dynamics,
+                state,
+                start_time,
+                end_time,
+                **msg["kwargs"],
             )
-            if typing.TYPE_CHECKING:
-                assert _next_int_state is not None
-            state, start_time, next_interruption = _next_int_state
 
             if next_interruption is not None:
                 dynamics, state = next_interruption.callback(dynamics, state)
@@ -136,6 +131,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         msg["done"] = True
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="simulate_point")
 def simulate_point(
     dynamics: Dynamics[T],
@@ -150,6 +146,7 @@ def simulate_point(
     raise NotImplementedError("No default behavior for simulate_point")
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
 def simulate_trajectory(
     dynamics: Dynamics[T],
@@ -163,6 +160,7 @@ def simulate_trajectory(
     raise NotImplementedError("No default behavior for simulate_trajectory")
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     interruption_stack: List[Interruption[T]],
@@ -178,12 +176,11 @@ def simulate_to_interruption(
     :returns: the final state
     """
     if len(interruption_stack) == 0:
-        result: Optional[State[T]] = simulate_point(
-            dynamics, start_state, start_time, end_time, **kwargs
+        return (
+            simulate_point(dynamics, start_state, start_time, end_time, **kwargs),
+            end_time,
+            None,
         )
-        if typing.TYPE_CHECKING:
-            assert result is not None
-        return (result, end_time, None)
 
     raise NotImplementedError("No default behavior for simulate_to_interruption")
 

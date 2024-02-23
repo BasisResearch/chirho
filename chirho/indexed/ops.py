@@ -2,6 +2,7 @@ import functools
 import operator
 import typing
 from typing import (
+    Callable,
     Dict,
     Hashable,
     Iterable,
@@ -17,7 +18,9 @@ from typing import (
 import pyro
 import pyro.poutine.indep_messenger
 import torch
+from typing_extensions import ParamSpec
 
+P = ParamSpec("P")
 T = TypeVar("T")
 
 
@@ -261,6 +264,19 @@ def scatter(
     raise NotImplementedError
 
 
+def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]:
+
+    @functools.wraps(fn)
+    def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+        result = fn(*args, **kwargs)
+        if typing.TYPE_CHECKING:
+            assert result is not None
+        return result
+
+    return _wrapped
+
+
+@_just
 @pyro.poutine.runtime.effectful(type="scatter_n")
 def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs) -> T:
     """
@@ -309,6 +325,7 @@ def cond(fst, snd: T, case: Optional[Union[bool, torch.Tensor]] = None, **kwargs
     raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="cond_n")
 def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs) -> T:
     assert len(values) > 0
@@ -326,6 +343,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
     return result
 
 
+@_just
 @pyro.poutine.runtime.effectful(type="get_index_plates")
 def get_index_plates() -> (
     Mapping[str, pyro.poutine.indep_messenger.CondIndepStackFrame]
@@ -344,12 +362,9 @@ def indexset_as_mask(
     Get a dense mask tensor for indexing into a tensor from an indexset.
     """
     if name_to_dim_size is None:
-        index_plates = get_index_plates()
-        if typing.TYPE_CHECKING:
-            assert index_plates is not None
         name_to_dim_size = {
             name: (typing.cast(int, f.dim), typing.cast(int, f.size))
-            for name, f in index_plates.items()
+            for name, f in get_index_plates().items()
         }
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)

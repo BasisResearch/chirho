@@ -17,10 +17,7 @@ def get_factual_indices() -> IndexSet:
 
     :return: IndexSet corresponding to the factual world.
     """
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
-    return IndexSet(**{name: {0} for name in index_plates.keys()})
+    return IndexSet(**{name: {0} for name in get_index_plates().keys()})
 
 
 class SelectCounterfactual(DependentMaskMessenger):

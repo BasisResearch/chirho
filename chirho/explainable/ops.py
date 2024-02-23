@@ -40,7 +40,4 @@ def preempt(
     for i, act in enumerate(acts):
         act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
 
-    result = cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))
-    if typing.TYPE_CHECKING:
-        assert result is not None
-    return result
+    return cond_n(act_values, case, event_dim=kwargs.get("event_dim", 0))

@@ -167,8 +167,6 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
                 with BatchedObservations(data, name=self._data_plate_name):
                     model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
             index_plates = get_index_plates()
-            if typing.TYPE_CHECKING:
-                assert index_plates is not None
 
         plate_name_to_dim = collections.OrderedDict(
             (p, index_plates[p])

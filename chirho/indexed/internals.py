@@ -50,11 +50,8 @@ def _gather_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        index_plates = get_index_plates()
-        if typing.TYPE_CHECKING:
-            assert index_plates is not None
         name_to_dim = {
-            name: typing.cast(int, f.dim) for name, f in index_plates.items()
+            name: typing.cast(int, f.dim) for name, f in get_index_plates().items()
         }
 
     result = value
@@ -111,11 +108,8 @@ def _scatter_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        index_plates = get_index_plates()
-        if typing.TYPE_CHECKING:
-            assert index_plates is not None
         name_to_dim = {
-            name: typing.cast(int, f.dim) for name, f in index_plates.items()
+            name: typing.cast(int, f.dim) for name, f in get_index_plates().items()
         }
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
@@ -125,8 +119,6 @@ def _scatter_tensor(
 
     if result is None:
         index_plates = get_index_plates()
-        if typing.TYPE_CHECKING:
-            assert index_plates is not None
         result_shape = list(
             torch.broadcast_shapes(
                 value.shape,
@@ -181,13 +173,10 @@ def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
 
 @indices_of.register
 def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
     name_to_dim = (
         kwargs["name_to_dim"]
         if "name_to_dim" in kwargs
-        else {name: typing.cast(int, f.dim) for name, f in index_plates.items()}
+        else {name: typing.cast(int, f.dim) for name, f in get_index_plates().items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(

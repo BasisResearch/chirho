@@ -80,7 +80,7 @@ def undo_split(
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-        result = scatter_n(
+        return scatter_n(
             {
                 IndexSet(
                     **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}
@@ -89,9 +89,6 @@ def undo_split(
             },
             event_dim=support.event_dim,
         )
-        if typing.TYPE_CHECKING:
-            assert result is not None
-        return result
 
     return _undo_split
 

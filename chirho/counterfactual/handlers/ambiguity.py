@@ -30,14 +30,10 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
             rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
             index_plates = get_index_plates()
-            if typing.TYPE_CHECKING:
-                assert index_plates is not None
 
             new_shape = list(value.shape)
             for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
-                dim = index_plates[k].dim
-                if typing.TYPE_CHECKING:
-                    assert isinstance(dim, int)
+                dim = typing.cast(int, index_plates[k].dim)
                 new_shape = [1] * ((event_dim - dim) - len(new_shape)) + new_shape
                 new_shape[dim - event_dim] = rv.batch_shape[dim]
 

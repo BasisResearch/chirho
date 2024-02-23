@@ -175,16 +175,10 @@ def _unbind_leftmost_dim_tensor(
     size = max(size, v.shape[0])
     v = v.expand((size,) + v.shape[1:])
 
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
-    if name not in index_plates:
+    if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
-    new_dim: int = typing.cast(int, index_plates[name].dim)
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.shape
     while new_dim - event_dim < -len(v.shape):
         v = v[None]
@@ -201,16 +195,10 @@ def _unbind_leftmost_dim_distribution(
     if v.batch_shape[0] != 1:
         raise NotImplementedError("Cannot freely reshape distribution")
 
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
-    if name not in index_plates:
+    if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
-    new_dim: int = typing.cast(int, index_plates[name].dim)
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.batch_shape
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
@@ -234,11 +222,10 @@ def _bind_leftmost_dim_tensor(
 ) -> torch.Tensor:
     if name not in indices_of(v, event_dim=event_dim):
         return v
-    index_plates = get_index_plates()
-    if typing.TYPE_CHECKING:
-        assert index_plates is not None
     return torch.transpose(
-        v[None], -len(v.shape) - 1, typing.cast(int, index_plates[name].dim) - event_dim
+        v[None],
+        -len(v.shape) - 1,
+        typing.cast(int, get_index_plates()[name].dim) - event_dim,
     )
 
 

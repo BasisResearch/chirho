@@ -49,12 +49,7 @@ def simulate(
 
     if pyro.settings.get("validate_dynamics"):
         check_dynamics(dynamics, initial_state, start_time, end_time, **kwargs)
-    result: Optional[State[T]] = simulate_point(
-        dynamics, initial_state, start_time, end_time, **kwargs
-    )
-    if typing.TYPE_CHECKING:
-        assert result is not None
-    return result
+    return simulate_point(dynamics, initial_state, start_time, end_time, **kwargs)
 
 
 def on(
