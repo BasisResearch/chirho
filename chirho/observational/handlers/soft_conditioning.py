@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import operator
-from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
+from typing import Callable, Literal, Optional, Protocol, TypeVar, Union
 
 import pyro
 import pyro.distributions.constraints as constraints

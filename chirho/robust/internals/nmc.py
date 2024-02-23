@@ -49,7 +49,7 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
         self.name = name
         super().__init__()
 
-    def _pyro_sample(self, msg: dict) -> None:
+    def _pyro_sample(self, msg) -> None:
         if (
             self.num_particles > 1
             and msg["value"] is None
@@ -89,7 +89,7 @@ class BatchedObservations(Generic[T], Observations[T]):
         self.name = name
         super().__init__(data)
 
-    def _pyro_observe(self, msg: dict) -> None:
+    def _pyro_observe(self, msg) -> None:
         super()._pyro_observe(msg)
         if msg["kwargs"]["name"] in self.data:
             rv, obs = msg["args"]
@@ -167,6 +167,8 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
                 with BatchedObservations(data, name=self._data_plate_name):
                     model_trace, guide_trace = get_nmc_traces(*args, **kwargs)
             index_plates = get_index_plates()
+            if typing.TYPE_CHECKING:
+                assert index_plates is not None
 
         plate_name_to_dim = collections.OrderedDict(
             (p, index_plates[p])
@@ -198,7 +200,7 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
         if self._mc_plate_name in index_plates:
             log_weights = torch.logsumexp(
                 log_weights,
-                dim=plate_name_to_dim[self._mc_plate_name].dim,
+                dim=typing.cast(int, plate_name_to_dim[self._mc_plate_name].dim),
                 keepdim=True,
             ) - math.log(self.num_samples)
             plate_name_to_dim.pop(self._mc_plate_name)
