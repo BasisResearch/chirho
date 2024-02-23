@@ -94,7 +94,6 @@ def SearchForExplanation(
     :param witnesses: A mapping from witness names to interventions or to constraints.
     :param consequents: A mapping from consequent names to factor functions or to constraints.
     """
-    antecedent_supports: Mapping[str, constraints.Constraint]
     if antecedents and isinstance(
         next(iter(antecedents.values())),
         constraints.Constraint,
