@@ -147,7 +147,7 @@ def simulate_point(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError("No default behavior for simulate_point")  # type: ignore
+    raise NotImplementedError("No default behavior for simulate_point")
 
 
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
@@ -160,7 +160,7 @@ def simulate_trajectory(
     """
     Simulate a dynamical system.
     """
-    raise NotImplementedError("No default behavior for simulate_trajectory")  # type: ignore
+    raise NotImplementedError("No default behavior for simulate_trajectory")
 
 
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
@@ -185,7 +185,7 @@ def simulate_to_interruption(
             assert result is not None
         return (result, end_time, None)
 
-    raise NotImplementedError("No default behavior for simulate_to_interruption")  # type: ignore
+    raise NotImplementedError("No default behavior for simulate_to_interruption")
 
 
 @pyro.poutine.runtime.effectful(type="check_dynamics")
