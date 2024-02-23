@@ -41,7 +41,7 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/source/requirements.txt`
-        "pyro-ppl>=1.9.0",
+        "pyro-ppl",
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
