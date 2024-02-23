@@ -1,3 +1,4 @@
+import functools
 import numbers
 import typing
 from typing import Dict, Hashable, Optional, TypeVar, Union
@@ -279,3 +280,19 @@ def get_sample_msg_device(
 @pyro.poutine.runtime.effectful(type="add_indices")
 def add_indices(indexset: IndexSet) -> IndexSet:
     return indexset
+
+
+if not typing.TYPE_CHECKING:
+    if tuple(map(int, pyro.__version__.split(".")[:2])) >= (1, 9):
+
+        class _PatchDefaultConstraintKwarg(
+            pyro.poutine.reentrant_messenger.ReentrantMessenger
+        ):
+            @staticmethod
+            def _pyro_param(msg):
+                if "constraint" not in msg["kwargs"]:
+                    msg["kwargs"]["constraint"] = pyro.distributions.constraints.real
+
+        pyro.infer.inspect.get_model_relations = functools.wraps(
+            pyro.infer.inspect.get_model_relations
+        )(_PatchDefaultConstraintKwarg()(pyro.infer.inspect.get_model_relations))
