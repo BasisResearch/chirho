@@ -181,6 +181,9 @@ def _unbind_leftmost_dim_tensor(
     if name not in index_plates:
         add_indices(IndexSet(**{name: set(range(size))}))
 
+    index_plates = get_index_plates()
+    if typing.TYPE_CHECKING:
+        assert index_plates is not None
     new_dim: int = typing.cast(int, index_plates[name].dim)
     orig_shape = v.shape
     while new_dim - event_dim < -len(v.shape):
@@ -190,7 +193,7 @@ def _unbind_leftmost_dim_tensor(
     return v
 
 
-@unbind_leftmost_dim.register
+@unbind_leftmost_dim.register(pyro.distributions.Distribution)
 def _unbind_leftmost_dim_distribution(
     v: pyro.distributions.TorchDistribution, name: str, size: int = 1, **kwargs
 ) -> pyro.distributions.TorchDistribution:
@@ -204,6 +207,9 @@ def _unbind_leftmost_dim_distribution(
     if name not in index_plates:
         add_indices(IndexSet(**{name: set(range(size))}))
 
+    index_plates = get_index_plates()
+    if typing.TYPE_CHECKING:
+        assert index_plates is not None
     new_dim: int = typing.cast(int, index_plates[name].dim)
     orig_shape = v.batch_shape
 

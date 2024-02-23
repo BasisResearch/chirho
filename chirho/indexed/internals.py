@@ -204,7 +204,7 @@ def _indices_of_tensor(value: torch.Tensor, **kwargs) -> IndexSet:
     return indices_of(value.shape, **kwargs)
 
 
-@indices_of.register
+@indices_of.register(pyro.distributions.Distribution)
 def _indices_of_distribution(
     value: pyro.distributions.TorchDistribution, **kwargs
 ) -> IndexSet:

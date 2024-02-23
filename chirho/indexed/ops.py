@@ -321,7 +321,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
             ),
             dtype=torch.bool,
         )
-        result = cond(result, value, tst, **kwargs)
+        result = cond(result if result is not None else value, value, tst, **kwargs)
     assert result is not None
     return result
 
