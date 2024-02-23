@@ -143,10 +143,14 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
 
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
-        name = msg["name"] if msg["name"] is not None else cls.default_name
-        index_plates = get_index_plates()
-        if name in index_plates:
-            name = f"{name}__dup_{len(index_plates)}"
+        if msg["name"] is None:
+            index_plates = get_index_plates()
+            if cls.default_name in index_plates:
+                name = f"{cls.default_name}__dup_{len(index_plates)}"
+            else:
+                name = cls.default_name
+        else:
+            name = msg["name"]
         msg["kwargs"]["name"] = msg["name"] = name
 
 
