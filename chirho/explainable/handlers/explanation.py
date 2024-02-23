@@ -159,13 +159,13 @@ def SearchForExplanation(
         prefix=antecedent_prefix,
     )
 
-    witness_handler: Preemptions = Preemptions(
+    witness_handler: Preemptions[T] = Preemptions(
         actions=typing.cast(Mapping[str, Intervention[T]], witnesses),
         bias=witness_bias,
         prefix=witness_prefix,
     )
 
-    consequent_handler = Factors(
+    consequent_handler: Factors[T] = Factors(
         factors=typing.cast(Mapping[str, Callable[[T], torch.Tensor]], consequents),
         prefix=consequent_prefix,
     )
