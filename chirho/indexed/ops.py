@@ -344,11 +344,12 @@ def indexset_as_mask(
     Get a dense mask tensor for indexing into a tensor from an indexset.
     """
     if name_to_dim_size is None:
-        g = get_index_plates()
-        assert g is not None
+        index_plates = get_index_plates()
+        if typing.TYPE_CHECKING:
+            assert index_plates is not None
         name_to_dim_size = {
             name: (typing.cast(int, f.dim), typing.cast(int, f.size))
-            for name, f in g.items()
+            for name, f in index_plates.items()
         }
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
