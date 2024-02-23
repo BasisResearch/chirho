@@ -1,5 +1,4 @@
 import itertools
-import typing
 from typing import Callable, Iterable, MutableMapping, TypeVar
 
 import pyro

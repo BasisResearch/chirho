@@ -1,5 +1,5 @@
 import typing
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 import pyro
 import torch

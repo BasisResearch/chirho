@@ -1,5 +1,4 @@
 import functools
-import typing
 from typing import Optional, Tuple, TypeVar
 
 import pyro

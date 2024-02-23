@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numbers
-import typing
 from typing import Callable, Mapping, Optional, Tuple, TypeVar, Union
 
 import pyro
