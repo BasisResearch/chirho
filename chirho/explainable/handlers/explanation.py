@@ -1,4 +1,5 @@
 import contextlib
+import typing
 from typing import Callable, Mapping, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
@@ -93,13 +94,20 @@ def SearchForExplanation(
     :param witnesses: A mapping from witness names to interventions or to constraints.
     :param consequents: A mapping from consequent names to factor functions or to constraints.
     """
+    antecedent_supports: Mapping[str, constraints.Constraint]
     if antecedents and isinstance(
         next(iter(antecedents.values())),
         constraints.Constraint,
     ):
         antecedents_supports = {a: s for a, s in antecedents.items()}
         antecedents = {
-            a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
+            a: typing.cast(
+                Callable[[T], T],
+                random_intervention(
+                    typing.cast(constraints.Constraint, s),
+                    name=f"{antecedent_prefix}_proposal_{a}",
+                ),
+            )
             for a, s in antecedents_supports.items()
         }
     else:
@@ -111,7 +119,10 @@ def SearchForExplanation(
         constraints.Constraint,
     ):
         witnesses = {
-            w: undo_split(s, antecedents=list(antecedents.keys()))
+            w: undo_split(
+                typing.cast(constraints.Constraint, s),
+                antecedents=list(antecedents.keys()),
+            )
             for w, s in witnesses.items()
         }
 
@@ -121,7 +132,7 @@ def SearchForExplanation(
     ):
         consequents = {
             c: consequent_differs(
-                support=s,
+                support=typing.cast(constraints.Constraint, s),
                 antecedents=list(antecedents.keys()),
                 scale=consequent_scale,
             )
@@ -141,17 +152,24 @@ def SearchForExplanation(
         raise ValueError("consequents and possible witnesses must be disjoint")
 
     antecedent_handler = SplitSubsets(
-        supports=antecedents_supports,
-        actions=antecedents,
+        supports=typing.cast(
+            Mapping[str, constraints.Constraint], antecedents_supports
+        ),
+        actions=typing.cast(Mapping[str, Intervention[T]], antecedents),
         bias=antecedent_bias,
         prefix=antecedent_prefix,
     )
 
     witness_handler: Preemptions = Preemptions(
-        actions=witnesses, bias=witness_bias, prefix=witness_prefix
+        actions=typing.cast(Mapping[str, Intervention[T]], witnesses),
+        bias=witness_bias,
+        prefix=witness_prefix,
     )
 
-    consequent_handler = Factors(factors=consequents, prefix=consequent_prefix)
+    consequent_handler = Factors(
+        factors=typing.cast(Mapping[str, Callable[[T], torch.Tensor]], consequents),
+        prefix=consequent_prefix,
+    )
 
     with antecedent_handler, witness_handler, consequent_handler:
         yield
