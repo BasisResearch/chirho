@@ -139,16 +139,16 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         >>> assert(x_counterfactual_2.squeeze() == torch.tensor(2.))
     """
 
-    default_name: str = "intervened"
+    fresh_prefix: str = "__fresh_split__"
 
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
         if msg["name"] is None:
             index_plates = get_index_plates()
-            if cls.default_name in index_plates:
-                name = f"{cls.default_name}__dup_{len(index_plates)}"
-            else:
-                name = cls.default_name
+            name, fresh_suffix = cls.fresh_prefix, len(index_plates)
+            while name in index_plates:
+                name = f"{cls.fresh_prefix}{fresh_suffix}"
+                fresh_suffix += 1
         else:
             name = msg["name"]
         msg["kwargs"]["name"] = msg["name"] = name
@@ -190,8 +190,8 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
         >>> assert(x.squeeze()[1] == torch.tensor(2.))
     """
 
-    default_name: str = "intervened"
+    fresh_prefix: str = "__fresh_split__"
 
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
-        msg["kwargs"]["name"] = msg["name"] = cls.default_name
+        msg["kwargs"]["name"] = msg["name"] = cls.fresh_prefix
