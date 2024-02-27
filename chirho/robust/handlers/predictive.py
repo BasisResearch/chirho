@@ -11,7 +11,7 @@ from chirho.robust.internals.utils import bind_leftmost_dim
 from chirho.robust.ops import Point
 
 try:
-    from pyro.poutine.runtime import InferDict, Message
+    from pyro.poutine.runtime import InferDict, Message  # type: ignore
 except ImportError:
     from chirho._pyro_patch import InferDict, Message  # type: ignore
 

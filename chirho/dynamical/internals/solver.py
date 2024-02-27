@@ -15,7 +15,7 @@ from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
 
 try:
-    from pyro.poutine.runtime import Message
+    from pyro.poutine.runtime import Message  # type: ignore
 except ImportError:
     from chirho._pyro_patch import Message  # type: ignore
 
