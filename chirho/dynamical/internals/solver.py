@@ -14,6 +14,11 @@ from chirho import _pyro_patch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
 
+try:
+    from pyro.poutine.runtime import Message
+except ImportError:
+    from chirho._pyro_patch import Message  # type: ignore
+
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
@@ -31,7 +36,7 @@ class Interruption(Generic[T], ShallowMessenger):
         self.predicate = predicate
         self.callback = callback
 
-    def _pyro_get_new_interruptions(self, msg: pyro.poutine.runtime.Message) -> None:
+    def _pyro_get_new_interruptions(self, msg: Message) -> None:
         if msg["value"] is None:
             msg["value"] = []
         assert isinstance(msg["value"], list)
@@ -60,7 +65,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg: pyro.poutine.runtime.Message) -> None:
+    def _pyro_simulate(self, msg: Message) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
         dynamics: Dynamics[T] = typing.cast(Dynamics[T], msg["args"][0])

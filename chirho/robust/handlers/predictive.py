@@ -10,12 +10,17 @@ from chirho.robust.internals.nmc import BatchedLatents
 from chirho.robust.internals.utils import bind_leftmost_dim
 from chirho.robust.ops import Point
 
+try:
+    from pyro.poutine.runtime import InferDict, Message
+except ImportError:
+    from chirho._pyro_patch import InferDict, Message  # type: ignore
+
 P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
 
 
-class PredictiveSiteInferDict(pyro.poutine.runtime.InferDict):
+class PredictiveSiteInferDict(InferDict):
     _model_predictive_site: bool
 
 
@@ -75,7 +80,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
 
 
 def _predictive_site_infer_dict(
-    msg: pyro.poutine.runtime.Message,
+    msg: Message,
 ) -> PredictiveSiteInferDict:
     return PredictiveSiteInferDict(
         _model_predictive_site=bool(

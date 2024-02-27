@@ -1,11 +1,14 @@
 import typing
 
-import pyro.poutine.runtime
-
 from chirho.indexed.ops import indices_of, union
 
+try:
+    from pyro.poutine.runtime import InferDict, Message
+except ImportError:
+    from chirho._pyro_patch import InferDict, Message  # type: ignore
 
-def site_is_ambiguous(msg: pyro.poutine.runtime.Message) -> bool:
+
+def site_is_ambiguous(msg: Message) -> bool:
     """
     Helper function used with :func:`observe` to determine
     whether a site is observed or ambiguous.
@@ -25,11 +28,11 @@ def site_is_ambiguous(msg: pyro.poutine.runtime.Message) -> bool:
     ) or not infer_dict.get("_specified_conditioning", True)
 
 
-class AmbiguityInferDict(pyro.poutine.runtime.InferDict):
+class AmbiguityInferDict(InferDict):
     _specified_conditioning: bool
 
 
-def no_ambiguity(msg: pyro.poutine.runtime.Message) -> AmbiguityInferDict:
+def no_ambiguity(msg: Message) -> AmbiguityInferDict:
     """
     Helper function used with :func:`pyro.poutine.infer_config` to inform
     :class:`FactualConditioningMessenger` that all ambiguity in the current
