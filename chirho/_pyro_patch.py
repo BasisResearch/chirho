@@ -18,7 +18,7 @@ class Message(TypedDict, total=False):
     kwargs: dict
     name: str
     type: str
-    value: object
+    value: Any
     fn: Callable
     infer: Mapping[str, Any]
 
@@ -31,8 +31,7 @@ def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]:
     @functools.wraps(fn)
     def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
         result = fn(*args, **kwargs)
-        if typing.TYPE_CHECKING:
-            assert result is not None
+        assert result is not None
         return result
 
     return _wrapped

@@ -337,7 +337,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
 def get_index_plates() -> (
     Mapping[str, pyro.poutine.indep_messenger.CondIndepStackFrame]
 ):
-    return {}  # type: ignore
+    return {}
 
 
 def indexset_as_mask(
