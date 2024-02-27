@@ -9,6 +9,7 @@ import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 from typing_extensions import ParamSpec
 
+from chirho import _pyro_patch
 from chirho.indexed.ops import (
     IndexSet,
     cond,
@@ -278,6 +279,7 @@ def get_sample_msg_device(
     raise ValueError(f"could not infer device for {dist} and {value}")
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="add_indices")
 def add_indices(indexset: IndexSet) -> IndexSet:
     return indexset
