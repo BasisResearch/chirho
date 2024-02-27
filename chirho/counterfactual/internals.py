@@ -1,11 +1,8 @@
 import typing
 
-from chirho.indexed.ops import indices_of, union
+from pyro.poutine.runtime import InferDict, Message
 
-try:
-    from pyro.poutine.runtime import InferDict, Message  # type: ignore
-except ImportError:
-    from chirho._pyro_patch import InferDict, Message  # type: ignore
+from chirho.indexed.ops import indices_of, union
 
 
 def site_is_ambiguous(msg: Message) -> bool:

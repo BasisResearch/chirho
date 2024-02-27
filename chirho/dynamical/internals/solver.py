@@ -9,15 +9,11 @@ from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
+from pyro.poutine.runtime import Message
 
 from chirho import _pyro_patch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
-
-try:
-    from pyro.poutine.runtime import Message  # type: ignore
-except ImportError:
-    from chirho._pyro_patch import Message  # type: ignore
 
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")

@@ -3,17 +3,13 @@ from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import torch
+from pyro.poutine.runtime import InferDict, Message
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.robust.internals.nmc import BatchedLatents
 from chirho.robust.internals.utils import bind_leftmost_dim
 from chirho.robust.ops import Point
-
-try:
-    from pyro.poutine.runtime import InferDict, Message  # type: ignore
-except ImportError:
-    from chirho._pyro_patch import InferDict, Message  # type: ignore
 
 P = ParamSpec("P")
 S = TypeVar("S")

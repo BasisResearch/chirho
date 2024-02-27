@@ -1,26 +1,12 @@
 import functools
 import typing
-from typing import Any, Callable, Mapping, Optional, TypedDict, TypeVar
+from typing import Callable, Optional, TypeVar
 
 import pyro
 from typing_extensions import ParamSpec
 
 P = ParamSpec("P")
 T = TypeVar("T")
-
-
-class InferDict(TypedDict, total=False):
-    pass
-
-
-class Message(TypedDict, total=False):
-    args: tuple
-    kwargs: dict
-    name: str
-    type: str
-    value: Any
-    fn: Callable
-    infer: Mapping[str, Any]
 
 
 def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]:
