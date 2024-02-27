@@ -12,7 +12,7 @@ jobs:
     strategy:
       matrix:
         python-version: [3.8, 3.9, '3.10']
-        pyro-version: ['1.8.6', '1.9.0']
+        pyro-version: ['1.8.6', 'latest']
 
     steps:
       - uses: actions/checkout@v2
@@ -33,7 +33,11 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyro-ppl==${{ matrix.pyro-version }}
+          if [ "${{ matrix.pyro-version }}" = "latest" ]; then
+            pip install pyro-ppl
+          else
+            pip install pyro-ppl==${{ matrix.pyro-version }}
+          fi
           pip install .[test]
 
       - name: Lint
