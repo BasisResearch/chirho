@@ -1,4 +1,5 @@
 using OrdinaryDiffEq, Plots
+using SteadyStateDiffEq
 
 # The general holling-tanner differential equation.
 # This subtracts predator and fishing mortality from capacity-limited growth.
@@ -81,7 +82,7 @@ function create_three_level_problem(u0, tspan, pstruct)
         pstruct.K1,
         pstruct.p12,
         pstruct.D1,
-        # Compute F1, the fishing mortality rate proportionally to intrinsict growth.
+        # Compute F1, the fishing mortality rate, proportionally to intrinsic growth.
         pstruct.f1 * pstruct.r1,
         pstruct.r2,
         pstruct.e12,
@@ -139,4 +140,72 @@ function plot_default_three_level_fishery(B1, B2, B3, f1, f2, f3)
     plot(sol, title="Default Zhou and Smith (2017)", xaxis="Time", yaxis="Biomass", yscale=:log10)
 end
 
-plot_default_three_level_fishery(B1, B2, B3) = plot_default_three_level_fishery(B1, B2, B3, 0.0, 0.0, 0.0)
+function create_three_level_ss_problem(u0, pstruct)
+    p = [
+        pstruct.r1,
+        pstruct.K1,
+        pstruct.p12,
+        pstruct.D1,
+        # Compute F1, the fishing mortality rate, proportionally to intrinsic growth.
+        pstruct.f1 * pstruct.r1,
+        pstruct.r2,
+        pstruct.e12,
+        pstruct.p23,
+        pstruct.D2,
+        pstruct.f2 * pstruct.r2,
+        pstruct.r3,
+        pstruct.e23,
+        pstruct.M3,
+        pstruct.f3 * pstruct.r3
+    ]
+    prob = SteadyStateProblem(
+        three_level_fishery_model,
+        u0,
+        p
+    )
+    return prob
+end
+
+function simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
+    u0 = [B1, B2, B3]
+    # FIXME WIP so we need compile the problem once and then reparameterize with pstruct actually.
+    prob = create_three_level_ss_problem(u0, pstruct)
+    sol = solve(prob, SSRootfind())
+    return sol
+end
+
+function simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3)
+    pstruct = default_three_level_fishery_parameters(f1, f2, f3)
+    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
+end
+
+function simulate_ss_three_level_fishery(f1, f2, f3, pstruct)
+    # Default stable parameters. Taken by solving for steady state with no fishing.
+    B1, B2, B3 = 958.833, 174.356, 33.476
+    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
+end
+
+function simulate_ss_three_level_fishery(f1, f2, f3)
+    # Default stable parameters. Taken by solving for steady state with no fishing.
+    # TODO overload structure needs help b/c defining these parameters twice.
+    B1, B2, B3 = 958.833, 174.356, 33.476
+    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3)
+end
+
+function sustained_yield(sssol, pstruct)
+    # The sustained yield is the steady state biomass times the fishing mortality rate.
+    # This is not the necessarily the "sustainable" yield if fishing rates drive a species
+    #  to extinction.
+    return ssol * [pstruct.f1 * pstruct.r1, pstruct.f2 * pstruct.r2, pstruct.f3 * pstruct.r3]
+end
+
+function disturbance_index(sssol_fished, sssol_unfished)
+    # The disturbance index (courtesy of Bundy et al. 2005 and Zhou and Smith 2017) simply
+    #  sums over the deviations in biomass ratios between trophic levels between the fished
+    #  and unfished regimes.
+    di = 0.0
+    for i in 1:(length(sssol_fished) - 1)
+        di += abs(sssol_fished[i+1] / sssol_fished[i] - sssol_unfished[i+1] / sssol_unfished[i])
+    end
+    return di
+end
