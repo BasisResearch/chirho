@@ -58,22 +58,22 @@ struct ThreeLevelFisheryParameters
     K1::Float64
     p12::Float64
     D1::Float64
-    f1::Float64
+    F1::Float64
     r2::Float64
     e12::Float64
     p23::Float64
     D2::Float64
-    f2::Float64
+    F2::Float64
     r3::Float64
     e23::Float64
     M3::Float64
-    f3::Float64
+    F3::Float64
 end
 
-function ThreeLevelFisheryParameters(;r1::Float64, K1::Float64, p12::Float64, D1::Float64, f1::Float64,
-                                      r2::Float64, e12::Float64, p23::Float64, D2::Float64, f2::Float64,
-                                      r3::Float64, e23::Float64, M3::Float64, f3::Float64)
-    return ThreeLevelFisheryParameters(r1, K1, p12, D1, f1, r2, e12, p23, D2, f2, r3, e23, M3, f3)
+function ThreeLevelFisheryParameters(;r1::Float64, K1::Float64, p12::Float64, D1::Float64, F1::Float64,
+                                      r2::Float64, e12::Float64, p23::Float64, D2::Float64, F2::Float64,
+                                      r3::Float64, e23::Float64, M3::Float64, F3::Float64)
+    return ThreeLevelFisheryParameters(r1, K1, p12, D1, F1, r2, e12, p23, D2, F2, r3, e23, M3, F3)
 end
 
 function create_three_level_problem(u0, tspan, pstruct)
@@ -82,17 +82,16 @@ function create_three_level_problem(u0, tspan, pstruct)
         pstruct.K1,
         pstruct.p12,
         pstruct.D1,
-        # Compute F1, the fishing mortality rate, proportionally to intrinsic growth.
-        pstruct.f1 * pstruct.r1,
+        pstruct.F1,
         pstruct.r2,
         pstruct.e12,
         pstruct.p23,
         pstruct.D2,
-        pstruct.f2 * pstruct.r2,
+        pstruct.F2,
         pstruct.r3,
         pstruct.e23,
         pstruct.M3,
-        pstruct.f3 * pstruct.r3
+        pstruct.F3
     ]
     prob = ODEProblem(
         three_level_fishery_model,
@@ -104,7 +103,7 @@ function create_three_level_problem(u0, tspan, pstruct)
 end
 
 # "Ground truth" stable parameters, taken from Table 1 of Zhou and Smith (2017).
-function default_three_level_fishery_parameters(f1, f2, f3)
+function default_three_level_fishery_parameters(F1, F2, F3)
     K1 = 1000.0
     r1, r2, r3 = 2.0, 1.0, 0.25
     p12, p23 = 0.5, 0.5
@@ -116,21 +115,21 @@ function default_three_level_fishery_parameters(f1, f2, f3)
         K1=K1,
         p12=p12,
         D1=D1,
-        f1=f1,
+        F1=F1,
         r2=r2,
         e12=e12,
         p23=p23,
         D2=D2,
-        f2=f2,
+        F2=F2,
         r3=r3,
         e23=e23,
         M3=M3,
-        f3=f3
+        F3=F3
     )
 end
 
-function plot_default_three_level_fishery(B1, B2, B3, f1, f2, f3)
-    pstruct = default_three_level_fishery_parameters(f1, f2, f3)
+function plot_default_three_level_fishery(B1, B2, B3, F1, F2, F3)
+    pstruct = default_three_level_fishery_parameters(F1, F2, F3)
     u0 = [B1, B2, B3]
     tspan = (0.0, 10.0)
     prob = create_three_level_problem(u0, tspan, pstruct)
@@ -146,17 +145,16 @@ function create_three_level_ss_problem(u0, pstruct)
         pstruct.K1,
         pstruct.p12,
         pstruct.D1,
-        # Compute F1, the fishing mortality rate, proportionally to intrinsic growth.
-        pstruct.f1 * pstruct.r1,
+        pstruct.F1,
         pstruct.r2,
         pstruct.e12,
         pstruct.p23,
         pstruct.D2,
-        pstruct.f2 * pstruct.r2,
+        pstruct.F2,
         pstruct.r3,
         pstruct.e23,
         pstruct.M3,
-        pstruct.f3 * pstruct.r3
+        pstruct.F3
     ]
     prob = SteadyStateProblem(
         three_level_fishery_model,
@@ -166,7 +164,7 @@ function create_three_level_ss_problem(u0, pstruct)
     return prob
 end
 
-function simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
+function simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
     u0 = [B1, B2, B3]
     # FIXME WIP so we need compile the problem once and then reparameterize with pstruct actually.
     prob = create_three_level_ss_problem(u0, pstruct)
@@ -174,29 +172,22 @@ function simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
     return sol
 end
 
-function simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3)
-    pstruct = default_three_level_fishery_parameters(f1, f2, f3)
-    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
+function simulate_ss_three_level_fishery(B1, B2, B3, F1, F2, F3)
+    pstruct = default_three_level_fishery_parameters(F1, F2, F3)
+    return simulate_ss_three_level_fishery(B1, B2, B3, F1, F2, F3, pstruct)
 end
 
-function simulate_ss_three_level_fishery(f1, f2, f3, pstruct)
+function simulate_ss_three_level_fishery(F1, F2, F3)
     # Default stable parameters. Taken by solving for steady state with no fishing.
     B1, B2, B3 = 958.833, 174.356, 33.476
-    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3, pstruct)
-end
-
-function simulate_ss_three_level_fishery(f1, f2, f3)
-    # Default stable parameters. Taken by solving for steady state with no fishing.
-    # TODO overload structure needs help b/c defining these parameters twice.
-    B1, B2, B3 = 958.833, 174.356, 33.476
-    return simulate_ss_three_level_fishery(B1, B2, B3, f1, f2, f3)
+    return simulate_ss_three_level_fishery(B1, B2, B3, F1, F2, F3)
 end
 
 function sustained_yield(sssol, pstruct)
     # The sustained yield is the steady state biomass times the fishing mortality rate.
     # This is not the necessarily the "sustainable" yield if fishing rates drive a species
     #  to extinction.
-    return ssol * [pstruct.f1 * pstruct.r1, pstruct.f2 * pstruct.r2, pstruct.f3 * pstruct.r3]
+    return ssol * [pstruct.F1 * pstruct.r1, pstruct.F2 * pstruct.r2, pstruct.F3 * pstruct.r3]
 end
 
 function disturbance_index(sssol_fished, sssol_unfished)
@@ -209,3 +200,4 @@ function disturbance_index(sssol_fished, sssol_unfished)
     end
     return di
 end
+
