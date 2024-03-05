@@ -53,7 +53,7 @@ function three_level_fishery_model(du, u, p, t)
     du[3] = apex_trophic_level(B3, r3, B2, e23, M3, F3)
 end
 
-struct ThreeLevelFisheryParameters
+mutable struct ThreeLevelFisheryParameters
     r1::Float64
     K1::Float64
     p12::Float64
@@ -130,13 +130,19 @@ end
 
 function plot_default_three_level_fishery(B1, B2, B3, F1, F2, F3)
     pstruct = default_three_level_fishery_parameters(F1, F2, F3)
+    plot_three_level_fishery(B1, B2, B3, pstruct)
+end
+
+function plot_three_level_fishery(B1, B2, B3, pstruct::ThreeLevelFisheryParameters)
     u0 = [B1, B2, B3]
     tspan = (0.0, 10.0)
     prob = create_three_level_problem(u0, tspan, pstruct)
     sol = solve(prob, Tsit5())
-    # plot(sol, title="Default Zhou and Smith (2017)", xaxis="Time", yaxis="Biomass")
-    # Use logscale instead.
-    plot(sol, title="Default Zhou and Smith (2017)", xaxis="Time", yaxis="Biomass", yscale=:log10)
+    plot(sol, title="Zhou and Smith (2017) Model", xaxis="Time", yaxis="Biomass", yscale=:log10)
+end
+
+function plot_three_level_fishery(pstruct::ThreeLevelFisheryParameters)
+    return plot_three_level_fishery(DEFAULT_B1, DEFAULT_B2, DEFAULT_B3, pstruct)
 end
 
 function create_three_level_ss_problem(u0, pstruct)
@@ -164,12 +170,20 @@ function create_three_level_ss_problem(u0, pstruct)
     return prob
 end
 
+DEFAULT_B1 = 958.833
+DEFAULT_B2 = 174.356
+DEFAULT_B3 = 33.476
+
 function simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
     u0 = [B1, B2, B3]
     # FIXME WIP so we need compile the problem once and then reparameterize with pstruct actually.
     prob = create_three_level_ss_problem(u0, pstruct)
     sol = solve(prob, SSRootfind())
     return sol
+end
+
+function simulate_ss_three_level_fishery(pstruct::ThreeLevelFisheryParameters)
+    return simulate_ss_three_level_fishery(DEFAULT_B1, DEFAULT_B2, DEFAULT_B3, pstruct)
 end
 
 function simulate_ss_three_level_fishery(B1, B2, B3, F1, F2, F3)
@@ -179,15 +193,22 @@ end
 
 function simulate_ss_three_level_fishery(F1, F2, F3)
     # Default stable parameters. Taken by solving for steady state with no fishing.
-    B1, B2, B3 = 958.833, 174.356, 33.476
-    return simulate_ss_three_level_fishery(B1, B2, B3, F1, F2, F3)
+    return simulate_ss_three_level_fishery(DEFAULT_B1, DEFAULT_B2, DEFAULT_B3, F1, F2, F3)
 end
 
-function sustained_yield(sssol, pstruct)
+function sustained_yield(sssol, pstruct, price1, price2, price3)
     # The sustained yield is the steady state biomass times the fishing mortality rate.
     # This is not the necessarily the "sustainable" yield if fishing rates drive a species
     #  to extinction.
-    return ssol * [pstruct.F1 * pstruct.r1, pstruct.F2 * pstruct.r2, pstruct.F3 * pstruct.r3]
+    return sum(sssol .* [
+        pstruct.F1 * pstruct.r1 * price1,
+        pstruct.F2 * pstruct.r2 * price2,
+        pstruct.F3 * pstruct.r3 * price3
+    ])
+end
+
+function sustained_yield(sssol, pstruct)
+    return sustained_yield(sssol, pstruct, 1.0, 1.0, 1.0)
 end
 
 function disturbance_index(sssol_fished, sssol_unfished)
@@ -201,3 +222,202 @@ function disturbance_index(sssol_fished, sssol_unfished)
     return di
 end
 
+function update_parameter!(pstruct::ThreeLevelFisheryParameters, param_name::String, value)
+    field = Symbol(param_name)
+    if hasproperty(pstruct, field)
+        setfield!(pstruct, field, value)
+    else
+        error("Parameter '$param_name' does not exist in ThreeLevelFisheryParameters")
+    end
+end
+
+
+function plot_parameter_sensitivities(
+    param_name::String,
+    param_values::Array{Float64, 1},
+    F1::Float64, F2::Float64, F3::Float64
+)
+    biomass = []
+    disturbance = []
+    totalyield = []
+    fished_ss = []
+    unfished_ss = []
+
+    fished_pstruct = default_three_level_fishery_parameters(F1, F2, F3)
+    unfished_pstruct = default_three_level_fishery_parameters(0.0, 0.0, 0.0)
+
+    for value in param_values
+        # Update the specified parameter
+        update_parameter!(fished_pstruct, param_name, value)
+        update_parameter!(unfished_pstruct, param_name, value)
+        # Simulate out to steady states.
+        fished_sssol = simulate_ss_three_level_fishery(fished_pstruct)
+        unfished_sssol = simulate_ss_three_level_fishery(unfished_pstruct)
+        # Sum over sssol to get total relative biomass. Larger is better.
+        push!(biomass, sum(fished_sssol)/sum(unfished_sssol))
+        # Compute the disturbance index.
+        push!(disturbance, disturbance_index(fished_sssol, unfished_sssol))
+        # Compute the total yield. This is not a function of unfished and therefore 0 yield.
+        push!(totalyield, sum(sustained_yield(fished_sssol, fished_pstruct, 1.0, 30.0, 1000.0)))
+
+        # Add the steady states to the list for later plotting. Copy.
+        push!(fished_ss, copy(fished_sssol))
+        push!(unfished_ss, copy(unfished_sssol))
+    end
+
+    fished_ss = permutedims(hcat(fished_ss...))
+    unfished_ss = permutedims(hcat(unfished_ss...))
+
+    pbiomass = plot(param_values, biomass, label="Relative Biomass", title="Parameter Sensitivities", xaxis=param_name)
+    # Plot each species relative biomass on the same plot as above.
+    for i in 1:3
+        plot!(param_values, fished_ss[:, i] ./ unfished_ss[:, i], label="TL $i", xaxis=param_name)
+    end
+    pdi = plot(param_values, disturbance, label="Disturbance Index", xaxis=param_name)
+    pyield = plot(param_values, totalyield, label="Total Yield", xaxis=param_name)
+
+    # Plot all three with the same x axis, title with the parameter of interest. Make tall to account for stacked plots.
+    plot(pbiomass, pdi, pyield, layout=(3, 1), title=param_name, size=(800, 500))
+
+end
+
+# plot_parameter_sensitivities("e12", collect(range(0.1, 0.3, 100)), 0.1 * 2.0, 0.1 * 1.0, 0.1 * 0.25)
+
+# As an initial exploration, we want to find out when extinction occurs within plausible parameter ranges.
+# K1 — 1000 fixed (this won't affect ratios for the same reason TL1 fishing doesn't, just time to extinction)
+# r1 — (1.0, 2.0, 5.68); r2 — (0.5, 1.0, 2.0); r3 — (0.114, 0.25, 1.0)
+#  - comment: after perusing FishBase (fishbase.se) a bit and looking at r in the "Estimates based on models" of common commercial fish, and multiplying
+#             by 2 as specified by Zhou and Smith (2017), these ranges seem plausible.
+RANGE_R1 = (1.0, 2.0, 5.68)
+RANGE_R2 = (0.5, 1.0, 2.0)
+RANGE_R3 = (0.114, 0.25, 1.0)
+# p12 — (0.01, 0.5, 10.0); p23 — (0.01, 0.5, 10.0) logscale, fairly clear from their exposition, and I'm cutting off an order on each side.
+# D1 — 100; D2 — 10 fixed (they don't give enough information to vary these)
+# e12 — (0.02, 0.2, 0.24); e23 — (0.02, 0.2, 0.24) logscale (probably...not super clear from their exposition)
+RANGE_E12 = (0.02, 0.2, 0.24)
+RANGE_E23 = (0.02, 0.2, 0.24)
+# M3 — 0.01 fixed (they just ballpark/handwave this)
+# F1, F2, F3 — (0, r, 2r) respectively, where r is the maximum intrinsic growth rate of the species. In our
+#  setting this is unknown, so take this to be the expected r. If f ever exceeds r you get extinction, with some additional
+#  constraints arising from the other parameters as analyzed by Zhou and Smith (2017).
+
+# Zhou and Smith (2017) report:
+# 1. that models are less sensitive to K, r, D and M.
+#  — comment: the relative values of r to fishing mortality is obviously important.
+# 2. biologically, r ranges from 0.057 to 2.84 for the schafer model. they multiply by 2 to account for predation, so r — (0.114, 5.68), decreasing with TL
+# 3. p rarely measured, but they say similar qualitative curves across 0.001 to 100.0 (on a log scale 0.5 is roughly in the middle), even though big changes
+#     are induced to absolute biomass ratios.
+# 4. they claim greatest sensitivity to energy transfer efficiency, which controls the carrying capacity of the predators (makes sense)
+#     biologically, e ranges between 0.02 and 0.24.
+
+# Brainstorm:
+# So we don't know exactly what r is, and couldn't know what it is when setting fishing rates. As such, we let that remain uncertain.
+# This will mean that an extinction averse fishing policy will set its fishing rates to be lower than say, the 10th percentile of likely
+#  growth rates. That would put it into a regime where extinction has a 10% chance of occurring, though in reality it would need to be set lower
+#  (at least for higher trophic levels) to account for the fact that their capacity will be reduced due to fishing for their food.
+# This translates to rare r probably being the primary driver of catastrophic events. The other parameters will augment this to
+#  greater rarity, requiring the fishing rates to be even lower. For internal analysis, we can quantify the degree to which other parameters
+#  are affecting this by constraining to non-extincting r and seeing the percentage of prior cases in which extinction occurs.
+
+# So this is a bit unrealistic, because in reality, we would have time to react if the system started behaving in unexpected ways (i.e. our estimates)
+#  for R were way off. This would be akin to our online setting, where we just want to avoid extinction for the next year, after we which we recalibrate
+#  our parameter estimates with the year's data, and then set our fishing rates for the next year.
+
+# TODO WIP still wanting to do our pairwise grid scatter simulation here to sanity check this.
+# 1. linspace across all unfixed parameters.
+# 2. solve fished and unfished steady states across the whole grid.
+# 3. sort into three categories: extinct in unfished (fished irrelevant), extinct in fished but not in unfished, and not extinct in either.
+# 4. plot pairwise scatters for each pair of parameters and color by the three categories.
+
+function grid_scatter_extinction(F1, F2, F3, n)
+    r1s = collect(range(RANGE_R1[1], RANGE_R1[3], n))
+    r2s = collect(range(RANGE_R2[1], RANGE_R2[3], n))
+    r3s = collect(range(RANGE_R3[1], RANGE_R3[3], n))
+    e12s = collect(range(RANGE_E12[1], RANGE_E12[3], n))
+    e23s = collect(range(RANGE_E23[1], RANGE_E23[3], n))
+
+    pstruct = default_three_level_fishery_parameters(F1, F2, F3)
+
+
+    # Store results 0, 1, 2 in a 5d array.
+    results = zeros(Int, n, n, n, n, n)
+    # Store the parameters in another 5d array.
+    parameters = zeros(Float64, n, n, n, n, n, 5)
+
+    # Use julia's version of product
+    for i in 1:n
+        for j in 1:n
+            for k in 1:n
+                for l in 1:n
+                    for m in 1:n
+                        update_parameter!(pstruct, "r1", r1s[i])
+                        update_parameter!(pstruct, "r2", r2s[j])
+                        update_parameter!(pstruct, "r3", r3s[k])
+                        update_parameter!(pstruct, "e12", e12s[l])
+                        update_parameter!(pstruct, "e23", e23s[m])
+
+                        # Store the parameters.
+                        parameters[i, j, k, l, m, 1] = r1s[i]
+                        parameters[i, j, k, l, m, 2] = r2s[j]
+                        parameters[i, j, k, l, m, 3] = r3s[k]
+                        parameters[i, j, k, l, m, 4] = e12s[l]
+                        parameters[i, j, k, l, m, 5] = e23s[m]
+
+                        update_parameter!(pstruct, "F1", 0.0)
+                        update_parameter!(pstruct, "F2", 0.0)
+                        update_parameter!(pstruct, "F3", 0.0)
+                        unfished_sssol = simulate_ss_three_level_fishery(pstruct)
+
+                        # If any unfished species are extinct, i.e. any less than 1e-6, then store a result of 0.
+                        if any(unfished_sssol .< 1e-6)
+                            results[i, j, k, l, m] = 0
+                        end
+
+                        update_parameter!(pstruct, "F1", F1)
+                        update_parameter!(pstruct, "F2", F2)
+                        update_parameter!(pstruct, "F3", F3)
+                        fished_sssol = simulate_ss_three_level_fishery(pstruct)
+
+                        # If any fished species are extinct, i.e. any less than 1e-6, then store a result of 1
+                        if any(fished_sssol .< 1e-6)
+                            results[i, j, k, l, m] = 1
+                        # If no species are extinct, store a result of 2.
+                        else
+                            results[i, j, k, l, m] = 2
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    # Reshape into flattened "dataset" style arrays.
+    nd = ndims(results)
+    results_flat = reshape(results, n^nd)
+    parameters_flat = reshape(parameters, n^nd, nd) + randn(n^nd, nd) * 0.05
+
+    # return results, parameters
+    
+    # Now plot the results in a 2d grid for each pair of parameters. Each pair gets a cell, and in that cell we can plot a simple scatter.
+    # Just ignore the diagonals.
+    plots = []
+    for i in 1:ndims(results)
+        for j in 1:ndims(results)
+            if i != j
+                scatterplot = scatter(
+                    parameters_flat[:, i], parameters_flat[:, j],
+                    zcolor=results_flat, color=:viridis, markersize=0.8, markerstrokewidth=0, alpha=0.5,
+                    legend=false, colorbar=false
+                )
+                push!(plots, scatterplot)
+            else
+                # HACK suggested by chatgpt — seems like there should be a better way to do this.
+                emptyplot = plot(legend=false, axis=false, grid=false, foreground_color_subplot=:white, background_color_subplot=:white)
+                push!(plots, emptyplot)
+            end
+        end
+    end
+
+    # Plot all the scatterplots in a grid.
+    plot(plots..., layout=(ndims(results), ndims(results)), size=(1000, 1000))
+end
