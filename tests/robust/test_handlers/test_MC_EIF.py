@@ -7,6 +7,7 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
+from chirho.robust.handlers.estimators import MonteCarloInfluenceEstimator
 from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 from chirho.robust.ops import influence_fn
 
@@ -67,15 +68,16 @@ def test_nmc_predictive_influence_smoke(
                 model, num_samples=2, return_sites=obs_names, parallel=True
             )().items()
         }
-
-    predictive_eif = influence_fn(
-        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-        test_datum,
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )(PredictiveModel(model, guide))
+    ):
+        predictive_eif = influence_fn(
+            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+            test_datum,
+        )(PredictiveModel(model, guide))
 
     test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_datum_eif) > 0
@@ -109,14 +111,16 @@ def test_nmc_predictive_influence_vmap_smoke(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
-    predictive_eif = influence_fn(
-        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-        test_data,
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )(PredictiveModel(model, guide))
+    ):
+        predictive_eif = influence_fn(
+            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+            test_data,
+        )(PredictiveModel(model, guide))
 
     test_data_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_data_eif) > 0
@@ -133,12 +137,14 @@ def test_influence_raises_no_grad_warning_correctly():
         model, guide=guide, num_samples=10, return_sites=["y"]
     )
     points = predictive()
-    influence = influence_fn(
-        PredictiveFunctional,
-        points,
+    with MonteCarloInfluenceEstimator(
         num_samples_outer=10,
         num_samples_inner=10,
-    )(PredictiveModel(model, guide))
+    ):
+        influence = influence_fn(
+            PredictiveFunctional,
+            points,
+        )(PredictiveModel(model, guide))
 
     with pytest.warns(UserWarning, match="torch.no_grad"):
         influence()
