@@ -1,11 +1,15 @@
 import numbers
+import typing
 from typing import Dict, Hashable, Optional, TypeVar, Union
 
 import pyro
+import pyro.distributions
 import pyro.infer.reparam
 import torch
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
+from typing_extensions import ParamSpec
 
+from chirho import _pyro_patch
 from chirho.indexed.ops import (
     IndexSet,
     cond,
@@ -16,6 +20,7 @@ from chirho.indexed.ops import (
     union,
 )
 
+P = ParamSpec("P")
 K = TypeVar("K")
 T = TypeVar("T")
 
@@ -48,7 +53,9 @@ def _gather_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        name_to_dim = {
+            name: typing.cast(int, f.dim) for name, f in get_index_plates().items()
+        }
 
     result = value
     for name, indices in indexset.items():
@@ -104,7 +111,9 @@ def _scatter_tensor(
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        name_to_dim = {
+            name: typing.cast(int, f.dim) for name, f in get_index_plates().items()
+        }
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -116,7 +125,11 @@ def _scatter_tensor(
         result_shape = list(
             torch.broadcast_shapes(
                 value.shape,
-                (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
+                (1,)
+                * max(
+                    [event_dim - typing.cast(int, f.dim) for f in index_plates.values()]
+                    + [0]
+                ),
             )
         )
         for name, indices in indexset.items():
@@ -166,7 +179,7 @@ def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
     name_to_dim = (
         kwargs["name_to_dim"]
         if "name_to_dim" in kwargs
-        else {name: f.dim for name, f in get_index_plates().items()}
+        else {name: typing.cast(int, f.dim) for name, f in get_index_plates().items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(
@@ -183,9 +196,9 @@ def _indices_of_tensor(value: torch.Tensor, **kwargs) -> IndexSet:
     return indices_of(value.shape, **kwargs)
 
 
-@indices_of.register
+@indices_of.register(pyro.distributions.Distribution)
 def _indices_of_distribution(
-    value: pyro.distributions.Distribution, **kwargs
+    value: pyro.distributions.TorchDistribution, **kwargs
 ) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
@@ -237,7 +250,7 @@ class _LazyPlateMessenger(IndepMessenger):
             name=self.name, dim=self.dim, size=self.size, counter=0
         )
 
-    def _process_message(self, msg):
+    def _process_message(self, msg) -> None:
         if msg["type"] not in ("sample",) or pyro.poutine.util.site_is_subsample(msg):
             return
         if self._orig_name in union(
@@ -248,7 +261,7 @@ class _LazyPlateMessenger(IndepMessenger):
 
 
 def get_sample_msg_device(
-    dist: pyro.distributions.Distribution,
+    dist: pyro.distributions.TorchDistribution,
     value: Optional[Union[torch.Tensor, float, int, bool]],
 ) -> torch.device:
     # some gross code to infer the device of the obs_mask tensor
@@ -266,6 +279,7 @@ def get_sample_msg_device(
     raise ValueError(f"could not infer device for {dist} and {value}")
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="add_indices")
 def add_indices(indexset: IndexSet) -> IndexSet:
     return indexset

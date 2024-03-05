@@ -1,7 +1,9 @@
+import typing
 from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import torch
+from pyro.poutine.runtime import InferDict, Message
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
@@ -12,6 +14,10 @@ from chirho.robust.ops import Point
 P = ParamSpec("P")
 S = TypeVar("S")
 T = TypeVar("T")
+
+
+class PredictiveSiteInferDict(InferDict):
+    _model_predictive_site: bool
 
 
 class PredictiveModel(Generic[P, T], torch.nn.Module):
@@ -47,7 +53,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: {"_model_predictive_site": False}
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=False)
         ):
             with pyro.poutine.trace() as guide_tr:
                 if self.guide is not None:
@@ -62,11 +68,23 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         )
 
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: {"_model_predictive_site": True}
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=True)
         ):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
                     return self.model(*args, **kwargs)
+
+
+def _predictive_site_infer_dict(
+    msg: Message,
+) -> PredictiveSiteInferDict:
+    return PredictiveSiteInferDict(
+        _model_predictive_site=bool(
+            (msg["infer"] if msg["infer"] is not None else {}).get(
+                "_model_predictive_site", True
+            )
+        )
+    )
 
 
 class PredictiveFunctional(Generic[P, T], torch.nn.Module):
@@ -119,11 +137,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
                     with pyro.poutine.infer_config(
-                        config_fn=lambda msg: {
-                            "_model_predictive_site": msg["infer"].get(
-                                "_model_predictive_site", True
-                            )
-                        }
+                        config_fn=_predictive_site_infer_dict
                     ):
                         self.model(*args, **kwargs)
 
@@ -131,10 +145,16 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
                 name: bind_leftmost_dim(
                     node["value"],
                     self._mc_plate_name,
-                    event_dim=len(node["fn"].event_shape),
+                    event_dim=len(
+                        typing.cast(
+                            pyro.distributions.TorchDistribution, node["fn"]
+                        ).event_shape
+                    ),
                 )
                 for name, node in model_tr.trace.nodes.items()
                 if node["type"] == "sample"
                 and not pyro.poutine.util.site_is_subsample(node)
-                and node["infer"].get("_model_predictive_site", False)
+                and (node["infer"] if node["infer"] is not None else {}).get(
+                    "_model_predictive_site", False
+                )
             }

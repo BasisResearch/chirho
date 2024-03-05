@@ -1,10 +1,27 @@
 import functools
 import operator
-from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
+import typing
+from typing import (
+    Dict,
+    Hashable,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
+import pyro.poutine.indep_messenger
 import torch
+from typing_extensions import ParamSpec
 
+from .. import _pyro_patch
+
+P = ParamSpec("P")
 T = TypeVar("T")
 
 
@@ -248,8 +265,9 @@ def scatter(
     raise NotImplementedError
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="scatter_n")
-def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
+def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs) -> T:
     """
     Scatters a dictionary of disjoint masked values into a single value
     using repeated calls to :func:``scatter``.
@@ -261,11 +279,12 @@ def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs
     assert all(isinstance(k, IndexSet) for k in values)
     for indices, value in values.items():
         result = scatter(value, indices, result=result, **kwargs)
+    assert result is not None
     return result
 
 
 @functools.singledispatch
-def cond(fst, snd, case: Optional[T] = None, **kwargs):
+def cond(fst, snd: T, case: Optional[Union[bool, torch.Tensor]] = None, **kwargs) -> T:
     """
     Selection operation that is the sum-type analogue of :func:`scatter`
     in the sense that where :func:`scatter` propagates both of its arguments,
@@ -295,8 +314,9 @@ def cond(fst, snd, case: Optional[T] = None, **kwargs):
     raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="cond_n")
-def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
+def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs) -> T:
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     result: Optional[T] = None
@@ -308,12 +328,14 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
             dtype=torch.bool,
         )
         result = cond(result if result is not None else value, value, tst, **kwargs)
+    assert result is not None
     return result
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="get_index_plates")
 def get_index_plates() -> (
-    Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]
+    Mapping[str, pyro.poutine.indep_messenger.CondIndepStackFrame]
 ):
     return {}
 
@@ -330,7 +352,8 @@ def indexset_as_mask(
     """
     if name_to_dim_size is None:
         name_to_dim_size = {
-            name: (f.dim, f.size) for name, f in get_index_plates().items()
+            name: (typing.cast(int, f.dim), typing.cast(int, f.size))
+            for name, f in get_index_plates().items()
         }
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)

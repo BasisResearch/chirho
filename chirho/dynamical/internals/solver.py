@@ -9,7 +9,9 @@ from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
+from pyro.poutine.runtime import Message
 
+from chirho import _pyro_patch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
 
@@ -30,19 +32,20 @@ class Interruption(Generic[T], ShallowMessenger):
         self.predicate = predicate
         self.callback = callback
 
-    def _pyro_get_new_interruptions(self, msg: dict) -> None:
+    def _pyro_get_new_interruptions(self, msg: Message) -> None:
         if msg["value"] is None:
             msg["value"] = []
         assert isinstance(msg["value"], list)
         msg["value"].append(self)
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
 def get_new_interruptions() -> List[Interruption]:
     """
     Install the active interruptions into the context.
     """
-    return []
+    return typing.cast(List[Interruption], [])
 
 
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
@@ -58,11 +61,11 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg: dict) -> None:
+    def _pyro_simulate(self, msg: Message) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
-        dynamics: Dynamics[T] = msg["args"][0]
-        state: State[T] = msg["args"][1]
+        dynamics: Dynamics[T] = typing.cast(Dynamics[T], msg["args"][0])
+        state: State[T] = typing.cast(State[T], msg["args"][1])
         start_time: R = msg["args"][2]
         end_time: R = msg["args"][3]
 
@@ -106,6 +109,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
+            next_interruption: Optional[Interruption[T]]
             state, start_time, next_interruption = simulate_to_interruption(
                 possible_interruptions,
                 dynamics,
@@ -116,7 +120,8 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                dynamics, state = next_interruption.callback(dynamics, state)
+                # TODO reenable this check once we figure out why mypy is inferring "Never"s
+                dynamics, state = next_interruption.callback(dynamics, state)  # type: ignore
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
@@ -128,6 +133,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         msg["done"] = True
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_point")
 def simulate_point(
     dynamics: Dynamics[T],
@@ -142,6 +148,7 @@ def simulate_point(
     raise NotImplementedError("No default behavior for simulate_point")
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
 def simulate_trajectory(
     dynamics: Dynamics[T],
@@ -155,6 +162,7 @@ def simulate_trajectory(
     raise NotImplementedError("No default behavior for simulate_trajectory")
 
 
+@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     interruption_stack: List[Interruption[T]],

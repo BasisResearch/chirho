@@ -152,6 +152,6 @@ class ExtractSupports(pyro.poutine.messenger.Messenger):
 
         self.supports = {}
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg) -> None:
         if not pyro.poutine.util.site_is_subsample(msg):
             self.supports[msg["name"]] = msg["fn"].support

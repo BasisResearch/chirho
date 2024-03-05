@@ -2,6 +2,9 @@ import functools
 from typing import TypeVar
 
 import pyro
+import pyro.distributions
+import pyro.distributions.constraints
+import pyro.distributions.torch
 import torch
 
 S = TypeVar("S")
@@ -12,7 +15,7 @@ T = TypeVar("T")
 def uniform_proposal(
     support: pyro.distributions.constraints.Constraint,
     **kwargs,
-) -> pyro.distributions.Distribution:
+) -> pyro.distributions.TorchDistribution:
     """
     This function heuristically constructs a probability distribution over a specified
     support. The choice of distribution depends on the type of support provided.
@@ -29,13 +32,13 @@ def uniform_proposal(
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0, 10).mask(False)
+        return pyro.distributions.Normal(0, 10).mask(False)  # type: ignore
     elif support is pyro.distributions.constraints.boolean:
-        return pyro.distributions.Bernoulli(logits=torch.zeros(()))
+        return pyro.distributions.Bernoulli(logits=torch.zeros(()))  # type: ignore
     else:
         tfm = pyro.distributions.transforms.biject_to(support)
         base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
-        return pyro.distributions.TransformedDistribution(base, tfm)
+        return pyro.distributions.TransformedDistribution(base, tfm)  # type: ignore
 
 
 @uniform_proposal.register
@@ -44,7 +47,7 @@ def _uniform_proposal_indep(
     *,
     event_shape: torch.Size = torch.Size([]),
     **kwargs,
-) -> pyro.distributions.Distribution:
+) -> pyro.distributions.TorchDistribution:
     d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
 
@@ -53,10 +56,10 @@ def _uniform_proposal_indep(
 def _uniform_proposal_integer(
     support: pyro.distributions.constraints.integer_interval,
     **kwargs,
-) -> pyro.distributions.Distribution:
+) -> pyro.distributions.TorchDistribution:
     if support.lower_bound != 0:
         raise NotImplementedError(
             "integer_interval with lower_bound > 0 not yet supported"
         )
     n = support.upper_bound - support.lower_bound + 1
-    return pyro.distributions.Categorical(probs=torch.ones((n,)))
+    return pyro.distributions.Categorical(probs=torch.ones((n,)))  # type: ignore
