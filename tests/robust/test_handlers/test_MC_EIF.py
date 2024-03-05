@@ -11,7 +11,7 @@ from chirho.robust.handlers.estimators import MonteCarloInfluenceEstimator
 from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 from chirho.robust.ops import influence_fn
 
-from .robust_fixtures import SimpleGuide, SimpleModel
+from ..robust_fixtures import SimpleGuide, SimpleModel
 
 pyro.settings.set(module_local_params=True)
 
