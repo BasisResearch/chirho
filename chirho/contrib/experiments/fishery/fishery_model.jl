@@ -1,5 +1,7 @@
 using OrdinaryDiffEq, Plots
 using SteadyStateDiffEq
+using NonlinearSolve
+using SciMLNLSolve
 
 # The general holling-tanner differential equation.
 # This subtracts predator and fishing mortality from capacity-limited growth.
@@ -162,12 +164,13 @@ function create_three_level_ss_problem(u0, pstruct)
         pstruct.M3,
         pstruct.F3
     ]
-    prob = SteadyStateProblem(
+    prob = ODEProblem(
         three_level_fishery_model,
         u0,
+        (0.0, Inf),
         p
     )
-    return prob
+    return NonlinearProblem(prob)
 end
 
 DEFAULT_B1 = 958.833
@@ -178,7 +181,7 @@ function simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
     u0 = [B1, B2, B3]
     # FIXME WIP so we need compile the problem once and then reparameterize with pstruct actually.
     prob = create_three_level_ss_problem(u0, pstruct)
-    sol = solve(prob, SSRootfind())
+    sol = solve(prob, NLSolveJL())
     return sol
 end
 
@@ -292,7 +295,11 @@ RANGE_R1 = (1.0, 2.0, 5.68)
 RANGE_R2 = (0.5, 1.0, 2.0)
 RANGE_R3 = (0.114, 0.25, 1.0)
 # p12 — (0.01, 0.5, 10.0); p23 — (0.01, 0.5, 10.0) logscale, fairly clear from their exposition, and I'm cutting off an order on each side.
+RANGE_P12 = (0.01, 0.5, 10.0)
+RANGE_P23 = (0.01, 0.5, 10.0)
 # D1 — 100; D2 — 10 fixed (they don't give enough information to vary these)
+RANGE_D1 = (50.0, 100.0, 200.0)
+RANGE_D2 = (5.0, 10.0, 20.0)
 # e12 — (0.02, 0.2, 0.24); e23 — (0.02, 0.2, 0.24) logscale (probably...not super clear from their exposition)
 RANGE_E12 = (0.02, 0.2, 0.24)
 RANGE_E23 = (0.02, 0.2, 0.24)
@@ -329,85 +336,76 @@ RANGE_E23 = (0.02, 0.2, 0.24)
 # 3. sort into three categories: extinct in unfished (fished irrelevant), extinct in fished but not in unfished, and not extinct in either.
 # 4. plot pairwise scatters for each pair of parameters and color by the three categories.
 
+function rand_unif(a, b, n)
+    return a .+ (b - a) .* rand(n)
+end
+
 function grid_scatter_extinction(F1, F2, F3, n)
-    r1s = collect(range(RANGE_R1[1], RANGE_R1[3], n))
-    r2s = collect(range(RANGE_R2[1], RANGE_R2[3], n))
-    r3s = collect(range(RANGE_R3[1], RANGE_R3[3], n))
-    e12s = collect(range(RANGE_E12[1], RANGE_E12[3], n))
-    e23s = collect(range(RANGE_E23[1], RANGE_E23[3], n))
+    
+    results = zeros(n) .- 1
+    parameters = zeros(n, 9)
+    parameters[:, 1] = rand_unif(RANGE_R1[1], RANGE_R1[3], n)
+    parameters[:, 2] = rand_unif(RANGE_R2[1], RANGE_R2[3], n)
+    parameters[:, 3] = rand_unif(RANGE_R3[1], RANGE_R3[3], n)
+    parameters[:, 4] = rand_unif(RANGE_P12[1], RANGE_P12[3], n)
+    parameters[:, 5] = rand_unif(RANGE_P23[1], RANGE_P23[3], n)
+    parameters[:, 6] = rand_unif(RANGE_D1[1], RANGE_D1[3], n)
+    parameters[:, 7] = rand_unif(RANGE_D2[1], RANGE_D2[3], n)
+    parameters[:, 8] = rand_unif(RANGE_E12[1], RANGE_E12[3], n)
+    parameters[:, 9] = rand_unif(RANGE_E23[1], RANGE_E23[3], n)
 
     pstruct = default_three_level_fishery_parameters(F1, F2, F3)
 
-
-    # Store results 0, 1, 2 in a 5d array.
-    results = zeros(Int, n, n, n, n, n)
-    # Store the parameters in another 5d array.
-    parameters = zeros(Float64, n, n, n, n, n, 5)
-
-    # Use julia's version of product
     for i in 1:n
-        for j in 1:n
-            for k in 1:n
-                for l in 1:n
-                    for m in 1:n
-                        update_parameter!(pstruct, "r1", r1s[i])
-                        update_parameter!(pstruct, "r2", r2s[j])
-                        update_parameter!(pstruct, "r3", r3s[k])
-                        update_parameter!(pstruct, "e12", e12s[l])
-                        update_parameter!(pstruct, "e23", e23s[m])
+        update_parameter!(pstruct, "r1", parameters[i, 1])
+        update_parameter!(pstruct, "r2", parameters[i, 2])
+        update_parameter!(pstruct, "r3", parameters[i, 3])
+        update_parameter!(pstruct, "p12", parameters[i, 4])
+        update_parameter!(pstruct, "p23", parameters[i, 5])
+        update_parameter!(pstruct, "D1", parameters[i, 6])
+        update_parameter!(pstruct, "D2", parameters[i, 7])
+        update_parameter!(pstruct, "e12", parameters[i, 8])
+        update_parameter!(pstruct, "e23", parameters[i, 9])
 
-                        # Store the parameters.
-                        parameters[i, j, k, l, m, 1] = r1s[i]
-                        parameters[i, j, k, l, m, 2] = r2s[j]
-                        parameters[i, j, k, l, m, 3] = r3s[k]
-                        parameters[i, j, k, l, m, 4] = e12s[l]
-                        parameters[i, j, k, l, m, 5] = e23s[m]
+        update_parameter!(pstruct, "F1", 0.0)
+        update_parameter!(pstruct, "F2", 0.0)
+        update_parameter!(pstruct, "F3", 0.0)
+        unfished_sssol = simulate_ss_three_level_fishery(pstruct)
 
-                        update_parameter!(pstruct, "F1", 0.0)
-                        update_parameter!(pstruct, "F2", 0.0)
-                        update_parameter!(pstruct, "F3", 0.0)
-                        unfished_sssol = simulate_ss_three_level_fishery(pstruct)
+        # If any unfished species are extinct, i.e. any less than 1e-6, then store a result of 1.
+        if any(unfished_sssol .< 1e-6)
+            results[i] = 1
+            continue
+        end
 
-                        # If any unfished species are extinct, i.e. any less than 1e-6, then store a result of 0.
-                        if any(unfished_sssol .< 1e-6)
-                            results[i, j, k, l, m] = 0
-                        end
+        update_parameter!(pstruct, "F1", F1)
+        update_parameter!(pstruct, "F2", F2)
+        update_parameter!(pstruct, "F3", F3)
+        fished_sssol = simulate_ss_three_level_fishery(pstruct)
 
-                        update_parameter!(pstruct, "F1", F1)
-                        update_parameter!(pstruct, "F2", F2)
-                        update_parameter!(pstruct, "F3", F3)
-                        fished_sssol = simulate_ss_three_level_fishery(pstruct)
-
-                        # If any fished species are extinct, i.e. any less than 1e-6, then store a result of 1
-                        if any(fished_sssol .< 1e-6)
-                            results[i, j, k, l, m] = 1
-                        # If no species are extinct, store a result of 2.
-                        else
-                            results[i, j, k, l, m] = 2
-                        end
-                    end
-                end
-            end
+        # If any fished species are extinct, i.e. any less than 1e-6, then store a result of 2
+        if any(fished_sssol .< 1e-6)
+            results[i] = 2
+        # If no species are extinct, store a result of 0.
+        else
+            results[i] = 0
         end
     end
 
-    # Reshape into flattened "dataset" style arrays.
-    nd = ndims(results)
-    results_flat = reshape(results, n^nd)
-    parameters_flat = reshape(parameters, n^nd, nd) + randn(n^nd, nd) * 0.05
-
-    # return results, parameters
+    print("unique results", unique(results))
+    # Percentage of each case.
+    print("percentage of each case", [count(==(i), results) / length(results) for i in [-1, 0, 1, 2]])
     
     # Now plot the results in a 2d grid for each pair of parameters. Each pair gets a cell, and in that cell we can plot a simple scatter.
     # Just ignore the diagonals.
     plots = []
-    for i in 1:ndims(results)
-        for j in 1:ndims(results)
+    for i in axes(parameters, 2)
+        for j in axes(parameters, 2)
             if i != j
                 scatterplot = scatter(
-                    parameters_flat[:, i], parameters_flat[:, j],
-                    zcolor=results_flat, color=:viridis, markersize=0.8, markerstrokewidth=0, alpha=0.5,
-                    legend=false, colorbar=false
+                    parameters[:, i], parameters[:, j],
+                    zcolor=results, color=:viridis, markersize=1.0, markerstrokewidth=0, alpha=0.5,
+                    legend=false, colorbar=false, xrotation=45
                 )
                 push!(plots, scatterplot)
             else
@@ -419,5 +417,5 @@ function grid_scatter_extinction(F1, F2, F3, n)
     end
 
     # Plot all the scatterplots in a grid.
-    plot(plots..., layout=(ndims(results), ndims(results)), size=(1000, 1000))
+    plot(plots..., layout=(size(parameters, 2), size(parameters, 2)), size=(1200, 1200), fontsize=4)
 end
