@@ -2,6 +2,7 @@ using OrdinaryDiffEq, Plots
 using SteadyStateDiffEq
 using NonlinearSolve
 using SciMLNLSolve
+using Statistics
 
 # The general holling-tanner differential equation.
 # This subtracts predator and fishing mortality from capacity-limited growth.
@@ -204,14 +205,20 @@ function sustained_yield(sssol, pstruct, price1, price2, price3)
     # This is not the necessarily the "sustainable" yield if fishing rates drive a species
     #  to extinction.
     return sum(sssol .* [
-        pstruct.F1 * pstruct.r1 * price1,
-        pstruct.F2 * pstruct.r2 * price2,
-        pstruct.F3 * pstruct.r3 * price3
+        pstruct.F1 * price1,
+        pstruct.F2 * price2,
+        pstruct.F3 * price3
     ])
 end
 
 function sustained_yield(sssol, pstruct)
     return sustained_yield(sssol, pstruct, 1.0, 1.0, 1.0)
+end
+
+function build_sustained_yield(price1, price2, price3)
+    return function(sssol_fished, _, pstruct)
+        return sustained_yield(sssol_fished, pstruct, price1, price2, price3)
+    end
 end
 
 function disturbance_index(sssol_fished, sssol_unfished)
@@ -223,6 +230,34 @@ function disturbance_index(sssol_fished, sssol_unfished)
         di += abs(sssol_fished[i+1] / sssol_fished[i] - sssol_unfished[i+1] / sssol_unfished[i])
     end
     return di
+end
+
+function build_disturbance_index()
+    return function(sssol_fished, sssol_unfished, _)
+        return disturbance_index(sssol_fished, sssol_unfished)
+    end
+end
+
+function build_biomass_ratio()
+    return function(sssol_fished, sssol_unfished, _)
+        return clamp(abs(1.0 - sum(sssol_fished) / sum(sssol_unfished)), 0.0, 1.0)
+    end
+end
+
+function build_extinction()
+    return function(sssol_fished, sssol_unfished, _)
+        if any_extinct(sssol_unfished)
+            return 1.0
+        elseif any_extinct(sssol_fished)
+            return 2.0
+        else
+            return 0.0
+        end
+    end
+end
+
+function any_extinct(sssol)
+    return any(sssol .< 1e-6)
 end
 
 function update_parameter!(pstruct::ThreeLevelFisheryParameters, param_name::String, value)
@@ -238,7 +273,7 @@ end
 function plot_parameter_sensitivities(
     param_name::String,
     param_values::Array{Float64, 1},
-    F1::Float64, F2::Float64, F3::Float64
+    F1::Float64, F2::Float64, F3::Float64,
 )
     biomass = []
     disturbance = []
@@ -340,9 +375,11 @@ function rand_unif(a, b, n)
     return a .+ (b - a) .* rand(n)
 end
 
-function grid_scatter_extinction(F1, F2, F3, n)
+
+
+function grid_scatter(F1, F2, F3, n, fn)
     
-    results = zeros(n) .- 1
+    results = zeros(n)
     parameters = zeros(n, 9)
     parameters[:, 1] = rand_unif(RANGE_R1[1], RANGE_R1[3], n)
     parameters[:, 2] = rand_unif(RANGE_R2[1], RANGE_R2[3], n)
@@ -372,29 +409,20 @@ function grid_scatter_extinction(F1, F2, F3, n)
         update_parameter!(pstruct, "F3", 0.0)
         unfished_sssol = simulate_ss_three_level_fishery(pstruct)
 
-        # If any unfished species are extinct, i.e. any less than 1e-6, then store a result of 1.
-        if any(unfished_sssol .< 1e-6)
-            results[i] = 1
-            continue
-        end
-
         update_parameter!(pstruct, "F1", F1)
         update_parameter!(pstruct, "F2", F2)
         update_parameter!(pstruct, "F3", F3)
         fished_sssol = simulate_ss_three_level_fishery(pstruct)
 
-        # If any fished species are extinct, i.e. any less than 1e-6, then store a result of 2
-        if any(fished_sssol .< 1e-6)
-            results[i] = 2
-        # If no species are extinct, store a result of 0.
-        else
-            results[i] = 0
-        end
+        results[i] = fn(fished_sssol, unfished_sssol, pstruct)
     end
 
-    print("unique results", unique(results))
-    # Percentage of each case.
-    print("percentage of each case", [count(==(i), results) / length(results) for i in [-1, 0, 1, 2]])
+    # Print stats of results. min, max, median, avg.
+    println("min: ", minimum(results))
+    println("max: ", maximum(results))
+    println("median: ", median(results))
+    println("avg: ", mean(results))
+
     
     # Now plot the results in a 2d grid for each pair of parameters. Each pair gets a cell, and in that cell we can plot a simple scatter.
     # Just ignore the diagonals.
@@ -404,7 +432,7 @@ function grid_scatter_extinction(F1, F2, F3, n)
             if i != j
                 scatterplot = scatter(
                     parameters[:, i], parameters[:, j],
-                    zcolor=results, color=:viridis, markersize=1.0, markerstrokewidth=0, alpha=0.5,
+                    zcolor=results, color=:viridis, markersize=1.0, markerstrokewidth=0, alpha=0.4,
                     legend=false, colorbar=false, xrotation=45
                 )
                 push!(plots, scatterplot)
