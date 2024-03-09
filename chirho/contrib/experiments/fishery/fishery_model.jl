@@ -57,20 +57,20 @@ function three_level_fishery_model(du, u, p, t)
 end
 
 mutable struct ThreeLevelFisheryParameters
-    r1::Float64
-    K1::Float64
-    p12::Float64
-    D1::Float64
-    F1::Float64
-    r2::Float64
-    e12::Float64
-    p23::Float64
-    D2::Float64
-    F2::Float64
-    r3::Float64
-    e23::Float64
-    M3::Float64
-    F3::Float64
+    r1
+    K1
+    p12
+    D1
+    F1
+    r2
+    e12
+    p23
+    D2
+    F2
+    r3
+    e23
+    M3
+    F3
 end
 
 function ThreeLevelFisheryParameters(;r1::Float64, K1::Float64, p12::Float64, D1::Float64, F1::Float64,
@@ -446,4 +446,10 @@ function grid_scatter(F1, F2, F3, n, fn)
 
     # Plot all the scatterplots in a grid.
     plot(plots..., layout=(size(parameters, 2), size(parameters, 2)), size=(1200, 1200), fontsize=4)
+end
+
+function pure_ss(x)
+    B1, B2, B3 = x[1:3]
+    pstruct = ThreeLevelFisheryParameters(x[4:end]...)
+    return simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
 end
