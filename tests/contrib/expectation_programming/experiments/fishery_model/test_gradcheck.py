@@ -1,5 +1,6 @@
 from juliatorch import JuliaFunction
 import juliacall, torch
+from chirho.contrib.experiments.fishery.build_f import build_f
 
 jl = juliacall.Main.seval
 
@@ -22,24 +23,20 @@ def _params():
 
 
 def _build_f_and_x():
-    # Create a Julia function
-    rr = _repo_root()
-    jl(f"include(\"{rr}/chirho/contrib/experiments/fishery/fishery_model.jl\")")
-
-    f = jl("pure_ss")
+    f = build_f()
 
     params = _params()
     B1, B2, B3 = 1000.0, 200.0, 30.0
     x = torch.tensor([B1, B2, B3, *params], dtype=torch.float64, requires_grad=True)
 
-    return lambda x_: f(x_), x
+    return f, x
 
 
 def test_forward():
     f, x = _build_f_and_x()
 
     # Check forward execution.
-    ss = JuliaFunction.apply(f, x)
+    ss = f(x)
 
     assert ss.shape == (3,)
     assert ss.dtype == torch.float64
@@ -50,4 +47,4 @@ def test_grads():
     f, x = _build_f_and_x()
 
     # Check gradients.
-    torch.autograd.gradcheck(JuliaFunction.apply, (f, x), eps=1e-6, atol=1e-4)
+    torch.autograd.gradcheck(f, (x,), eps=1e-6, atol=1e-4)
