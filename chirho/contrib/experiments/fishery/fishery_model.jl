@@ -453,3 +453,12 @@ function pure_ss(x)
     pstruct = ThreeLevelFisheryParameters(x[4:end]...)
     return simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
 end
+
+function pure_t(x)
+    pstruct = ThreeLevelFisheryParameters(x[4:17]...)
+    tspan = (0.0, x[end])
+
+    prob = create_three_level_problem(x[1:3], tspan, pstruct)
+    sol = solve(prob, Tsit5())
+    return sol(x[18:end])
+end
