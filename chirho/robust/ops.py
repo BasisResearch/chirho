@@ -1,3 +1,4 @@
+import functools
 from typing import Any, Callable, Mapping, Protocol, TypeVar
 
 import pyro
@@ -19,9 +20,10 @@ class Functional(Protocol[P, S]):
     ) -> Callable[P, S]: ...
 
 
-@pyro.poutine.runtime.effectful(type="influence_fn")
 def influence_fn(
-    functional: Functional[P, S], *points: Point[T], **linearize_kwargs
+    functional: Functional[P, S],
+    *points: Point[T],
+    pointwise_influence: bool = True,
 ) -> Functional[P, S]:
     """
     Returns a new functional that computes the efficient influence function for ``functional``
@@ -85,14 +87,15 @@ def influence_fn(
                 model, guide=guide, num_samples=10, return_sites=["y"]
             )
             points = predictive()
-            with MonteCarloInfluenceEstimator(num_samples_inner=1000, num_samples_outer=1000):
-                influence = influence_fn(
-                    SimpleFunctional,
-                    points,
-                )(PredictiveModel(model, guide))
 
-            with torch.no_grad():  # Avoids memory leak (see notes below)
-                influence()
+            influence = influence_fn(
+                SimpleFunctional,
+                points,
+            )(PredictiveModel(model, guide))
+
+            with MonteCarloInfluenceEstimator(num_samples_inner=1000, num_samples_outer=1000):
+                with torch.no_grad():  # Avoids memory leak (see notes below)
+                    influence()
 
     .. note::
 
@@ -103,7 +106,30 @@ def influence_fn(
 
     """
 
-    raise NotImplementedError(
-        "Evaluating the `influence_fn` requires an either (i) an approximation method such as `MonteCarloInfluenceEstimator`"
-        "or (ii) a custom handler for the specific model and functional."
+    @pyro.poutine.runtime.effectful(type="influence")
+    def _influence(
+        *models: Callable[P, Any],
+        functional: Functional[P, S],
+        points: Point[T],
+        pointwise_influence: bool,
+    ) -> Callable[P, S]:
+        """
+        Functional representing the efficient influence function of ``functional`` at ``points`` .
+
+        :param models: Python callables containing Pyro primitives.
+        :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
+        """
+        raise NotImplementedError(
+            "Evaluating the `influence` induced by an `influence_fn` requires either "
+            "(i) an approximation method such as `MonteCarloInfluenceEstimator`"
+            "or (ii) a custom handler for the specific model and functional."
+        )
+
+    # This small amount of indirection allows any enclosing handlers to maintain a reference to
+    # the `functional`, `points`, and `pointwise_influence` induced by the higher order `influence_fn`.
+    return functools.partial(
+        _influence,
+        functional=functional,
+        points=points,
+        pointwise_influence=pointwise_influence,
     )

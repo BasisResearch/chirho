@@ -34,9 +34,11 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
         self.linearize_kwargs = linearize_kwargs
         super().__init__()
 
-    def _pyro_influence_fn(self, msg) -> None:
-        functional: Functional[P, S] = msg["args"][0]
-        points: Point[T] = msg["args"][1:]
+    def _pyro_influence(self, msg) -> None:
+        models = msg["args"]
+        functional = msg["kwargs"]["functional"]
+        points = msg["kwargs"]["points"]
+        pointwise_influence = msg["kwargs"]["pointwise_influence"]
 
         if len(points) != 1:
             raise NotImplementedError(
@@ -46,56 +48,48 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
         from chirho.robust.internals.linearize import linearize
         from chirho.robust.internals.utils import make_functional_call
 
-        def _influence_functional(*models: Callable[P, Any]) -> Callable[P, S]:
+        if len(models) != len(points):
+            raise ValueError("mismatch between number of models and points")
+
+        linearized = linearize(
+            pointwise_influence=pointwise_influence, *models, **self.linearize_kwargs
+        )
+        target = functional(*models)
+
+        # TODO check that target_params == model_params
+        assert isinstance(target, torch.nn.Module)
+        target_params, func_target = make_functional_call(target)
+
+        def _fn(*args, **kwargs):
             """
-            Functional representing the efficient influence function of ``functional`` at ``points`` .
+            Evaluates the efficient influence function for ``functional`` at each
+            point in ``points``.
 
-            :param models: Python callables containing Pyro primitives.
-            :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
+            :return: efficient influence function evaluated at each point in ``points`` or averaged
             """
-            if len(models) != len(points):
-                raise ValueError("mismatch between number of models and points")
+            if torch.is_grad_enabled():
+                warnings.warn(
+                    "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
+                    "Please use torch.no_grad() to avoid this issue. See example in the docstring."
+                )
+            param_eif = linearized(*points, *args, **kwargs)
+            return torch.vmap(
+                lambda d: torch.func.jvp(
+                    lambda p: func_target(p, *args, **kwargs),
+                    (target_params,),
+                    (d,),
+                )[1],
+                in_dims=0,
+                randomness="different",
+            )(param_eif)
 
-            linearized = linearize(*models, **self.linearize_kwargs)
-            target = functional(*models)
-
-            # TODO check that target_params == model_params
-            assert isinstance(target, torch.nn.Module)
-            target_params, func_target = make_functional_call(target)
-
-            def _fn(*args: P.args, **kwargs: P.kwargs) -> S:
-                """
-                Evaluates the efficient influence function for ``functional`` at each
-                point in ``points``.
-
-                :return: efficient influence function evaluated at each point in ``points`` or averaged
-                """
-                if torch.is_grad_enabled():
-                    warnings.warn(
-                        "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
-                        "Please use torch.no_grad() to avoid this issue. See example in the docstring."
-                    )
-                param_eif = linearized(*points, *args, **kwargs)
-                return torch.vmap(
-                    lambda d: torch.func.jvp(
-                        lambda p: func_target(p, *args, **kwargs),
-                        (target_params,),
-                        (d,),
-                    )[1],
-                    in_dims=0,
-                    randomness="different",
-                )(param_eif)
-
-            return _fn
-
-        msg["value"] = _influence_functional
+        msg["value"] = _fn
         msg["done"] = True
 
 
 def one_step_corrected_estimator(
     functional: Functional[P, S],
     *test_points: Point[T],
-    **influence_kwargs,
 ) -> Functional[P, S]:
     """
     Returns a functional that computes the one-step correction for the
@@ -110,9 +104,7 @@ def one_step_corrected_estimator(
     [1] `Semiparametric doubly robust targeted double machine learning: a review`,
     Edward H. Kennedy, 2022.
     """
-    influence_kwargs_one_step = influence_kwargs.copy()
-    influence_kwargs_one_step["pointwise_influence"] = False
-    eif_fn = influence_fn(functional, *test_points, **influence_kwargs_one_step)
+    eif_fn = influence_fn(functional, *test_points, pointwise_influence=False)
 
     def _corrected_functional(*model: Callable[P, Any]) -> Callable[P, S]:
         plug_in_estimator = functional(*model)
