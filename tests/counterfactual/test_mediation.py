@@ -171,12 +171,10 @@ def test_mediation_nde_smoke():
 
     # natural direct effect: DE{x,x'}(Y) = E[ Y(X=x', Z(X=x)) - E[Y(X=x)] ]
     def direct_effect(model, x, x_prime, w_obs, x_obs, z_obs, y_obs) -> Callable:
-        return do(actions={"X": x})(
-            do(actions={"X": x_prime})(
-                do(actions={"Z": lambda Z: Z})(
-                    condition(data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs})(
-                        pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
-                    )
+        return do(actions={"X": (x, x_prime)})(
+            do(actions={"Z": lambda Z: Z})(
+                condition(data={"W": w_obs, "X": x_obs, "Z": z_obs, "Y": y_obs})(
+                    pyro.plate("data", size=y_obs.shape[-1], dim=-1)(model)
                 )
             )
         )
@@ -196,9 +194,9 @@ def test_mediation_nde_smoke():
         W, X, Z, Y = extended_model()
 
     assert W.shape == (N,)
-    assert X.shape == (2, 2, N)
-    assert Z.shape == (2, 2, 2, N)
-    assert Y.shape == (2, 2, 2, N)
+    assert X.shape == (3, N)
+    assert Z.shape == (2, 3, N)
+    assert Y.shape == (2, 3, N)
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])

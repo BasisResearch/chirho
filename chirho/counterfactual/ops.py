@@ -5,7 +5,7 @@ from typing import Tuple, TypeVar
 
 import pyro
 
-from chirho.indexed.ops import IndexSet, scatter_n
+from chirho.indexed.ops import IndexSet, gather, scatter_n
 from chirho.interventional.ops import Intervention, intervene
 
 S = TypeVar("S")
@@ -35,8 +35,12 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
 
     """
     name = kwargs.get("name", None)
-    act_values = {IndexSet(**{name: {0}}): obs}
+    obs_idx = IndexSet(**{name: {0}})
+    act_values = {obs_idx: gather(obs, obs_idx, **kwargs)}
     for i, act in enumerate(acts):
-        act_values[IndexSet(**{name: {i + 1}})] = intervene(obs, act, **kwargs)
+        act_idx = IndexSet(**{name: {i + 1}})
+        act_values[act_idx] = gather(
+            intervene(act_values[obs_idx], act, **kwargs), act_idx, **kwargs
+        )
 
     return scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))
