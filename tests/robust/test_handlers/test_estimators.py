@@ -72,18 +72,18 @@ def test_estimator_smoke(
             )().items()
         }
 
+    estimator = estimation_method(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_datum,
+    )(PredictiveModel(model, guide))
+
     with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
     ):
-        estimator = estimation_method(
-            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-            test_datum,
-        )(PredictiveModel(model, guide))
-
-    estimate_on_test: Mapping[str, torch.Tensor] = estimator()
+        estimate_on_test: Mapping[str, torch.Tensor] = estimator()
     assert len(estimate_on_test) > 0
     for k, v in estimate_on_test.items():
         assert not torch.isnan(v).any(), f"{estimation_method} for {k} had nans"

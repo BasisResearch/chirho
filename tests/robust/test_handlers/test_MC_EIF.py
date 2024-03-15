@@ -68,18 +68,19 @@ def test_nmc_predictive_influence_smoke(
                 model, num_samples=2, return_sites=obs_names, parallel=True
             )().items()
         }
+
+    predictive_eif = influence_fn(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_datum,
+    )(PredictiveModel(model, guide))
+
     with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
     ):
-        predictive_eif = influence_fn(
-            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-            test_datum,
-        )(PredictiveModel(model, guide))
-
-    test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif()
+        test_datum_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_datum_eif) > 0
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -111,18 +112,19 @@ def test_nmc_predictive_influence_vmap_smoke(
             model, num_samples=4, return_sites=obs_names, parallel=True
         )()
 
+    predictive_eif = influence_fn(
+        functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
+        test_data,
+    )(PredictiveModel(model, guide))
+
     with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
     ):
-        predictive_eif = influence_fn(
-            functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
-            test_data,
-        )(PredictiveModel(model, guide))
+        test_data_eif: Mapping[str, torch.Tensor] = predictive_eif()
 
-    test_data_eif: Mapping[str, torch.Tensor] = predictive_eif()
     assert len(test_data_eif) > 0
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
@@ -137,20 +139,20 @@ def test_influence_raises_no_grad_warning_correctly():
         model, guide=guide, num_samples=10, return_sites=["y"]
     )
     points = predictive()
+    influence = influence_fn(
+        PredictiveFunctional,
+        points,
+    )(PredictiveModel(model, guide))
+
     with MonteCarloInfluenceEstimator(
         num_samples_outer=10,
         num_samples_inner=10,
     ):
-        influence = influence_fn(
-            PredictiveFunctional,
-            points,
-        )(PredictiveModel(model, guide))
-
-    with pytest.warns(UserWarning, match="torch.no_grad"):
-        influence()
-
-    with pytest.warns() as record:
-        with torch.no_grad():
+        with pytest.warns(UserWarning, match="torch.no_grad"):
             influence()
-        assert len(record) == 0
-        warnings.warn("Dummy warning.")
+
+        with pytest.warns() as record:
+            with torch.no_grad():
+                influence()
+            assert len(record) == 0
+            warnings.warn("Dummy warning.")

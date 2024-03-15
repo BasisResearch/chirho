@@ -35,10 +35,17 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_influence(self, msg) -> None:
-        models = msg["args"]
+        models = msg["kwargs"]["models"]
         functional = msg["kwargs"]["functional"]
         points = msg["kwargs"]["points"]
         pointwise_influence = msg["kwargs"]["pointwise_influence"]
+
+        args = msg["args"]
+        kwargs = {
+            k: v
+            for k, v in msg["kwargs"].items()
+            if k not in ["models", "functional", "points", "pointwise_influence"]
+        }
 
         if len(points) != 1:
             raise NotImplementedError(
@@ -60,30 +67,21 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
         assert isinstance(target, torch.nn.Module)
         target_params, func_target = make_functional_call(target)
 
-        def _fn(*args, **kwargs):
-            """
-            Evaluates the efficient influence function for ``functional`` at each
-            point in ``points``.
-
-            :return: efficient influence function evaluated at each point in ``points`` or averaged
-            """
-            if torch.is_grad_enabled():
-                warnings.warn(
-                    "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
-                    "Please use torch.no_grad() to avoid this issue. See example in the docstring."
-                )
-            param_eif = linearized(*points, *args, **kwargs)
-            return torch.vmap(
-                lambda d: torch.func.jvp(
-                    lambda p: func_target(p, *args, **kwargs),
-                    (target_params,),
-                    (d,),
-                )[1],
-                in_dims=0,
-                randomness="different",
-            )(param_eif)
-
-        msg["value"] = _fn
+        if torch.is_grad_enabled():
+            warnings.warn(
+                "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
+                "Please use torch.no_grad() to avoid this issue. See example in the docstring."
+            )
+        param_eif = linearized(*points, *args, **kwargs)
+        msg["value"] = torch.vmap(
+            lambda d: torch.func.jvp(
+                lambda p: func_target(p, *args, **kwargs),
+                (target_params,),
+                (d,),
+            )[1],
+            in_dims=0,
+            randomness="different",
+        )(param_eif)
         msg["done"] = True
 
 

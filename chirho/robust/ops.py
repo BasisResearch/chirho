@@ -106,12 +106,8 @@ def influence_fn(
 
     """
 
-    @pyro.poutine.runtime.effectful(type="influence")
-    def _influence(
+    def influence_functional(
         *models: Callable[P, Any],
-        functional: Functional[P, S],
-        points: Point[T],
-        pointwise_influence: bool,
     ) -> Callable[P, S]:
         """
         Functional representing the efficient influence function of ``functional`` at ``points`` .
@@ -119,17 +115,36 @@ def influence_fn(
         :param models: Python callables containing Pyro primitives.
         :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
-        raise NotImplementedError(
-            "Evaluating the `influence` induced by an `influence_fn` requires either "
-            "(i) an approximation method such as `MonteCarloInfluenceEstimator`"
-            "or (ii) a custom handler for the specific model and functional."
+
+        @pyro.poutine.runtime.effectful(type="influence")
+        def _influence(
+            *model_args: P.args,
+            models: Callable[P, Any],
+            functional: Functional[P, S],
+            points: Point[T],
+            pointwise_influence: bool,
+            **model_kwargs: P.kwargs,
+        ) -> S:
+            """
+            Evaluates the efficient influence function for ``functional`` at each
+            point in ``points``.
+
+            :return: efficient influence function evaluated at each point in ``points`` or averaged
+            """
+            raise NotImplementedError(
+                "Evaluating the `influence` induced by an `influence_fn` requires either "
+                "(i) an approximation method such as `MonteCarloInfluenceEstimator`"
+                "or (ii) a custom handler for the specific model and functional."
+            )
+
+        # This small amount of indirection allows any enclosing handlers to maintain a reference to
+        # the `models`, `functional`, `points`, and `pointwise_influence` induced by the higher order `influence_fn`.
+        return functools.partial(
+            _influence,
+            models=models,
+            functional=functional,
+            points=points,
+            pointwise_influence=pointwise_influence,
         )
 
-    # This small amount of indirection allows any enclosing handlers to maintain a reference to
-    # the `functional`, `points`, and `pointwise_influence` induced by the higher order `influence_fn`.
-    return functools.partial(
-        _influence,
-        functional=functional,
-        points=points,
-        pointwise_influence=pointwise_influence,
-    )
+    return influence_functional
