@@ -49,9 +49,11 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     )
 
     v = {
-        k: torch.ones_like(v).unsqueeze(0)
-        if k != "model.guide.loc_a"
-        else torch.zeros_like(v).unsqueeze(0)
+        k: (
+            torch.ones_like(v).unsqueeze(0)
+            if k != "model.guide.loc_a"
+            else torch.zeros_like(v).unsqueeze(0)
+        )
         for k, v in log_prob_params.items()
     }
 
