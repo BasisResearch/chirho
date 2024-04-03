@@ -124,6 +124,7 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
         used to approximate marginal distribution, defaults to 1
     :type num_samples: int, optional
     """
+
     model: Callable[P, Any]
     guide: Optional[Callable[P, Any]]
     num_samples: int

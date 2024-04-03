@@ -69,11 +69,20 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
         SimpleModel,
-        pyro.infer.autoguide.AutoNormal,
+        lambda m: pyro.infer.autoguide.AutoNormal(
+            pyro.poutine.block(
+                hide=[
+                    "y",
+                ]
+            )(m)
+        ),
         {"y"},
         1,
-        marks=pytest.mark.xfail(
-            reason="torch.func autograd doesnt work with PyroParam"
+        marks=(
+            [pytest.mark.xfail(reason="torch.func autograd doesnt work with PyroParam")]
+            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3]))
+            <= (1, 8, 6)
+            else []
         ),
     ),
 ]
@@ -117,7 +126,7 @@ def test_nmc_param_influence_smoke(
     for k, v in test_datum_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        if not k.endswith("guide.loc_a"):
+        if not (k.endswith("guide.loc_a") or k.endswith("a_unconstrained")):
             assert not torch.isclose(
                 v, torch.zeros_like(v)
             ).all(), f"eif for {k} was zero"
@@ -162,7 +171,7 @@ def test_nmc_param_influence_vmap_smoke(
     for k, v in test_data_eif.items():
         assert not torch.isnan(v).any(), f"eif for {k} had nans"
         assert not torch.isinf(v).any(), f"eif for {k} had infs"
-        if not k.endswith("guide.loc_a"):
+        if not (k.endswith("guide.loc_a") or k.endswith("a_unconstrained")):
             assert not torch.isclose(
                 v, torch.zeros_like(v)
             ).all(), f"eif for {k} was zero"
