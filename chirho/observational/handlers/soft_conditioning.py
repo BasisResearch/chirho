@@ -134,49 +134,7 @@ class TorchKernel(torch.nn.Module):
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return soft_eq(self.support, x, y)
-        #raise NotImplementedError
-
-
-# class SoftEqKernel(TorchKernel):
-#     """
-#     Kernel that returns a Bernoulli log-probability of equality.
-#     """
-
-#     support: constraints.Constraint = constraints.boolean
-#     alpha: torch.Tensor
-
-#     def __init__(self, alpha: Union[float, torch.Tensor], *, event_dim: int = 0):
-#         super().__init__()
-#         self.register_buffer("alpha", torch.as_tensor(alpha))
-#         if event_dim > 0:
-#             self.support = constraints.independent(constraints.boolean, event_dim)
-
-#     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-#         return soft_eq(self.support, x, y, scale=self.alpha)
-
-
-# class RBFKernel(TorchKernel):
-#     """
-#     Kernel that returns a Normal log-probability of distance.
-#     """
-
-#     support: constraints.Constraint = constraints.real
-#     scale: torch.Tensor
-
-#     def __init__(self, scale: Union[float, torch.Tensor], *, event_dim: int = 0):
-#         super().__init__()
-#         self.register_buffer("scale", torch.as_tensor(scale))
-#         if event_dim > 0:
-#             self.support = constraints.independent(constraints.real, event_dim)
-
-#     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-#         return (
-#             pyro.distributions.Normal(loc=0.0, scale=self.scale)
-#             .expand([1] * self.support.event_dim)
-#             .to_event(self.support.event_dim)
-#             .log_prob(x - y)
-#         )
-
+    
 
 class _MaskedDelta(Protocol):
     base_dist: pyro.distributions.Delta
@@ -258,7 +216,7 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         the site's ``event_dim`` and ``support``.
     """
 
-    def __init__(self, *, scale: float = 1.0, alpha: float = 1.0):
+    def __init__(self, *, scale: float = 1.0, alpha: float = 1e-8):
         self.alpha = alpha
         self.scale = scale
         super().__init__()
@@ -298,12 +256,13 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             torch.int64,
         ):
             support = constraints.boolean
-            alpha = self.alpha * functools.reduce(
-                operator.mul, msg["fn"].event_shape, 1.0
-            )
-            return KernelSoftConditionReparam(
-            #    SoftEqKernel(alpha=alpha, event_dim=len(msg["fn"].event_shape))
+            scale = self.alpha 
+            
+            #TODO decide if still needed
+            #* functools.reduce(
+            #    operator.mul, msg["fn"].event_shape, 1.0
             #)
+            return KernelSoftConditionReparam(
                 TorchKernel(constraints.boolean)
                 )
             
