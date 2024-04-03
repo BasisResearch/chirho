@@ -127,51 +127,55 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
 
 
 class TorchKernel(torch.nn.Module):
-    support: constraints.Constraint
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError
-
-
-class SoftEqKernel(TorchKernel):
-    """
-    Kernel that returns a Bernoulli log-probability of equality.
-    """
-
-    support: constraints.Constraint = constraints.boolean
-    alpha: torch.Tensor
-
-    def __init__(self, alpha: Union[float, torch.Tensor], *, event_dim: int = 0):
+    def __init__(self, support: constraints.Constraint):
         super().__init__()
-        self.register_buffer("alpha", torch.as_tensor(alpha))
-        if event_dim > 0:
-            self.support = constraints.independent(constraints.boolean, event_dim)
+        self.support = support 
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        return soft_eq(self.support, x, y, scale=self.alpha)
+        return soft_eq(self.support, x, y)
+        #raise NotImplementedError
 
 
-class RBFKernel(TorchKernel):
-    """
-    Kernel that returns a Normal log-probability of distance.
-    """
+# class SoftEqKernel(TorchKernel):
+#     """
+#     Kernel that returns a Bernoulli log-probability of equality.
+#     """
 
-    support: constraints.Constraint = constraints.real
-    scale: torch.Tensor
+#     support: constraints.Constraint = constraints.boolean
+#     alpha: torch.Tensor
 
-    def __init__(self, scale: Union[float, torch.Tensor], *, event_dim: int = 0):
-        super().__init__()
-        self.register_buffer("scale", torch.as_tensor(scale))
-        if event_dim > 0:
-            self.support = constraints.independent(constraints.real, event_dim)
+#     def __init__(self, alpha: Union[float, torch.Tensor], *, event_dim: int = 0):
+#         super().__init__()
+#         self.register_buffer("alpha", torch.as_tensor(alpha))
+#         if event_dim > 0:
+#             self.support = constraints.independent(constraints.boolean, event_dim)
 
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        return (
-            pyro.distributions.Normal(loc=0.0, scale=self.scale)
-            .expand([1] * self.support.event_dim)
-            .to_event(self.support.event_dim)
-            .log_prob(x - y)
-        )
+#     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+#         return soft_eq(self.support, x, y, scale=self.alpha)
+
+
+# class RBFKernel(TorchKernel):
+#     """
+#     Kernel that returns a Normal log-probability of distance.
+#     """
+
+#     support: constraints.Constraint = constraints.real
+#     scale: torch.Tensor
+
+#     def __init__(self, scale: Union[float, torch.Tensor], *, event_dim: int = 0):
+#         super().__init__()
+#         self.register_buffer("scale", torch.as_tensor(scale))
+#         if event_dim > 0:
+#             self.support = constraints.independent(constraints.real, event_dim)
+
+#     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+#         return (
+#             pyro.distributions.Normal(loc=0.0, scale=self.scale)
+#             .expand([1] * self.support.event_dim)
+#             .to_event(self.support.event_dim)
+#             .log_prob(x - y)
+#         )
 
 
 class _MaskedDelta(Protocol):
@@ -274,12 +278,17 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             return None
 
         if msg["fn"].base_dist.v.is_floating_point():
-            scale = self.scale * functools.reduce(
-                operator.mul, msg["fn"].event_shape, 1.0
-            )
+            support = constraints.real
+            
+            #TODO decide if this is still needed
+            # scale = self.scale * functools.reduce(
+            #     operator.mul, msg["fn"].event_shape, 1.0
+            # )
             return KernelSoftConditionReparam(
-                RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
-            )
+            #    RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
+            #)
+                TorchKernel(constraints.real)
+                )
 
         if msg["fn"].base_dist.v.dtype in (
             torch.bool,
@@ -288,12 +297,16 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             torch.int32,
             torch.int64,
         ):
+            support = constraints.boolean
             alpha = self.alpha * functools.reduce(
                 operator.mul, msg["fn"].event_shape, 1.0
             )
             return KernelSoftConditionReparam(
-                SoftEqKernel(alpha=alpha, event_dim=len(msg["fn"].event_shape))
-            )
+            #    SoftEqKernel(alpha=alpha, event_dim=len(msg["fn"].event_shape))
+            #)
+                TorchKernel(constraints.boolean)
+                )
+            
 
         raise NotImplementedError(
             f"Could not reparameterize deterministic site {msg['name']}"
