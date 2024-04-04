@@ -14,7 +14,7 @@ from chirho.counterfactual.handlers import (
 from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.condition import Factors
-from chirho.observational.handlers.soft_conditioning import (  # RBFKernel,; SoftEqKernel,
+from chirho.observational.handlers.soft_conditioning import (
     AutoSoftConditioning,
     KernelSoftConditionReparam,
     soft_eq,
