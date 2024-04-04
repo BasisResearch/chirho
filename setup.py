@@ -61,6 +61,7 @@ setup(
             "myst_parser",
             "nbsphinx",
             "nbval",
+            "nbqa",
         ],
     },
     python_requires=">=3.8",
