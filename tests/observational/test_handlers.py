@@ -14,11 +14,10 @@ from chirho.counterfactual.handlers import (
 from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.condition import Factors
-from chirho.observational.handlers.soft_conditioning import (
+from chirho.observational.handlers.soft_conditioning import (  # RBFKernel,; SoftEqKernel,
     AutoSoftConditioning,
     KernelSoftConditionReparam,
-    RBFKernel,
-    SoftEqKernel,
+    TorchKernel,
     soft_eq,
     soft_neq,
 )
@@ -73,7 +72,10 @@ def test_soft_conditioning_smoke_continuous_1(
         reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
         reparam_config = {
-            name: KernelSoftConditionReparam(RBFKernel(scale=scale)) for name in data
+            name: KernelSoftConditionReparam(
+                TorchKernel(support=constraints.real, scale=scale)
+            )
+            for name in data
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
@@ -114,7 +116,10 @@ def test_soft_conditioning_smoke_discrete_1(
         reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
         reparam_config = {
-            name: KernelSoftConditionReparam(SoftEqKernel(alpha)) for name in data
+            name: KernelSoftConditionReparam(
+                TorchKernel(support=constraints.boolean, scale=alpha)
+            )
+            for name in data
         }
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config

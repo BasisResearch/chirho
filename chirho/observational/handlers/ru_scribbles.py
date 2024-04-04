@@ -52,9 +52,8 @@ def discrete_scm_1():
     Y = pyro.deterministic("y", X + Z + 1, event_dim=0)
     return Z, X, Y
 
-def test_soft_conditioning_smoke_continuous_1(
-    scale, alpha, x_obs, y_obs, z_obs
-):
+
+def test_soft_conditioning_smoke_continuous_1(scale, alpha, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
@@ -62,7 +61,7 @@ def test_soft_conditioning_smoke_continuous_1(
         if obs is not None
     }
     reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
-    
+
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
     ), condition(data=data):
@@ -88,10 +87,7 @@ def test_soft_conditioning_smoke_continuous_1(
 test_soft_conditioning_smoke_continuous_1(0.6, 0.6, 1.5, 2.5, 3.5)
 
 
-
-def test_soft_conditioning_smoke_discrete_1(
-    scale, alpha, x_obs, y_obs, z_obs
-):
+def test_soft_conditioning_smoke_discrete_1(scale, alpha, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
@@ -99,7 +95,7 @@ def test_soft_conditioning_smoke_discrete_1(
         if obs is not None
     }
     reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
-    #TODO remove alpha throughout?
+    # TODO remove alpha throughout?
 
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
@@ -126,4 +122,4 @@ def test_soft_conditioning_smoke_discrete_1(
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
 
 
-test_soft_conditioning_smoke_discrete_1(.6, .6, 1, 2, 3)
+test_soft_conditioning_smoke_discrete_1(0.6, 0.6, 1, 2, 3)

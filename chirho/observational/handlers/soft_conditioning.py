@@ -14,7 +14,6 @@ from chirho.indexed.ops import cond
 
 T = TypeVar("T")
 
-
 Kernel = Callable[[T, T], torch.Tensor]
 
 
@@ -128,13 +127,17 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
 
 class TorchKernel(torch.nn.Module):
 
-    def __init__(self, support: constraints.Constraint):
+    def __init__(
+        self, support: constraints.Constraint, scale: float = 1.0, alpha: float = 1e-8
+    ):
         super().__init__()
-        self.support = support 
+        self.support = support
+        self.scale = scale
+        self.alpha = alpha
 
     def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
         return soft_eq(self.support, x, y)
-    
+
 
 class _MaskedDelta(Protocol):
     base_dist: pyro.distributions.Delta
@@ -237,16 +240,16 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
 
         if msg["fn"].base_dist.v.is_floating_point():
             support = constraints.real
-            
-            #TODO decide if this is still needed
+
+            # TODO decide if this is still needed
             # scale = self.scale * functools.reduce(
             #     operator.mul, msg["fn"].event_shape, 1.0
             # )
             return KernelSoftConditionReparam(
-            #    RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
-            #)
+                #    RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
+                # )
                 TorchKernel(constraints.real)
-                )
+            )
 
         if msg["fn"].base_dist.v.dtype in (
             torch.bool,
@@ -256,16 +259,13 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             torch.int64,
         ):
             support = constraints.boolean
-            scale = self.alpha 
-            
-            #TODO decide if still needed
-            #* functools.reduce(
+            scale = self.alpha
+
+            # TODO decide if still needed
+            # * functools.reduce(
             #    operator.mul, msg["fn"].event_shape, 1.0
-            #)
-            return KernelSoftConditionReparam(
-                TorchKernel(constraints.boolean)
-                )
-            
+            # )
+            return KernelSoftConditionReparam(TorchKernel(constraints.boolean))
 
         raise NotImplementedError(
             f"Could not reparameterize deterministic site {msg['name']}"
