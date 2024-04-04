@@ -17,7 +17,6 @@ from chirho.observational.handlers.condition import Factors
 from chirho.observational.handlers.soft_conditioning import (  # RBFKernel,; SoftEqKernel,
     AutoSoftConditioning,
     KernelSoftConditionReparam,
-    TorchKernel,
     soft_eq,
     soft_neq,
 )
@@ -71,12 +70,11 @@ def test_soft_conditioning_smoke_continuous_1(
     if use_auto:
         reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
-        reparam_config = {
-            name: KernelSoftConditionReparam(
-                TorchKernel(support=constraints.real, scale=scale)
-            )
-            for name in data
-        }
+
+        def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+            return soft_eq(constraints.real, v1, v2, scale=scale)
+
+        reparam_config = {name: KernelSoftConditionReparam(_soft_eq) for name in data}
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
     ), condition(data=data):
@@ -115,12 +113,11 @@ def test_soft_conditioning_smoke_discrete_1(
     if use_auto:
         reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
     else:
-        reparam_config = {
-            name: KernelSoftConditionReparam(
-                TorchKernel(support=constraints.boolean, scale=alpha)
-            )
-            for name in data
-        }
+
+        def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+            return soft_eq(constraints.boolean, v1, v2, scale=scale)
+
+        reparam_config = {name: KernelSoftConditionReparam(_soft_eq) for name in data}
     with pyro.poutine.trace() as tr, pyro.poutine.reparam(
         config=reparam_config
     ), condition(data=data):

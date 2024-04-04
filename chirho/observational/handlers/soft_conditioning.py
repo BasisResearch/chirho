@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import operator
 from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
@@ -125,20 +124,6 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
     return result
 
 
-class TorchKernel(torch.nn.Module):
-
-    def __init__(
-        self, support: constraints.Constraint, scale: float = 1.0, alpha: float = 1e-8
-    ):
-        super().__init__()
-        self.support = support
-        self.scale = scale
-        self.alpha = alpha
-
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        return soft_eq(self.support, x, y)
-
-
 class _MaskedDelta(Protocol):
     base_dist: pyro.distributions.Delta
     event_dim: int
@@ -240,16 +225,7 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
 
         if msg["fn"].base_dist.v.is_floating_point():
             support = constraints.real
-
-            # TODO decide if this is still needed
-            # scale = self.scale * functools.reduce(
-            #     operator.mul, msg["fn"].event_shape, 1.0
-            # )
-            return KernelSoftConditionReparam(
-                #    RBFKernel(scale=scale, event_dim=len(msg["fn"].event_shape))
-                # )
-                TorchKernel(constraints.real)
-            )
+            scale = self.scale
 
         if msg["fn"].base_dist.v.dtype in (
             torch.bool,
@@ -261,11 +237,14 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             support = constraints.boolean
             scale = self.alpha
 
-            # TODO decide if still needed
-            # * functools.reduce(
-            #    operator.mul, msg["fn"].event_shape, 1.0
-            # )
-            return KernelSoftConditionReparam(TorchKernel(constraints.boolean))
+        def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+            return soft_eq(support, v1, v2, scale=scale)
+
+        # TODO decide if still needed
+        # * functools.reduce(
+        #    operator.mul, msg["fn"].event_shape, 1.0
+        # )
+        return KernelSoftConditionReparam(_soft_eq)
 
         raise NotImplementedError(
             f"Could not reparameterize deterministic site {msg['name']}"
