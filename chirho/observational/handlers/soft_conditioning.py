@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import functools
+import operator
 from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
@@ -241,9 +242,7 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             return soft_eq(support, v1, v2, scale=scale)
 
         # TODO decide if still needed
-        # * functools.reduce(
-        #    operator.mul, msg["fn"].event_shape, 1.0
-        # )
+        scale = scale * functools.reduce(operator.mul, msg["fn"].event_shape, 1.0)
         return KernelSoftConditionReparam(_soft_eq)
 
         raise NotImplementedError(
