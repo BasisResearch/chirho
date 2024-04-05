@@ -21,6 +21,7 @@ EXTRAS_REQUIRE = [
     "pytorch-lightning",
     "scikit-image",
     "tensorboard",
+    "typing_extensions",
 ]
 
 DYNAMICAL_REQUIRE = ["torchdiffeq"]
@@ -40,7 +41,7 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/source/requirements.txt`
-        "pyro-ppl>=1.8.5",
+        "pyro-ppl==1.8.6",
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,

@@ -1,1 +1,1 @@
-from .defaults import soft_eq, soft_neq, uniform_proposal  # noqa: F401
+from .defaults import uniform_proposal  # noqa: F401

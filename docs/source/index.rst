@@ -44,6 +44,7 @@ Table of Contents
    observational
    indexed
    dynamical
+   robust
    explainable
 
 .. toctree::
