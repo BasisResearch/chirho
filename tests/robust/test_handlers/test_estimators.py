@@ -6,10 +6,13 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.estimators import one_step_corrected_estimator
+from chirho.robust.handlers.estimators import (
+    MonteCarloInfluenceEstimator,
+    one_step_corrected_estimator,
+)
 from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 
-from .robust_fixtures import SimpleGuide, SimpleModel
+from ..robust_fixtures import SimpleGuide, SimpleModel
 
 pyro.settings.set(module_local_params=True)
 
@@ -72,13 +75,15 @@ def test_estimator_smoke(
     estimator = estimation_method(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
         test_datum,
+    )(PredictiveModel(model, guide))
+
+    with MonteCarloInfluenceEstimator(
         max_plate_nesting=max_plate_nesting,
         num_samples_outer=num_samples_outer,
         num_samples_inner=num_samples_inner,
         cg_iters=cg_iters,
-    )(PredictiveModel(model, guide))
-
-    estimate_on_test: Mapping[str, torch.Tensor] = estimator()
+    ):
+        estimate_on_test: Mapping[str, torch.Tensor] = estimator()
     assert len(estimate_on_test) > 0
     for k, v in estimate_on_test.items():
         assert not torch.isnan(v).any(), f"{estimation_method} for {k} had nans"

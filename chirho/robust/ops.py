@@ -1,7 +1,7 @@
-import warnings
+import functools
 from typing import Any, Callable, Mapping, Protocol, TypeVar
 
-import torch
+import pyro
 from typing_extensions import ParamSpec
 
 from chirho.observational.ops import Observation
@@ -21,7 +21,9 @@ class Functional(Protocol[P, S]):
 
 
 def influence_fn(
-    functional: Functional[P, S], *points: Point[T], **linearize_kwargs
+    functional: Functional[P, S],
+    *points: Point[T],
+    pointwise_influence: bool = True,
 ) -> Functional[P, S]:
     """
     Returns a new functional that computes the efficient influence function for ``functional``
@@ -40,6 +42,7 @@ def influence_fn(
             import torch
 
             from chirho.robust.handlers.predictive import PredictiveModel
+            from chirho.robust.handlers.estimators import MonteCarloInfluenceEstimator
             from chirho.robust.ops import influence_fn
 
             pyro.settings.set(module_local_params=True)
@@ -84,78 +87,64 @@ def influence_fn(
                 model, guide=guide, num_samples=10, return_sites=["y"]
             )
             points = predictive()
+
             influence = influence_fn(
                 SimpleFunctional,
                 points,
-                num_samples_outer=1000,
-                num_samples_inner=1000,
             )(PredictiveModel(model, guide))
 
-            with torch.no_grad():  # Avoids memory leak (see notes below)
-                influence()
+            with MonteCarloInfluenceEstimator(num_samples_inner=1000, num_samples_outer=1000):
+                with torch.no_grad():  # Avoids memory leak (see notes below)
+                    influence()
 
     .. note::
 
-        * ``functional`` must compose with ``torch.func.jvp``
-        * Since the efficient influence function is approximated using Monte Carlo, the result
-          of this function is stochastic, i.e., evaluating this function on the same ``points``
-          can result in different values. To reduce variance, increase ``num_samples_outer`` and
-          ``num_samples_inner`` in ``linearize_kwargs``.
-        * Currently, ``model`` cannot contain any ``pyro.param`` statements.
-          This issue will be addressed in a future release:
-          https://github.com/BasisResearch/chirho/issues/393.
         * There are memory leaks when calling this function multiple times due to ``torch.func``.
           See issue:
           https://github.com/BasisResearch/chirho/issues/516.
           To avoid this issue, use ``torch.no_grad()`` as shown in the example above.
 
     """
-    from chirho.robust.internals.linearize import linearize
-    from chirho.robust.internals.utils import make_functional_call
 
-    if len(points) != 1:
-        raise NotImplementedError(
-            "influence_fn currently only supports unary functionals"
-        )
-
-    def _influence_functional(*models: Callable[P, Any]) -> Callable[P, S]:
+    def influence_functional(
+        *models: Callable[P, Any],
+    ) -> Callable[P, S]:
         """
         Functional representing the efficient influence function of ``functional`` at ``points`` .
 
         :param models: Python callables containing Pyro primitives.
         :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
-        if len(models) != len(points):
-            raise ValueError("mismatch between number of models and points")
 
-        linearized = linearize(*models, **linearize_kwargs)
-        target = functional(*models)
-
-        # TODO check that target_params == model_params
-        assert isinstance(target, torch.nn.Module)
-        target_params, func_target = make_functional_call(target)
-
-        def _fn(*args: P.args, **kwargs: P.kwargs) -> S:
+        @pyro.poutine.runtime.effectful(type="influence")
+        def _influence(
+            *model_args: P.args,
+            models: Callable[P, Any],
+            functional: Functional[P, S],
+            points: Point[T],
+            pointwise_influence: bool,
+            **model_kwargs: P.kwargs,
+        ) -> S:
             """
             Evaluates the efficient influence function for ``functional`` at each
             point in ``points``.
 
             :return: efficient influence function evaluated at each point in ``points`` or averaged
             """
-            if torch.is_grad_enabled():
-                warnings.warn(
-                    "Calling influence_fn with torch.grad enabled can lead to memory leaks. "
-                    "Please use torch.no_grad() to avoid this issue. See example in the docstring."
-                )
-            param_eif = linearized(*points, *args, **kwargs)
-            return torch.vmap(
-                lambda d: torch.func.jvp(
-                    lambda p: func_target(p, *args, **kwargs), (target_params,), (d,)
-                )[1],
-                in_dims=0,
-                randomness="different",
-            )(param_eif)
+            raise NotImplementedError(
+                "Evaluating the `influence` induced by an `influence_fn` requires either "
+                "(i) an approximation method such as `MonteCarloInfluenceEstimator`"
+                "or (ii) a custom handler for the specific model and functional."
+            )
 
-        return _fn
+        # This small amount of indirection allows any enclosing handlers to maintain a reference to
+        # the `models`, `functional`, `points`, and `pointwise_influence` induced by the higher order `influence_fn`.
+        return functools.partial(
+            _influence,
+            models=models,
+            functional=functional,
+            points=points,
+            pointwise_influence=pointwise_influence,
+        )
 
-    return _influence_functional
+    return influence_functional
