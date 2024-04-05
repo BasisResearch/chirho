@@ -54,13 +54,11 @@ def discrete_scm_1():
 
 
 @pytest.mark.parametrize("use_auto", [True, False])
-@pytest.mark.parametrize("scale,alpha", [(0.6, 0.6)])
+@pytest.mark.parametrize("scale", [0.6])
 @pytest.mark.parametrize("x_obs", [1.5, None])
 @pytest.mark.parametrize("y_obs", [2.5, None])
 @pytest.mark.parametrize("z_obs", [3.5, None])
-def test_soft_conditioning_smoke_continuous_1(
-    use_auto, scale, alpha, x_obs, y_obs, z_obs
-):
+def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
@@ -68,7 +66,7 @@ def test_soft_conditioning_smoke_continuous_1(
         if obs is not None
     }
     if use_auto:
-        reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
+        reparam_config = AutoSoftConditioning(scale=scale)
     else:
 
         def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
@@ -97,13 +95,11 @@ def test_soft_conditioning_smoke_continuous_1(
 
 
 @pytest.mark.parametrize("use_auto", [True, False])
-@pytest.mark.parametrize("scale,alpha", [(0.5, 0.5)])
+@pytest.mark.parametrize("scale", [0.5])
 @pytest.mark.parametrize("x_obs", [1, None])
 @pytest.mark.parametrize("y_obs", [2, None])
 @pytest.mark.parametrize("z_obs", [3, None])
-def test_soft_conditioning_smoke_discrete_1(
-    use_auto, scale, alpha, x_obs, y_obs, z_obs
-):
+def test_soft_conditioning_smoke_discrete_1(use_auto, scale, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
     data = {
         name: torch.as_tensor(obs)
@@ -111,7 +107,7 @@ def test_soft_conditioning_smoke_discrete_1(
         if obs is not None
     }
     if use_auto:
-        reparam_config = AutoSoftConditioning(scale=scale, alpha=alpha)
+        reparam_config = AutoSoftConditioning(scale=scale)
     else:
 
         def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
@@ -158,7 +154,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
         for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
         if obs is not None
     }
-    reparam_config = AutoSoftConditioning(scale=1.0, alpha=0.0)
+    reparam_config = AutoSoftConditioning(scale=1.0)
 
     actions = {"x": torch.tensor(0.1234)}
 

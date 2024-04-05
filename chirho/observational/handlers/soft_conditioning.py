@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import operator
 from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
@@ -205,8 +204,7 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         the site's ``event_dim`` and ``support``.
     """
 
-    def __init__(self, *, scale: float = 1.0, alpha: float = 1e-8):
-        self.alpha = alpha
+    def __init__(self, *, scale: float = 1.0):
         self.scale = scale
         super().__init__()
 
@@ -224,25 +222,11 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None
 
-        if msg["fn"].base_dist.v.is_floating_point():
-            support = constraints.real
-            scale = self.scale
-
-        if msg["fn"].base_dist.v.dtype in (
-            torch.bool,
-            torch.int8,
-            torch.int16,
-            torch.int32,
-            torch.int64,
-        ):
-            support = constraints.boolean
-            scale = self.alpha
+        support = msg["fn"].base_dist.support
 
         def _soft_eq(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
-            return soft_eq(support, v1, v2, scale=scale)
+            return soft_eq(support, v1, v2, scale=self.scale)
 
-        # TODO decide if still needed
-        scale = scale * functools.reduce(operator.mul, msg["fn"].event_shape, 1.0)
         return KernelSoftConditionReparam(_soft_eq)
 
         raise NotImplementedError(
