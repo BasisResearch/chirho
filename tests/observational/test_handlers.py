@@ -95,7 +95,7 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_o
 
 
 @pytest.mark.parametrize("use_auto", [True, False])
-@pytest.mark.parametrize("scale", [0.5])
+@pytest.mark.parametrize("scale", [0.6])
 @pytest.mark.parametrize("x_obs", [1, None])
 @pytest.mark.parametrize("y_obs", [2, None])
 @pytest.mark.parametrize("z_obs", [3, None])
