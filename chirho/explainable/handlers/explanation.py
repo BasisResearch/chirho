@@ -5,7 +5,7 @@ import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.explainable.handlers.components import (
-    consequent_differs,
+    consequent_neq,
     random_intervention,
     undo_split,
 )
@@ -120,7 +120,7 @@ def SearchForExplanation(
         constraints.Constraint,
     ):
         consequents = {
-            c: consequent_differs(
+            c: consequent_neq(
                 support=s,
                 antecedents=list(antecedents.keys()),
                 scale=consequent_scale,

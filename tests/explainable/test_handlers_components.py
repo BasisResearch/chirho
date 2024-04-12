@@ -9,7 +9,7 @@ from chirho.counterfactual.ops import split
 from chirho.explainable.handlers import random_intervention
 from chirho.explainable.handlers.components import (
     ExtractSupports,
-    consequent_differs,
+    consequent_neq,
     undo_split,
 )
 from chirho.explainable.ops import preempt
@@ -231,9 +231,9 @@ def test_undo_split_with_interaction():
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_consequent_differs(plate_size, event_shape):
+def test_consequent_neq(plate_size, event_shape):
     factors = {
-        "consequent": consequent_differs(
+        "consequent": consequent_neq(
             antecedents=["split"],
             support=constraints.independent(constraints.real, len(event_shape)),
         )
@@ -253,7 +253,7 @@ def test_consequent_differs(plate_size, event_shape):
         )
         con_dif = pyro.deterministic(
             "con_dif",
-            consequent_differs(
+            consequent_neq(
                 support=constraints.independent(constraints.real, len(event_shape)),
                 antecedents=["split"],
             )(consequent),

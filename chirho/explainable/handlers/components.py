@@ -92,7 +92,7 @@ def undo_split(
     return _undo_split
 
 
-def consequent_differs(
+def consequent_neq(
     support: constraints.Constraint,
     antecedents: Iterable[str] = [],
     **kwargs,
@@ -109,7 +109,7 @@ def consequent_differs(
              element indicates whether the corresponding element of ``consequent`` differs from its factual value.
     """
 
-    def _consequent_differs(consequent: T) -> torch.Tensor:
+    def _consequent_neq(consequent: T) -> torch.Tensor:
         indices = IndexSet(
             **{
                 name: ind
@@ -125,7 +125,7 @@ def consequent_differs(
         )
         return diff
 
-    return _consequent_differs
+    return _consequent_neq
 
 
 class ExtractSupports(pyro.poutine.messenger.Messenger):
