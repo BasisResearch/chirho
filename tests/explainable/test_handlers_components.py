@@ -10,6 +10,7 @@ from chirho.explainable.handlers import random_intervention
 from chirho.explainable.handlers.components import (
     ExtractSupports,
     consequent_neq,
+    consequent_eq,
     undo_split,
 )
 from chirho.explainable.ops import preempt
@@ -291,6 +292,78 @@ options = [
         "bernoulli_var": constraints.interval(0, 1),
     },  # misspecified on purpose, should make no damage
 ]
+
+
+
+# potentially, the following test could be merged with the previous one
+# as they share quite a bit of code
+# but despite some repeated code left separate to test two functionalities
+# in isolation
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_consequent_eq(plate_size, event_shape):
+    factors = {
+        "consequent": consequent_eq(
+            antecedents=["split"],
+            support=constraints.independent(constraints.real, len(event_shape)),
+        )
+    }
+
+    @Factors(factors=factors)
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def model_ce():
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        new_w = w.clone()
+        new_w[1::2] = 10
+        w = split(w, (new_w,), name="split", event_dim=len(event_shape))
+        consequent = pyro.deterministic(
+            "consequent", w * 0.1, event_dim=len(event_shape)
+        )
+        con_eq = pyro.deterministic(
+            "con_eq",
+            consequent_eq(
+                support=constraints.independent(constraints.real, len(event_shape)),
+                antecedents=["split"],
+            )(consequent),
+            event_dim=0,
+        )
+
+        return con_eq
+
+    with MultiWorldCounterfactual() as mwc:
+        with pyro.poutine.trace() as tr:
+            model_ce()
+
+    tr.trace.compute_log_prob()
+    nd = tr.trace.nodes
+
+    with mwc:
+        int_con_eq = gather(nd["con_eq"]["value"], IndexSet(**{"split": {1}}))
+
+        assert "split" not in indices_of(int_con_eq)
+        assert not indices_of(int_con_eq)
+
+    assert int_con_eq.squeeze().shape == nd["w"]["fn"].batch_shape
+    assert nd["__factor_consequent"]["log_prob"].sum() < -10
+
+
+options = [
+    None,
+    [],
+    ["uniform_var"],
+    ["uniform_var", "normal_var", "bernoulli_var"],
+    {},
+    {"uniform_var": 5.0, "bernoulli_var": 5.0},
+    {
+        "uniform_var": constraints.interval(1, 10),
+        "bernoulli_var": constraints.interval(0, 1),
+    },  # misspecified on purpose, should make no damage
+]
+
 
 
 @pytest.mark.parametrize("event_shape", [(), (3, 2)], ids=str)

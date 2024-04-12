@@ -8,7 +8,7 @@ import torch
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
-from chirho.observational.handlers import soft_neq
+from chirho.observational.handlers import soft_eq, soft_neq
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -90,6 +90,42 @@ def undo_split(
         )
 
     return _undo_split
+
+
+def consequent_eq(
+    support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
+    **kwargs,
+) -> Callable[[T], torch.Tensor]:
+    """
+    A helper function for assessing whether values at a site are close to their observed values, assigning
+    a small negative value close to zero if a value is close to its observed state and a large negative value otherwise.
+
+    :param support: The support constraint for the consequent site.
+    :param antecedents: A list of names of upstream intervened sites to consider when assessing similarity.
+
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor where each
+             element indicates the extent to which the corresponding element of ``consequent``
+             is close to its factual value.
+    """
+
+    def _consequent_eq(consequent: T) -> torch.Tensor:
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+        eq = soft_eq(
+            support,
+            consequent,
+            gather(consequent, indices, event_dim=support.event_dim),
+            **kwargs,
+        )
+        return eq
+
+    return _consequent_eq
 
 
 def consequent_neq(
