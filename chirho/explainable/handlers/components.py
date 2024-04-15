@@ -16,7 +16,7 @@ T = TypeVar("T")
 
 def sufficiency_intervention(
     support: constraints.Constraint,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+) -> Callable[[T], T]:
     """
     Creates a sufficiency intervention for a single sample site, determined by
     the site name, intervening to keep the value as in the factual world.
@@ -35,7 +35,7 @@ def sufficiency_intervention(
         >>>     value = intervene(value, intervention)
     """
 
-    def _sufficiency_intervention(value: torch.Tensor) -> torch.Tensor:
+    def _sufficiency_intervention(value: T) -> T:
 
         indices = indices_of(value)
 
@@ -74,7 +74,9 @@ def random_intervention(
     """
 
     def _random_intervention(value: torch.Tensor) -> torch.Tensor:
+
         event_shape = value.shape[len(value.shape) - support.event_dim :]
+
         proposal_dist = uniform_proposal(
             support,
             event_shape=event_shape,
