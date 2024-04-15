@@ -37,7 +37,7 @@ def sufficiency_intervention(
 
     def _sufficiency_intervention(value: T) -> T:
 
-        indices = indices_of(value)
+        indices = indices_of(value, event_dim=support.event_dim)
 
         factual_value = gather(
             value,
