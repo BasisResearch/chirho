@@ -6,13 +6,14 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.counterfactual.ops import split
-from chirho.explainable.handlers import random_intervention
+from chirho.explainable.handlers import random_intervention, sufficiency_intervention
 from chirho.explainable.handlers.components import (
     ExtractSupports,
     consequent_eq,
     consequent_neq,
     undo_split,
 )
+from chirho.explainable.internals import uniform_proposal
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.ops import intervene
@@ -27,6 +28,40 @@ SUPPORT_CASES = [
     pyro.distributions.constraints.integer_interval(0, 2),
     pyro.distributions.constraints.integer_interval(0, 100),
 ]
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_sufficiency_intervention(support, event_shape):
+    if event_shape:
+        support = pyro.distributions.constraints.independent(support, len(event_shape))
+
+    proposal_dist = uniform_proposal(
+        support,
+        event_shape=event_shape,
+    )
+
+    with MultiWorldCounterfactual():
+        value = pyro.sample("value", proposal_dist)
+
+        intervention = sufficiency_intervention(support)
+
+        value = intervene(value, intervention)
+
+        indices = indices_of(value)
+        observed = gather(
+            value,
+            IndexSet(**{index: {0} for index in indices}),
+            event_dim=support.event_dim,
+        )
+        intervened = gather(
+            value,
+            IndexSet(**{index: {1} for index in indices}),
+            event_dim=support.event_dim,
+        )
+
+    assert torch.allclose(observed, intervened)
+    assert torch.all(support.check(value))
 
 
 @pytest.mark.parametrize("support", SUPPORT_CASES)

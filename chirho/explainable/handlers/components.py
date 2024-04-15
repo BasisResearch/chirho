@@ -14,6 +14,41 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
+def sufficiency_intervention(
+    support: constraints.Constraint,
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """
+    Creates a sufficiency intervention for a single sample site, determined by
+    the site name, intervening to keep the value as in the factual world.
+
+    :param support: The support constraint for the site.
+    :param name: The sample site name.
+
+    :return: A function that takes a `torch.Tensor` as input
+        and returns the factual value at the named site as a tensor.
+
+    Example::
+
+        >>> with MultiWorldCounterfactual() as mwc:
+        >>>     value = pyro.sample("value", proposal_dist)
+        >>>     intervention = sufficiency_intervention(support)
+        >>>     value = intervene(value, intervention)
+    """
+
+    def _sufficiency_intervention(value: torch.Tensor) -> torch.Tensor:
+
+        indices = indices_of(value)
+
+        factual_value = gather(
+            value,
+            IndexSet(**{index: {0} for index in indices}),
+            event_dim=support.event_dim,
+        )
+        return factual_value
+
+    return _sufficiency_intervention
+
+
 def random_intervention(
     support: constraints.Constraint,
     name: str,
