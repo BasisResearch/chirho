@@ -9,8 +9,8 @@ from chirho.counterfactual.ops import split
 from chirho.explainable.handlers import random_intervention
 from chirho.explainable.handlers.components import (
     ExtractSupports,
-    consequent_neq,
     consequent_eq,
+    consequent_neq,
     undo_split,
 )
 from chirho.explainable.ops import preempt
@@ -294,7 +294,6 @@ options = [
 ]
 
 
-
 # potentially, the following test could be merged with the previous one
 # as they share quite a bit of code
 # but despite some repeated code left separate to test two functionalities
@@ -363,7 +362,6 @@ options = [
         "bernoulli_var": constraints.interval(0, 1),
     },  # misspecified on purpose, should make no damage
 ]
-
 
 
 @pytest.mark.parametrize("event_shape", [(), (3, 2)], ids=str)
