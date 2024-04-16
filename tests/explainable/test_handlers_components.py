@@ -44,7 +44,7 @@ def test_sufficiency_intervention(support, event_shape):
     with MultiWorldCounterfactual():
         value = pyro.sample("value", proposal_dist)
 
-        intervention = sufficiency_intervention(support)
+        intervention = sufficiency_intervention(support, "value")
 
         value = intervene(value, intervention)
 

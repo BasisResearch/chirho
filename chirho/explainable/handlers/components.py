@@ -16,10 +16,12 @@ T = TypeVar("T")
 
 def sufficiency_intervention(
     support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
 ) -> Callable[[T], T]:
     """
     Creates a sufficiency intervention for a single sample site, determined by
-    the site name, intervening to keep the value as in the factual world.
+    the site name, intervening to keep the value as in the factual world with
+    respect to the antecedents.
 
     :param support: The support constraint for the site.
     :param name: The sample site name.
@@ -37,11 +39,25 @@ def sufficiency_intervention(
 
     def _sufficiency_intervention(value: T) -> T:
 
-        indices = indices_of(value, event_dim=support.event_dim)
+        # indices = indices_of(value, event_dim=support.event_dim)
+
+        # factual_value = gather(
+        #     value,
+        #     IndexSet(**{index: {0} for index in indices}),
+        #     event_dim=support.event_dim,
+        # )
+
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
 
         factual_value = gather(
             value,
-            IndexSet(**{index: {0} for index in indices}),
+            indices,
             event_dim=support.event_dim,
         )
         return factual_value
