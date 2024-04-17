@@ -209,11 +209,13 @@ def SearchForNS(
         constraints.Constraint,
     ):
         antecedents_supports = {a: s for a, s in antecedents.items()}
-        
+
         print(antecedents.keys())
-        antecedents  = {
-            a: (random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}"),
-                sufficiency_intervention(s, antecedents.keys()))
+        antecedents = {
+            a: (
+                random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}"),
+                sufficiency_intervention(s, antecedents.keys()),
+            )
             for a, s in antecedents.items()
         }
     else:

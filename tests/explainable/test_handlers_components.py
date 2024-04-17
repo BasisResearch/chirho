@@ -43,8 +43,10 @@ def test_sufficiency_intervention(support, event_shape):
 
     with MultiWorldCounterfactual():
         upstream = pyro.sample("upstream", proposal_dist)
-        value = split(upstream, (upstream * 2,), name="value", event_dim=support.event_dim)
-    
+        value = split(
+            upstream, (upstream * 2,), name="value", event_dim=support.event_dim
+        )
+
         intervention = sufficiency_intervention(support, ["value"])
 
         value = intervene(value, intervention)
@@ -64,10 +66,10 @@ def test_sufficiency_intervention(support, event_shape):
     assert torch.allclose(observed, intervened)
     assert torch.all(support.check(value))
 
+
 support = pyro.distributions.constraints.real
 event_shape = ()
 test_sufficiency_intervention(support, event_shape)
-
 
 
 @pytest.mark.parametrize("support", SUPPORT_CASES)
