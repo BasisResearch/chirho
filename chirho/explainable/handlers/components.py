@@ -39,14 +39,6 @@ def sufficiency_intervention(
 
     def _sufficiency_intervention(value: T) -> T:
 
-        # indices = indices_of(value, event_dim=support.event_dim)
-
-        # factual_value = gather(
-        #     value,
-        #     IndexSet(**{index: {0} for index in indices}),
-        #     event_dim=support.event_dim,
-        # )
-
         indices = IndexSet(
             **{
                 name: ind
