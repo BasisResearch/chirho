@@ -33,32 +33,37 @@ SUPPORT_CASES = [
 @pytest.mark.parametrize("support", SUPPORT_CASES)
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_sufficiency_intervention(support, event_shape):
-    if event_shape:
-        support = pyro.distributions.constraints.independent(support, len(event_shape))
-
-    proposal_dist = uniform_proposal(
-        support,
-        event_shape=event_shape,
-    )
 
     with MultiWorldCounterfactual():
-        value = pyro.sample("value", proposal_dist)
-        value = intervene(
-            value, random_intervention(support, "value"), name="randomize"
+
+        if event_shape:
+            support = pyro.distributions.constraints.independent(
+                support, len(event_shape)
+            )
+
+        proposal_dist = uniform_proposal(
+            support,
+            event_shape=event_shape,
         )
 
-        intervention = sufficiency_intervention(support, ["randomize"])
+        value = pyro.sample("value", proposal_dist)
+        value = intervene(
+            value, random_intervention(support, "value"), name="randomize", event_dim=0
+        )
 
-        value = intervene(value, intervention, name="reinstate")
+        indices_first = indices_of(value)
+        intervention = sufficiency_intervention(support, indices_first.keys())
+
+        value = intervene(value, intervention, event_dim=0)
 
         indices = indices_of(value)
         observed = gather(
             value,
             IndexSet(**{index: {0} for index in indices}),
+            event_dim=0,
         )
         intervened = gather(
-            value,
-            IndexSet(**{index: {1} for index in indices}),
+            value, IndexSet(**{index: {1} for index in indices}), event_dim=0
         )
 
     assert torch.allclose(observed, intervened)
