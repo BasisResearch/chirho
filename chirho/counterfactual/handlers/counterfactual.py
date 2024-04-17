@@ -90,7 +90,7 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
 
         >>> with SingleWorldFactual():
         ...    x = torch.tensor(1.)
-        ...    x = intervene(x, torch.tensor(0.))
+        ...    x = x, torch.tensor(0.))
         >>> assert (x == torch.tensor(1.))
     """
 
@@ -129,7 +129,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         >>> with MultiWorldCounterfactual():
         ...    x = torch.tensor(1.)
         ...    x = intervene(x, torch.tensor(0.), name="x_ax_1")
-        ...    x = intervene(x, torch.tensor(2.), name="x_ax_2")
+        ...    x = x, torch.tensor(2.), name="x_ax_2")
         ...    x_factual = gather(x, IndexSet(x_ax_1={0}, x_ax_2={0}))
         ...    x_counterfactual_1 = gather(x, IndexSet(x_ax_1={1}, x_ax_2={0}))
         ...    x_counterfactual_2 = gather(x, IndexSet(x_ax_1={0}, x_ax_2={1}))

@@ -50,7 +50,9 @@ def sufficiency_intervention(
         factual_value = gather(
             value,
             indices,
-            event_dim=support.event_dim,
+            # event_dim=support.event_dim,
+            # this led to a bug, gathering copied all
+            # counterfactual words for event shape (3,2)
         )
         return factual_value
 
