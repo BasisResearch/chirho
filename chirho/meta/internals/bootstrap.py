@@ -1,7 +1,7 @@
 import typing
 from typing import Callable, Dict, Generic, Iterable, Mapping, ParamSpec, Type, TypeGuard, TypeVar
 
-from chirho.meta.ops.syntax import Interpretation, Operation, Term
+from chirho.meta.ops.syntax import Context, Interpretation, Operation, Symbol, Term
 
 from . import runtime
 from . import utils
@@ -76,8 +76,6 @@ def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
         return typing.get_origin(m) is Operation or m is Operation
 
     if _is_op_type(m):
-        from ..internals.bootstrap import _BaseOperation
-
         @_BaseOperation
         def defop(fn: Callable[..., S]) -> _BaseOperation[..., S]:
             return _BaseOperation(fn)
@@ -90,7 +88,10 @@ def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
 # bootstrap
 runtime.get_runtime = _BaseOperation(runtime.get_runtime)
 syntax.apply = _BaseOperation(syntax.apply)
-syntax.define = syntax.define(syntax.Operation)(syntax.define)
+syntax.define = _BaseOperation(syntax.define)
 
+syntax.register(syntax.define(Operation), None, _BaseOperation)
 syntax.register(syntax.define(Term), None, _BaseTerm)
 syntax.register(syntax.define(Interpretation), None, _BaseInterpretation)
+syntax.register(syntax.define(Symbol), None, str)
+syntax.register(syntax.define(Context), None, dict)

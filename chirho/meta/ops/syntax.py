@@ -20,6 +20,9 @@ class Operation(Protocol[P, T_co]):
         ...
 
 
+Interpretation = Mapping[Operation[..., T], Callable[..., V]]
+
+
 @typing.runtime_checkable
 class Term(Protocol[T]):
     op: Operation[..., T]
@@ -27,7 +30,10 @@ class Term(Protocol[T]):
     kwargs: Mapping[str, "Term[T]" | T]
 
 
-Interpretation = Mapping[Operation[..., T], Callable[..., V]]
+Symbol = str  # TODO replace with extensional protocol type
+Context = collections.abc.MutableMapping[Symbol, T]
+TypeContext = Context[Type[T]]
+TermContext = Context[Term[T]]
 
 
 def define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
