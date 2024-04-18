@@ -1,9 +1,11 @@
 import functools
-from typing import Callable, ClassVar, Concatenate, Dict, Generic, Iterable, Mapping, ParamSpec, TypeVar
+import typing
+from typing import Callable, ClassVar, Concatenate, Dict, Generic, Iterable, Mapping, ParamSpec, Type, TypeGuard, TypeVar
 
 from chirho.meta.ops.syntax import Interpretation, Operation, Term
 
 from . import runtime
+from . import utils
 
 from ..ops import syntax
 
@@ -95,6 +97,27 @@ class _StatefulInterpretation(Generic[S, T, V]):
     @classmethod
     def keys(cls) -> Iterable[Operation[..., T]]:
         return cls._op_intps.keys()
+
+
+@utils.weak_memoize
+def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
+    if not typing.TYPE_CHECKING:
+        if typing.get_origin(m) not in (m, None):
+            return base_define(typing.get_origin(m))
+
+    def _is_op_type(m: Type[S] | Callable[P, S]) -> TypeGuard[Type[Operation[..., S]]]:
+        return typing.get_origin(m) is Operation or m is Operation
+
+    if _is_op_type(m):
+        from ..internals.bootstrap import _BaseOperation
+
+        @_BaseOperation
+        def defop(fn: Callable[..., S]) -> _BaseOperation[..., S]:
+            return _BaseOperation(fn)
+
+        return defop
+    else:
+        return base_define(Operation[..., T])(m)
 
 
 # bootstrap

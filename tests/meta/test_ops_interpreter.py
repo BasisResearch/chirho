@@ -6,7 +6,7 @@ from typing import Optional, ParamSpec, TypeVar
 
 import pytest
 
-from chirho.meta.ops._utils import value_or_fn
+from chirho.meta.internals.utils import value_or_fn
 from chirho.meta.ops.interpreter import (
     bind_result,
     interpreter,

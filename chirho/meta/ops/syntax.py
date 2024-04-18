@@ -3,7 +3,7 @@ import functools
 import typing
 from typing import Callable, Iterable, Mapping, Optional, ParamSpec, Protocol, Type, TypeGuard, TypeVar
 
-from ._utils import weak_memoize
+from ..internals.utils import weak_memoize
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -32,30 +32,15 @@ class Term(Protocol[T]):
 Interpretation = Mapping[Operation[..., T], Callable[..., V]]
 
 
-@weak_memoize
 def define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
     """
     Scott encoding of a type as its constructor.
     """
-    if not typing.TYPE_CHECKING:
-        if typing.get_origin(m) not in (m, None):
-            return define(typing.get_origin(m))
+    from ..internals.bootstrap import base_define
 
-    def _is_op_type(m: Type[S] | Callable[P, S]) -> TypeGuard[Type[Operation[..., S]]]:
-        return typing.get_origin(m) is Operation or m is Operation
+    return base_define(m)
 
-    if _is_op_type(m):
-        from ..internals.bootstrap import _BaseOperation
-
-        @_BaseOperation
-        def defop(fn: Callable[..., S]) -> _BaseOperation[..., S]:
-            return _BaseOperation(fn)
-
-        return defop
-    else:
-        return define(Operation[..., T])(m)
-
-
+@
 @typing.overload
 def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     ...
