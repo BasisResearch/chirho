@@ -1,5 +1,6 @@
+import dataclasses
 import typing
-from typing import Callable, Dict, Generic, Iterable, Mapping, ParamSpec, Type, TypeGuard, TypeVar
+from typing import Callable, Generic, ParamSpec, Type, TypeGuard, TypeVar
 
 from chirho.meta.ops.syntax import Context, Interpretation, Operation, Symbol, Term
 
@@ -16,20 +17,13 @@ V = TypeVar("V")
 T_co = TypeVar("T_co", covariant=True)
 
 
+@dataclasses.dataclass(unsafe_hash=True)
 class _BaseOperation(Generic[P, T_co]):
     default: Callable[P, T_co]
 
-    def __init__(self, __default: Callable[P, T_co]):
-        self.default = __default
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}({getattr(self.default, '__name__', self.default)})"
-
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T_co:
         if self is runtime.get_runtime:
-            intp = getattr(runtime.get_runtime, "default")(
-                *args, **kwargs
-            ).interpretation
+            intp = self.default(*args, **kwargs).interpretation
             return syntax.apply.default(intp, self, *args, **kwargs)
         elif self is syntax.apply:
             intp = runtime.get_interpretation()
@@ -39,27 +33,11 @@ class _BaseOperation(Generic[P, T_co]):
             return syntax.apply(intp, self, *args, **kwargs)
 
 
+@dataclasses.dataclass
 class _BaseTerm(Generic[T]):
     op: Operation[..., T]
-    args: tuple["_BaseTerm[T]" | T, ...]
-    kwargs: dict[str, "_BaseTerm[T]" | T]
-
-    def __init__(
-        self,
-        __op: Operation[..., T],
-        __args: Iterable["_BaseTerm[T]" | T],
-        __kwargs: Mapping[str, "_BaseTerm[T]" | T],
-    ):
-        self.op = __op
-        self.args = tuple(__args)
-        self.kwargs = dict(__kwargs)
-
-    def __repr__(self) -> str:
-        return (
-            f"{self.op}("
-            + f"{', '.join(map(repr, self.args))},"
-            + f"{', '.join(f'{k}={v}' for k, v in self.kwargs.items())})"
-        )
+    args: tuple[Term[T] | T, ...]
+    kwargs: dict[str, Term[T] | T]
 
 
 @utils.weak_memoize
