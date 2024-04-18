@@ -2,7 +2,7 @@ import contextlib
 import functools
 from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Tuple, TypeVar
 
-from chirho.meta.ops.syntax import Interpretation, Operation, define
+from chirho.meta.ops.core import Interpretation, Operation, define
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")

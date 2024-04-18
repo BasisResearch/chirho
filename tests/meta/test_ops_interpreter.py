@@ -11,7 +11,7 @@ from chirho.meta.ops.interpreter import (
     bind_result,
     interpreter,
 )
-from chirho.meta.ops.syntax import Interpretation, Operation, define, register
+from chirho.meta.ops.core import Interpretation, Operation, define, register
 
 logger = logging.getLogger(__name__)
 

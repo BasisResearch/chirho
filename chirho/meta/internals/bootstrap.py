@@ -2,12 +2,12 @@ import dataclasses
 import typing
 from typing import Callable, Generic, ParamSpec, Type, TypeGuard, TypeVar
 
-from chirho.meta.ops.syntax import Context, Interpretation, Operation, Symbol, Term
+from chirho.meta.ops.core import Context, Interpretation, Operation, Symbol, Term
 
 from . import runtime
 from . import utils
 
-from ..ops import syntax
+from ..ops import core
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -24,13 +24,13 @@ class _BaseOperation(Generic[P, T_co]):
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> T_co:
         if self is runtime.get_runtime:
             intp = self.default(*args, **kwargs).interpretation
-            return syntax.apply.default(intp, self, *args, **kwargs)
-        elif self is syntax.apply:
+            return core.apply.default(intp, self, *args, **kwargs)
+        elif self is core.apply:
             intp = runtime.get_interpretation()
-            return syntax.apply.default(intp, self, *args, **kwargs)
+            return core.apply.default(intp, self, *args, **kwargs)
         else:
             intp = runtime.get_interpretation()
-            return syntax.apply(intp, self, *args, **kwargs)
+            return core.apply(intp, self, *args, **kwargs)
 
 
 @dataclasses.dataclass
@@ -60,13 +60,13 @@ def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
 
 
 # bootstrap
-syntax.apply = _BaseOperation(syntax.apply)
-syntax.define = _BaseOperation(syntax.define)
-syntax.register = _BaseOperation(syntax.register)
+core.apply = _BaseOperation(core.apply)
+core.define = _BaseOperation(core.define)
+core.register = _BaseOperation(core.register)
 runtime.get_runtime = _BaseOperation(runtime.get_runtime)
 
-syntax.register(syntax.define(Operation), None, _BaseOperation)
-syntax.register(syntax.define(Term), None, _BaseTerm)
-syntax.register(syntax.define(Interpretation), None, dict)
-syntax.register(syntax.define(Symbol), None, str)
-syntax.register(syntax.define(Context), None, dict)
+core.register(core.define(Operation), None, _BaseOperation)
+core.register(core.define(Term), None, _BaseTerm)
+core.register(core.define(Interpretation), None, dict)
+core.register(core.define(Symbol), None, str)
+core.register(core.define(Context), None, dict)
