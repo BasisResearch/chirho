@@ -60,13 +60,13 @@ def register(
 
 
 def apply(
-    interpretation: Interpretation[S, T],
+    intp: Interpretation[S, T],
     op: Operation[P, S],
     *args: P.args,
     **kwargs: P.kwargs
 ) -> T:
     try:
-        interpret = interpretation[op]
+        interpret = intp[op]
     except KeyError:
         interpret = op.default
     return interpret(*args, **kwargs)
