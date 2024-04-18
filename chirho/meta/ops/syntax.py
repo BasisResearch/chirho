@@ -1,5 +1,4 @@
 import collections.abc
-import functools
 import typing
 from typing import Callable, Iterable, Mapping, Optional, ParamSpec, Protocol, Type, TypeVar
 
