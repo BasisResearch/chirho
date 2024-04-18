@@ -1,9 +1,7 @@
 import collections.abc
 import functools
 import typing
-from typing import Callable, Iterable, Mapping, Optional, ParamSpec, Protocol, Type, TypeGuard, TypeVar
-
-from ..internals.utils import weak_memoize
+from typing import Callable, Iterable, Mapping, Optional, ParamSpec, Protocol, Type, TypeVar
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
