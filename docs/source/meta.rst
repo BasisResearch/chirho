@@ -13,11 +13,11 @@ Operations
    :members:
    :undoc-members:
 
-.. automodule:: chirho.meta.ops.operation
+.. automodule:: chirho.meta.ops.core
    :members:
    :undoc-members:
 
-.. automodule:: chirho.meta.ops.interpretation
+.. automodule:: chirho.meta.ops.interpreter
    :members:
    :undoc-members:
 
@@ -26,18 +26,6 @@ Operations
    :undoc-members:
 
 .. automodule:: chirho.meta.ops.runner
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.meta.ops.term
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.meta.ops.runtime
-   :members:
-   :undoc-members:
-
-.. automodule:: chirho.meta.ops._utils
    :members:
    :undoc-members:
 
@@ -55,14 +43,14 @@ Internals
    :members:
    :undoc-members:
 
-.. automodule:: chirho.meta.internals.base_interpretation
+.. automodule:: chirho.meta.internals.bootstrap
    :members:
    :undoc-members:
 
-.. automodule:: chirho.meta.internals.base_operation
+.. automodule:: chirho.meta.internals.runtime
    :members:
    :undoc-members:
 
-.. automodule:: chirho.meta.internals.base_term
+.. automodule:: chirho.meta.internals.utils
    :members:
    :undoc-members:
