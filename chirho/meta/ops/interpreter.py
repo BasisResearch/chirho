@@ -1,12 +1,8 @@
-import collections.abc
 import contextlib
 import functools
-import typing
 from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Tuple, TypeVar
 
-from chirho.meta.ops.operation import Operation, define
-
-from ..internals.base_interpretation import _BaseInterpretation
+from chirho.meta.ops.syntax import Interpretation, Operation, define
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -14,47 +10,10 @@ S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
 
-Interpretation = collections.abc.Mapping[Operation[..., T], Callable[..., V]]
-
-
-@typing.overload
-def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    ...
-
-
-@typing.overload
-def register(
-    op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
-) -> Callable[[Callable[Q, V]], Callable[Q, V]]:
-    ...
-
-
-@typing.overload
-def register(
-    op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
-    interpret_op: Callable[Q, V],
-) -> Callable[Q, V]:
-    ...
-
-
-def register(op, intp=None, interpret_op=None):
-    if interpret_op is None:
-        return lambda interpret_op: register(op, intp, interpret_op)
-
-    if intp is None:
-        setattr(op, "default", interpret_op)
-        return interpret_op
-    elif isinstance(intp, collections.abc.MutableMapping):
-        intp.__setitem__(op, interpret_op)
-        return interpret_op
-    raise NotImplementedError(f"Cannot register {op} in {intp}")
-
 
 @contextlib.contextmanager
 def interpreter(intp: Interpretation, *, unset: bool = True):
-    from .runtime import get_interpretation, swap_interpretation
+    from ..internals.runtime import get_interpretation, swap_interpretation
 
     old_intp = get_interpretation()
     try:
@@ -74,7 +33,7 @@ def interpreter(intp: Interpretation, *, unset: bool = True):
 
 @contextlib.contextmanager
 def shallow_interpreter(intp: Interpretation):
-    from .runtime import get_interpretation
+    from ..internals.runtime import get_interpretation
 
     # destructive update: calling any op in intp should remove intp from active
     active_intp = get_interpretation()
@@ -145,7 +104,3 @@ def bind_prompts(
         return shallow_interpreter(bound_conts)(_set_local_state(fn))
 
     return _bind_local_state
-
-
-# bootstrap
-register(define(Interpretation), None, _BaseInterpretation)

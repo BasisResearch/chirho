@@ -1,13 +1,12 @@
 import contextlib
 from typing import Optional, ParamSpec, TypeVar
 
-from chirho.meta.ops.interpretation import (
-    Interpretation,
+from chirho.meta.ops.interpreter import (
     Prompt,
     bind_prompts,
     interpreter,
 )
-from chirho.meta.ops.operation import Operation, define
+from chirho.meta.ops.syntax import Interpretation, Operation, define
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -45,7 +44,7 @@ def coproduct(
 
 @contextlib.contextmanager
 def handler(intp: Interpretation[S, T], *, prompt: Prompt[T] = fwd):
-    from .runtime import get_interpretation
+    from ..internals.runtime import get_interpretation
 
     with interpreter(coproduct(get_interpretation(), intp, prompt=prompt)):
         yield intp

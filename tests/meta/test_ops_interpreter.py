@@ -7,13 +7,11 @@ from typing import Optional, ParamSpec, TypeVar
 import pytest
 
 from chirho.meta.ops._utils import value_or_fn
-from chirho.meta.ops.interpretation import (
-    Interpretation,
+from chirho.meta.ops.interpreter import (
     bind_result,
     interpreter,
-    register,
 )
-from chirho.meta.ops.operation import Operation, define
+from chirho.meta.ops.syntax import Interpretation, Operation, define, register
 
 logger = logging.getLogger(__name__)
 
