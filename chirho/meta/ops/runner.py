@@ -1,5 +1,5 @@
 import contextlib
-from typing import Optional, ParamSpec, TypeVar
+from typing import Mapping, Optional, ParamSpec, TypeVar
 
 from chirho.meta.ops.interpreter import (
     Prompt,
@@ -46,16 +46,6 @@ def product(
     }
 
 
-def handler_prompt_to_runner_prompt(
-    intp: Interpretation[S, T],
-    handler_prompt: Prompt[T],
-    runner_prompt: Prompt[T],
-) -> Interpretation[S, T]:
-    return {  # TODO shallow_interpreter?
-        op: interpreter({handler_prompt: runner_prompt})(intp[op]) for op in intp.keys()
-    }
-
-
 @contextlib.contextmanager
 def runner(
     intp: Interpretation[S, T],
@@ -71,8 +61,9 @@ def runner(
         assert (
             prompt is not handler_prompt
         ), f"runner prompt and handler prompt must be distinct, but got {handler_prompt}"
-        curr_intp = handler_prompt_to_runner_prompt(curr_intp, handler_prompt, prompt)
-        next_intp = handler_prompt_to_runner_prompt(next_intp, handler_prompt, prompt)
+        h2r = {handler_prompt: prompt}
+        curr_intp = {op: interpreter(h2r)(curr_intp[op]) for op in curr_intp.keys()}
+        next_intp = {op: interpreter(h2r)(next_intp[op]) for op in next_intp.keys()}
 
     with interpreter(product(curr_intp, next_intp, prompt=prompt)):
         yield intp
