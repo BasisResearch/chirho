@@ -159,6 +159,10 @@ Documentation
   and tracking counterfactual worlds
 - `Dynamical <https://basisresearch.github.io/chirho/dynamical.html>`_
   - Operations and effect handlers for counterfactual reasoning in dynamical systems
+- `Robust <https://basisresearch.github.io/chirho/robust.html>`_
+  - Operations and effect handlers for robust estimation
+- `Explainable <https://basisresearch.github.io/chirho/explainable.html>`_
+  - Operations and effect handlers for causal explanation
   
 Caveats
 -------

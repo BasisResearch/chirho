@@ -678,7 +678,7 @@ def test_cf_inference_with_soft_conditioner():
     h_cond = condition(data={"x": torch.tensor(0.0), "y": torch.tensor(1.0)})
     h_do = do(actions={"z": torch.tensor(0.0)})
     scale = 0.01
-    reparam_config = AutoSoftConditioning(scale=scale, alpha=0.5)
+    reparam_config = AutoSoftConditioning(scale=scale)
 
     def model_cf():
         with pyro.poutine.reparam(config=reparam_config):
