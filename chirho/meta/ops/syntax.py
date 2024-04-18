@@ -40,7 +40,7 @@ def define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
 
     return base_define(m)
 
-@
+
 @typing.overload
 def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
     ...
