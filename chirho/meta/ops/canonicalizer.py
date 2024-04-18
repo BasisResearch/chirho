@@ -1,6 +1,6 @@
 import contextlib
 import functools
-from typing import Callable, Concatenate, Mapping, Optional, ParamSpec, Tuple, TypeVar
+from typing import Callable, ParamSpec, TypeVar
 
 from chirho.meta.ops.core import Interpretation, Operation, Term, Variable, define, evaluate
 from chirho.meta.ops.interpreter import interpreter
