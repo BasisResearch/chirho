@@ -2,7 +2,7 @@ import dataclasses
 import typing
 from typing import Callable, Generic, ParamSpec, Type, TypeGuard, TypeVar
 
-from chirho.meta.ops.core import Context, Interpretation, Operation, Symbol, Term
+from chirho.meta.ops.core import Context, Interpretation, Operation, Symbol, Term, Variable
 
 from . import runtime
 from . import utils
@@ -40,6 +40,12 @@ class _BaseTerm(Generic[T]):
     kwargs: dict[str, Term[T] | T]
 
 
+@dataclasses.dataclass
+class _BaseVariable(Generic[T]):
+    name: str
+    type: Type[T]
+
+
 @utils.weak_memoize
 def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
     if not typing.TYPE_CHECKING:
@@ -67,6 +73,7 @@ runtime.get_runtime = _BaseOperation(runtime.get_runtime)
 
 core.register(core.define(Operation), None, _BaseOperation)
 core.register(core.define(Term), None, _BaseTerm)
+core.register(core.define(Variable), None, _BaseVariable)
 core.register(core.define(Interpretation), None, dict)
 core.register(core.define(Symbol), None, str)
 core.register(core.define(Context), None, dict)
