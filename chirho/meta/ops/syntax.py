@@ -59,15 +59,6 @@ def register(
     raise NotImplementedError(f"Cannot register {op} in {intp}")
 
 
-def LazyInterpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
-    return {
-        op: functools.partial(
-            lambda op, *args, **kwargs: define(Term)(op, args, kwargs), op
-        )
-        for op in ops
-    }
-
-
 def apply(
     interpretation: Interpretation[S, T],
     op: Operation[P, S],
