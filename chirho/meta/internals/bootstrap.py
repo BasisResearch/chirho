@@ -62,10 +62,6 @@ class _BaseTerm(Generic[T]):
         )
 
 
-class _BaseInterpretation(Generic[S, T], Dict[Operation[..., S], Callable[..., T]]):
-    pass
-
-
 @utils.weak_memoize
 def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
     if not typing.TYPE_CHECKING:
@@ -86,12 +82,13 @@ def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
 
 
 # bootstrap
-runtime.get_runtime = _BaseOperation(runtime.get_runtime)
 syntax.apply = _BaseOperation(syntax.apply)
 syntax.define = _BaseOperation(syntax.define)
+syntax.register = _BaseOperation(syntax.register)
+runtime.get_runtime = _BaseOperation(runtime.get_runtime)
 
 syntax.register(syntax.define(Operation), None, _BaseOperation)
 syntax.register(syntax.define(Term), None, _BaseTerm)
-syntax.register(syntax.define(Interpretation), None, _BaseInterpretation)
+syntax.register(syntax.define(Interpretation), None, dict)
 syntax.register(syntax.define(Symbol), None, str)
 syntax.register(syntax.define(Context), None, dict)
