@@ -45,32 +45,11 @@ def define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
     return base_define(m)
 
 
-@typing.overload
-def register(op: Operation[P, T]) -> Callable[[Callable[P, T]], Callable[P, T]]:
-    ...
-
-
-@typing.overload
-def register(
-    op: Operation[P, T],
-    intp: Optional[Interpretation[T, V]],
-) -> Callable[[Callable[Q, V]], Callable[Q, V]]:
-    ...
-
-
-@typing.overload
 def register(
     op: Operation[P, T],
     intp: Optional[Interpretation[T, V]],
     interpret_op: Callable[Q, V],
 ) -> Callable[Q, V]:
-    ...
-
-
-def register(op, intp=None, interpret_op=None):
-    if interpret_op is None:
-        return lambda interpret_op: register(op, intp, interpret_op)
-
     if intp is None:
         setattr(op, "default", interpret_op)
         return interpret_op
