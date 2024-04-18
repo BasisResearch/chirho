@@ -14,9 +14,9 @@ V = TypeVar("V")
 
 @define(Operation)
 def quotient(
-    intp: Interpretation[S, T],
-    *intps: Interpretation[S, T]
-) -> Interpretation[S, T]:
+    intp: Interpretation[S, Term[T]],
+    *intps: Interpretation[S, Term[T]]
+) -> Interpretation[S, Term[T]]:
     if len(intps) == 0:
         return intp
     if len(intps) > 1:
@@ -24,7 +24,7 @@ def quotient(
 
     intp2, = intps
 
-    def _wrapper(fn: Callable[P, T], *args: P.args, **kwargs: P.kwargs):
+    def _wrapper(fn: Callable[P, Term[T]], *args: P.args, **kwargs: P.kwargs) -> Term[T]:
         with interpreter(intp2):
             new_args = tuple(evaluate(arg) for arg in args)
             new_kwargs = {k: evaluate(kwarg) for k, kwarg in kwargs.items()}
@@ -34,19 +34,29 @@ def quotient(
 
 
 @define(Operation)
-def specializer(intp: Interpretation[S, T]) -> Interpretation[S, Term[T]]:
+def free_interpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
 
-    def _free_wrapper(op, *args, **kwargs) -> Term[S]:
+    def _free_wrapper(op: Operation[P, T], *args: P.args, **kwargs: P.kwargs) -> Term[T]:
         return define(Term)(op, args, kwargs)
 
-    def _partial_wrapper(op, fn, *args, **kwargs) -> Term[T]:
+    return {op: functools.partial(_free_wrapper, op) for op in ops}
+
+
+@define(Operation)
+def specializer(intp: Interpretation[S, T]) -> Interpretation[S, Term[T]]:
+
+    def _partial_wrapper(
+        op: Operation[P, S],
+        fn: Callable[P, T],
+        *args: P.args,
+        **kwargs: P.kwargs
+    ) -> Term[T]:
         if any(isinstance(arg, Variable) for arg in tuple(args) + tuple(kwargs.items())):
             return define(Term)(op, args, kwargs)
         return fn(*args, **kwargs)
 
-    free = {op: functools.partial(_free_wrapper, op) for op in intp.keys()}
     partial = {op: functools.partial(_partial_wrapper, op, intp[op]) for op in intp.keys()}
-    return quotient(free, partial)
+    return quotient(free_interpretation(*intp.keys()), partial)
 
 
 @contextlib.contextmanager
