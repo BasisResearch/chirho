@@ -26,9 +26,9 @@ def quotient(
 
     def _wrapper(fn: Callable[P, Term[T]], *args: P.args, **kwargs: P.kwargs) -> Term[T]:
         with interpreter(intp2):
-            new_args = tuple(evaluate(arg) for arg in args)
-            new_kwargs = {k: evaluate(kwarg) for k, kwarg in kwargs.items()}
-        return fn(*new_args, **new_kwargs)
+            simplified_args = tuple(evaluate(arg) for arg in args)
+            simplified_kwargs = {k: evaluate(kwarg) for k, kwarg in kwargs.items()}
+        return fn(*simplified_args, **simplified_kwargs)
 
     return {op: functools.partial(_wrapper, intp[op]) for op in intp.keys()}
 
