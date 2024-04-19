@@ -2,7 +2,7 @@ import contextlib
 import functools
 from typing import Callable, ParamSpec, TypeVar
 
-from chirho.meta.ops.core import Interpretation, Operation, Term, Variable, define, evaluate
+from chirho.meta.ops.core import Interpretation, Operation, Term, define, evaluate
 from chirho.meta.ops.interpreter import interpreter
 
 P = ParamSpec("P")
@@ -10,6 +10,15 @@ Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
 V = TypeVar("V")
+
+
+@define(Operation)
+def free_interpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
+
+    def _free_wrapper(op: Operation[P, T], *args: P.args, **kwargs: P.kwargs) -> Term[T]:
+        return define(Term)(op, args, kwargs)
+
+    return {op: functools.partial(_free_wrapper, op) for op in ops}
 
 
 @define(Operation)
@@ -39,29 +48,3 @@ def simplifier(intp: Interpretation[S, Term[T]]):
 
     with interpreter(quotient(get_interpretation(), intp)):
         yield intp
-
-
-@define(Operation)
-def free_interpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
-
-    def _free_wrapper(op: Operation[P, T], *args: P.args, **kwargs: P.kwargs) -> Term[T]:
-        return define(Term)(op, args, kwargs)
-
-    return {op: functools.partial(_free_wrapper, op) for op in ops}
-
-
-@define(Operation)
-def specializer(intp: Interpretation[S, T]) -> Interpretation[S, Term[T]]:
-
-    def _partial_wrapper(
-        op: Operation[P, S],
-        fn: Callable[P, T],
-        *args: P.args,
-        **kwargs: P.kwargs
-    ) -> Term[T]:
-        if any(isinstance(arg, Variable) for arg in tuple(args) + tuple(kwargs.values())):
-            return define(Term)(op, args, kwargs)
-        return fn(*args, **kwargs)
-
-    partial = {op: functools.partial(_partial_wrapper, op, intp[op]) for op in intp.keys()}
-    return quotient(free_interpretation(*intp.keys()), partial)
