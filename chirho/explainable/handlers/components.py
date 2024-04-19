@@ -209,6 +209,82 @@ def consequent_neq(
     return _consequent_neq
 
 
+def consequent_eq_neq(
+    support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
+    **kwargs,
+) -> Callable[[T], torch.Tensor]:
+    """
+    A helper function for obtaining joint log prob of necessity and sufficiency. Assumes that
+    the necessity intervention has been applied in counterfactual world 1 and sufficiency intervention in 
+    counterfactual world 2 (these can be passed as kwargs).
+
+    :param support: The support constraint for the consequent site.
+    :param antecedents: A list of names of upstream intervened sites to consider when composing the joint log prob.
+
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor with log prob sums
+    of values resulting from necessity and sufficiency interventions, in appropriate counterfactual worlds.
+    """
+
+    def _consequent_eq_neq(consequent: T) -> torch.Tensor:
+        factual_indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+
+        necessity_world = kwargs.get('necessity_world', 1)
+        sufficiency_world = kwargs.get('sufficiency_world', 2)
+        
+        necessity_indices = IndexSet(
+            **{
+                name: {necessity_world}
+                for name in indices_of(consequent).keys()
+                if name in antecedents
+            }
+        )
+
+        sufficiency_indices = IndexSet(
+            **{
+                name: {sufficiency_world}
+                for name in indices_of(consequent).keys()
+                if name in antecedents
+            }
+        )
+
+        factual_value = gather(consequent, factual_indices, event_dim=support.event_dim)
+        necessity_value = gather(consequent, necessity_indices, event_dim=support.event_dim)
+        sufficiency_value = gather(consequent, sufficiency_indices, event_dim=support.event_dim)
+
+        necessity_log_probs = soft_neq(support, necessity_value, factual_value,  **kwargs)
+        sufficiency_log_probs = soft_eq(support, sufficiency_value, factual_value,  **kwargs) 
+        
+
+        nec_suff_log_probs = torch.add(necessity_log_probs, sufficiency_log_probs)
+        
+        FACTUAL_NEC_SUFF = torch.zeros_like(nec_suff_log_probs)
+        #TODO reflect on this, do we want zeros?
+
+        nec_suff_log_probs_partitioned = {
+            **{
+            IndexSet(**{antecedent: {0}}) : FACTUAL_NEC_SUFF
+         for antecedent in antecedents},
+         **{
+            IndexSet(**{antecedent: {ind}}) : nec_suff_log_probs
+         for antecedent in antecedents for ind in [necessity_world, sufficiency_world]}
+         }
+
+        new_value = scatter_n(nec_suff_log_probs_partitioned, event_dim=support.event_dim)
+
+
+        return new_value
+
+    return _consequent_eq_neq
+
+
+
 class ExtractSupports(pyro.poutine.messenger.Messenger):
     """
     A Pyro Messenger for inferring distribution constraints.
