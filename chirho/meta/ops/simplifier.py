@@ -37,8 +37,7 @@ def quotient(
 def simplifier(intp: Interpretation[S, Term[T]]):
     from ..internals.runtime import get_interpretation
 
-    curr_intp = get_interpretation()
-    with interpreter(quotient(curr_intp, intp)):
+    with interpreter(quotient(get_interpretation(), intp)):
         yield intp
 
 
@@ -60,7 +59,7 @@ def specializer(intp: Interpretation[S, T]) -> Interpretation[S, Term[T]]:
         *args: P.args,
         **kwargs: P.kwargs
     ) -> Term[T]:
-        if any(isinstance(arg, Variable) for arg in tuple(args) + tuple(kwargs.items())):
+        if any(isinstance(arg, Variable) for arg in tuple(args) + tuple(kwargs.values())):
             return define(Term)(op, args, kwargs)
         return fn(*args, **kwargs)
 
