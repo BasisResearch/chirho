@@ -33,6 +33,15 @@ def quotient(
     return {op: functools.partial(_wrapper, intp[op]) for op in intp.keys()}
 
 
+@contextlib.contextmanager
+def simplifier(intp: Interpretation[S, Term[T]]):
+    from ..internals.runtime import get_interpretation
+
+    curr_intp = get_interpretation()
+    with interpreter(quotient(curr_intp, intp)):
+        yield intp
+
+
 @define(Operation)
 def free_interpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
 
@@ -57,12 +66,3 @@ def specializer(intp: Interpretation[S, T]) -> Interpretation[S, Term[T]]:
 
     partial = {op: functools.partial(_partial_wrapper, op, intp[op]) for op in intp.keys()}
     return quotient(free_interpretation(*intp.keys()), partial)
-
-
-@contextlib.contextmanager
-def canonicalizer(intp: Interpretation[S, Term[T]]):
-    from ..internals.runtime import get_interpretation
-
-    curr_intp = get_interpretation()
-    with interpreter(quotient(curr_intp, intp)):
-        yield intp
