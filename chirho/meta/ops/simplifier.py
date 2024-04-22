@@ -24,7 +24,8 @@ def free_interpretation(*ops: Operation[P, T]) -> Interpretation[T, Term[T]]:
 @define(Operation)
 def quotient(
     intp: Interpretation[S, Term[T]],
-    *intps: Interpretation[S, Term[T]]
+    *intps: Interpretation[S, Term[T]],
+    # TODO should this have NbE-ish prompts for reification and reflection?
 ) -> Interpretation[S, Term[T]]:
     if len(intps) == 0:
         return intp
