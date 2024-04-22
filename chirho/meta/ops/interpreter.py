@@ -47,6 +47,18 @@ def shallow_interpreter(intp: Interpretation):
         yield intp
 
 
+def value_or_result(fn: Callable[P, T]) -> Callable[Concatenate[Optional[T], P], T]:
+    """
+    Return either the value or the result of calling the function.
+    """
+
+    @functools.wraps(fn)
+    def _wrapper(__result: Optional[T], *args: P.args, **kwargs: P.kwargs) -> T:
+        return fn(*args, **kwargs) if __result is None else __result
+
+    return _wrapper
+
+
 @define(Operation)
 def _get_result() -> Optional[T]:
     return None

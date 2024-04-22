@@ -6,7 +6,7 @@ from typing import Optional, ParamSpec, TypeVar
 
 import pytest
 
-from chirho.meta.internals.utils import value_or_fn
+from chirho.meta.ops.interpreter import value_or_result
 from chirho.meta.ops.interpreter import (
     bind_result,
     interpreter,
@@ -40,7 +40,7 @@ def times_n(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
     def _op_times_n(
         n: int, op: Operation[..., int], result: Optional[int], *args: int
     ) -> int:
-        return value_or_fn(op.default)(result, *args) * n
+        return value_or_result(op.default)(result, *args) * n
 
     return {op: bind_result(functools.partial(_op_times_n, n, op)) for op in ops}
 

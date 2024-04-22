@@ -5,7 +5,6 @@ from typing import Callable, Generic, ParamSpec, Type, TypeGuard, TypeVar
 from chirho.meta.ops.core import Context, Interpretation, Operation, Symbol, Term, Variable
 
 from . import runtime
-from . import utils
 
 from ..ops import core
 
@@ -46,7 +45,7 @@ class _BaseVariable(Generic[T]):
     type: Type[T]
 
 
-@utils.weak_memoize
+@runtime.weak_memoize
 def base_define(m: Type[T] | Callable[Q, T]) -> Operation[..., T]:
     if not typing.TYPE_CHECKING:
         if typing.get_origin(m) not in (m, None):

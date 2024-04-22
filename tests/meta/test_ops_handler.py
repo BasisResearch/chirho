@@ -5,7 +5,7 @@ from typing import ParamSpec, TypeVar
 
 import pytest
 
-from chirho.meta.internals.utils import value_or_fn
+from chirho.meta.ops.interpreter import value_or_result
 from chirho.meta.ops.handler import coproduct, fwd, handler
 from chirho.meta.ops.interpreter import bind_result, interpreter
 from chirho.meta.ops.core import Interpretation, Operation, define
@@ -33,7 +33,7 @@ def times_plus_1(x: int, y: int) -> int:
 
 
 def defaults(*ops: Operation[..., int]) -> Interpretation[int, int]:
-    return {op: bind_result(value_or_fn(op.default)) for op in ops}
+    return {op: bind_result(value_or_result(op.default)) for op in ops}
 
 
 def times_n_handler(n: int, *ops: Operation[..., int]) -> Interpretation[int, int]:
