@@ -292,12 +292,7 @@ def consequent_eq_neq(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in intervention_names
-                # this doesnt't catch duplicated interventions if prior
-                # upstream interventions on antecedent nodes
-                # have been performed
-                # because the index names for antecedent interventions
-                # are now of the form ...dup_n
+                if name in set(intervention_names) | set(antecedents)
             }
         )
 
@@ -337,17 +332,17 @@ def consequent_eq_neq(
 
         nec_suff_log_probs = torch.add(necessity_log_probs, sufficiency_log_probs)
 
-        FACTUAL_NEC_SUFF = torch.zeros_like(nec_suff_log_probs)
+        FACTUAL_NEC_SUFF = torch.zeros_like(factual_value)
         # TODO reflect on this, do we want zeros?
 
         nec_suff_log_probs_partitioned = {
             **{
-                IndexSet(**{antecedent: {0}}): FACTUAL_NEC_SUFF
-                for antecedent in antecedents
+                IndexSet(**{antecedent: {0} for antecedent in set(intervention_names) | 
+                set(antecedents)}): FACTUAL_NEC_SUFF
             },
             **{
                 IndexSet(**{antecedent: {ind}}): nec_suff_log_probs
-                for antecedent in antecedents
+                for antecedent in intervention_names
                 for ind in [necessity_world, sufficiency_world]
             },
         }
