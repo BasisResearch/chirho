@@ -392,7 +392,7 @@ def test_consequent_eq_neq(plate_size, event_shape):
             "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
         )
 
-        # `intervene doesn't lose indices`
+        # `intervene doesn't lose indices
         # w = intervene(w, antecedents["w"], name = "w_antecedent", event_dim=0)
 
         con = pyro.deterministic(
@@ -430,7 +430,7 @@ def test_consequent_eq_neq(plate_size, event_shape):
             # NOTE: using do instead of intervene leads to disappearing indices
             # with non-trivial event_dim
             with do(actions=antecedents, intervention_name="w_antecedent"):
-                # uncomment to catch issues with upstream interventions on antecedents
+                # uncomment do to catch issues with upstream interventions on antecedents
                 # if you use `do` instead of `intervene` for the antecedent intervention
                 with do(actions = upstream):
                     with Factors(factors=factors, prefix="consequent_eq_neq_"):
@@ -443,15 +443,17 @@ def test_consequent_eq_neq(plate_size, event_shape):
     with mwc:
         print(indices_of(nd["consequent_eq_neq_con"]["log_prob"]))
         eq_neq_log_probs = gather(
-            nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w": {1}})
+            nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w_antecedent": {1}})
         )
-        print(eq_neq_log_probs)
-#        assert torch.all(eq_neq_log_probs.flatten() > 1.3836)
+        con_shape = gather(nd['con']['value'], IndexSet(**{"w_antecedent": {1}})).shape
+
+        assert con_shape == eq_neq_log_probs.shape
+        assert torch.all(eq_neq_log_probs != 0)
 
 
 plate_size = 4
 # changing shape makes indices of w empty
-event_shape = ()  # (3,2) #() #(3,2) #(3,2) #() #(3,)
+event_shape =  ()  # (3,2) #() #(3,2) #(3,2) #() #(3,)
 
 
 test_consequent_eq_neq(plate_size, event_shape)
