@@ -1,5 +1,13 @@
 import itertools
-from typing import Callable, Iterable, MutableMapping, TypeVar
+from typing import (
+    Callable,
+    Generic,
+    Hashable,
+    Iterable,
+    Mapping,
+    MutableMapping,
+    TypeVar,
+)
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -8,6 +16,7 @@ import torch
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
+from chirho.interventional.ops import AtomicIntervention, intervene
 from chirho.observational.handlers import soft_eq, soft_neq
 
 S = TypeVar("S")
@@ -209,6 +218,55 @@ def consequent_neq(
     return _consequent_neq
 
 
+class InterventionsNamed(Generic[T], pyro.poutine.messenger.Messenger):
+    """
+    Intervene on values in a probabilistic program.
+
+    :class:`DoMessenger` is an effect handler that intervenes at specified sample sites
+    in a probabilistic program. This allows users to define programs without any
+    interventional or causal semantics, and then to add those features later in the
+    context of, for example, :class:`DoMessenger`. This handler uses :func:`intervene`
+    internally and supports the same types of interventions.
+    """
+
+    def __init__(
+        self,
+        actions: Mapping[Hashable, AtomicIntervention[T]],
+        intervention_name: str = "",
+    ):
+        """
+        :param actions: A mapping from names of sample sites to interventions.
+        """
+        self.actions = actions
+        self.intervention_name = intervention_name
+        super().__init__()
+
+    def _pyro_post_sample(self, msg):
+        if msg["name"] not in self.actions or msg["infer"].get(
+            "_do_not_intervene", None
+        ):
+            return
+
+        new_name = (
+            msg["name"] if self.intervention_name == "" else self.intervention_name
+        )
+
+        msg["value"] = intervene(
+            msg["value"],
+            self.actions[msg["name"]],
+            event_dim=len(msg["fn"].event_shape),
+            name=new_name,
+        )
+
+
+if isinstance(pyro.poutine.handlers._make_handler(InterventionsNamed), tuple):
+    do = pyro.poutine.handlers._make_handler(InterventionsNamed)[1]
+else:
+
+    @pyro.poutine.handlers._make_handler(InterventionsNamed)
+    def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]): ...
+
+
 def consequent_eq_neq(
     support: constraints.Constraint,
     antecedents: Iterable[str] = [],
@@ -227,11 +285,19 @@ def consequent_eq_neq(
     """
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
+
+        intervention_names = kwargs.get("intervention_names", antecedents)
+
         factual_indices = IndexSet(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in antecedents
+                if name in intervention_names
+                # this doesnt't catch duplicated interventions if prior
+                # upstream interventions on antecedent nodes
+                # have been performed
+                # because the index names for antecedent interventions
+                # are now of the form ...dup_n
             }
         )
 
@@ -242,7 +308,7 @@ def consequent_eq_neq(
             **{
                 name: {necessity_world}
                 for name in indices_of(consequent).keys()
-                if name in antecedents
+                if name in intervention_names
             }
         )
 
@@ -250,7 +316,7 @@ def consequent_eq_neq(
             **{
                 name: {sufficiency_world}
                 for name in indices_of(consequent).keys()
-                if name in antecedents
+                if name in intervention_names
             }
         )
 

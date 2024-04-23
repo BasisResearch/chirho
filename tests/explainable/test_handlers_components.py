@@ -10,12 +10,16 @@ from chirho.explainable.handlers import random_intervention, sufficiency_interve
 from chirho.explainable.handlers.components import (
     ExtractSupports,
     consequent_eq,
+    consequent_eq_neq,
     consequent_neq,
+    do,
     undo_split,
 )
 from chirho.explainable.internals import uniform_proposal
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
+
+# from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
 from chirho.observational.handlers.condition import Factors
 
@@ -321,20 +325,6 @@ def test_consequent_neq(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
 
 
-options = [
-    None,
-    [],
-    ["uniform_var"],
-    ["uniform_var", "normal_var", "bernoulli_var"],
-    {},
-    {"uniform_var": 5.0, "bernoulli_var": 5.0},
-    {
-        "uniform_var": constraints.interval(1, 10),
-        "bernoulli_var": constraints.interval(0, 1),
-    },  # misspecified on purpose, should make no damage
-]
-
-
 # potentially, the following test could be merged with the previous one
 # as they share quite a bit of code
 # but despite some repeated code left separate to test two functionalities
@@ -389,6 +379,82 @@ def test_consequent_eq(plate_size, event_shape):
 
     assert int_con_eq.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -10
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_consequent_eq_neq(plate_size, event_shape):
+
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def model_ce():
+
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+
+        # `intervene doesn't lose indices`
+        # w = intervene(w, antecedents["w"], name = "w_antecedent", event_dim=0)
+
+        con = pyro.deterministic(
+            "con",
+            torch.add(w, torch.full(event_shape, 10.0)),
+            event_dim=len(event_shape),
+        )
+
+        print(indices_of(w))
+        print(indices_of(con))
+        return con
+
+    # upstream = {"w": torch.tensor(10.0)}
+
+    joint_dims = torch.Size([plate_size, *event_shape])
+
+    antecedents = {
+        "w": (
+            #    torch.tensor(5.0)
+            torch.full(joint_dims, 5.0),
+            sufficiency_intervention(constraints.real, ["w"]),
+        )
+    }
+
+    factors = {
+        "con": consequent_eq_neq(
+            support=constraints.real,
+            antecedents=["w"],
+            intervention_names=["w_antecedent"],
+        )
+    }
+
+    with MultiWorldCounterfactual() as mwc:
+        with pyro.poutine.trace() as tr:
+            # NOTE: using do instead of intervene leads to disappearing indices
+            # with non-trivial event_dim
+            with do(actions=antecedents, intervention_name="w_antecedent"):
+                # uncomment to catch issues with upstream interventions on antecedents
+                # if you use `do` instead of `intervene` for the antecedent intervention
+                # with do(actions = upstream):
+                with Factors(factors=factors, prefix="consequent_eq_neq_"):
+                    model_ce()
+
+    tr.trace.compute_log_prob()
+    nd = tr.trace.nodes
+    print(nd.keys())
+
+    with mwc:
+        print(indices_of(nd["consequent_eq_neq_con"]["log_prob"]))
+        eq_neq_log_probs = gather(
+            nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w": {1}})
+        )
+        print(eq_neq_log_probs)
+        assert torch.all(eq_neq_log_probs.flatten() > 1.3836)
+
+
+plate_size = 4
+# changing shape makes indices of w empty
+event_shape = ()  # (3,2) #() #(3,2) #(3,2) #() #(3,)
+
+
+test_consequent_eq_neq(plate_size, event_shape)
 
 
 options = [
