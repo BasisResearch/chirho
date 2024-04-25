@@ -9,7 +9,6 @@ from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
-from pyro.poutine.runtime import Message
 
 from chirho import _pyro_patch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
@@ -32,7 +31,7 @@ class Interruption(Generic[T], ShallowMessenger):
         self.predicate = predicate
         self.callback = callback
 
-    def _pyro_get_new_interruptions(self, msg: Message) -> None:
+    def _pyro_get_new_interruptions(self, msg) -> None:
         if msg["value"] is None:
             msg["value"] = []
         assert isinstance(msg["value"], list)
@@ -61,7 +60,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg: Message) -> None:
+    def _pyro_simulate(self, msg) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
         dynamics: Dynamics[T] = typing.cast(Dynamics[T], msg["args"][0])

@@ -1,9 +1,9 @@
 import typing
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Mapping, Optional, TypeVar
 
 import pyro
 import torch
-from pyro.poutine.runtime import InferDict, Message
+from pyro.poutine.runtime import InferDict
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
@@ -76,7 +76,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
 
 
 def _predictive_site_infer_dict(
-    msg: Message,
+    msg: Mapping[str, Any],
 ) -> PredictiveSiteInferDict:
     return PredictiveSiteInferDict(
         _model_predictive_site=bool(
