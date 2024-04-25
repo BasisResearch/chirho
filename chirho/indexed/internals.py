@@ -34,6 +34,7 @@ def _gather_number(
     *,
     event_dim: Optional[int] = None,
     name_to_dim: Optional[Dict[Hashable, int]] = None,
+    **kwargs,
 ) -> Union[numbers.Number, torch.Tensor]:
     assert event_dim is None or event_dim == 0
     return gather(
@@ -48,6 +49,7 @@ def _gather_tensor(
     *,
     event_dim: Optional[int] = None,
     name_to_dim: Optional[Dict[Hashable, int]] = None,
+    **kwargs,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
@@ -59,6 +61,8 @@ def _gather_tensor(
 
     result = value
     for name, indices in indexset.items():
+        if name not in name_to_dim:
+            continue
         dim = name_to_dim[name] - event_dim
         if len(result.shape) < -dim or result.shape[dim] == 1:
             continue
