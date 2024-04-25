@@ -214,8 +214,8 @@ def test_twinworld_point_intervention(
         cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys():
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(cf_state[k])
-            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
+            assert cf.fresh_prefix in indices_of(cf_state[k])
+            assert cf.fresh_prefix in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.skip(
@@ -251,8 +251,8 @@ def test_multiworld_point_intervention(
         cf_trajectory = dt.trajectory
         for k in cf_trajectory.keys():
             # TODO: Figure out why event_dim=1 is not needed with cf_state but is with cf_trajectory.
-            assert cf.default_name in indices_of(cf_state[k])
-            assert cf.default_name in indices_of(cf_trajectory[k], event_dim=1)
+            assert cf.fresh_prefix in indices_of(cf_state[k])
+            assert cf.fresh_prefix in indices_of(cf_trajectory[k], event_dim=1)
 
 
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
