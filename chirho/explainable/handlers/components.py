@@ -24,8 +24,7 @@ T = TypeVar("T")
 
 
 def sufficiency_intervention(
-    support: constraints.Constraint,
-    antecedents: Iterable[str] = [],
+    intervention_names: Iterable[str],
 ) -> Callable[[T], T]:
     """
     Creates a sufficiency intervention for a single sample site, determined by
@@ -52,7 +51,7 @@ def sufficiency_intervention(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in antecedents
+                if name in intervention_names
             }
         )
 
@@ -232,14 +231,14 @@ class InterventionsNamed(Generic[T], pyro.poutine.messenger.Messenger):
     def __init__(
         self,
         actions: Mapping[Hashable, AtomicIntervention[T]],
-        intervention_name: str = "",
+        intervention_postfix: str = "",
         event_dim: int = None,
     ):
         """
         :param actions: A mapping from names of sample sites to interventions.
         """
         self.actions = actions
-        self.intervention_name = intervention_name
+        self.intervention_postfix = intervention_postfix
         self.event_dim = event_dim
         super().__init__()
 
@@ -250,7 +249,7 @@ class InterventionsNamed(Generic[T], pyro.poutine.messenger.Messenger):
             return
 
         new_name = (
-            msg["name"] if self.intervention_name == "" else self.intervention_name
+            msg["name"] if self.intervention_postfix == "" else f"{msg['name']}{self.intervention_postfix}"
         )
 
         new_dim = len(msg["fn"].event_shape) if self.event_dim is None else self.event_dim
@@ -297,7 +296,8 @@ def consequent_eq_neq(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in set(intervention_names) | set(antecedents)
+                if name in intervention_names
+                #TODO consider an analogous change in other consequent_ functions
             }
         )
 
@@ -342,7 +342,7 @@ def consequent_eq_neq(
 
         nec_suff_log_probs_partitioned = {
             **{
-                IndexSet(**{antecedent: {0} for antecedent in indices_of(consequent).keys()}): FACTUAL_NEC_SUFF,
+                IndexSet(**{antecedent: {0} for antecedent in intervention_names}): FACTUAL_NEC_SUFF,
                 #set(intervention_names) | 
                 #set(antecedents)}): FACTUAL_NEC_SUFF
             },
@@ -353,8 +353,11 @@ def consequent_eq_neq(
             },
         }
 
+    
+
         new_value = scatter_n(
-            nec_suff_log_probs_partitioned, event_dim=support.event_dim
+            nec_suff_log_probs_partitioned, 
+            event_dim = 0, #support.event_dim   # support.event_dim
         )
 
         assert new_value.shape == consequent.shape

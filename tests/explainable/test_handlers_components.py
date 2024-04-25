@@ -417,14 +417,14 @@ def test_consequent_eq_neq(plate_size, event_shape):
 
     antecedents = {
         "w": (
-            torch.full(joint_dims, 5.0),
-            sufficiency_intervention(constraints.real, ["w"]),
+            torch.full(joint_dims, 5.0),  # could use random intervention here
+            sufficiency_intervention(["w_antecedent"]),
         )
     }
 
     factors = {
         "con": consequent_eq_neq(
-            support= constraints.real, #pyro.distributions.constraints.independent(constraints.real, len(event_shape)), 
+            support= constraints.real,#pyro.distributions.constraints.independent(constraints.real, len(event_shape)), 
             antecedents=["w"],
             intervention_names=["w_antecedent"],
         )
@@ -436,8 +436,8 @@ def test_consequent_eq_neq(plate_size, event_shape):
             # makes indices of w disappear
             # NOTE: using unnamed interventions makes proper gathering
             # in consequent_eq_neq impossible
-            with do(actions=antecedents, intervention_name="w_antecedent", event_dim = 0):
-                with do(actions = upstream, event_dim = 0):
+            with do(actions = upstream, event_dim = 0):
+                with do(actions=antecedents, intervention_postfix="_antecedent", event_dim = 0):  
                     with Factors(factors=factors, prefix="consequent_eq_neq_"):
                         model_ce()
 
@@ -450,14 +450,13 @@ def test_consequent_eq_neq(plate_size, event_shape):
         eq_neq_log_probs = gather(
             nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w_antecedent": {1}})
         )
-        con_neq = gather(nd['con']['value'], IndexSet(**{"w_antecedent": {1}}))
-        
-        print(con_neq)
-        assert torch.all(eq_neq_log_probs != 0)
+    
+        print(eq_neq_log_probs)
+        assert torch.all(eq_neq_log_probs >  1)
 
 
 plate_size = 4
-event_shape = (3,2) # (3,2) #(3,2)#, (3,2) #(3,2) # (3,2) # (3,2) #() #(3,2) #() #(3,2)  # (3,2) #() #(3,2) #(3,2) #() #(3,)
+event_shape = () # (3,2) #() #(3,2)  # (3,2) #() #(3,2) #(3,2) #() #(3,)
 
 
 test_consequent_eq_neq(plate_size, event_shape)

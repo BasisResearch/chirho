@@ -4,5 +4,5 @@ from .components import (  # noqa: F401
     sufficiency_intervention,
     undo_split,
 )
-from .explanation import SearchForExplanation, SearchForNS, SplitSubsets  # noqa: F401
+from .explanation import SearchForExplanation, SplitSubsets  # noqa: F401
 from .preemptions import Preemptions  # noqa: F401
