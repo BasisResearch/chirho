@@ -1,21 +1,28 @@
 import functools
 import typing
-from typing import Callable, Optional, TypeVar
+from typing import Any, Callable, Optional, TypeVar
 
 import pyro
-from typing_extensions import ParamSpec
+from typing_extensions import Never, ParamSpec
 
 P = ParamSpec("P")
 T = TypeVar("T")
 
 
-def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]:
+@typing.overload
+def _just(fn: Callable[P, Optional[T]]) -> Callable[P, T]: ...
+
+
+@typing.overload
+def _just(fn: Callable[P, Never]) -> Callable[P, Any]: ...
+
+
+def _just(fn):
 
     if not typing.TYPE_CHECKING:
         return fn
 
-    @functools.wraps(fn)
-    def _wrapped(*args: P.args, **kwargs: P.kwargs) -> T:
+    def _wrapped(*args, **kwargs):
         result = fn(*args, **kwargs)
         assert result is not None
         return result
