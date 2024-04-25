@@ -4,6 +4,7 @@ from typing import Any, Callable, Mapping, Protocol, TypeVar
 import pyro
 from typing_extensions import ParamSpec
 
+from chirho import _pyro_patch
 from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
@@ -116,6 +117,7 @@ def influence_fn(
         :return: efficient influence function for ``functional`` evaluated at ``model`` and ``points``
         """
 
+        @_pyro_patch._just
         @pyro.poutine.runtime.effectful(type="influence")
         def _influence(
             *model_args: P.args,
