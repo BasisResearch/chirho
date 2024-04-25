@@ -32,6 +32,8 @@ Table of Contents
    dr_learner
    dynamical_intro
    actual_causality
+   actual_causality
+   causal_explanation
 
 .. toctree::
    :maxdepth: 2
