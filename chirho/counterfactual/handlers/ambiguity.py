@@ -91,7 +91,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         obs_event_dim = len(rv.event_shape)
 
         # factual world
-        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
+        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)  # type: ignore
             obs_noise = pyro.sample(
@@ -107,7 +107,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
         # counterfactual world
-        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
+        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
             cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
             cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)  # type: ignore
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)

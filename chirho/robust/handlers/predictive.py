@@ -136,7 +136,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
                     with pyro.poutine.infer_config(
-                        config_fn=_predictive_site_infer_dict
+                        config_fn=_predictive_site_infer_dict  # type: ignore
                     ):
                         self.model(*args, **kwargs)
 
