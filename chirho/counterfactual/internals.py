@@ -1,7 +1,5 @@
 import typing
-from typing import Any, Mapping
-
-from pyro.poutine.runtime import InferDict
+from typing import Any, Mapping, TypedDict
 
 from chirho.indexed.ops import indices_of, union
 
@@ -26,7 +24,7 @@ def site_is_ambiguous(msg: Mapping[str, Any]) -> bool:
     ) or not infer_dict.get("_specified_conditioning", True)
 
 
-class AmbiguityInferDict(InferDict):
+class AmbiguityInferDict(TypedDict, total=False):
     _specified_conditioning: bool
 
 

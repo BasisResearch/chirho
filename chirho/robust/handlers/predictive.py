@@ -1,9 +1,8 @@
 import typing
-from typing import Any, Callable, Generic, Mapping, Optional, TypeVar
+from typing import Any, Callable, Generic, Mapping, Optional, TypedDict, TypeVar
 
 import pyro
 import torch
-from pyro.poutine.runtime import InferDict
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
@@ -16,7 +15,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class PredictiveSiteInferDict(InferDict):
+class PredictiveSiteInferDict(TypedDict, total=False):
     _model_predictive_site: bool
 
 
@@ -53,7 +52,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=False)
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=False)  # type: ignore
         ):
             with pyro.poutine.trace() as guide_tr:
                 if self.guide is not None:
@@ -68,7 +67,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         )
 
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=True)
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=True)  # type: ignore
         ):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):

@@ -59,7 +59,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     def _observe_dist(
         self, rv: dist.TorchDistribution, obs: torch.Tensor, name: str
     ) -> torch.Tensor:
-        with pyro.poutine.infer_config(config_fn=no_ambiguity):
+        with pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
             with SelectFactual():
                 fv = pyro.sample(name + "_factual", rv, obs=obs)
 
