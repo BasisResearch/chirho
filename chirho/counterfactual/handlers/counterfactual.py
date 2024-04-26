@@ -90,7 +90,7 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
 
         >>> with SingleWorldFactual():
         ...    x = torch.tensor(1.)
-        ...    x = x, torch.tensor(0.))
+        ...    x = intervene(x, torch.tensor(0.))
         >>> assert (x == torch.tensor(1.))
     """
 
@@ -129,7 +129,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         >>> with MultiWorldCounterfactual():
         ...    x = torch.tensor(1.)
         ...    x = intervene(x, torch.tensor(0.), name="x_ax_1")
-        ...    x = x, torch.tensor(2.), name="x_ax_2")
+        ...    x = intervene(x, torch.tensor(2.), name="x_ax_2")
         ...    x_factual = gather(x, IndexSet(x_ax_1={0}, x_ax_2={0}))
         ...    x_counterfactual_1 = gather(x, IndexSet(x_ax_1={1}, x_ax_2={0}))
         ...    x_counterfactual_2 = gather(x, IndexSet(x_ax_1={0}, x_ax_2={1}))
@@ -139,18 +139,14 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
         >>> assert(x_counterfactual_2.squeeze() == torch.tensor(2.))
     """
 
-    fresh_prefix: str = "__fresh_split__"
+    default_name: str = "intervened"
 
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
-        if msg["name"] is None:
-            index_plates = get_index_plates()
-            name, fresh_suffix = cls.fresh_prefix, len(index_plates)
-            while name in index_plates:
-                name = f"{cls.fresh_prefix}{fresh_suffix}"
-                fresh_suffix += 1
-        else:
-            name = msg["name"]
+        name = msg["name"] if msg["name"] is not None else cls.default_name
+        index_plates = get_index_plates()
+        if name in index_plates:
+            name = f"{name}__dup_{len(index_plates)}"
         msg["kwargs"]["name"] = msg["name"] = name
 
 
@@ -190,8 +186,8 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
         >>> assert(x.squeeze()[1] == torch.tensor(2.))
     """
 
-    fresh_prefix: str = "__fresh_split__"
+    default_name: str = "intervened"
 
     @classmethod
     def _pyro_split(cls, msg: Dict[str, Any]) -> None:
-        msg["kwargs"]["name"] = msg["name"] = cls.fresh_prefix
+        msg["kwargs"]["name"] = msg["name"] = cls.default_name
