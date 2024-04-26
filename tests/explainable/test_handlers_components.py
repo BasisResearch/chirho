@@ -7,12 +7,10 @@ import torch
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.counterfactual.ops import split
 from chirho.explainable.handlers import random_intervention, sufficiency_intervention
-from chirho.explainable.handlers.components import (
+from chirho.explainable.handlers.components import (  # consequent_eq_neq,
     ExtractSupports,
     consequent_eq,
-    consequent_eq_neq,
     consequent_neq,
-    do,
     undo_split,
 )
 from chirho.explainable.internals import uniform_proposal
@@ -51,12 +49,8 @@ def test_sufficiency_intervention(support, event_shape):
         )
 
         value = pyro.sample("value", proposal_dist)
-        value = intervene(
-            value, random_intervention(support, "value"), name="randomize", event_dim=0
-        )
 
-        indices_first = indices_of(value)
-        intervention = sufficiency_intervention(support, indices_first.keys())
+        intervention = sufficiency_intervention(support, indices_of(value).keys())
 
         value = intervene(value, intervention, event_dim=0)
 
@@ -271,9 +265,6 @@ def test_undo_split_with_interaction():
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 
 
-# @pytest.mark.parametrize("plate_size", [4])
-# @pytest.mark.parametrize("event_shape", [()], ids=str)
-
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
@@ -379,87 +370,6 @@ def test_consequent_eq(plate_size, event_shape):
 
     assert int_con_eq.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -10
-
-
-
-
-@pytest.mark.parametrize("plate_size", [4, 50, 200])
-@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_consequent_eq_neq(plate_size, event_shape):
-
-    @pyro.plate("data", size=plate_size, dim=-1)
-    def model_ce():
-        
-        w = pyro.sample(
-            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
-        )
-
-
-        # `intervene doesn't lose indices if event_dim = 0
-        # w = intervene(w, antecedents["w"], name = "w_antecedent", event_dim=0)
-        # setting to len(event_shape)) makes the corresponding index empty
-        print(w.shape)
-        con = pyro.deterministic(
-           "con",
-           torch.add(w, torch.tensor(10.0)), event_dim = len(event_shape)) #, event_dim=len(event_shape))
-        #TODO check event_dim here
-
-        print(indices_of(w))
-        print(indices_of(con))
-        
-        print("wshape", w.shape)
-        print("conshape", con.shape)
-        return con
-
-    upstream = {"w": torch.tensor(10.0)}
-
-    joint_dims = torch.Size([plate_size, *event_shape])
-
-    antecedents = {
-        "w": (
-            torch.full(joint_dims, 5.0),  # could use random intervention here
-            sufficiency_intervention(["w_antecedent"]),
-        )
-    }
-
-    factors = {
-        "con": consequent_eq_neq(
-            support= constraints.real,#pyro.distributions.constraints.independent(constraints.real, len(event_shape)), 
-            antecedents=["w"],
-            intervention_names=["w_antecedent"],
-        )
-    }
-
-    with MultiWorldCounterfactual() as mwc:
-        with pyro.poutine.trace() as tr:
-            # NOTE: using non-zero event_dim for the antecedent intervention
-            # makes indices of w disappear
-            # NOTE: using unnamed interventions makes proper gathering
-            # in consequent_eq_neq impossible
-            with do(actions = upstream, event_dim = 0):
-                #with do(actions=antecedents, intervention_postfix="_antecedent", event_dim = 0):  
-                #    with Factors(factors=factors, prefix="consequent_eq_neq_"):
-                model_ce()
-
-    tr.trace.compute_log_prob()
-    nd = tr.trace.nodes
-    print(nd.keys())
-
-    # with mwc:
-    #     print(indices_of(nd["consequent_eq_neq_con"]["log_prob"]))
-    #     eq_neq_log_probs = gather(
-    #         nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w_antecedent": {1}})
-    #     )
-    
-    #     print(eq_neq_log_probs)
-    #     assert torch.all(eq_neq_log_probs >  1)
-
-
-plate_size = 4
-event_shape = () # (3,2) #() #(3,2)  # (3,2) #() #(3,2) #(3,2) #() #(3,)
-
-
-test_consequent_eq_neq(plate_size, event_shape)
 
 
 options = [

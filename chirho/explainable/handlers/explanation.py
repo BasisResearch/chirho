@@ -4,15 +4,13 @@ from typing import Callable, Mapping, TypeVar, Union
 import pyro.distributions.constraints as constraints
 import torch
 
-from chirho.explainable.handlers.components import (
+from chirho.explainable.handlers.components import (  # sufficiency_intervention,
     consequent_neq,
     random_intervention,
-    sufficiency_intervention,
     undo_split,
-    do,
 )
 from chirho.explainable.handlers.preemptions import Preemptions
-#from chirho.interventional.handlers import do
+from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import Factors
 
@@ -158,5 +156,3 @@ def SearchForExplanation(
 
     with antecedent_handler, witness_handler, consequent_handler:
         yield
-
-

@@ -1,13 +1,5 @@
 import itertools
-from typing import (
-    Callable,
-    Generic,
-    Hashable,
-    Iterable,
-    Mapping,
-    MutableMapping,
-    TypeVar,
-)
+from typing import Callable, Iterable, MutableMapping, TypeVar
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -16,7 +8,8 @@ import torch
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
-from chirho.interventional.ops import AtomicIntervention, intervene
+
+# from chirho.interventional.ops import intervene
 from chirho.observational.handlers import soft_eq, soft_neq
 
 S = TypeVar("S")
@@ -24,7 +17,8 @@ T = TypeVar("T")
 
 
 def sufficiency_intervention(
-    intervention_names: Iterable[str],
+    support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
 ) -> Callable[[T], T]:
     """
     Creates a sufficiency intervention for a single sample site, determined by
@@ -51,14 +45,14 @@ def sufficiency_intervention(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in intervention_names
+                if name in antecedents
             }
         )
 
         factual_value = gather(
             value,
             indices,
-            event_dim=0,
+            event_dim=support.event_dim,
         )
         return factual_value
 
@@ -217,60 +211,6 @@ def consequent_neq(
     return _consequent_neq
 
 
-class InterventionsNamed(Generic[T], pyro.poutine.messenger.Messenger):
-    """
-    Intervene on values in a probabilistic program.
-
-    :class:`DoMessenger` is an effect handler that intervenes at specified sample sites
-    in a probabilistic program. This allows users to define programs without any
-    interventional or causal semantics, and then to add those features later in the
-    context of, for example, :class:`DoMessenger`. This handler uses :func:`intervene`
-    internally and supports the same types of interventions.
-    """
-
-    def __init__(
-        self,
-        actions: Mapping[Hashable, AtomicIntervention[T]],
-        intervention_postfix: str = "",
-        event_dim: int = None,
-    ):
-        """
-        :param actions: A mapping from names of sample sites to interventions.
-        """
-        self.actions = actions
-        self.intervention_postfix = intervention_postfix
-        self.event_dim = event_dim
-        super().__init__()
-
-    def _pyro_post_sample(self, msg):
-        if msg["name"] not in self.actions or msg["infer"].get(
-            "_do_not_intervene", None
-        ):
-            return
-
-        new_name = (
-            msg["name"] if self.intervention_postfix == "" else f"{msg['name']}{self.intervention_postfix}"
-        )
-
-        new_dim = len(msg["fn"].event_shape) if self.event_dim is None else self.event_dim
-     
-
-        msg["value"] = intervene(
-            msg["value"],
-            self.actions[msg["name"]],
-            event_dim=new_dim,
-            name=new_name,
-        )
-
-
-if isinstance(pyro.poutine.handlers._make_handler(InterventionsNamed), tuple):
-    do = pyro.poutine.handlers._make_handler(InterventionsNamed)[1]
-else:
-
-    @pyro.poutine.handlers._make_handler(InterventionsNamed)
-    def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]): ...
-
-
 def consequent_eq_neq(
     support: constraints.Constraint,
     antecedents: Iterable[str] = [],
@@ -297,7 +237,7 @@ def consequent_eq_neq(
                 name: ind
                 for name, ind in get_factual_indices().items()
                 if name in intervention_names
-                #TODO consider an analogous change in other consequent_ functions
+                # TODO consider an analogous change in other consequent_ functions
             }
         )
 
@@ -321,12 +261,8 @@ def consequent_eq_neq(
         )
 
         factual_value = gather(consequent, factual_indices, event_dim=0)
-        necessity_value = gather(
-            consequent, necessity_indices, event_dim=0
-        )
-        sufficiency_value = gather(
-            consequent, sufficiency_indices, event_dim=0
-        )
+        necessity_value = gather(consequent, necessity_indices, event_dim=0)
+        sufficiency_value = gather(consequent, sufficiency_indices, event_dim=0)
 
         necessity_log_probs = soft_neq(
             support, necessity_value, factual_value, **kwargs
@@ -342,25 +278,26 @@ def consequent_eq_neq(
 
         nec_suff_log_probs_partitioned = {
             **{
-                IndexSet(**{antecedent: {0} for antecedent in intervention_names}): FACTUAL_NEC_SUFF,
-                #set(intervention_names) | 
-                #set(antecedents)}): FACTUAL_NEC_SUFF
+                IndexSet(
+                    **{antecedent: {0} for antecedent in intervention_names}
+                ): FACTUAL_NEC_SUFF,
+                # set(intervention_names) |
+                # set(antecedents)}): FACTUAL_NEC_SUFF
             },
             **{
                 IndexSet(**{antecedent: {ind}}): nec_suff_log_probs
-                for antecedent in intervention_names #indices_of(consequent).keys()
+                for antecedent in intervention_names  # indices_of(consequent).keys()
                 for ind in [necessity_world, sufficiency_world]
             },
         }
 
-    
-
         new_value = scatter_n(
-            nec_suff_log_probs_partitioned, 
-            event_dim = 0, #support.event_dim   # support.event_dim
+            nec_suff_log_probs_partitioned,
+            event_dim=0,  # support.event_dim   # support.event_dim
         )
 
-        assert new_value.shape == consequent.shape
+        if isinstance(consequent, torch.Tensor):
+            assert new_value.shape == consequent.shape
         # TODO remove assertion once done testing
 
         return new_value
