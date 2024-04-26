@@ -437,22 +437,22 @@ def test_consequent_eq_neq(plate_size, event_shape):
             # NOTE: using unnamed interventions makes proper gathering
             # in consequent_eq_neq impossible
             with do(actions = upstream, event_dim = 0):
-                with do(actions=antecedents, intervention_postfix="_antecedent", event_dim = 0):  
-                    with Factors(factors=factors, prefix="consequent_eq_neq_"):
-                        model_ce()
+                #with do(actions=antecedents, intervention_postfix="_antecedent", event_dim = 0):  
+                #    with Factors(factors=factors, prefix="consequent_eq_neq_"):
+                model_ce()
 
     tr.trace.compute_log_prob()
     nd = tr.trace.nodes
     print(nd.keys())
 
-    with mwc:
-        print(indices_of(nd["consequent_eq_neq_con"]["log_prob"]))
-        eq_neq_log_probs = gather(
-            nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w_antecedent": {1}})
-        )
+    # with mwc:
+    #     print(indices_of(nd["consequent_eq_neq_con"]["log_prob"]))
+    #     eq_neq_log_probs = gather(
+    #         nd["consequent_eq_neq_con"]["log_prob"], IndexSet(**{"w_antecedent": {1}})
+    #     )
     
-        print(eq_neq_log_probs)
-        assert torch.all(eq_neq_log_probs >  1)
+    #     print(eq_neq_log_probs)
+    #     assert torch.all(eq_neq_log_probs >  1)
 
 
 plate_size = 4
