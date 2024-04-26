@@ -22,7 +22,6 @@ T = TypeVar("T")
 def SplitSubsets(
     supports: Mapping[str, constraints.Constraint],
     actions: Mapping[str, Intervention[T]],
-    intervention_postfix: str = "",
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
@@ -44,7 +43,7 @@ def SplitSubsets(
         for antecedent in actions.keys()
     }
 
-    with do(actions=actions, intervention_postfix=intervention_postfix):
+    with do(actions=actions):
         with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
 
