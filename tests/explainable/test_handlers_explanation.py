@@ -7,7 +7,11 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.explainable.handlers.components import undo_split
-from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
+from chirho.explainable.handlers.explanation import (
+    SearchForExplanation,
+    SearchForNS,
+    SplitSubsets,
+)
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import condition
@@ -165,7 +169,56 @@ def test_SearchForExplanation():
     assert tr_empty.trace.nodes
 
 
-test_SearchForExplanation()
+def test_SearchForNS():
+    observations = {
+        "prob_sally_throws": 1.0,
+        "prob_bill_throws": 1.0,
+        "prob_sally_hits": 1.0,
+        "prob_bill_hits": 1.0,
+        "prob_bottle_shatters_if_sally": 1.0,
+        "prob_bottle_shatters_if_bill": 1.0,
+    }
+
+    observations_conditioning = condition(
+        data={k: torch.as_tensor(v) for k, v in observations.items()}
+    )
+
+    antecedents = {"sally_throws": 0.0}
+    witnesses = {"bill_throws": constraints.boolean, "bill_hits": constraints.boolean}
+    consequents = {"bottle_shatters": constraints.boolean}
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForNS(
+            antecedents=antecedents,
+            witnesses=witnesses,
+            consequents=consequents,
+            antecedent_bias=0.1,
+            consequent_scale=1e-8,
+        ):
+            with observations_conditioning:
+                with pyro.plate("sample", 200):
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
+
+    tr.trace.compute_log_prob()
+    tr = tr.trace.nodes
+
+    with mwc:
+        eq_logs = gather(
+            tr["__consequent__eq_bottle_shatters"]["log_prob"],
+            IndexSet(**{"sally_throws": {1}}),
+        )
+        neq_logs = gather(
+            tr["__consequent__neq_bottle_shatters"]["log_prob"],
+            IndexSet(**{"sally_throws": {1}}),
+        )
+        eq_neq_logs = gather(
+            tr["__consequent__eq_neq_bottle_shatters"]["log_prob"],
+            IndexSet(**{"sally_throws": {1}}),
+        )
+
+    assert eq_logs.shape == neq_logs.shape == eq_neq_logs.shape
+    assert eq_logs.shape[-1] == 200
 
 
 def test_SplitSubsets_single_layer():
