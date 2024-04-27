@@ -230,14 +230,11 @@ def consequent_eq_neq(
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
 
-        intervention_names = kwargs.get("intervention_names", antecedents)
-
         factual_indices = IndexSet(
             **{
                 name: ind
                 for name, ind in get_factual_indices().items()
-                if name in intervention_names
-                # TODO consider an analogous change in other consequent_ functions
+                if name in antecedents
             }
         )
 
@@ -248,7 +245,7 @@ def consequent_eq_neq(
             **{
                 name: {necessity_world}
                 for name in indices_of(consequent).keys()
-                if name in intervention_names
+                if name in antecedents
             }
         )
 
@@ -256,13 +253,17 @@ def consequent_eq_neq(
             **{
                 name: {sufficiency_world}
                 for name in indices_of(consequent).keys()
-                if name in intervention_names
+                if name in antecedents
             }
         )
 
-        factual_value = gather(consequent, factual_indices, event_dim=0)
-        necessity_value = gather(consequent, necessity_indices, event_dim=0)
-        sufficiency_value = gather(consequent, sufficiency_indices, event_dim=0)
+        factual_value = gather(consequent, factual_indices, event_dim=support.event_dim)
+        necessity_value = gather(
+            consequent, necessity_indices, event_dim=support.event_dim
+        )
+        sufficiency_value = gather(
+            consequent, sufficiency_indices, event_dim=support.event_dim
+        )
 
         necessity_log_probs = soft_neq(
             support, necessity_value, factual_value, **kwargs
@@ -278,27 +279,19 @@ def consequent_eq_neq(
 
         nec_suff_log_probs_partitioned = {
             **{
-                IndexSet(
-                    **{antecedent: {0} for antecedent in intervention_names}
-                ): FACTUAL_NEC_SUFF,
-                # set(intervention_names) |
-                # set(antecedents)}): FACTUAL_NEC_SUFF
+                factual_indices: FACTUAL_NEC_SUFF,
             },
             **{
                 IndexSet(**{antecedent: {ind}}): nec_suff_log_probs
-                for antecedent in intervention_names  # indices_of(consequent).keys()
+                for antecedent in (set(antecedents) & set(indices_of(consequent)))
                 for ind in [necessity_world, sufficiency_world]
             },
         }
 
         new_value = scatter_n(
             nec_suff_log_probs_partitioned,
-            event_dim=0,  # support.event_dim   # support.event_dim
+            event_dim=support.event_dim,
         )
-
-        if isinstance(consequent, torch.Tensor):
-            assert new_value.shape == consequent.shape
-        # TODO remove assertion once done testing
 
         return new_value
 

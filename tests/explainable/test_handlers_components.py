@@ -10,14 +10,14 @@ from chirho.explainable.handlers import random_intervention, sufficiency_interve
 from chirho.explainable.handlers.components import (  # consequent_eq_neq,
     ExtractSupports,
     consequent_eq,
+    consequent_eq_neq,
     consequent_neq,
     undo_split,
 )
 from chirho.explainable.internals import uniform_proposal
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
-
-# from chirho.interventional.handlers import do
+from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
 from chirho.observational.handlers.condition import Factors
 
@@ -265,7 +265,6 @@ def test_undo_split_with_interaction():
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 
 
-
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_neq(plate_size, event_shape):
@@ -370,6 +369,57 @@ def test_consequent_eq(plate_size, event_shape):
 
     assert int_con_eq.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -10
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [()], ids=str)
+# TODO generalize to , (3,), (3, 2)], ids=str)
+def test_consequent_eq_neq(plate_size, event_shape):
+    factors = {
+        "consequent": consequent_eq_neq(
+            support=constraints.independent(constraints.real, len(event_shape)),
+            antecedents=["w"],
+        )
+    }
+
+    @Factors(factors=factors)
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def model_ce():
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        consequent = pyro.deterministic(
+            "consequent", w * 0.1, event_dim=len(event_shape)
+        )
+
+        return consequent
+
+    antecedents = {
+        "w": (
+            torch.tensor(5.0),
+            sufficiency_intervention(constraints.real, ["w"]),
+        )
+    }
+
+    with MultiWorldCounterfactual() as mwc:
+        with do(actions=antecedents):
+            with pyro.poutine.trace() as tr:
+                model_ce()
+        with pyro.poutine.trace() as tr:
+            model_ce()
+
+    tr.trace.compute_log_prob()
+    nd = tr.trace.nodes
+
+    with mwc:
+        print(indices_of(nd["__factor_consequent"]["log_prob"]))
+        eq_neq_log_probs = gather(
+            nd["__factor_consequent"]["log_prob"], IndexSet(**{"w": {1}})
+        )
+
+    print(eq_neq_log_probs)
+
+    assert eq_neq_log_probs.sum() == 0
 
 
 options = [
