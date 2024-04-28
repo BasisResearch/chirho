@@ -24,8 +24,10 @@ T = TypeVar("T")
 @contextlib.contextmanager
 def SplitSubsets(
     supports: Mapping[str, constraints.Constraint],
-    actions: Mapping[str, Union[Intervention[T], Tuple[Intervention[T], ...]]],
+    actions,  #: Mapping[str, Union[Intervention[T], Tuple[Intervention[T], ...]]],
     # TODO deal with type-related linting errors
+    # which have to do with random_intervention typed with tensors
+    # and sufficiency_intervention typed with T
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
@@ -193,7 +195,7 @@ def SearchForNS(
         given its support as a :class:`~pyro.distributions.constraints.Constraint`.
         In another counterfactual world, the antecedent nodes are intervened to be
         at their factual values. The former will be used for probability-of-necessity-like
-        calculations, while the latter will be used for the 
+        calculations, while the latter will be used for the
         probability-of-sufficiency-like ones.
 
       2. These interventions are randomly :func:`~chirho.explainable.ops.preempt`-ed \
@@ -219,7 +221,13 @@ def SearchForNS(
 
         antecedents_supports = {a: s for a, s in antecedents.items()}
 
-        _antecedents = {
+        _antecedents: Mapping[
+            str,
+            Tuple[
+                Union[Intervention[torch.Tensor], Intervention[T]],
+                Union[Intervention[torch.Tensor], Intervention[T]],
+            ],
+        ] = {
             a: (
                 random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}"),
                 sufficiency_intervention(s, antecedents.keys()),
