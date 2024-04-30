@@ -168,10 +168,10 @@ def test_multiple_interventions(x_cf_value):
     with MultiWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    assert W.shape == ()
-    assert X.shape == (2,)
-    assert Z.shape == (2, 2)
-    assert Y.shape == (2, 2)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet(X={0, 1})
+        assert indices_of(Z) == IndexSet(X={0, 1}, Z={0, 1})
+        assert indices_of(Y) == IndexSet(X={0, 1}, Z={0, 1})
 
 
 def test_mediation_nde_smoke():
