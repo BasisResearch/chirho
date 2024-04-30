@@ -11,6 +11,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
+from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.handlers import Interventions, do
 from chirho.observational.handlers import condition
 
@@ -71,22 +72,22 @@ def test_do_api(x_cf_value):
     intervened_model_1 = Interventions({"X": x_cf_value})(model)
     intervened_model_2 = do(model, {"X": x_cf_value})
 
-    W_1, X_1, Z_1, Y_1 = TwinWorldCounterfactual(-1)(intervened_model_1)()
-    W_2, X_2, Z_2, Y_2 = TwinWorldCounterfactual(-1)(intervened_model_2)()
+    with TwinWorldCounterfactual(-1):
+        W_1, X_1, Z_1, Y_1 = intervened_model_1()
+        W_2, X_2, Z_2, Y_2 = intervened_model_2()
 
-    assert W_1.shape == W_2.shape == torch.Size([])
-    assert X_1.shape == X_2.shape == (2,)
-    assert Z_1.shape == Z_2.shape == (2,)
-    assert Y_1.shape == Y_2.shape == (2,)
+        assert indices_of(W_1) == indices_of(W_2) == IndexSet()
+        for var in [X_1, Z_1, Y_1, X_2, Z_2, Y_2]:
+            assert indices_of(var) == IndexSet(__fresh_split__={0, 1})
 
-    # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
-    assert W_1 != W_2
-    assert X_1[0] != X_2[0]  # Sampled with fresh randomness each time
-    assert X_1[1] == X_2[1]  # Intervention assignment should be equal
-    assert Z_1[0] != Z_2[0]  # Sampled with fresh randomness each time
-    assert Z_1[1] != Z_2[1]  # Counterfactual, but with different exogenous noise
-    assert Y_1[0] != Y_2[0]  # Sampled with fresh randomness each time
-    assert Y_1[1] != Y_2[1]  # Counterfactual, but with different exogenous noise
+        # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
+        assert W_1 != W_2
+        assert gather(X_1, IndexSet(__fresh_split__={0})) != gather(X_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
+        assert gather(X_1, IndexSet(__fresh_split__={1})) == gather(X_2, IndexSet(__fresh_split__={1}))  # Intervention assignment should be equal
+        assert gather(Z_1, IndexSet(__fresh_split__={0})) != gather(Z_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
+        assert gather(Z_1, IndexSet(__fresh_split__={1})) != gather(Z_2, IndexSet(__fresh_split__={1}))  # Counterfactual, but with different exogenous noise
+        assert gather(Y_1, IndexSet(__fresh_split__={0})) != gather(Y_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
+        assert gather(Y_1, IndexSet(__fresh_split__={1})) != gather(Y_2, IndexSet(__fresh_split__={1}))  # Counterfactual, but with different exogenous noise
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
