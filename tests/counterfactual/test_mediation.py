@@ -64,41 +64,57 @@ def linear_fs():
     return f_W, f_X, f_Z, f_Y
 
 
+@pytest.mark.parametrize(
+    "HandlerClass", [MultiWorldCounterfactual, TwinWorldCounterfactual]
+)
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_do_api(x_cf_value):
+def test_do_api(HandlerClass, x_cf_value):
     model = make_mediation_model(*linear_fs())
 
     # These APIs should be equivalent
     intervened_model_1 = Interventions({"X": x_cf_value})(model)
     intervened_model_2 = do(model, {"X": x_cf_value})
 
-    with TwinWorldCounterfactual(-1):
+    intervention_name = (
+        "X" if HandlerClass == MultiWorldCounterfactual else "__fresh_split__"
+    )
+
+    with HandlerClass(-1):
         W_1, X_1, Z_1, Y_1 = intervened_model_1()
         W_2, X_2, Z_2, Y_2 = intervened_model_2()
 
+        factual_index = IndexSet()
+        factual_index[intervention_name] = {0}
+
+        counterfactual_index = IndexSet()
+        counterfactual_index[intervention_name] = {1}
+
+        all_index = IndexSet()
+        all_index[intervention_name] = {0, 1}
+
         assert indices_of(W_1) == indices_of(W_2) == IndexSet()
         for var in [X_1, Z_1, Y_1, X_2, Z_2, Y_2]:
-            assert indices_of(var) == IndexSet(__fresh_split__={0, 1})
+            assert indices_of(var) == all_index
 
         # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
         assert W_1 != W_2
-        assert gather(X_1, IndexSet(__fresh_split__={0})) != gather(
-            X_2, IndexSet(__fresh_split__={0})
+        assert gather(X_1, factual_index) != gather(
+            X_2, factual_index
         )  # Sampled with fresh randomness each time
-        assert gather(X_1, IndexSet(__fresh_split__={1})) == gather(
-            X_2, IndexSet(__fresh_split__={1})
+        assert gather(X_1, counterfactual_index) == gather(
+            X_2, counterfactual_index
         )  # Intervention assignment should be equal
-        assert gather(Z_1, IndexSet(__fresh_split__={0})) != gather(
-            Z_2, IndexSet(__fresh_split__={0})
+        assert gather(Z_1, factual_index) != gather(
+            Z_2, factual_index
         )  # Sampled with fresh randomness each time
-        assert gather(Z_1, IndexSet(__fresh_split__={1})) != gather(
-            Z_2, IndexSet(__fresh_split__={1})
+        assert gather(Z_1, counterfactual_index) != gather(
+            Z_2, counterfactual_index
         )  # Counterfactual, but with different exogenous noise
-        assert gather(Y_1, IndexSet(__fresh_split__={0})) != gather(
-            Y_2, IndexSet(__fresh_split__={0})
+        assert gather(Y_1, factual_index) != gather(
+            Y_2, factual_index
         )  # Sampled with fresh randomness each time
-        assert gather(Y_1, IndexSet(__fresh_split__={1})) != gather(
-            Y_2, IndexSet(__fresh_split__={1})
+        assert gather(Y_1, counterfactual_index) != gather(
+            Y_2, counterfactual_index
         )  # Counterfactual, but with different exogenous noise
 
 
@@ -140,35 +156,6 @@ def test_linear_mediation_conditioned(x_cf_value):
 
         assert gather(X, IndexSet(__fresh_split__={0})) == x_cond_value
         assert gather(X, IndexSet(__fresh_split__={1})) == x_cf_value
-
-
-@pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_multiworld_handler(x_cf_value):
-    model = make_mediation_model(*linear_fs())
-
-    intervened_model = do(model, {"X": x_cf_value})
-
-    with TwinWorldCounterfactual(-1):
-        W_1, X_1, Z_1, Y_1 = intervened_model()
-
-    with MultiWorldCounterfactual(-1):
-        W_2, X_2, Z_2, Y_2 = intervened_model()
-
-    # Copied from above test.
-    # TODO: refactor this to remove duplicate code.
-    assert W_1.shape == W_2.shape == torch.Size([])
-    assert X_1.shape == X_2.shape == (2,)
-    assert Z_1.shape == Z_2.shape == (2,)
-    assert Y_1.shape == Y_2.shape == (2,)
-
-    # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
-    assert W_1 != W_2
-    assert X_1[0] != X_2[0]  # Sampled with fresh randomness each time
-    assert X_1[1] == X_2[1]  # Intervention assignment should be equal
-    assert Z_1[0] != Z_2[0]  # Sampled with fresh randomness each time
-    assert Z_1[1] != Z_2[1]  # Counterfactual, but with different exogenous noise
-    assert Y_1[0] != Y_2[0]  # Sampled with fresh randomness each time
-    assert Y_1[1] != Y_2[1]  # Counterfactual, but with different exogenous noise
 
 
 @pytest.mark.parametrize("x_cf_value", [0.0])
