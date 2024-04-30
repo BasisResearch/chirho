@@ -201,10 +201,10 @@ def test_mediation_nde_smoke():
     with MultiWorldCounterfactual(-2):
         W, X, Z, Y = extended_model()
 
-    assert W.shape == (N,)
-    assert X.shape == (3, N)
-    assert Z.shape == (2, 3, N)
-    assert Y.shape == (2, 3, N)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet(X={0, 1, 2})
+        assert indices_of(Z) == IndexSet(X={0, 1, 2}, Z={0, 1})
+        assert indices_of(Y) == IndexSet(X={0, 1, 2}, Z={0, 1})
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
@@ -217,9 +217,9 @@ def test_mediation_dependent_intervention(cf_dim, cf_value):
     with MultiWorldCounterfactual(cf_dim):
         W, X, Z, Y = intervened_model()
 
-    assert W.shape == ()
-    assert X.shape == ()
-    assert Z.shape == (2,) + (1,) * (len(Z.shape) - 1)
-    assert Y.shape == (2,) + (1,) * (len(Y.shape) - 1)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet()
+        assert indices_of(Z) == IndexSet(Z={0, 1})
+        assert indices_of(Y) == IndexSet(Z={0, 1})
 
-    assert torch.all(Z[1] == (Z[0] + cf_value))
+        assert gather(Z, IndexSet(Z={1})) == (gather(Z, IndexSet(Z={0})) + cf_value)
