@@ -82,12 +82,24 @@ def test_do_api(x_cf_value):
 
         # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
         assert W_1 != W_2
-        assert gather(X_1, IndexSet(__fresh_split__={0})) != gather(X_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
-        assert gather(X_1, IndexSet(__fresh_split__={1})) == gather(X_2, IndexSet(__fresh_split__={1}))  # Intervention assignment should be equal
-        assert gather(Z_1, IndexSet(__fresh_split__={0})) != gather(Z_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
-        assert gather(Z_1, IndexSet(__fresh_split__={1})) != gather(Z_2, IndexSet(__fresh_split__={1}))  # Counterfactual, but with different exogenous noise
-        assert gather(Y_1, IndexSet(__fresh_split__={0})) != gather(Y_2, IndexSet(__fresh_split__={0}))  # Sampled with fresh randomness each time
-        assert gather(Y_1, IndexSet(__fresh_split__={1})) != gather(Y_2, IndexSet(__fresh_split__={1}))  # Counterfactual, but with different exogenous noise
+        assert gather(X_1, IndexSet(__fresh_split__={0})) != gather(
+            X_2, IndexSet(__fresh_split__={0})
+        )  # Sampled with fresh randomness each time
+        assert gather(X_1, IndexSet(__fresh_split__={1})) == gather(
+            X_2, IndexSet(__fresh_split__={1})
+        )  # Intervention assignment should be equal
+        assert gather(Z_1, IndexSet(__fresh_split__={0})) != gather(
+            Z_2, IndexSet(__fresh_split__={0})
+        )  # Sampled with fresh randomness each time
+        assert gather(Z_1, IndexSet(__fresh_split__={1})) != gather(
+            Z_2, IndexSet(__fresh_split__={1})
+        )  # Counterfactual, but with different exogenous noise
+        assert gather(Y_1, IndexSet(__fresh_split__={0})) != gather(
+            Y_2, IndexSet(__fresh_split__={0})
+        )  # Sampled with fresh randomness each time
+        assert gather(Y_1, IndexSet(__fresh_split__={1})) != gather(
+            Y_2, IndexSet(__fresh_split__={1})
+        )  # Counterfactual, but with different exogenous noise
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -99,10 +111,18 @@ def test_linear_mediation_unconditioned(x_cf_value):
     with TwinWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    # Noise should be shared between factual and counterfactual outcomes
-    # Some numerical precision issues getting these exactly equal
-    assert isclose((Z - X - W)[0], (Z - X - W)[1], abs_tol=1e-5)
-    assert isclose((Y - Z - X - W)[0], (Y - Z - X - W)[1], abs_tol=1e-5)
+        # Noise should be shared between factual and counterfactual outcomes
+        # Some numerical precision issues getting these exactly equal
+        assert isclose(
+            gather((Z - X - W), IndexSet(__fresh_split__={0})),
+            gather((Z - X - W), IndexSet(__fresh_split__={1})),
+            abs_tol=1e-5,
+        )
+        assert isclose(
+            gather(Y - Z - X - W, IndexSet(__fresh_split__={0})),
+            gather(Y - Z - X - W, IndexSet(__fresh_split__={1})),
+            abs_tol=1e-5,
+        )
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -118,8 +138,8 @@ def test_linear_mediation_conditioned(x_cf_value):
     with TwinWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    assert X[0] == x_cond_value
-    assert X[1] == x_cf_value
+        assert gather(X, IndexSet(__fresh_split__={0})) == x_cond_value
+        assert gather(X, IndexSet(__fresh_split__={1})) == x_cf_value
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
