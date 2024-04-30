@@ -48,25 +48,20 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
 
     with SingleWorldFactual():
         z_factual, x_factual, y_factual = model()
-
-    assert x_factual != x_cf_value
-    assert z_factual.shape == x_factual.shape == y_factual.shape == torch.Size([])
+        assert indices_of(z_factual) == indices_of(x_factual) == indices_of(y_factual) == IndexSet()
+        assert x_factual != x_cf_value
 
     with SingleWorldCounterfactual():
         z_cf, x_cf, y_cf = model()
-
-    assert x_cf == x_cf_value
-    assert z_cf.shape == x_cf.shape == y_cf.shape == torch.Size([])
+        assert indices_of(z_cf) == indices_of(x_cf) == indices_of(y_cf) == IndexSet()
+        assert x_cf == x_cf_value
 
     with TwinWorldCounterfactual(cf_dim):
         z_cf_twin, x_cf_twin, y_cf_twin = model()
-
-    assert torch.all(x_cf_twin[0] != x_cf_value)
-    assert torch.all(x_cf_twin[1] == x_cf_value)
-    assert z_cf_twin.shape == torch.Size([])
-    assert (
-        x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (len(y_cf_twin.shape) - 1)
-    )
+        assert indices_of(z_cf_twin) == IndexSet()
+        assert indices_of(x_cf_twin) == indices_of(y_cf_twin) == IndexSet(__fresh_split__={0, 1})
+        assert gather(x_cf_twin, IndexSet(__fresh_split__={0})) != x_cf_value
+        assert gather(x_cf_twin, IndexSet(__fresh_split__={1})) == x_cf_value
 
 
 @pytest.mark.parametrize("num_splits", [1, 2, 3])
