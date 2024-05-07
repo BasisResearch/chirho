@@ -19,8 +19,6 @@ import pyro.poutine.indep_messenger
 import torch
 from typing_extensions import ParamSpec
 
-from .. import _pyro_patch
-
 P = ParamSpec("P")
 T = TypeVar("T")
 
@@ -265,7 +263,6 @@ def scatter(
     raise NotImplementedError
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="scatter_n")
 def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs) -> T:
     """
@@ -314,7 +311,6 @@ def cond(fst, snd: T, case: Optional[Union[bool, torch.Tensor]] = None, **kwargs
     raise NotImplementedError(f"cond not implemented for {type(fst)}")
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="cond_n")
 def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs) -> T:
     assert len(values) > 0
@@ -332,7 +328,6 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
     return result
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="get_index_plates")
 def get_index_plates() -> (
     Mapping[str, pyro.poutine.indep_messenger.CondIndepStackFrame]

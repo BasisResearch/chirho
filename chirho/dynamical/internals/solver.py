@@ -10,7 +10,6 @@ from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho import _pyro_patch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
 
@@ -38,7 +37,6 @@ class Interruption(Generic[T], ShallowMessenger):
         msg["value"].append(self)
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
 def get_new_interruptions() -> List[Interruption]:
     """
@@ -132,7 +130,6 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         msg["done"] = True
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_point")
 def simulate_point(
     dynamics: Dynamics[T],
@@ -147,7 +144,6 @@ def simulate_point(
     raise NotImplementedError("No default behavior for simulate_point")
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_trajectory")
 def simulate_trajectory(
     dynamics: Dynamics[T],
@@ -161,7 +157,6 @@ def simulate_trajectory(
     raise NotImplementedError("No default behavior for simulate_trajectory")
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
     interruption_stack: List[Interruption[T]],

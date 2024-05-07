@@ -3,7 +3,6 @@ from typing import Optional, Tuple, TypeVar
 
 import pyro
 
-from chirho import _pyro_patch
 from chirho.indexed.ops import IndexSet, cond_n
 from chirho.interventional.ops import Intervention, intervene
 
@@ -11,7 +10,6 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="preempt")
 @functools.partial(pyro.poutine.block, hide_types=["intervene"])
 def preempt(

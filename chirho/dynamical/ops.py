@@ -6,8 +6,6 @@ from typing import Callable, Mapping, Optional, Tuple, TypeVar, Union
 import pyro
 import torch
 
-from chirho import _pyro_patch
-
 R = Union[numbers.Real, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
@@ -16,7 +14,6 @@ State = Mapping[str, T]
 Dynamics = Callable[[State[T]], State[T]]
 
 
-@_pyro_patch._just
 @pyro.poutine.runtime.effectful(type="simulate")
 def simulate(
     dynamics: Dynamics[T],
