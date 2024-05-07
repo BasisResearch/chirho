@@ -11,6 +11,7 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
+from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.handlers import Interventions, do
 from chirho.observational.handlers import condition
 
@@ -63,30 +64,58 @@ def linear_fs():
     return f_W, f_X, f_Z, f_Y
 
 
+@pytest.mark.parametrize(
+    "HandlerClass", [MultiWorldCounterfactual, TwinWorldCounterfactual]
+)
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_do_api(x_cf_value):
+def test_do_api(HandlerClass, x_cf_value):
     model = make_mediation_model(*linear_fs())
 
     # These APIs should be equivalent
     intervened_model_1 = Interventions({"X": x_cf_value})(model)
     intervened_model_2 = do(model, {"X": x_cf_value})
 
-    W_1, X_1, Z_1, Y_1 = TwinWorldCounterfactual(-1)(intervened_model_1)()
-    W_2, X_2, Z_2, Y_2 = TwinWorldCounterfactual(-1)(intervened_model_2)()
+    intervention_name = (
+        "X" if HandlerClass == MultiWorldCounterfactual else "__fresh_split__"
+    )
 
-    assert W_1.shape == W_2.shape == torch.Size([])
-    assert X_1.shape == X_2.shape == (2,)
-    assert Z_1.shape == Z_2.shape == (2,)
-    assert Y_1.shape == Y_2.shape == (2,)
+    with HandlerClass(-1):
+        W_1, X_1, Z_1, Y_1 = intervened_model_1()
+        W_2, X_2, Z_2, Y_2 = intervened_model_2()
 
-    # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
-    assert W_1 != W_2
-    assert X_1[0] != X_2[0]  # Sampled with fresh randomness each time
-    assert X_1[1] == X_2[1]  # Intervention assignment should be equal
-    assert Z_1[0] != Z_2[0]  # Sampled with fresh randomness each time
-    assert Z_1[1] != Z_2[1]  # Counterfactual, but with different exogenous noise
-    assert Y_1[0] != Y_2[0]  # Sampled with fresh randomness each time
-    assert Y_1[1] != Y_2[1]  # Counterfactual, but with different exogenous noise
+        factual_index = IndexSet()
+        factual_index[intervention_name] = {0}
+
+        counterfactual_index = IndexSet()
+        counterfactual_index[intervention_name] = {1}
+
+        all_index = IndexSet()
+        all_index[intervention_name] = {0, 1}
+
+        assert indices_of(W_1) == indices_of(W_2) == IndexSet()
+        for var in [X_1, Z_1, Y_1, X_2, Z_2, Y_2]:
+            assert indices_of(var) == all_index
+
+        # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
+        assert W_1 != W_2
+        assert gather(X_1, factual_index) != gather(
+            X_2, factual_index
+        )  # Sampled with fresh randomness each time
+        assert gather(X_1, counterfactual_index) == gather(
+            X_2, counterfactual_index
+        )  # Intervention assignment should be equal
+        assert gather(Z_1, factual_index) != gather(
+            Z_2, factual_index
+        )  # Sampled with fresh randomness each time
+        assert gather(Z_1, counterfactual_index) != gather(
+            Z_2, counterfactual_index
+        )  # Counterfactual, but with different exogenous noise
+        assert gather(Y_1, factual_index) != gather(
+            Y_2, factual_index
+        )  # Sampled with fresh randomness each time
+        assert gather(Y_1, counterfactual_index) != gather(
+            Y_2, counterfactual_index
+        )  # Counterfactual, but with different exogenous noise
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -98,10 +127,18 @@ def test_linear_mediation_unconditioned(x_cf_value):
     with TwinWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    # Noise should be shared between factual and counterfactual outcomes
-    # Some numerical precision issues getting these exactly equal
-    assert isclose((Z - X - W)[0], (Z - X - W)[1], abs_tol=1e-5)
-    assert isclose((Y - Z - X - W)[0], (Y - Z - X - W)[1], abs_tol=1e-5)
+        # Noise should be shared between factual and counterfactual outcomes
+        # Some numerical precision issues getting these exactly equal
+        assert isclose(
+            gather((Z - X - W), IndexSet(__fresh_split__={0})),
+            gather((Z - X - W), IndexSet(__fresh_split__={1})),
+            abs_tol=1e-5,
+        )
+        assert isclose(
+            gather(Y - Z - X - W, IndexSet(__fresh_split__={0})),
+            gather(Y - Z - X - W, IndexSet(__fresh_split__={1})),
+            abs_tol=1e-5,
+        )
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
@@ -117,37 +154,8 @@ def test_linear_mediation_conditioned(x_cf_value):
     with TwinWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    assert X[0] == x_cond_value
-    assert X[1] == x_cf_value
-
-
-@pytest.mark.parametrize("x_cf_value", x_cf_values)
-def test_multiworld_handler(x_cf_value):
-    model = make_mediation_model(*linear_fs())
-
-    intervened_model = do(model, {"X": x_cf_value})
-
-    with TwinWorldCounterfactual(-1):
-        W_1, X_1, Z_1, Y_1 = intervened_model()
-
-    with MultiWorldCounterfactual(-1):
-        W_2, X_2, Z_2, Y_2 = intervened_model()
-
-    # Copied from above test.
-    # TODO: refactor this to remove duplicate code.
-    assert W_1.shape == W_2.shape == torch.Size([])
-    assert X_1.shape == X_2.shape == (2,)
-    assert Z_1.shape == Z_2.shape == (2,)
-    assert Y_1.shape == Y_2.shape == (2,)
-
-    # Checking equality on each element is probably overkill, but may be nice for debugging tests later...
-    assert W_1 != W_2
-    assert X_1[0] != X_2[0]  # Sampled with fresh randomness each time
-    assert X_1[1] == X_2[1]  # Intervention assignment should be equal
-    assert Z_1[0] != Z_2[0]  # Sampled with fresh randomness each time
-    assert Z_1[1] != Z_2[1]  # Counterfactual, but with different exogenous noise
-    assert Y_1[0] != Y_2[0]  # Sampled with fresh randomness each time
-    assert Y_1[1] != Y_2[1]  # Counterfactual, but with different exogenous noise
+        assert gather(X, IndexSet(__fresh_split__={0})) == x_cond_value
+        assert gather(X, IndexSet(__fresh_split__={1})) == x_cf_value
 
 
 @pytest.mark.parametrize("x_cf_value", [0.0])
@@ -160,10 +168,10 @@ def test_multiple_interventions(x_cf_value):
     with MultiWorldCounterfactual(-1):
         W, X, Z, Y = intervened_model()
 
-    assert W.shape == ()
-    assert X.shape == (2,)
-    assert Z.shape == (2, 2)
-    assert Y.shape == (2, 2)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet(X={0, 1})
+        assert indices_of(Z) == IndexSet(X={0, 1}, Z={0, 1})
+        assert indices_of(Y) == IndexSet(X={0, 1}, Z={0, 1})
 
 
 def test_mediation_nde_smoke():
@@ -193,10 +201,10 @@ def test_mediation_nde_smoke():
     with MultiWorldCounterfactual(-2):
         W, X, Z, Y = extended_model()
 
-    assert W.shape == (N,)
-    assert X.shape == (3, N)
-    assert Z.shape == (2, 3, N)
-    assert Y.shape == (2, 3, N)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet(X={0, 1, 2})
+        assert indices_of(Z) == IndexSet(X={0, 1, 2}, Z={0, 1})
+        assert indices_of(Y) == IndexSet(X={0, 1, 2}, Z={0, 1})
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
@@ -209,9 +217,9 @@ def test_mediation_dependent_intervention(cf_dim, cf_value):
     with MultiWorldCounterfactual(cf_dim):
         W, X, Z, Y = intervened_model()
 
-    assert W.shape == ()
-    assert X.shape == ()
-    assert Z.shape == (2,) + (1,) * (len(Z.shape) - 1)
-    assert Y.shape == (2,) + (1,) * (len(Y.shape) - 1)
+        assert indices_of(W) == IndexSet()
+        assert indices_of(X) == IndexSet()
+        assert indices_of(Z) == IndexSet(Z={0, 1})
+        assert indices_of(Y) == IndexSet(Z={0, 1})
 
-    assert torch.all(Z[1] == (Z[0] + cf_value))
+        assert gather(Z, IndexSet(Z={1})) == (gather(Z, IndexSet(Z={0})) + cf_value)
