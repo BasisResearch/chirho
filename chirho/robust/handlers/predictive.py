@@ -15,7 +15,7 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class PredictiveSiteInferDict(TypedDict, total=False):
+class PredictiveSiteInferDict(pyro.poutine.runtime.InferDict):
     _model_predictive_site: bool
 
 
@@ -52,7 +52,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=False)  # type: ignore
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=False)
         ):
             with pyro.poutine.trace() as guide_tr:
                 if self.guide is not None:
@@ -67,7 +67,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         )
 
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=True)  # type: ignore
+            config_fn=lambda msg: PredictiveSiteInferDict(_model_predictive_site=True)
         ):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
@@ -136,7 +136,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
                     with pyro.poutine.infer_config(
-                        config_fn=_predictive_site_infer_dict  # type: ignore
+                        config_fn=_predictive_site_infer_dict
                     ):
                         self.model(*args, **kwargs)
 

@@ -59,7 +59,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     def _observe_dist(
         self, rv: dist.TorchDistribution, obs: torch.Tensor, name: str
     ) -> torch.Tensor:
-        with pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
+        with pyro.poutine.infer_config(config_fn=no_ambiguity):
             with SelectFactual():
                 fv = pyro.sample(name + "_factual", rv, obs=obs)
 
@@ -77,7 +77,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     @_dispatched_observe.register
     def _observe_tfmdist(
         self,
-        rv: dist.TransformedDistribution,  # type: ignore
+        rv: dist.TransformedDistribution,
         value: torch.Tensor,
         name: str,
     ) -> torch.Tensor:
@@ -91,9 +91,9 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         obs_event_dim = len(rv.event_shape)
 
         # factual world
-        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
+        with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
-            new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)  # type: ignore
+            new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
             obs_noise = pyro.sample(
                 name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
             )
@@ -107,9 +107,9 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
         # counterfactual world
-        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):  # type: ignore
+        with SelectCounterfactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             cf_noise_dist = dist.Delta(obs_noise, event_dim=noise_event_dim).mask(False)
-            cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)  # type: ignore
+            cf_obs_dist = dist.TransformedDistribution(cf_noise_dist, tfm)
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
 
         # merge

@@ -32,13 +32,13 @@ def uniform_proposal(
     :return: A uniform probability distribution over the specified support.
     """
     if support is pyro.distributions.constraints.real:
-        return pyro.distributions.Normal(0, 10).mask(False)  # type: ignore
+        return pyro.distributions.Normal(0, 10).mask(False)
     elif support is pyro.distributions.constraints.boolean:
-        return pyro.distributions.Bernoulli(logits=torch.zeros(()))  # type: ignore
+        return pyro.distributions.Bernoulli(logits=torch.zeros(()))
     else:
         tfm = pyro.distributions.transforms.biject_to(support)
         base = uniform_proposal(pyro.distributions.constraints.real, **kwargs)
-        return pyro.distributions.TransformedDistribution(base, tfm)  # type: ignore
+        return pyro.distributions.TransformedDistribution(base, tfm)
 
 
 @uniform_proposal.register
@@ -62,4 +62,4 @@ def _uniform_proposal_integer(
             "integer_interval with lower_bound > 0 not yet supported"
         )
     n = support.upper_bound - support.lower_bound + 1
-    return pyro.distributions.Categorical(probs=torch.ones((n,)))  # type: ignore
+    return pyro.distributions.Categorical(probs=torch.ones((n,)))
