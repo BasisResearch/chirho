@@ -88,7 +88,7 @@ class SingleStageCut(DependentMaskMessenger):
             IndexSet(**{self.name: {0 if name in self.vars else 1}})
         )
 
-    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_post_sample(self, msg) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
 

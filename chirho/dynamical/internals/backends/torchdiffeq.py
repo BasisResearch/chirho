@@ -1,4 +1,5 @@
 import functools
+import typing
 from typing import Callable, List, Optional, Tuple, TypeVar
 
 import pyro
@@ -151,7 +152,9 @@ def torchdiffeq_simulate_point(
 
     # TODO support dim != -1
     idx_name = "__time"
-    name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+    name_to_dim = {
+        k: typing.cast(int, f.dim) - 1 for k, f in get_index_plates().items()
+    }
     name_to_dim[idx_name] = -1
 
     final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
@@ -249,7 +252,7 @@ def torchdiffeq_simulate_to_interruption(
         dynamics, initial_state, start_time, interruptions, **kwargs
     )
 
-    value = simulate_point(
+    value: State[torch.Tensor] = simulate_point(
         dynamics, initial_state, start_time, interruption_time, **kwargs
     )
     return value, interruption_time, next_interruption

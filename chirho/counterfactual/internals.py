@@ -1,9 +1,12 @@
-from typing import Any, Dict
+import typing
+from typing import Any, Mapping, TypedDict
+
+import pyro
 
 from chirho.indexed.ops import indices_of, union
 
 
-def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
+def site_is_ambiguous(msg: Mapping[str, Any]) -> bool:
     """
     Helper function used with :func:`observe` to determine
     whether a site is observed or ambiguous.
@@ -13,17 +16,24 @@ def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     are fixed/observed (as opposed to random/unobserved).
     """
     rv, obs = msg["args"][:2]
+    infer_dict = msg["infer"]
+    if typing.TYPE_CHECKING:
+        assert infer_dict is not None
     value_indices = indices_of(obs, event_dim=len(rv.event_shape))
     dist_indices = indices_of(rv)
     return (
         bool(union(value_indices, dist_indices)) and value_indices != dist_indices
-    ) or not msg["infer"].get("_specified_conditioning", True)
+    ) or not infer_dict.get("_specified_conditioning", True)
 
 
-def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
+class AmbiguityInferDict(pyro.poutine.runtime.InferDict):
+    _specified_conditioning: bool
+
+
+def no_ambiguity(msg: Mapping[str, Any]) -> AmbiguityInferDict:
     """
     Helper function used with :func:`pyro.poutine.infer_config` to inform
     :class:`FactualConditioningMessenger` that all ambiguity in the current
     context has been resolved.
     """
-    return {"_specified_conditioning": True}
+    return AmbiguityInferDict(_specified_conditioning=True)

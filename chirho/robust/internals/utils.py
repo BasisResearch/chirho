@@ -1,6 +1,7 @@
 import contextlib
 import functools
 import math
+import typing
 from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar
 
 import pyro
@@ -177,7 +178,7 @@ def _unbind_leftmost_dim_tensor(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.shape
     while new_dim - event_dim < -len(v.shape):
         v = v[None]
@@ -186,10 +187,10 @@ def _unbind_leftmost_dim_tensor(
     return v
 
 
-@unbind_leftmost_dim.register
+@unbind_leftmost_dim.register(pyro.distributions.Distribution)
 def _unbind_leftmost_dim_distribution(
-    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
-) -> pyro.distributions.Distribution:
+    v: pyro.distributions.TorchDistribution, name: str, size: int = 1, **kwargs
+) -> pyro.distributions.TorchDistribution:
     size = max(size, v.batch_shape[0])
     if v.batch_shape[0] != 1:
         raise NotImplementedError("Cannot freely reshape distribution")
@@ -197,7 +198,7 @@ def _unbind_leftmost_dim_distribution(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.batch_shape
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
@@ -222,7 +223,9 @@ def _bind_leftmost_dim_tensor(
     if name not in indices_of(v, event_dim=event_dim):
         return v
     return torch.transpose(
-        v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
+        v[None],
+        -len(v.shape) - 1,
+        typing.cast(int, get_index_plates()[name].dim) - event_dim,
     )
 
 

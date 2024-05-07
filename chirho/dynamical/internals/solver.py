@@ -30,7 +30,7 @@ class Interruption(Generic[T], ShallowMessenger):
         self.predicate = predicate
         self.callback = callback
 
-    def _pyro_get_new_interruptions(self, msg: dict) -> None:
+    def _pyro_get_new_interruptions(self, msg) -> None:
         if msg["value"] is None:
             msg["value"] = []
         assert isinstance(msg["value"], list)
@@ -42,7 +42,7 @@ def get_new_interruptions() -> List[Interruption]:
     """
     Install the active interruptions into the context.
     """
-    return []
+    return typing.cast(List[Interruption], [])
 
 
 class Solver(Generic[T], pyro.poutine.messenger.Messenger):
@@ -58,11 +58,11 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             raise NotImplementedError(f"cannot install interruption {h}")
 
     @typing.final
-    def _pyro_simulate(self, msg: dict) -> None:
+    def _pyro_simulate(self, msg) -> None:
         from chirho.dynamical.handlers.interruption import StaticEvent
 
-        dynamics: Dynamics[T] = msg["args"][0]
-        state: State[T] = msg["args"][1]
+        dynamics: Dynamics[T] = typing.cast(Dynamics[T], msg["args"][0])
+        state: State[T] = typing.cast(State[T], msg["args"][1])
         start_time: R = msg["args"][2]
         end_time: R = msg["args"][3]
 
@@ -106,6 +106,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
+            next_interruption: Optional[Interruption[T]]
             state, start_time, next_interruption = simulate_to_interruption(
                 possible_interruptions,
                 dynamics,
@@ -116,7 +117,8 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                dynamics, state = next_interruption.callback(dynamics, state)
+                # TODO reenable this check once we figure out why mypy is inferring "Never"s
+                dynamics, state = next_interruption.callback(dynamics, state)  # type: ignore
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
