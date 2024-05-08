@@ -373,7 +373,6 @@ def test_consequent_eq(plate_size, event_shape):
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-# TODO generalize to , ids=str)
 def test_consequent_eq_neq(plate_size, event_shape):
     factors = {
         "consequent": consequent_eq_neq(
