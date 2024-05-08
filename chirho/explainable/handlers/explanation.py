@@ -14,7 +14,7 @@ from chirho.explainable.handlers.components import (  # sufficiency_intervention
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.interventional.handlers import Interventions
 from chirho.interventional.ops import Intervention
-from chirho.observational.handlers.condition import Factors, Observations
+from chirho.observational.handlers.condition import Factors
 from chirho.observational.ops import Observation
 
 S = TypeVar("S")
