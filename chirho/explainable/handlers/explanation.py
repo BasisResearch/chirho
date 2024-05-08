@@ -322,8 +322,6 @@ def ExplanationTransform(
         assert len(antecedents) > 0
         assert len(consequents) > 0
         assert not set(consequents.keys()) & set(antecedents.keys())
-        assert any(v is not None for v in antecedents.values())
-        assert any(v is not None for v in consequents.values())
         assert set(antecedents.keys()) <= set(supports.keys())
         assert set(consequents.keys()) <= set(supports.keys())
 
@@ -388,6 +386,10 @@ def ExplanationTransform(
             preemptions, bias=witness_bias, prefix=witness_prefix
         )
         with antecedent_handler, witness_handler, consequent_handler:
-            yield {**antecedents, **consequents}
+            evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
+                **{a: aa for a, aa in antecedents.items() if aa is not None},
+                **{c: cc for c, cc in consequents.items() if cc is not None},
+            }
+            yield evidence
 
     return _query
