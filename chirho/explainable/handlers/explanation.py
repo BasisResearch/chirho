@@ -23,10 +23,7 @@ T = TypeVar("T")
 @contextlib.contextmanager
 def SplitSubsets(
     supports: Mapping[str, constraints.Constraint],
-    actions: Mapping[str, Intervention[T]],  # , Union[, Tuple[Intervention[T], ...]]],
-    # TODO deal with type-related linting errors
-    # which have to do with random_intervention typed with tensors
-    # and sufficiency_intervention typed with T
+    actions: Mapping[str, Intervention[T]],
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
