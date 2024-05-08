@@ -1,11 +1,10 @@
 import contextlib
-from typing import Callable, Mapping, Tuple, TypeVar, Union
+from typing import Callable, Mapping, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.explainable.handlers.components import (  # sufficiency_intervention,
-    consequent_eq,
     consequent_eq_neq,
     consequent_neq,
     random_intervention,
@@ -24,7 +23,7 @@ T = TypeVar("T")
 @contextlib.contextmanager
 def SplitSubsets(
     supports: Mapping[str, constraints.Constraint],
-    actions,  #: Mapping[str, Union[Intervention[T], Tuple[Intervention[T], ...]]],
+    actions: Mapping[str, Intervention[T]],  # , Union[, Tuple[Intervention[T], ...]]],
     # TODO deal with type-related linting errors
     # which have to do with random_intervention typed with tensors
     # and sufficiency_intervention typed with T
@@ -223,15 +222,12 @@ def SearchForNS(
 
         _antecedents: Mapping[
             str,
-            Tuple[
-                Union[Intervention[torch.Tensor], Intervention[T]],
-                Union[Intervention[torch.Tensor], Intervention[T]],
-            ],
+            Intervention[T],
         ] = {
             a: (
                 random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}"),
                 sufficiency_intervention(s, antecedents.keys()),
-            )
+            )  # type: ignore
             for a, s in antecedents_supports.items()
         }
 
@@ -242,7 +238,8 @@ def SearchForNS(
         # comment: how about extracting supports?
 
         _antecedents = {
-            a: (antecedents[a], sufficiency_intervention(s, antecedents.keys()))
+            a: (antecedents[a], sufficiency_intervention(s, antecedents.keys()))  # type: ignore
+            # TODO fix type error
             for a, s in antecedents_supports.items()
         }
 
@@ -260,24 +257,6 @@ def SearchForNS(
         constraints.Constraint,
     ):
 
-        consequents_eq = {
-            c: consequent_eq(
-                support=s,
-                antecedents=antecedents_list,
-                scale=consequent_scale,  # TODO allow for different scales for neq and eq
-            )
-            for c, s in consequents.items()
-        }
-
-        consequents_neq = {
-            c: consequent_neq(
-                support=s,
-                antecedents=antecedents_list,
-                scale=consequent_scale,  # TODO allow for different scales for neq and eq
-            )
-            for c, s in consequents.items()
-        }
-
         consequents_eq_neq = {
             c: consequent_eq_neq(
                 support=s,
@@ -287,16 +266,16 @@ def SearchForNS(
             for c, s in consequents.items()
         }
 
-    if len(consequents_neq) == 0:
+    if len(consequents) == 0:
         raise ValueError("must have at least one consequent")
 
     if len(antecedents) == 0:
         raise ValueError("must have at least one antecedent")
 
-    if set(consequents_neq.keys()) & set(antecedents.keys()):
+    if set(consequents.keys()) & set(antecedents.keys()):
         raise ValueError("consequents and possible antecedents must be disjoint")
 
-    if set(consequents_neq.keys()) & set(witnesses.keys()):
+    if set(consequents.keys()) & set(witnesses.keys()):
         raise ValueError("consequents and possible witnesses must be disjoint")
 
     antecedent_handler = SplitSubsets(
@@ -310,21 +289,9 @@ def SearchForNS(
         actions=witnesses, bias=witness_bias, prefix=witness_prefix
     )
 
-    consequent_eq_handler: Factors = Factors(
-        factors=consequents_eq, prefix=f"{consequent_prefix}_eq_"
-    )
-
-    consequent_neq_handler: Factors = Factors(
-        factors=consequents_neq, prefix=f"{consequent_prefix}_neq_"
-    )
-
     consequent_eq_neq_handler: Factors = Factors(
         factors=consequents_eq_neq, prefix=f"{consequent_prefix}_eq_neq_"
     )
 
-    with (
-        antecedent_handler
-    ), (
-        witness_handler
-    ), consequent_neq_handler, consequent_eq_handler, consequent_eq_neq_handler:
+    with antecedent_handler, witness_handler, consequent_eq_neq_handler:
         yield

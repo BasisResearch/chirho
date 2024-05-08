@@ -372,8 +372,8 @@ def test_consequent_eq(plate_size, event_shape):
 
 
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
-@pytest.mark.parametrize("event_shape", [()], ids=str)
-# TODO generalize to , (3,), (3, 2)], ids=str)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+# TODO generalize to , ids=str)
 def test_consequent_eq_neq(plate_size, event_shape):
     factors = {
         "consequent": consequent_eq_neq(
@@ -396,8 +396,10 @@ def test_consequent_eq_neq(plate_size, event_shape):
 
     antecedents = {
         "w": (
-            torch.tensor(5.0),
-            sufficiency_intervention(constraints.real, ["w"]),
+            torch.tensor(5.0).expand(event_shape),
+            sufficiency_intervention(
+                constraints.independent(constraints.real, len(event_shape)), ["w"]
+            ),
         )
     }
 
@@ -412,12 +414,9 @@ def test_consequent_eq_neq(plate_size, event_shape):
     nd = tr.trace.nodes
 
     with mwc:
-        print(indices_of(nd["__factor_consequent"]["log_prob"]))
         eq_neq_log_probs = gather(
             nd["__factor_consequent"]["log_prob"], IndexSet(**{"w": {1}})
         )
-
-    print(eq_neq_log_probs)
 
     assert eq_neq_log_probs.sum() == 0
 

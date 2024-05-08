@@ -204,21 +204,12 @@ def test_SearchForNS():
     tr = tr.trace.nodes
 
     with mwc:
-        eq_logs = gather(
-            tr["__consequent__eq_bottle_shatters"]["log_prob"],
-            IndexSet(**{"sally_throws": {1}}),
-        )
-        neq_logs = gather(
-            tr["__consequent__neq_bottle_shatters"]["log_prob"],
-            IndexSet(**{"sally_throws": {1}}),
-        )
         eq_neq_logs = gather(
             tr["__consequent__eq_neq_bottle_shatters"]["log_prob"],
             IndexSet(**{"sally_throws": {1}}),
         )
 
-    assert eq_logs.shape == neq_logs.shape == eq_neq_logs.shape
-    assert eq_logs.shape[-1] == 200
+    assert eq_neq_logs.shape[-1] == 200
 
 
 def test_SplitSubsets_single_layer():

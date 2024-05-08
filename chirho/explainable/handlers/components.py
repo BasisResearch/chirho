@@ -62,7 +62,7 @@ def sufficiency_intervention(
 def random_intervention(
     support: constraints.Constraint,
     name: str,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+) -> Callable[[T], T]:
     """
     Creates a random-valued intervention for a single sample site, determined by
     by the distribution support, and site name.
@@ -83,9 +83,9 @@ def random_intervention(
         >>> assert x != 2
     """
 
-    def _random_intervention(value: torch.Tensor) -> torch.Tensor:
+    def _random_intervention(value: T) -> T:
 
-        event_shape = value.shape[len(value.shape) - support.event_dim :]
+        event_shape = value.shape[len(value.shape) - support.event_dim :]  # type: ignore
 
         proposal_dist = uniform_proposal(
             support,
@@ -244,7 +244,7 @@ def consequent_eq_neq(
         necessity_indices = IndexSet(
             **{
                 name: {necessity_world}
-                for name in indices_of(consequent).keys()
+                for name in indices_of(consequent, event_dim=support.event_dim).keys()
                 if name in antecedents
             }
         )
@@ -252,7 +252,7 @@ def consequent_eq_neq(
         sufficiency_indices = IndexSet(
             **{
                 name: {sufficiency_world}
-                for name in indices_of(consequent).keys()
+                for name in indices_of(consequent, event_dim=support.event_dim).keys()
                 if name in antecedents
             }
         )
@@ -272,9 +272,9 @@ def consequent_eq_neq(
             support, sufficiency_value, factual_value, **kwargs
         )
 
-        nec_suff_log_probs = torch.add(necessity_log_probs, sufficiency_log_probs)
+        # nec_suff_log_probs = torch.add(necessity_log_probs, sufficiency_log_probs)
 
-        FACTUAL_NEC_SUFF = torch.zeros_like(factual_value)
+        FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
         # TODO reflect on this, do we want zeros?
 
         nec_suff_log_probs_partitioned = {
@@ -282,15 +282,21 @@ def consequent_eq_neq(
                 factual_indices: FACTUAL_NEC_SUFF,
             },
             **{
-                IndexSet(**{antecedent: {ind}}): nec_suff_log_probs
-                for antecedent in (set(antecedents) & set(indices_of(consequent)))
-                for ind in [necessity_world, sufficiency_world]
+                IndexSet(**{antecedent: {ind}}): log_prob
+                for antecedent in (
+                    set(antecedents)
+                    & set(indices_of(consequent, event_dim=support.event_dim))
+                )
+                for ind, log_prob in zip(
+                    [necessity_world, sufficiency_world],
+                    [necessity_log_probs, sufficiency_log_probs],
+                )
             },
         }
 
         new_value = scatter_n(
             nec_suff_log_probs_partitioned,
-            event_dim=support.event_dim,
+            event_dim=0,
         )
 
         return new_value
