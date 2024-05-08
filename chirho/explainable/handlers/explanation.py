@@ -302,7 +302,9 @@ def ExplanationTransform(
     supports: Mapping[str, constraints.Constraint],
     antecedent_alternatives: Optional[Mapping[str, Intervention[S]]] = None,
     consequent_factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
-    witness_preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
+    witness_preemptions: Optional[
+        Mapping[str, Union[Intervention[S], Intervention[T]]]
+    ] = None,
     *,
     antecedent_bias: float = 0.0,
     consequent_scale: float = 1e-2,
@@ -332,14 +334,24 @@ def ExplanationTransform(
                 for a in antecedents.keys()
             }
         else:
-            necessity_interventions = {a: antecedent_alternatives[a] for a in antecedents.keys()}
+            necessity_interventions = {
+                a: antecedent_alternatives[a] for a in antecedents.keys()
+            }
 
-        interventions = {
+        sufficiency_interventions = {
             a: (
-                aa if aa is not None else sufficiency_intervention(supports[a], antecedents=antecedents.keys()),
-                necessity_interventions[a],
+                aa
+                if aa is not None
+                else sufficiency_intervention(
+                    supports[a], antecedents=antecedents.keys()
+                )
             )
             for a, aa in antecedents.items()
+        }
+
+        interventions = {
+            a: (necessity_interventions[a], sufficiency_interventions[a])
+            for a in antecedents.keys()
         }
 
         if consequent_factors is None:
@@ -360,16 +372,21 @@ def ExplanationTransform(
                 for w in set(supports.keys()) - set(consequents.keys())
             }
         else:
-            preemptions = {w: witness_preemptions[w] for w in set(supports.keys()) - set(consequents.keys())}
+            preemptions = {
+                w: witness_preemptions[w]
+                for w in set(supports.keys()) - set(consequents.keys())
+            }
 
         antecedent_handler = SplitSubsets(
             {a: supports[a] for a in antecedents.keys()},
             interventions,
             bias=antecedent_bias,
-            prefix=antecedent_prefix
+            prefix=antecedent_prefix,
         )
         consequent_handler = Factors(factors, prefix=consequent_prefix)
-        witness_handler = Preemptions(preemptions, bias=witness_bias, prefix=witness_prefix)
+        witness_handler = Preemptions(
+            preemptions, bias=witness_bias, prefix=witness_prefix
+        )
         with antecedent_handler, witness_handler, consequent_handler:
             yield {**antecedents, **consequents}
 
