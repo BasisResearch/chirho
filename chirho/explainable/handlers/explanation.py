@@ -1,5 +1,5 @@
 import contextlib
-from typing import Callable, Mapping, Tuple, TypeVar, Union
+from typing import Callable, Mapping, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
 import torch
@@ -24,7 +24,7 @@ T = TypeVar("T")
 @contextlib.contextmanager
 def SplitSubsets(
     supports: Mapping[str, constraints.Constraint],
-    actions,  #: Mapping[str, Union[Intervention[T], Tuple[Intervention[T], ...]]],
+    actions: Mapping[str, Intervention[T]],  # , Union[, Tuple[Intervention[T], ...]]],
     # TODO deal with type-related linting errors
     # which have to do with random_intervention typed with tensors
     # and sufficiency_intervention typed with T
@@ -223,15 +223,12 @@ def SearchForNS(
 
         _antecedents: Mapping[
             str,
-            Tuple[
-                Union[Intervention[torch.Tensor], Intervention[T]],
-                Union[Intervention[torch.Tensor], Intervention[T]],
-            ],
+            Intervention[T],
         ] = {
             a: (
                 random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}"),
                 sufficiency_intervention(s, antecedents.keys()),
-            )
+            )  # type: ignore
             for a, s in antecedents_supports.items()
         }
 
@@ -242,7 +239,8 @@ def SearchForNS(
         # comment: how about extracting supports?
 
         _antecedents = {
-            a: (antecedents[a], sufficiency_intervention(s, antecedents.keys()))
+            a: (antecedents[a], sufficiency_intervention(s, antecedents.keys()))  # type: ignore
+            # TODO fix type error
             for a, s in antecedents_supports.items()
         }
 
