@@ -313,6 +313,26 @@ def ExplanationTransform(
     witness_prefix: str = "__witness_",
     consequent_prefix: str = "__consequent_",
 ):
+    """
+    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
+    On each run, nodes listed in ``actions`` are randomly selected and intervened on with probability ``.5 + bias``
+    (that is, preempted with probability ``.5-bias``). The sampling is achieved by adding stochastic binary preemption
+    nodes associated with intervention candidates. If a given preemption node has value ``0``, the corresponding
+    intervention is executed. See tests in `tests/explainable/test_handlers_explanation.py` for examples.
+
+    :param supports: A mapping of sites to their support constraints.
+    :param antecedent_alternatives: A mapping of antecedent names to interventions.
+    :param consequent_factors: A mapping of consequent names to factor functions.
+    :param witness_preemptions: A mapping of witness names to interventions.
+    :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
+    :param witness_bias: The scalar bias towards not intervening on witnesses. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param antecedent_prefix: A prefix used for naming additional antecedent nodes. Defaults to ``__antecedent_``.
+    :param witness_prefix: A prefix used for naming additional witness nodes. Defaults to ``__witness_``.
+    :param consequent_prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
+
+    :return: A context manager that can be used to query the evidence.
+    """
 
     @contextlib.contextmanager
     def _query(
