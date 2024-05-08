@@ -1,5 +1,5 @@
 import contextlib
-from typing import Callable, Mapping, TypeVar, Union
+from typing import Callable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
 import torch
@@ -12,9 +12,10 @@ from chirho.explainable.handlers.components import (  # sufficiency_intervention
     undo_split,
 )
 from chirho.explainable.handlers.preemptions import Preemptions
-from chirho.interventional.handlers import do
+from chirho.interventional.handlers import Interventions
 from chirho.interventional.ops import Intervention
-from chirho.observational.handlers.condition import Factors
+from chirho.observational.handlers.condition import Factors, Observations
+from chirho.observational.ops import Observation
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -48,7 +49,7 @@ def SplitSubsets(
         for antecedent in actions.keys()
     }
 
-    with do(actions=actions):
+    with Interventions(actions=actions):  # type: ignore
         with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
 
@@ -295,3 +296,81 @@ def SearchForNS(
 
     with antecedent_handler, witness_handler, consequent_eq_neq_handler:
         yield
+
+
+def ExplanationTransform(
+    supports: Mapping[str, constraints.Constraint],
+    antecedent_alternatives: Optional[Mapping[str, Intervention[S]]] = None,
+    consequent_factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
+    witness_preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
+    *,
+    antecedent_bias: float = 0.0,
+    consequent_scale: float = 1e-2,
+    witness_bias: float = 0.0,
+    antecedent_prefix: str = "__antecedent_",
+    witness_prefix: str = "__witness_",
+    consequent_prefix: str = "__consequent_",
+):
+
+    @contextlib.contextmanager
+    def _query(
+        antecedents: Mapping[str, Optional[Observation[S]]],
+        consequents: Mapping[str, Optional[Observation[T]]],
+    ):
+        assert len(antecedents) > 0
+        assert len(consequents) > 0
+        assert not set(consequents.keys()) & set(antecedents.keys())
+        assert any(v is not None for v in antecedents.values())
+        assert any(v is not None for v in consequents.values())
+        assert set(antecedents.keys()) <= set(supports.keys())
+        assert set(consequents.keys()) <= set(supports.keys())
+
+        # default argument values
+        if antecedent_alternatives is None:
+            necessity_interventions = {
+                a: random_intervention(supports[a], name=f"__antecedent_proposal_{a}")
+                for a in antecedents.keys()
+            }
+        else:
+            necessity_interventions = {a: antecedent_alternatives[a] for a in antecedents.keys()}
+
+        interventions = {
+            a: (
+                aa if aa is not None else sufficiency_intervention(supports[a], antecedents=antecedents.keys()),
+                necessity_interventions[a],
+            )
+            for a, aa in antecedents.items()
+        }
+
+        if consequent_factors is None:
+            factors = {
+                c: consequent_eq_neq(
+                    support=supports[c],
+                    antecedents=antecedents.keys(),
+                    scale=consequent_scale,
+                )
+                for c in consequents.keys()
+            }
+        else:
+            factors = {c: consequent_factors[c] for c in consequents.keys()}
+
+        if witness_preemptions is None:
+            preemptions = {
+                w: undo_split(supports[w], antecedents=antecedents.keys())
+                for w in set(supports.keys()) - set(consequents.keys())
+            }
+        else:
+            preemptions = {w: witness_preemptions[w] for w in set(supports.keys()) - set(consequents.keys())}
+
+        antecedent_handler = SplitSubsets(
+            {a: supports[a] for a in antecedents.keys()},
+            interventions,
+            bias=antecedent_bias,
+            prefix=antecedent_prefix
+        )
+        consequent_handler = Factors(factors, prefix=consequent_prefix)
+        witness_handler = Preemptions(preemptions, bias=witness_bias, prefix=witness_prefix)
+        with antecedent_handler, witness_handler, consequent_handler:
+            yield {**antecedents, **consequents}
+
+    return _query
