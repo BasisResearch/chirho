@@ -100,18 +100,21 @@ def SearchForExplanation(
     if witnesses is not None:
         assert set(witnesses.keys()) <= set(supports.keys())
         assert not set(witnesses.keys()) & set(consequents.keys())
+    else:
+        witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
     ########################################
     # Fill in default argument values
     ########################################
     # defaults for alternatives
-    if alternatives is None:
-        necessity_interventions: Mapping[str, Intervention[S]] = {
+    alternatives = (
+        {a: alternatives[a] for a in antecedents.keys()}
+        if alternatives is not None
+        else {
             a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
             for a in antecedents.keys()
         }
-    else:
-        necessity_interventions = {a: alternatives[a] for a in antecedents.keys()}
+    )
 
     sufficiency_interventions = {
         a: (
@@ -123,8 +126,7 @@ def SearchForExplanation(
     }
 
     interventions = {
-        a: (necessity_interventions[a], sufficiency_interventions[a])
-        for a in antecedents.keys()
+        a: (alternatives[a], sufficiency_interventions[a]) for a in antecedents.keys()
     }
 
     # defaults for consequent_factors
@@ -142,22 +144,17 @@ def SearchForExplanation(
     )
 
     # defaults for witness_preemptions
-    if witnesses is None:
-        witness_vars = set(supports.keys()) - set(consequents.keys())
-    else:
-        witness_vars = set(witnesses.keys())
-
     preemptions = (
-        {w: preemptions[w] for w in witness_vars}
+        {w: preemptions[w] for w in witnesses}
         if preemptions is not None
         else {
             w: undo_split(supports[w], antecedents=antecedents.keys())
-            for w in witness_vars
+            for w in witnesses
         }
     )
 
     #############################################
-    # define constituent handlers from arguments
+    # Define constituent handlers from arguments
     #############################################
     antecedent_handler = SplitSubsets(
         {a: supports[a] for a in antecedents.keys()},
@@ -171,7 +168,7 @@ def SearchForExplanation(
     )
 
     #############################################################
-    # apply handlers and yield evidence for factual conditioning
+    # Apply handlers and yield evidence for factual conditioning
     #############################################################
     evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
         **{a: aa for a, aa in antecedents.items() if aa is not None},
