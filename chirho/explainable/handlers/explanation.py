@@ -1,4 +1,5 @@
 import contextlib
+import typing
 from typing import Callable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
@@ -51,7 +52,7 @@ def SplitSubsets(
 
 
 @contextlib.contextmanager
-def ExplanationTransform(
+def SearchForExplanation(
     supports: Mapping[str, constraints.Constraint],
     antecedents: Mapping[str, Optional[Observation[S]]],
     consequents: Mapping[str, Optional[Observation[T]]],
@@ -59,15 +60,13 @@ def ExplanationTransform(
         Mapping[str, Optional[Union[Observation[S], Observation[T]]]]
     ] = None,
     *,
-    antecedent_alternatives: Optional[Mapping[str, Intervention[S]]] = None,
-    consequent_factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
-    witness_preemptions: Optional[
-        Mapping[str, Union[Intervention[S], Intervention[T]]]
-    ] = None,
+    alternatives: Optional[Mapping[str, Intervention[S]]] = None,
+    factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
+    preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
     consequent_scale: float = 1e-2,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
-    prefix: str = "__cause_",
+    prefix: str = "__cause__",
 ):
     """
     A context manager used for a stochastic search of minimal but-for causes among potential interventions.
@@ -80,18 +79,19 @@ def ExplanationTransform(
     :param antecedents: A mapping of antecedent names to observations.
     :param consequents: A mapping of consequent names to observations.
     :param witnesses: A mapping of witness names to observations.
-    :param antecedent_alternatives: A mapping of antecedent names to interventions.
-    :param consequent_factors: A mapping of consequent names to factor functions.
-    :param witness_preemptions: A mapping of witness names to interventions.
+    :param alternatives: A mapping of antecedent names to interventions.
+    :param factors: A mapping of consequent names to factor functions.
+    :param preemptions: A mapping of witness names to interventions.
     :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
-    :param witness_bias: The scalar bias towards not intervening on witnesses. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param antecedent_prefix: A prefix used for naming additional antecedent nodes. Defaults to ``__antecedent_``.
-    :param witness_prefix: A prefix used for naming additional witness nodes. Defaults to ``__witness_``.
-    :param consequent_prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
+    :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
 
     :return: A context manager that can be used to query the evidence.
     """
+    ########################################
+    # Validate input arguments
+    ########################################
     assert len(antecedents) > 0
     assert len(consequents) > 0
     assert not set(consequents.keys()) & set(antecedents.keys())
@@ -101,24 +101,25 @@ def ExplanationTransform(
         assert set(witnesses.keys()) <= set(supports.keys())
         assert not set(witnesses.keys()) & set(consequents.keys())
 
-    # default argument values
-    if antecedent_alternatives is None:
-        necessity_interventions = {
-            a: random_intervention(supports[a], name=f"{prefix}__alternative_{a}")
+    ########################################
+    # Fill in default argument values
+    ########################################
+    # defaults for alternatives
+    if alternatives is None:
+        necessity_interventions: Mapping[str, Intervention[S]] = {
+            a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
             for a in antecedents.keys()
         }
     else:
-        necessity_interventions = {
-            a: antecedent_alternatives[a] for a in antecedents.keys()
-        }
+        necessity_interventions = {a: alternatives[a] for a in antecedents.keys()}
 
     sufficiency_interventions = {
         a: (
-            aa
-            if aa is not None
+            antecedents[a]
+            if antecedents[a] is not None
             else sufficiency_intervention(supports[a], antecedents=antecedents.keys())
         )
-        for a, aa in antecedents.items()
+        for a in antecedents.keys()
     }
 
     interventions = {
@@ -126,8 +127,11 @@ def ExplanationTransform(
         for a in antecedents.keys()
     }
 
-    if consequent_factors is None:
-        factors = {
+    # defaults for consequent_factors
+    factors = (
+        {c: factors[c] for c in consequents.keys()}
+        if factors is not None
+        else {
             c: consequent_eq_neq(
                 support=supports[c],
                 antecedents=antecedents.keys(),
@@ -135,36 +139,44 @@ def ExplanationTransform(
             )
             for c in consequents.keys()
         }
-    else:
-        factors = {c: consequent_factors[c] for c in consequents.keys()}
+    )
 
+    # defaults for witness_preemptions
     if witnesses is None:
         witness_vars = set(supports.keys()) - set(consequents.keys())
     else:
         witness_vars = set(witnesses.keys())
 
-    if witness_preemptions is None:
-        preemptions = {
+    preemptions = (
+        {w: preemptions[w] for w in witness_vars}
+        if preemptions is not None
+        else {
             w: undo_split(supports[w], antecedents=antecedents.keys())
             for w in witness_vars
         }
-    else:
-        preemptions = {w: witness_preemptions[w] for w in witness_vars}
+    )
 
+    #############################################
+    # define constituent handlers from arguments
+    #############################################
     antecedent_handler = SplitSubsets(
         {a: supports[a] for a in antecedents.keys()},
-        interventions,
+        typing.cast(Mapping[str, Intervention[S]], interventions),
         bias=antecedent_bias,
         prefix=f"{prefix}__antecedent_",
     )
-    consequent_handler = Factors(factors, prefix=f"{prefix}__consequent_")
-    witness_handler = Preemptions(
+    consequent_handler: Factors[T] = Factors(factors, prefix=f"{prefix}__consequent_")
+    witness_handler: Preemptions = Preemptions(
         preemptions, bias=witness_bias, prefix=f"{prefix}__witness_"
     )
+
+    #############################################################
+    # apply handlers and yield evidence for factual conditioning
+    #############################################################
+    evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
+        **{a: aa for a, aa in antecedents.items() if aa is not None},
+        **{c: cc for c, cc in consequents.items() if cc is not None},
+        **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
+    }
     with antecedent_handler, witness_handler, consequent_handler:
-        evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
-            **{a: aa for a, aa in antecedents.items() if aa is not None},
-            **{c: cc for c, cc in consequents.items() if cc is not None},
-            **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
-        }
         yield evidence
