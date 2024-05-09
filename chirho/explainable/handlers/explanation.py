@@ -69,11 +69,7 @@ def SearchForExplanation(
     prefix: str = "__cause__",
 ):
     """
-    A context manager used for a stochastic search of minimal but-for causes among potential interventions.
-    On each run, nodes listed in ``actions`` are randomly selected and intervened on with probability ``.5 + bias``
-    (that is, preempted with probability ``.5-bias``). The sampling is achieved by adding stochastic binary preemption
-    nodes associated with intervention candidates. If a given preemption node has value ``0``, the corresponding
-    intervention is executed.
+    A handler for transforming causal explanation queries into probabilistic inferences.
 
     When used as a context manager, ``SearchForExplanation`` yields a dictionary of observations
     that can be used with ``condition`` to simultaneously impose an additional factivity constraint
@@ -84,9 +80,9 @@ def SearchForExplanation(
                 model()
 
     :param supports: A mapping of sites to their support constraints.
-    :param antecedents: A mapping of antecedent names to observations.
-    :param consequents: A mapping of consequent names to observations.
-    :param witnesses: A mapping of witness names to observations.
+    :param antecedents: A mapping of antecedent names to optional observations.
+    :param consequents: A mapping of consequent names to optional observations.
+    :param witnesses: A mapping of witness names to optional observations.
     :param alternatives: An optional mapping of names to alternative antecedent interventions.
     :param factors: An optional mapping of names to consequent constraint factors.
     :param preemptions: An optional mapping of names to witness preemption values.
@@ -109,6 +105,7 @@ def SearchForExplanation(
         assert set(witnesses.keys()) <= set(supports.keys())
         assert not set(witnesses.keys()) & set(consequents.keys())
     else:
+        # if witness candidates are not provided, use all non-consequent nodes
         witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
     ##################################################################
