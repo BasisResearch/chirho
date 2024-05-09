@@ -78,7 +78,7 @@ def SearchForExplanation(
 
     When used as a context manager, ``SearchForExplanation`` yields a dictionary of observations
     that can be used with ``condition`` to simultaneously impose an additional factivity constraint
-    alongside the necessity and sufficiency constraints it implements::
+    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation`` ::
 
         with SearchForExplanation(...) as evidence:
             with condition(data=evidence):
@@ -88,9 +88,9 @@ def SearchForExplanation(
     :param antecedents: A mapping of antecedent names to observations.
     :param consequents: A mapping of consequent names to observations.
     :param witnesses: A mapping of witness names to observations.
-    :param alternatives: A mapping of antecedent names to interventions.
-    :param factors: A mapping of consequent names to factor functions.
-    :param preemptions: A mapping of witness names to interventions.
+    :param alternatives: An optional mapping of names to alternative antecedent interventions.
+    :param factors: An optional mapping of names to consequent constraint factors.
+    :param preemptions: An optional mapping of names to witness preemption values.
     :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
     :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
