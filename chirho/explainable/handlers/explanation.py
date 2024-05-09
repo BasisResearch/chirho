@@ -111,10 +111,10 @@ def SearchForExplanation(
     else:
         witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
-    ########################################
-    # Fill in default argument values
-    ########################################
-    # defaults for alternatives
+    ##################################################################
+    # Fill in default argument values and create constituent handlers
+    ##################################################################
+    # defaults for necessity interventions
     alternatives = (
         {a: alternatives[a] for a in antecedents.keys()}
         if alternatives is not None
@@ -124,7 +124,8 @@ def SearchForExplanation(
         }
     )
 
-    sufficiency_interventions = {
+    # defaults for sufficiency interventions
+    sufficiency_actions = {
         a: (
             antecedents[a]
             if antecedents[a] is not None
@@ -133,46 +134,43 @@ def SearchForExplanation(
         for a in antecedents.keys()
     }
 
-    interventions = {
-        a: (alternatives[a], sufficiency_interventions[a]) for a in antecedents.keys()
-    }
-
-    # defaults for consequent_factors
-    factors = (
-        {c: factors[c] for c in consequents.keys()}
-        if factors is not None
-        else {
-            c: consequent_eq_neq(
-                support=supports[c],
-                antecedents=antecedents.keys(),
-                scale=consequent_scale,
-            )
-            for c in consequents.keys()
-        }
-    )
-
-    # defaults for witness_preemptions
-    preemptions = (
-        {w: preemptions[w] for w in witnesses}
-        if preemptions is not None
-        else {
-            w: undo_split(supports[w], antecedents=antecedents.keys())
-            for w in witnesses
-        }
-    )
-
-    #############################################
-    # Define constituent handlers from arguments
-    #############################################
+    # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
         {a: supports[a] for a in antecedents.keys()},
-        typing.cast(Mapping[str, Intervention[S]], interventions),
+        {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},
         bias=antecedent_bias,
         prefix=f"{prefix}__antecedent_",
     )
-    consequent_handler: Factors[T] = Factors(factors, prefix=f"{prefix}__consequent_")
-    witness_handler: Preemptions = Preemptions(
-        preemptions, bias=witness_bias, prefix=f"{prefix}__witness_"
+
+    # defaults for consequent_factors
+    consequent_handler: Factors[T] = Factors(
+        (
+            {c: factors[c] for c in consequents.keys()}
+            if factors is not None
+            else {
+                c: consequent_eq_neq(
+                    support=supports[c],
+                    antecedents=antecedents.keys(),
+                    scale=consequent_scale,
+                )
+                for c in consequents.keys()
+            }
+        ),
+        prefix=f"{prefix}__consequent_",
+    )
+
+    # defaults for witness_preemptions
+    witness_handler = Preemptions(
+        (
+            {w: preemptions[w] for w in witnesses}
+            if preemptions is not None
+            else {
+                w: undo_split(supports[w], antecedents=antecedents.keys())
+                for w in witnesses
+            }
+        ),
+        bias=witness_bias,
+        prefix=f"{prefix}__witness_",
     )
 
     ######################################################################
