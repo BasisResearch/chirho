@@ -167,9 +167,9 @@ def SearchForExplanation(
         preemptions, bias=witness_bias, prefix=f"{prefix}__witness_"
     )
 
-    #############################################################
-    # Apply handlers and yield evidence for factual conditioning
-    #############################################################
+    ######################################################################
+    # Apply handlers and yield evidence for optional factual conditioning
+    ######################################################################
     evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
         **{a: aa for a, aa in antecedents.items() if aa is not None},
         **{c: cc for c, cc in consequents.items() if cc is not None},
