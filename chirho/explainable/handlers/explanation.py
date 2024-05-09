@@ -46,6 +46,7 @@ def SplitSubsets(
         for antecedent in actions.keys()
     }
 
+    # TODO fix Intervention type confusion
     with Interventions(actions=actions):  # type: ignore
         with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
