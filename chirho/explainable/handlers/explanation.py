@@ -80,7 +80,7 @@ def SearchForExplanation(
     that can be used with ``condition`` to simultaneously impose an additional factivity constraint
     alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation`` ::
 
-        with SearchForExplanation(...) as evidence:
+        with SearchForExplanation(supports, antecedents, consequents, ...) as evidence:
             with condition(data=evidence):
                 model()
 
