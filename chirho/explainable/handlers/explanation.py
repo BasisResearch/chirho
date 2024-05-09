@@ -12,7 +12,7 @@ from chirho.explainable.handlers.components import (
     undo_split,
 )
 from chirho.explainable.handlers.preemptions import Preemptions
-from chirho.interventional.handlers import Interventions
+from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import Factors
 from chirho.observational.ops import Observation
@@ -46,8 +46,7 @@ def SplitSubsets(
         for antecedent in actions.keys()
     }
 
-    # TODO fix Intervention type confusion
-    with Interventions(actions=actions):  # type: ignore
+    with do(actions=actions):
         with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
             yield
 
