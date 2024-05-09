@@ -90,12 +90,18 @@ def ExplanationTransform(
     def _query(
         antecedents: Mapping[str, Optional[Observation[S]]],
         consequents: Mapping[str, Optional[Observation[T]]],
+        witnesses: Optional[
+            Mapping[str, Optional[Union[Observation[S], Observation[T]]]]
+        ] = None,
     ):
         assert len(antecedents) > 0
         assert len(consequents) > 0
         assert not set(consequents.keys()) & set(antecedents.keys())
         assert set(antecedents.keys()) <= set(supports.keys())
         assert set(consequents.keys()) <= set(supports.keys())
+        if witnesses is not None:
+            assert set(witnesses.keys()) <= set(supports.keys())
+            assert not set(witnesses.keys()) & set(consequents.keys())
 
         # default argument values
         if antecedent_alternatives is None:
@@ -136,16 +142,18 @@ def ExplanationTransform(
         else:
             factors = {c: consequent_factors[c] for c in consequents.keys()}
 
+        if witnesses is None:
+            witness_vars = set(supports.keys()) - set(consequents.keys())
+        else:
+            witness_vars = set(witnesses.keys())
+
         if witness_preemptions is None:
             preemptions = {
                 w: undo_split(supports[w], antecedents=antecedents.keys())
-                for w in set(supports.keys()) - set(consequents.keys())
+                for w in witness_vars
             }
         else:
-            preemptions = {
-                w: witness_preemptions[w]
-                for w in set(supports.keys()) - set(consequents.keys())
-            }
+            preemptions = {w: witness_preemptions[w] for w in witness_vars}
 
         antecedent_handler = SplitSubsets(
             {a: supports[a] for a in antecedents.keys()},
@@ -161,6 +169,7 @@ def ExplanationTransform(
             evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
                 **{a: aa for a, aa in antecedents.items() if aa is not None},
                 **{c: cc for c, cc in consequents.items() if cc is not None},
+                **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
             }
             yield evidence
 
