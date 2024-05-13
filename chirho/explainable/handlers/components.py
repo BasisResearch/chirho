@@ -8,7 +8,6 @@ import torch
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
-
 from chirho.observational.handlers import soft_eq, soft_neq
 from chirho.observational.ops import Observation
 

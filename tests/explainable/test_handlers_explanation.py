@@ -71,9 +71,9 @@ def test_SearchForExplanation():
         "bottle_shatters": constraints.boolean,
     }
 
-    antecedents = {"sally_throws": torch.tensor([1.0])}
+    antecedents = {"sally_throws": torch.tensor(1.0)}
 
-    consequents = {"bottle_shatters": torch.tensor([1.0])}
+    consequents = {"bottle_shatters": torch.tensor(1.0)}
 
     witnesses = {
         "bill_throws": None,
@@ -87,7 +87,7 @@ def test_SearchForExplanation():
         "prob_bottle_shatters_if_sally",
         "prob_bottle_shatters_if_bill",
     ]
-    observations = {k: torch.tensor([1.0]) for k in observation_keys}
+    observations = {k: torch.tensor(1.0) for k in observation_keys}
 
     observations_conditioning = condition(
         data={k: torch.as_tensor(v) for k, v in observations.items()}
