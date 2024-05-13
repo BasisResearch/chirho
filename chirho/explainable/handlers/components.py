@@ -1,5 +1,5 @@
 import itertools
-from typing import Callable, Iterable, MutableMapping, TypeVar
+from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -9,8 +9,8 @@ from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
 
-# from chirho.interventional.ops import intervene
 from chirho.observational.handlers import soft_eq, soft_neq
+from chirho.observational.ops import Observation
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -19,6 +19,7 @@ T = TypeVar("T")
 def sufficiency_intervention(
     support: constraints.Constraint,
     antecedents: Iterable[str] = [],
+    sufficiency_world=2,
 ) -> Callable[[T], T]:
     """
     Creates a sufficiency intervention for a single sample site, determined by
@@ -43,18 +44,18 @@ def sufficiency_intervention(
 
         indices = IndexSet(
             **{
-                name: ind
+                name: sufficiency_world
                 for name, ind in get_factual_indices().items()
                 if name in antecedents
             }
         )
 
-        factual_value = gather(
+        sufficiency_value = gather(
             value,
             indices,
             event_dim=support.event_dim,
         )
-        return factual_value
+        return sufficiency_value
 
     return _sufficiency_intervention
 
@@ -213,6 +214,7 @@ def consequent_neq(
 
 def consequent_eq_neq(
     support: constraints.Constraint,
+    proposed_consequent: Optional[Observation[T]],
     antecedents: Iterable[str] = [],
     **kwargs,
 ) -> Callable[[T], torch.Tensor]:
@@ -257,7 +259,6 @@ def consequent_eq_neq(
             }
         )
 
-        factual_value = gather(consequent, factual_indices, event_dim=support.event_dim)
         necessity_value = gather(
             consequent, necessity_indices, event_dim=support.event_dim
         )
@@ -265,17 +266,32 @@ def consequent_eq_neq(
             consequent, sufficiency_indices, event_dim=support.event_dim
         )
 
-        necessity_log_probs = soft_neq(
-            support, necessity_value, factual_value, **kwargs
-        )
-        sufficiency_log_probs = soft_eq(
-            support, sufficiency_value, factual_value, **kwargs
+        # compare to proposed consequent if provided
+        # as then the sufficiency value can be different
+        # due to witness preemption
+        necessity_log_probs = (
+            soft_neq(
+                support,
+                necessity_value,
+                proposed_consequent,
+                **kwargs,
+            )
+            if proposed_consequent is not None
+            else soft_neq(
+                support,
+                necessity_value,
+                sufficiency_value,
+                **kwargs,
+            )
         )
 
-        # nec_suff_log_probs = torch.add(necessity_log_probs, sufficiency_log_probs)
+        sufficiency_log_probs = (
+            soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
+            if proposed_consequent is not None
+            else torch.zeros_like(necessity_log_probs)
+        )
 
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
-        # TODO reflect on this, do we want zeros?
 
         nec_suff_log_probs_partitioned = {
             **{

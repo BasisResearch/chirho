@@ -1,5 +1,4 @@
 import contextlib
-import typing
 from typing import Callable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
@@ -111,6 +110,7 @@ def SearchForExplanation(
     ##################################################################
     # Fill in default argument values and create constituent handlers
     ##################################################################
+
     # defaults for necessity interventions
     alternatives = (
         {a: alternatives[a] for a in antecedents.keys()}
@@ -134,26 +134,9 @@ def SearchForExplanation(
     # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
         {a: supports[a] for a in antecedents.keys()},
-        {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},
+        {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},  # type: ignore
         bias=antecedent_bias,
         prefix=f"{prefix}__antecedent_",
-    )
-
-    # defaults for consequent_factors
-    consequent_handler: Factors[T] = Factors(
-        (
-            {c: factors[c] for c in consequents.keys()}
-            if factors is not None
-            else {
-                c: consequent_eq_neq(
-                    support=supports[c],
-                    antecedents=antecedents.keys(),
-                    scale=consequent_scale,
-                )
-                for c in consequents.keys()
-            }
-        ),
-        prefix=f"{prefix}__consequent_",
     )
 
     # defaults for witness_preemptions
@@ -168,6 +151,24 @@ def SearchForExplanation(
         ),
         bias=witness_bias,
         prefix=f"{prefix}__witness_",
+    )
+
+    #
+    consequent_handler: Factors[T] = Factors(
+        (
+            {c: factors[c] for c in consequents.keys()}
+            if factors is not None
+            else {
+                c: consequent_eq_neq(
+                    support=supports[c],
+                    proposed_consequent=consequents[c],  # added this
+                    antecedents=antecedents.keys(),
+                    scale=consequent_scale,
+                )
+                for c in consequents.keys()
+            }
+        ),
+        prefix=f"{prefix}__consequent_",
     )
 
     ######################################################################
