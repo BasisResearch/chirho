@@ -7,11 +7,7 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.explainable.handlers.components import undo_split
-from chirho.explainable.handlers.explanation import (
-    SearchForExplanation,
-    SearchForNS,
-    SplitSubsets,
-)
+from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import condition
@@ -67,33 +63,50 @@ def stones_bayesian_model():
 
 
 def test_SearchForExplanation():
-    observations = {
-        "prob_sally_throws": 1.0,
-        "prob_bill_throws": 1.0,
-        "prob_sally_hits": 1.0,
-        "prob_bill_hits": 1.0,
-        "prob_bottle_shatters_if_sally": 1.0,
-        "prob_bottle_shatters_if_bill": 1.0,
+    supports = {
+        "sally_throws": constraints.boolean,
+        "bill_throws": constraints.boolean,
+        "sally_hits": constraints.boolean,
+        "bill_hits": constraints.boolean,
+        "bottle_shatters": constraints.boolean,
     }
+
+    antecedents = {"sally_throws": torch.tensor(1.0)}
+
+    consequents = {"bottle_shatters": torch.tensor(1.0)}
+
+    witnesses = {
+        "bill_throws": None,
+    }
+
+    observation_keys = [
+        "prob_sally_throws",
+        "prob_bill_throws",
+        "prob_sally_hits",
+        "prob_bill_hits",
+        "prob_bottle_shatters_if_sally",
+        "prob_bottle_shatters_if_bill",
+    ]
+    observations = {k: torch.tensor(1.0) for k in observation_keys}
 
     observations_conditioning = condition(
         data={k: torch.as_tensor(v) for k, v in observations.items()}
     )
 
-    antecedents = {"sally_throws": 0.0}
-    witnesses = {"bill_throws": constraints.boolean, "bill_hits": constraints.boolean}
-    consequents = {"bottle_shatters": constraints.boolean}
+    alternatives = {"sally_throws": 0.0}
 
     with MultiWorldCounterfactual() as mwc:
         with SearchForExplanation(
+            supports=supports,
             antecedents=antecedents,
-            witnesses=witnesses,
             consequents=consequents,
+            witnesses=witnesses,
+            alternatives=alternatives,
             antecedent_bias=0.1,
             consequent_scale=1e-8,
         ):
             with observations_conditioning:
-                with pyro.plate("sample", 200):
+                with pyro.plate("sample", 20):
                     with pyro.poutine.trace() as tr:
                         stones_bayesian_model()
 
@@ -101,9 +114,9 @@ def test_SearchForExplanation():
     tr = tr.trace.nodes
 
     with mwc:
-        log_probs = (
+        nec_log_probs = (
             gather(
-                tr["__consequent_bottle_shatters"]["log_prob"],
+                tr["__cause____consequent_bottle_shatters"]["log_prob"],
                 IndexSet(**{i: {1} for i in antecedents.keys()}),
                 event_dim=0,
             )
@@ -111,17 +124,17 @@ def test_SearchForExplanation():
             .tolist()
         )
 
-        st_obs = (
+        suff_log_probs = (
             gather(
-                tr["sally_throws"]["value"],
-                IndexSet(**{i: {0} for i in antecedents.keys()}),
+                tr["__cause____consequent_bottle_shatters"]["log_prob"],
+                IndexSet(**{i: {2} for i in antecedents.keys()}),
                 event_dim=0,
             )
             .squeeze()
             .tolist()
         )
 
-        st_int = (
+        st_nec = (
             gather(
                 tr["sally_throws"]["value"],
                 IndexSet(**{i: {1} for i in antecedents.keys()}),
@@ -131,7 +144,7 @@ def test_SearchForExplanation():
             .tolist()
         )
 
-        bh_int = (
+        bh_nec = (
             gather(
                 tr["bill_hits"]["value"],
                 IndexSet(**{i: {1} for i in antecedents.keys()}),
@@ -141,75 +154,39 @@ def test_SearchForExplanation():
             .tolist()
         )
 
-        st_ant = tr["__antecedent_sally_throws"]["value"].squeeze().tolist()
-
-        assert all(lp <= -1e5 or lp > math.log(0.5) for lp in log_probs)
-
-        for step in range(200):
-            bottle_will_shatter = (
-                st_obs[step] != st_int[step] and st_ant == 0.0
-            ) or bh_int[step] == 1.0
-            if bottle_will_shatter:
-                assert log_probs[step] <= -1e5
-
-    witnesses = {}
-    with MultiWorldCounterfactual():
-        with SearchForExplanation(
-            antecedents=antecedents,
-            witnesses=witnesses,
-            consequents=consequents,
-            antecedent_bias=0.1,
-            consequent_scale=1e-8,
-        ):
-            with observations_conditioning:
-                with pyro.plate("sample", 200):
-                    with pyro.poutine.trace() as tr_empty:
-                        stones_bayesian_model()
-
-    assert tr_empty.trace.nodes
-
-
-def test_SearchForNS():
-    observations = {
-        "prob_sally_throws": 1.0,
-        "prob_bill_throws": 1.0,
-        "prob_sally_hits": 1.0,
-        "prob_bill_hits": 1.0,
-        "prob_bottle_shatters_if_sally": 1.0,
-        "prob_bottle_shatters_if_bill": 1.0,
-    }
-
-    observations_conditioning = condition(
-        data={k: torch.as_tensor(v) for k, v in observations.items()}
-    )
-
-    antecedents = {"sally_throws": 0.0}
-    witnesses = {"bill_throws": constraints.boolean, "bill_hits": constraints.boolean}
-    consequents = {"bottle_shatters": constraints.boolean}
-
-    with MultiWorldCounterfactual() as mwc:
-        with SearchForNS(
-            antecedents=antecedents,
-            witnesses=witnesses,
-            consequents=consequents,
-            antecedent_bias=0.1,
-            consequent_scale=1e-8,
-        ):
-            with observations_conditioning:
-                with pyro.plate("sample", 200):
-                    with pyro.poutine.trace() as tr:
-                        stones_bayesian_model()
-
-    tr.trace.compute_log_prob()
-    tr = tr.trace.nodes
-
-    with mwc:
-        eq_neq_logs = gather(
-            tr["__consequent__eq_neq_bottle_shatters"]["log_prob"],
-            IndexSet(**{"sally_throws": {1}}),
+        st_suff = (
+            gather(
+                tr["sally_throws"]["value"],
+                IndexSet(**{i: {2} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
         )
 
-    assert eq_neq_logs.shape[-1] == 200
+        bh_suff = (
+            gather(
+                tr["bill_hits"]["value"],
+                IndexSet(**{i: {2} for i in antecedents.keys()}),
+                event_dim=0,
+            )
+            .squeeze()
+            .tolist()
+        )
+
+        assert all(lp <= -1e5 or lp > math.log(0.5) for lp in nec_log_probs)
+        assert all(lp <= -10 or lp == 0.0 for lp in suff_log_probs)
+
+        for step in range(20):
+            if st_nec[step] == 0 and bh_nec[step] == 0:
+                assert nec_log_probs[step] == 0.0
+            else:
+                assert nec_log_probs[step] <= -1e10
+
+            if st_suff[step] == 1 or bh_suff[step] == 1:
+                assert suff_log_probs[step] == 0.0
+            else:
+                assert suff_log_probs[step] <= -10
 
 
 def test_SplitSubsets_single_layer():
