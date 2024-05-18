@@ -377,6 +377,7 @@ def test_consequent_eq_neq(plate_size, event_shape):
     factors = {
         "consequent": consequent_eq_neq(
             support=constraints.independent(constraints.real, len(event_shape)),
+            proposed_consequent=torch.Tensor([0.1]),  # added this
             antecedents=["w"],
         )
     }
