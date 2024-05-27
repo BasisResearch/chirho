@@ -182,7 +182,7 @@ function simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
     u0 = [B1, B2, B3]
     # FIXME WIP so we need compile the problem once and then reparameterize with pstruct actually.
     prob = create_three_level_ss_problem(u0, pstruct)
-    sol = solve(prob, NLSolveJL(), abstol=1e-14,reltol=1e-14)
+    sol = solve(prob, NLSolveJL(), abstol=1e-14,reltol=1e-14)  # TODO WIP change these back to defaults and see if it works with FD.
     return sol
 end
 
