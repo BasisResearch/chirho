@@ -52,7 +52,7 @@ flight_landing_times = torch.tensor(
     [landing_time, landing_time + 1e-2, landing_time + 2e-2]
 )
 flight_landing_data = {k: torch.tensor([v] * 3) for (k, v) in landing_data.items()}
-reparam_config = AutoSoftConditioning(scale=0.01, alpha=0.5)
+reparam_config = AutoSoftConditioning(scale=0.01)
 
 twin_world = TwinWorldCounterfactual()
 intervention = StaticIntervention(time=superspreader_time, intervention=counterfactual)
