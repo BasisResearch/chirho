@@ -3,6 +3,7 @@ using SteadyStateDiffEq
 using NonlinearSolve
 using SciMLNLSolve
 using Statistics
+using ModelingToolkit
 
 # The general holling-tanner differential equation.
 # This subtracts predator and fishing mortality from capacity-limited growth.
@@ -454,11 +455,77 @@ function pure_ss(x)
     return simulate_ss_three_level_fishery(B1, B2, B3, pstruct)
 end
 
+function build_fast_pure_ss(x0)
+    pstruct0 = ThreeLevelFisheryParameters(x0[4:end]...)
+    u00 = x0[1:3]
+
+    # Create the problem once and remake in the call.
+    print("Creating Problem...")
+    prob0 = create_three_level_ss_problem(u00, pstruct0)
+
+    return function(x)
+        u0 = x[1:3]
+        p = x[4:end]
+        prob = remake(prob0; u0=u0, p=p)
+        return solve(prob, NLSolveJL())
+    end
+end
+
 function pure_t(x)
     pstruct = ThreeLevelFisheryParameters(x[4:17]...)
     tspan = (0.0, x[end])
 
     prob = create_three_level_problem(x[1:3], tspan, pstruct)
     sol = solve(prob, Tsit5())
-    return sol(x[18:end])
+    return sol(x[18:end]) # TODO extract number of parameters from struct?
 end
+
+function build_fast_pure_t(x0)
+    p0 = x0[4:17]
+    pstruct0 = ThreeLevelFisheryParameters(p0...)
+    u00 = x0[1:3]
+    t0 = (0.0, x0[end])
+
+    # Create the problem once and remake in the call.
+    print("Creating Problem...")
+    prob0 = create_three_level_problem(u00, t0, pstruct0)
+    # Somehow this makes it slower?
+    # prob0sys = complete(modelingtoolkitize(prob0))
+    # prob0mtk = ODEProblem(prob0sys, u00, t0, p0)  #; jac=true)
+
+    return function(x)
+        u0 = x[1:3]
+        p = x[4:17]
+        saveat = x[18:end]
+        t = (0.0, saveat[end])
+
+        # prob = remake(prob0mtk; u0=u0, p=p, tspan=t)
+        prob = remake(prob0; u0=u0, p=p, tspan=t)
+
+        # sol = solve(prob, Tsit5(), saveat=saveat)
+        # return sol.u
+        sol = solve(prob, Tsit5())
+        return sol(saveat)
+    end
+end
+
+# # We have the following x0 array
+# # [
+# #     9.5883e+02, 1.7436e+02, 3.3476e+01, 2.0000e+00, 1.0000e+03, 5.0000e-01,
+# #     1.0000e+02, 4.6075e-01, 1.0000e+00, 2.0000e-01, 5.0000e-01, 1.0000e+01,
+# #     4.7431e-01, 2.5000e-01, 2.0000e-01, 1.0000e-02, 1.6409e-01, 0.0000e+00,
+# #     5.0000e-01, 1.0000e+00, 1.5000e+00, 2.0000e+00, 2.5000e+00, 3.0000e+00,
+# #     3.5000e+00, 4.0000e+00, 4.5000e+00
+# # ]
+#
+# # Now, build_fast_pure_t with it, and then execute the resulting function.
+# x0_ = [
+#     9.5883e+02, 1.7436e+02, 3.3476e+01, 2.0000e+00, 1.0000e+03, 5.0000e-01,
+#     1.0000e+02, 4.6075e-01, 1.0000e+00, 2.0000e-01, 5.0000e-01, 1.0000e+01,
+#     4.7431e-01, 2.5000e-01, 2.0000e-01, 1.0000e-02, 1.6409e-01, 0.0000e+00,
+#     5.0000e-01, 1.0000e+00, 1.5000e+00, 2.0000e+00, 2.5000e+00, 3.0000e+00,
+#     3.5000e+00, 4.0000e+00, 4.5000e+00
+# ]
+#
+# fast_pure_t = build_fast_pure_t(x0_)
+# u_ = fast_pure_t(x0_)
