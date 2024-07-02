@@ -5,6 +5,10 @@ import pyro
 import torch
 
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
+from torch.profiler import profile, ProfilerActivity, record_function
+
+import psutil
+from chirho.robust.internals.chunkable_jacfwd import jacfwd as chunked_jacfwd
 
 
 class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
@@ -73,15 +77,71 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
                 "Please use torch.no_grad() to avoid this issue. See example in the docstring."
             )
         param_eif = linearized(*points, *args, **kwargs)
-        msg["value"] = torch.vmap(
-            lambda d: torch.func.jvp(
-                lambda p: func_target(p, *args, **kwargs),
+        # print(param_eif)
+        print('B:', psutil.virtual_memory()[3] / 1000000000)
+
+        def partial_func_target(p):
+            ret = func_target(p, *args, **kwargs)
+            # try:
+            #     for k, v in ret.items():
+            #         print(k, v.shape)
+            # except (TypeError, AttributeError):
+            #     print('ret shape', ret.shape)
+            #
+            # # Print value if ret is just a scalar.
+            # if ret.shape == torch.Size([]):
+            #     print('ret val', ret)
+
+            return ret
+
+        def jvp(d):
+            return torch.func.jvp(
+                partial_func_target,
                 (target_params,),
-                (d,),
-            )[1],
-            in_dims=0,
-            randomness="different",
-        )(param_eif)
+                (d,)
+            )[1]
+        # #
+        # msg["value"] = torch.vmap(
+        #     jvp,
+        #     in_dims=0,
+        #     randomness="different",
+        # )(param_eif)
+
+        def jacrev_expanded_for_bmm(fn, primals):
+            jac_fn = torch.func.jacrev(fn)
+            jac_ret = jac_fn(primals)
+
+            # Now, expand the jacobian return to matrices. We do this by reshaping into 2 dimensions, and ensuring that
+            #  the last dimension is always equal to the number of elements in the primal.
+            jac_exp = {
+                k: torch.reshape(jac_ret[k], (1, -1, v.shape[-1] if len(v.shape) > 0 else 1)) for k, v in primals.items()
+            }
+
+            return jac_exp
+
+        jac = jacrev_expanded_for_bmm(partial_func_target, target_params)
+
+        def expand_for_matmul(doft, primals):
+            # We need to expand the doft to be transpose of the jacobian.
+            doft_exp = {
+                # FIXME this won't handle non flat left batching.
+                k: torch.reshape(doft[k], (-1, v.shape[-1] if len(v.shape) > 0 else 1, 1)) for k, v in primals.items()
+            }
+            return doft_exp
+
+        param_eif_exp = expand_for_matmul(param_eif, target_params)
+
+        msg["value"] = torch.stack([torch.matmul(jac[k], param_eif_exp[k])[..., 0, 0] for k in jac.keys()]).sum(0)
+
+        # assert torch.allclose(
+        #     msg["value"],
+        #     torch.vmap(
+        #             jvp,
+        #             in_dims=0,
+        #             randomness="different",
+        #         )(param_eif),
+        # )
+
         msg["done"] = True
 
 
