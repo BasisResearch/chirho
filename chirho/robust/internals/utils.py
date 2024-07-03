@@ -139,6 +139,14 @@ def pytree_generalized_manual_revjvp(
     def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
         _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
 
+        # FIXME if the output of fn is just a single tensor, then the jac doesn't actually return a treemap
+        #  with that output as a single high level node. So the recursion won't match the subtree because this already
+        #  matches the subtree. Ah, okay, so we need to check if this top level matches the subtree.
+        if tspec == sub_tspec:
+            flattened, _ = tree_flatten(pytree)
+            yield flattened
+            return
+
         # Extract child trees.
         node_type = _get_node_type(pytree)
         flatten_fn = SUPPORTED_NODES[node_type].flatten_fn

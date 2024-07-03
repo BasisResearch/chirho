@@ -6,12 +6,8 @@ import torch
 
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 from chirho.robust.internals.utils import make_flatten_unflatten
-from torch.profiler import profile, ProfilerActivity, record_function
-import functools
-from torch.utils._pytree import tree_flatten, tree_unflatten
-
-import psutil
-from chirho.robust.internals.chunkable_jacfwd import jacfwd as chunked_jacfwd
+from torch.utils._pytree import tree_flatten
+from chirho.robust.internals.utils import pytree_generalized_manual_revjvp
 
 
 class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
@@ -81,37 +77,11 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
             )
         param_eif = linearized(*points, *args, **kwargs)
 
-        # Compute the jacobian of the target functional with respect to the target parameters.
-        # What happens if func_target returns
-        jac_fn = torch.func.jacrev(lambda p: func_target(p, *args, **kwargs))
-        jac_ret = jac_fn(target_params)
-
-        # Flatten for easier matrix vector product.
-        flat_jac_ret, jac_ret_tspec = tree_flatten(jac_ret)
-        flat_param_eif, param_eif_tspec = tree_flatten(param_eif)
-
-        # BSTORM
-        # Okay, so I think the jac will always return a tensor with shape (*output_shape, *input_shape). This actually
-        #  does make sense. So in that case, we know the input shape, and can always reshape the jacobian to be batched
-        #  as (1, -1, product(input_shape)).
-        # Then if we always assume the param_eif is (*batch_shape, *input_shape)...then we can reshape it to be
-        #  (*batch_shape
-
-        # Convert everything batched matrices for a batched matrix vector product.
-        # Assumption: param_eif's leftmost dimension is a flattened batch dimension.
-
-        # The input dimension of the jacobian can be treated as a batch dimension, so we can unflatten to get the full
-        #  jacobian in matrix form. We want to broadcast this over the batched param_eif, prepend a dimension.
-        flatten_jac, _ = make_flatten_unflatten(jac_ret)
-        jac_ret_bmat = flatten_jac(jac_ret)[None, :, :]  # .shape == (1, num_ouputs, num_params)
-
-        # And we can do the same with param_eif, but this already has an actual left batch dimension, so this will
-        #  need to have a dimension added to the right to emulate a batched row vector.
-        flatten_param_eif, _ = make_flatten_unflatten(param_eif)
-        param_eif_bmat = flatten_param_eif(param_eif)[:, :, None]  # .shape == (batch_size, num_params, 1)
-
-        # Perform the batched jacobian vector product operation, and squeeze out the last two unary dimensions.
-        msg["value"] = (jac_ret_bmat @ param_eif_bmat)[:, 0, 0]
+        msg["value"] = pytree_generalized_manual_revjvp(
+            fn=lambda p: func_target(p, *args, **kwargs),
+            params=target_params,
+            batched_vector=param_eif
+        )
 
         # old_ret = torch.vmap(
         #     lambda d: torch.func.jvp(
