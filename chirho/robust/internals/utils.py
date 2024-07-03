@@ -1,7 +1,7 @@
 import contextlib
 import functools
 import math
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar, List
 
 import pyro
 import torch
@@ -9,11 +9,14 @@ from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import add_indices
 from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
+from torch.utils._pytree import tree_unflatten, tree_flatten, TreeSpec, PyTree, _get_node_type, SUPPORTED_NODES
+from math import prod
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
 T = TypeVar("T")
+U = TypeVar("U")
 
 ParamDict = Mapping[str, torch.Tensor]
 
@@ -91,6 +94,111 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
         )
 
     return flatten, unflatten
+
+
+def pytree_generalized_manual_revjvp(
+    fn: Callable[[T], S],
+    params: T,
+    batched_vector: U
+):
+
+    # Assumptions (in terms of elements of the referenced pytrees):
+    # 1. params is not batched, and represents just the inputs to the fn that we'll take the jac wrt.
+    #    - params.shape == (*param_shape)
+    # 2. batched_vector is the batched vector component of the jv product. It's rightside shape matches params.
+    #    - batched_vector.shape == (*batch_shape, *param_shape)
+    # 3. The output of the function will have some output_shape, which will cause the jacobian to have shape.
+    #    - jac.shape == (*output_shape, *param_shape)
+    # So the task is to infer these shapes and line everything up correctly. As a general approach, we'll flatten
+    #  the inputs and output shapes in order to apply a standard batched matrix multiplication operation.
+    # The output will have a shape (*batch_shape, *output_shape).
+
+
+    # FIXME
+    # So we need to consider the outer tree structure shapes too...eesh.
+    # The jac tree structure is the output tree structure, except at each leaf of the output tree structure
+    #  you have an instance of the parameter tree structure, where each element in that has shape (*output_shape, *param_shape)
+    # This is sort of a generalization of the output X param to the tree structure.
+    # Soooo we could iterate through the outer jacobian tree structure until we reach a leaf, and then the batch and
+    #  params need to map onto those along the param dimension.
+    # There's like this generalized einsum thing that also respects a treespec. Is probably what funsor is.
+
+    # So, within each we have an einsum over two tensors of some particular shape.
+    # But then we also want to einsum over subtrees.
+
+    jac_fn = torch.func.jacrev(fn)
+    jac = jac_fn(params)
+
+    # jac is a pytree matching the structure of the pytree returned by fn, but for each leaf, it has a subtree matching
+    #  the structure of the params pytree.
+
+    flat_params, param_tspec = tree_flatten(params)
+
+    flat_batched_vector, batched_vector_tspec = tree_flatten(batched_vector)
+
+    def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
+        _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
+
+        # Extract child trees.
+        node_type = _get_node_type(pytree)
+        flatten_fn = SUPPORTED_NODES[node_type].flatten_fn
+        children_pytrees, _ = flatten_fn(pytree)
+        children_tspecs = tspec.children_specs
+
+        # Iterate through children and their specs.
+        for child_pytree, child_tspec in zip(children_pytrees, children_tspecs):
+            # If we've landed on the target subtree...
+            if child_tspec == sub_tspec:
+                child_flattened, _ = tree_flatten(child_pytree)
+                yield child_flattened  # ...yield the flat child for that subtree.
+            else:  # otherwise, recurse to the next level.
+                yield from recurse_to_flattened_sub_tspec(child_pytree, sub_tspec, tspec=child_tspec)
+
+    flat_out: List[PyTree] = []
+
+    # Recurse into the jacobian tree to find the subtree corresponding to the sub-jacobian for each
+    #  individual output tensor in that tree.
+    for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(pytree=jac, sub_tspec=param_tspec):
+
+        flat_sub_out: List[torch.Tensor] = []
+
+        # This sub jacobian can then
+        for i, (p, j, v) in enumerate(zip(flat_params, flat_jac_output_subtree, flat_batched_vector)):
+            og_param_shape = p.shape
+            param_shape = og_param_shape if len(og_param_shape) else (1,)
+            param_numel = prod(param_shape)
+            og_param_ndim = len(og_param_shape)
+
+            og_batch_shape = v.shape[:-og_param_ndim] if og_param_ndim else v.shape
+            batch_shape = og_batch_shape if len(og_batch_shape) else (1,)
+            batch_ndim = len(batch_shape)
+
+            og_output_shape = j.shape[:-og_param_ndim] if og_param_ndim else j.shape
+            output_shape = og_output_shape if len(og_output_shape) else (1,)
+            output_numel = prod(output_shape)
+
+            # Reshape jacobian s.t. that it can broadcast over the batch dims.
+            j_bm = j.reshape(*(1,)*batch_ndim, output_numel, param_numel)
+            v_bm = v.reshape(*batch_shape, param_numel, 1)
+            jv = j_bm @ v_bm
+
+            og_res_shape = (*og_batch_shape, *og_output_shape)
+            jv = jv.reshape(*og_res_shape) if len(og_res_shape) else jv.squeeze()
+
+            flat_sub_out.append(jv)
+
+        # The inner product is operating over parameters and the parameter subtree that we just iterated over.
+        # So stack these and sum.
+        flat_out.append(torch.stack(flat_sub_out, dim=0).sum(0))
+
+    # flat_out is now the flattened version of the tree returned by fn, with each contained tensor having the same
+    #  batch dimensions (matching the batching of the batched vector).
+    # TODO get this from the jacobian treespec instead, and don't have an extra forward eval of fn.
+    #  Jacobian tree has this structure but its leaves have params treespec.
+    out = fn(params)
+    _, out_treespec = tree_flatten(out)
+
+    return tree_unflatten(flat_out, out_treespec)
 
 
 def make_functional_call(
