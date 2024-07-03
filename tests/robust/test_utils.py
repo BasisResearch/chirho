@@ -5,15 +5,18 @@ from math import prod
 
 
 _shapes = [
-    tuple(),
+    # tuple(),  # standard jvp doesn't support this. TODO can probably simplify our implementation by also not.
     (1,),
     (1, 1),
     (2,),
     (2, 3)
 ]
 
+# TODO this test has some stochastic failures. Probably floating point mismatch due to lower precision of computing
+#  jacobian separately.
 
-@pytest.mark.parametrize("batch_shape", _shapes)
+# @pytest.mark.parametrize("batch_shape", _shapes)
+@pytest.mark.parametrize("batch_shape", [(1,), (3,)])  # standard vmap application doesn't support multiple batch dims.
 @pytest.mark.parametrize("output_shape1", _shapes)
 @pytest.mark.parametrize("output_shape2", _shapes)  # some redundant tests here  in lower triangle of test case prod
 @pytest.mark.parametrize("param_shape1", _shapes)
@@ -57,5 +60,22 @@ def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_sha
     assert broadcasted_reverse_jvp_result["out1"].shape == batch_shape + output_shape1
     assert broadcasted_reverse_jvp_result["out2"].shape == batch_shape + output_shape2
 
-    # skip test.
-    # pytest.skip("Not implemented yet.")
+    # torch.func.jvp requires that params and tangents have the same structure. TODO we can simplify our implementation
+    #  probably by also requiring this?
+    batch_tangents = dict(
+        params1=batch_vector["batch_vector1"],
+        params2=batch_vector["batch_vector2"]
+    )
+
+    vmapped_forward_jvp_result = torch.vmap(
+        lambda d: torch.func.jvp(
+            fn,
+            (params,),
+            (d,),
+        )[1],
+        in_dims=0,
+        randomness="different"
+    )(batch_tangents)
+
+    assert torch.allclose(broadcasted_reverse_jvp_result["out1"], vmapped_forward_jvp_result["out1"])
+    assert torch.allclose(broadcasted_reverse_jvp_result["out2"], vmapped_forward_jvp_result["out2"])
