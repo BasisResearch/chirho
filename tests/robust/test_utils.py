@@ -119,7 +119,7 @@ def test_memory_pytree_generalized_manual_revjvp():
     output_shape2 = (2,)
     params_shape1 = (10000,)
     params_shape2 = (10000,)
-    # Also works with these, but runtime is too long for CI. Note that these weren't tested with profiler though.
+    # Also works with these, but runtime is too long for CI. Runs locally at a little over 7GB.
     # params_shape1 = (100000,)
     # params_shape2 = (100000,)
 
