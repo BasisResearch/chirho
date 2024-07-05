@@ -3,12 +3,8 @@ from typing import Any, Callable
 
 import pyro
 import torch
-from torch.utils._pytree import tree_flatten
 
-from chirho.robust.internals.utils import (
-    make_flatten_unflatten,
-    pytree_generalized_manual_revjvp,
-)
+from chirho.robust.internals.utils import pytree_generalized_manual_revjvp
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
 
