@@ -105,7 +105,17 @@ def pytree_generalized_manual_revjvp(
     fn: Callable[[TPyTree], SPyTree],
     params: TPyTree,
     batched_vector: UPyTree
-):
+) -> SPyTree:
+    """
+    Computes the jacobian-vector product using backward differentiation for the jacobian, and then manually
+    right multiplying the batched vector. This supports pytree structured inputs, outputs, and params.
+
+    :param fn: function to compute the jacobian of
+    :param params: parameters to compute the jacobian at
+    :param batched_vector: batched vector to right multiply the jacobian by
+    :raises ValueError: if params and batched_vector do not have the same tree structure
+    :return: jacobian-vector product
+    """
 
     # Assumptions (in terms of elements of the referenced pytrees):
     # 1. params is not batched, and represents just the inputs to the fn that we'll take the jac wrt.
@@ -141,6 +151,7 @@ def pytree_generalized_manual_revjvp(
     #  subtree (corresponding to params) onto the params and batched_vector tree structures, which are both structured
     #  according to the parameters.
     def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
+        # Default to passed treespec, otherwise compute here.
         _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
 
         # If fn returns a tensor straight away, then the subtree will match at the root node. Check for that here.
@@ -149,7 +160,7 @@ def pytree_generalized_manual_revjvp(
             yield flattened
             return
 
-        # Extract child trees.
+        # Extract child trees in a node-type agnostic way.
         node_type = _get_node_type(pytree)
         flatten_fn = SUPPORTED_NODES[node_type].flatten_fn
         children_pytrees, _ = flatten_fn(pytree)
@@ -172,26 +183,30 @@ def pytree_generalized_manual_revjvp(
 
         flat_sub_out: List[torch.Tensor] = []
 
-        # This sub jacobian can then
+        # Then map that subtree (with tree structure matching that of params) onto the params and batched_vector.
         for i, (p, j, v) in enumerate(zip(flat_params, flat_jac_output_subtree, flat_batched_vector)):
+            # Infer the parameter shapes directly from passed parameters.
             og_param_shape = p.shape
             param_shape = og_param_shape if len(og_param_shape) else (1,)
             param_numel = prod(param_shape)
             og_param_ndim = len(og_param_shape)
 
+            # Infer the batch shape by subtracting off the param shape on the right.
             og_batch_shape = v.shape[:-og_param_ndim] if og_param_ndim else v.shape
             batch_shape = og_batch_shape if len(og_batch_shape) else (1,)
             batch_ndim = len(batch_shape)
 
+            # Infer the output shape by subtracting off the param shape from the jacobian.
             og_output_shape = j.shape[:-og_param_ndim] if og_param_ndim else j.shape
             output_shape = og_output_shape if len(og_output_shape) else (1,)
             output_numel = prod(output_shape)
 
-            # Reshape jacobian s.t. that it can broadcast over the batch dims.
+            # Reshape for matmul and s.t. that the jacobian can be broadcast over the batch dims.
             j_bm = j.reshape(*(1,)*batch_ndim, output_numel, param_numel)
             v_bm = v.reshape(*batch_shape, param_numel, 1)
             jv = j_bm @ v_bm
 
+            # Reshape result back to the original output shape, with support for empty scalar shapes.
             og_res_shape = (*og_batch_shape, *og_output_shape)
             jv = jv.reshape(*og_res_shape) if len(og_res_shape) else jv.squeeze()
 
@@ -203,7 +218,7 @@ def pytree_generalized_manual_revjvp(
 
     # flat_out is now the flattened version of the tree returned by fn, with each contained tensor having the same
     #  batch dimensions (matching the batching of the batched vector).
-    # TODO get this from the jacobian treespec instead, and don't have an extra forward eval of fn.
+    # TODO get out_treespec from the jacobian treespec instead, and don't have an extra forward eval of fn.
     #  Jacobian tree has this structure but its leaves have params treespec.
     out = fn(params)
     _, out_treespec = tree_flatten(out)

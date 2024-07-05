@@ -78,8 +78,6 @@ def test_smoke_pytree_generalized_manual_revjvp(batch_shape, output_shape1, outp
 @pytest.mark.parametrize("param_shape1", _shapes[1:])
 @pytest.mark.parametrize("param_shape2", _shapes[1:])
 def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
-    # TODO this test has some stochastic failures. Probably floating point mismatch due to lower precision of computing
-    #  jacobian separately?
 
     broadcasted_reverse_jvp_result, (fn, params, batch_vector) = _exec_pytree_generalized_manual_revjvp(
         batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
@@ -95,5 +93,8 @@ def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_sha
         randomness="different"
     )(batch_vector)
 
-    assert torch.allclose(broadcasted_reverse_jvp_result["out1"], vmapped_forward_jvp_result["out1"])
-    assert torch.allclose(broadcasted_reverse_jvp_result["out2"], vmapped_forward_jvp_result["out2"])
+    # When using standard precision, this test has some stochastic failures (around 1/3000) that pass on rerun.
+    # This is probably due to floating point mismatch induced by lower precision of separate jacobian computation
+    #  and manual matmul?
+    assert torch.allclose(broadcasted_reverse_jvp_result["out1"], vmapped_forward_jvp_result["out1"], atol=1e-5)
+    assert torch.allclose(broadcasted_reverse_jvp_result["out2"], vmapped_forward_jvp_result["out2"], atol=1e-5)
