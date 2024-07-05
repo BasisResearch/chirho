@@ -3,11 +3,13 @@ from typing import Any, Callable
 
 import pyro
 import torch
-
-from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
-from chirho.robust.internals.utils import make_flatten_unflatten
 from torch.utils._pytree import tree_flatten
-from chirho.robust.internals.utils import pytree_generalized_manual_revjvp
+
+from chirho.robust.internals.utils import (
+    make_flatten_unflatten,
+    pytree_generalized_manual_revjvp,
+)
+from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
 
 class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
@@ -77,10 +79,14 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
             )
         param_eif = linearized(*points, *args, **kwargs)
 
+        # Compute the jacobian vector product of the functionals jacobian wrt the parameters with the fisher matrix X
+        #  log prob of data product. This implementation uses reverse mode auto diff for the jacobian and then
+        #  manually right multiplies with param_eif. Unfortunately, torch.func.jvp uses very large amounts of memory,
+        #  which is exacerbated when using vmap to broadcast, as opposed to the manual impplementation used herein.
         msg["value"] = pytree_generalized_manual_revjvp(
             fn=lambda p: func_target(p, *args, **kwargs),
             params=target_params,
-            batched_vector=param_eif
+            batched_vector=param_eif,
         )
 
         msg["done"] = True

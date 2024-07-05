@@ -1,16 +1,23 @@
 import contextlib
 import functools
 import math
-from typing import Any, Callable, Dict, Mapping, Optional, Tuple, TypeVar, List
+from math import prod
+from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
+from torch.utils._pytree import (
+    SUPPORTED_NODES,
+    PyTree,
+    TreeSpec,
+    _get_node_type,
+    tree_flatten,
+    tree_unflatten,
+)
 from typing_extensions import Concatenate, ParamSpec
 
 from chirho.indexed.handlers import add_indices
 from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
-from torch.utils._pytree import tree_unflatten, tree_flatten, TreeSpec, PyTree, _get_node_type, SUPPORTED_NODES
-from math import prod
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -102,9 +109,7 @@ UPyTree = TypeVar("UPyTree", bound=PyTree)
 
 
 def pytree_generalized_manual_revjvp(
-    fn: Callable[[TPyTree], SPyTree],
-    params: TPyTree,
-    batched_vector: UPyTree
+    fn: Callable[[TPyTree], SPyTree], params: TPyTree, batched_vector: UPyTree
 ) -> SPyTree:
     """
     Computes the jacobian-vector product using backward differentiation for the jacobian, and then manually
@@ -143,14 +148,18 @@ def pytree_generalized_manual_revjvp(
 
     if param_tspec != batched_vector_tspec:
         # This is also required by pytorch's jvp implementation.
-        raise ValueError("params and batched_vector must have the same tree structure. This requirement generalizes"
-                         " the notion that the batched_vector must be the correct shape to right multiply the "
-                         "jacobian.")
+        raise ValueError(
+            "params and batched_vector must have the same tree structure. This requirement generalizes"
+            " the notion that the batched_vector must be the correct shape to right multiply the "
+            "jacobian."
+        )
 
     # In order to map the param shapes together, we need to iterate through the output tree structure and map each
     #  subtree (corresponding to params) onto the params and batched_vector tree structures, which are both structured
     #  according to the parameters.
-    def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
+    def recurse_to_flattened_sub_tspec(
+        pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None
+    ):
         # Default to passed treespec, otherwise compute here.
         _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
 
@@ -173,18 +182,24 @@ def pytree_generalized_manual_revjvp(
                 child_flattened, _ = tree_flatten(child_pytree)
                 yield child_flattened  # ...yield the flat child for that subtree.
             else:  # otherwise, recurse to the next level.
-                yield from recurse_to_flattened_sub_tspec(child_pytree, sub_tspec, tspec=child_tspec)
+                yield from recurse_to_flattened_sub_tspec(
+                    child_pytree, sub_tspec, tspec=child_tspec
+                )
 
     flat_out: List[PyTree] = []
 
     # Recurse into the jacobian tree to find the subtree corresponding to the sub-jacobian for each
     #  individual output tensor in that tree.
-    for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(pytree=jac, sub_tspec=param_tspec):
+    for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(
+        pytree=jac, sub_tspec=param_tspec
+    ):
 
         flat_sub_out: List[torch.Tensor] = []
 
         # Then map that subtree (with tree structure matching that of params) onto the params and batched_vector.
-        for i, (p, j, v) in enumerate(zip(flat_params, flat_jac_output_subtree, flat_batched_vector)):
+        for i, (p, j, v) in enumerate(
+            zip(flat_params, flat_jac_output_subtree, flat_batched_vector)
+        ):
             # Infer the parameter shapes directly from passed parameters.
             og_param_shape = p.shape
             param_shape = og_param_shape if len(og_param_shape) else (1,)
@@ -202,7 +217,7 @@ def pytree_generalized_manual_revjvp(
             output_numel = prod(output_shape)
 
             # Reshape for matmul and s.t. that the jacobian can be broadcast over the batch dims.
-            j_bm = j.reshape(*(1,)*batch_ndim, output_numel, param_numel)
+            j_bm = j.reshape(*(1,) * batch_ndim, output_numel, param_numel)
             v_bm = v.reshape(*batch_shape, param_numel, 1)
             jv = j_bm @ v_bm
 
