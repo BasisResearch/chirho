@@ -83,16 +83,6 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
             batched_vector=param_eif
         )
 
-        # old_ret = torch.vmap(
-        #     lambda d: torch.func.jvp(
-        #         lambda p: func_target(p, *args, **kwargs),
-        #         (target_params,),
-        #         (d,),
-        #     )[1],
-        #     in_dims=0,
-        #     randomness="different",
-        # )(param_eif)
-
         msg["done"] = True
 
 
