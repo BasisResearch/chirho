@@ -5,32 +5,27 @@ from math import prod
 
 
 _shapes = [
-    # tuple(),  # standard jvp doesn't support this. TODO can probably simplify our implementation by also not.
+    tuple(),
     (1,),
     (1, 1),
     (2,),
     (2, 3)
 ]
 
-# TODO this test has some stochastic failures. Probably floating point mismatch due to lower precision of computing
-#  jacobian separately.
 
-# @pytest.mark.parametrize("batch_shape", _shapes)
-@pytest.mark.parametrize("batch_shape", [(1,), (3,)])  # standard vmap application doesn't support multiple batch dims.
-@pytest.mark.parametrize("output_shape1", _shapes)
-@pytest.mark.parametrize("output_shape2", _shapes)  # some redundant tests here  in lower triangle of test case prod
-@pytest.mark.parametrize("param_shape1", _shapes)
-@pytest.mark.parametrize("param_shape2", _shapes)  # some redundant tests here  in lower triangle of test case prod
-def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
+def _exec_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
+
+    # TODO add tests of subdicts and sublists to really exercise the pytree structure.
+    # TODO add permutations for single tensors params/batch_vector/outputs (i.e. not in an explicit tree structure.
 
     params = dict(
         params1=torch.randn(param_shape1),
-        params2=torch.randn(param_shape2)
+        params2=torch.randn(param_shape2),
     )
 
-    batch_vector = dict(
-        batch_vector1=torch.randn(batch_shape + param_shape1),
-        batch_vector2=torch.randn(batch_shape + param_shape2)
+    batch_vector = dict(  # this tree is mapped onto the params struture in the right multiplication w/ the jacobian.
+        params1=torch.randn(batch_shape + param_shape1),
+        params2=torch.randn(batch_shape + param_shape2)
     )
 
     weights1 = torch.randn(prod(output_shape1), prod(param_shape1))
@@ -57,14 +52,37 @@ def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_sha
         batch_vector
     )
 
+    return broadcasted_reverse_jvp_result, (fn, params, batch_vector)
+
+
+@pytest.mark.parametrize("batch_shape", _shapes)
+@pytest.mark.parametrize("output_shape1", _shapes)
+@pytest.mark.parametrize("output_shape2", _shapes)
+@pytest.mark.parametrize("param_shape1", _shapes)
+@pytest.mark.parametrize("param_shape2", _shapes)
+def test_smoke_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
+
+    broadcasted_reverse_jvp_result, _ = _exec_pytree_generalized_manual_revjvp(
+        batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
+    )
+
     assert broadcasted_reverse_jvp_result["out1"].shape == batch_shape + output_shape1
     assert broadcasted_reverse_jvp_result["out2"].shape == batch_shape + output_shape2
 
-    # torch.func.jvp requires that params and tangents have the same structure. TODO we can simplify our implementation
-    #  probably by also requiring this?
-    batch_tangents = dict(
-        params1=batch_vector["batch_vector1"],
-        params2=batch_vector["batch_vector2"]
+
+# Standard vmap and jvp application doesn't support multiple batch dims or scalar shapes. So manually spec
+#  single batch dims and remove the tuple() scalar shape via _shapes[1:]
+@pytest.mark.parametrize("batch_shape", [(1,), (3,)])
+@pytest.mark.parametrize("output_shape1", _shapes[1:])
+@pytest.mark.parametrize("output_shape2", _shapes[1:])
+@pytest.mark.parametrize("param_shape1", _shapes[1:])
+@pytest.mark.parametrize("param_shape2", _shapes[1:])
+def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
+    # TODO this test has some stochastic failures. Probably floating point mismatch due to lower precision of computing
+    #  jacobian separately?
+
+    broadcasted_reverse_jvp_result, (fn, params, batch_vector) = _exec_pytree_generalized_manual_revjvp(
+        batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
     )
 
     vmapped_forward_jvp_result = torch.vmap(
@@ -75,7 +93,7 @@ def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_sha
         )[1],
         in_dims=0,
         randomness="different"
-    )(batch_tangents)
+    )(batch_vector)
 
     assert torch.allclose(broadcasted_reverse_jvp_result["out1"], vmapped_forward_jvp_result["out1"])
     assert torch.allclose(broadcasted_reverse_jvp_result["out2"], vmapped_forward_jvp_result["out2"])

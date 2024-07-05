@@ -96,10 +96,15 @@ def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
     return flatten, unflatten
 
 
+SPyTree = TypeVar("SPyTree", bound=PyTree)
+TPyTree = TypeVar("TPyTree", bound=PyTree)
+UPyTree = TypeVar("UPyTree", bound=PyTree)
+
+
 def pytree_generalized_manual_revjvp(
-    fn: Callable[[T], S],
-    params: T,
-    batched_vector: U
+    fn: Callable[[TPyTree], SPyTree],
+    params: TPyTree,
+    batched_vector: UPyTree
 ):
 
     # Assumptions (in terms of elements of the referenced pytrees):
@@ -111,37 +116,34 @@ def pytree_generalized_manual_revjvp(
     #    - jac.shape == (*output_shape, *param_shape)
     # So the task is to infer these shapes and line everything up correctly. As a general approach, we'll flatten
     #  the inputs and output shapes in order to apply a standard batched matrix multiplication operation.
-    # The output will have a shape (*batch_shape, *output_shape).
+    # The output will have shape (*batch_shape, *output_shape).
 
-
-    # FIXME
-    # So we need to consider the outer tree structure shapes too...eesh.
-    # The jac tree structure is the output tree structure, except at each leaf of the output tree structure
-    #  you have an instance of the parameter tree structure, where each element in that has shape (*output_shape, *param_shape)
-    # This is sort of a generalization of the output X param to the tree structure.
-    # Soooo we could iterate through the outer jacobian tree structure until we reach a leaf, and then the batch and
-    #  params need to map onto those along the param dimension.
-    # There's like this generalized einsum thing that also respects a treespec. Is probably what funsor is.
-
-    # So, within each we have an einsum over two tensors of some particular shape.
-    # But then we also want to einsum over subtrees.
+    # The shaping is complicated by fact that we aren't working with tensors, but PyTrees instead, and we want to
+    #  perform the same inner product wrt to the tree structure. This mainly shows up in that the jacobian will
+    #  return a pytree with a "root" structure matching that of SPyTree (the return of the fn), but at each leaf
+    #  of that tree, we have a pytree matching the structure of TPyTree (the params). This is the tree-structured
+    #  equivalent the jac shape matching output on the left, and params on the right.
 
     jac_fn = torch.func.jacrev(fn)
     jac = jac_fn(params)
-
-    # jac is a pytree matching the structure of the pytree returned by fn, but for each leaf, it has a subtree matching
-    #  the structure of the params pytree.
 
     flat_params, param_tspec = tree_flatten(params)
 
     flat_batched_vector, batched_vector_tspec = tree_flatten(batched_vector)
 
+    if param_tspec != batched_vector_tspec:
+        # This is also required by pytorch's jvp implementation.
+        raise ValueError("params and batched_vector must have the same tree structure. This requirement generalizes"
+                         " the notion that the batched_vector must be the correct shape to right multiply the "
+                         "jacobian.")
+
+    # In order to map the param shapes together, we need to iterate through the output tree structure and map each
+    #  subtree (corresponding to params) onto the params and batched_vector tree structures, which are both structured
+    #  according to the parameters.
     def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
         _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
 
-        # FIXME if the output of fn is just a single tensor, then the jac doesn't actually return a treemap
-        #  with that output as a single high level node. So the recursion won't match the subtree because this already
-        #  matches the subtree. Ah, okay, so we need to check if this top level matches the subtree.
+        # If fn returns a tensor straight away, then the subtree will match at the root node. Check for that here.
         if tspec == sub_tspec:
             flattened, _ = tree_flatten(pytree)
             yield flattened
