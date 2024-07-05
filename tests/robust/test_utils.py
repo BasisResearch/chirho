@@ -66,6 +66,9 @@ def test_smoke_pytree_generalized_manual_revjvp(
     assert broadcasted_reverse_jvp_result["out1"].shape == batch_shape + output_shape1
     assert broadcasted_reverse_jvp_result["out2"].shape == batch_shape + output_shape2
 
+    assert not torch.isnan(broadcasted_reverse_jvp_result["out1"]).any()
+    assert not torch.isnan(broadcasted_reverse_jvp_result["out2"]).any()
+
 
 # Standard vmap and jvp application doesn't support multiple batch dims or scalar shapes. So manually spec
 #  single batch dims and remove the tuple() scalar shape via _shapes[1:]
@@ -107,3 +110,42 @@ def test_pytree_generalized_manual_revjvp(
         vmapped_forward_jvp_result["out2"],
         atol=1e-5,
     )
+
+
+def test_memory_pytree_generalized_manual_revjvp():
+    # vmap over jvp can not handle 1000 batch x 1000 params (10s of gigabytes used).
+    batch_shape = (10000,)
+    output_shape1 = (2,)
+    output_shape2 = (2,)
+    params_shape1 = (10000,)
+    params_shape2 = (10000,)
+    # Also works with these, but runtime is too long for CI. Note that these weren't tested with profiler though.
+    # params_shape1 = (100000,)
+    # params_shape2 = (100000,)
+
+    with torch.profiler.profile(
+        activities=[torch.profiler.ProfilerActivity.CPU],
+        profile_memory=True,
+        with_stack=False,
+    ) as prof:
+
+        broadcasted_reverse_jvp_result, _ = _exec_pytree_generalized_manual_revjvp(
+            batch_shape, output_shape1, output_shape2, params_shape1, params_shape2
+        )
+
+    assert broadcasted_reverse_jvp_result["out1"].shape == batch_shape + output_shape1
+    assert broadcasted_reverse_jvp_result["out2"].shape == batch_shape + output_shape2
+
+    assert not torch.isnan(broadcasted_reverse_jvp_result["out1"]).any()
+    assert not torch.isnan(broadcasted_reverse_jvp_result["out2"]).any()
+
+    # Summing up the self CPU memory usage
+    total_memory_allocated = sum(
+        [item.self_cpu_memory_usage for item in prof.key_averages()]
+    )
+    total_gb_allocated = total_memory_allocated / (1024**3)
+
+    # Locally, this runs at slightly over 1.0 GB.
+    assert (
+        total_gb_allocated < 3.0
+    ), f"Memory usage was {total_gb_allocated} GB, which is too high."
