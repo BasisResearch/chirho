@@ -4,6 +4,7 @@ from typing import Any, Callable
 import pyro
 import torch
 
+from chirho.robust.internals.utils import pytree_generalized_manual_revjvp
 from chirho.robust.ops import Functional, P, Point, S, T, influence_fn
 
 
@@ -73,15 +74,17 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
                 "Please use torch.no_grad() to avoid this issue. See example in the docstring."
             )
         param_eif = linearized(*points, *args, **kwargs)
-        msg["value"] = torch.vmap(
-            lambda d: torch.func.jvp(
-                lambda p: func_target(p, *args, **kwargs),
-                (target_params,),
-                (d,),
-            )[1],
-            in_dims=0,
-            randomness="different",
-        )(param_eif)
+
+        # Compute the jacobian vector product of the functionals jacobian wrt the parameters with the fisher matrix X
+        #  log prob of data product. This implementation uses reverse mode auto diff for the jacobian and then
+        #  manually right multiplies with param_eif. Unfortunately, torch.func.jvp uses very large amounts of memory,
+        #  which is exacerbated when using vmap to broadcast, as opposed to the manual impplementation used herein.
+        msg["value"] = pytree_generalized_manual_revjvp(
+            fn=lambda p: func_target(p, *args, **kwargs),
+            params=target_params,
+            batched_vector=param_eif,
+        )
+
         msg["done"] = True
 
 
