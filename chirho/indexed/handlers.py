@@ -137,3 +137,24 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
         msg["fn"] = msg["fn"].expand(
             torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
         )
+
+
+@pyro.poutine.block()
+@pyro.validation_enabled(False)
+@torch.no_grad()
+def guess_max_plate_nesting(
+    model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs
+) -> int:
+    """
+    Guesses the maximum plate nesting level by running `pyro.infer.Trace_ELBO`
+
+    :param model: Python callable containing Pyro primitives.
+    :type model: Callable[P, Any]
+    :param guide: Python callable containing Pyro primitives.
+    :type guide: Callable[P, Any]
+    :return: maximum plate nesting level
+    :rtype: int
+    """
+    elbo = pyro.infer.Trace_ELBO()
+    elbo._guess_max_plate_nesting(model, guide, args, kwargs)
+    return elbo.max_plate_nesting

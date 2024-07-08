@@ -10,7 +10,7 @@ from chirho.robust.handlers.estimators import (
     MonteCarloInfluenceEstimator,
     one_step_corrected_estimator,
 )
-from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
+from chirho.observational.handlers.predictive import PredictiveFunctional, PredictiveModel
 
 from ..robust_fixtures import SimpleGuide, SimpleModel
 

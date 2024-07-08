@@ -7,15 +7,13 @@ import torch
 
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import indices_of
-from chirho.robust.handlers.predictive import PredictiveModel
+from chirho.observational.handlers.predictive import BatchedLatents, BatchedObservations, PredictiveModel
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
-from chirho.robust.internals.nmc import (
-    BatchedLatents,
+from chirho.observational.handlers.predictive import (
     BatchedNMCLogMarginalLikelihood,
-    BatchedObservations,
 )
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
