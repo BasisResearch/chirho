@@ -163,7 +163,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
     the returned values are batched along their leftmost positional dimension.
 
     Similar to ``pyro.infer.Predictive(model, guide, num_samples, parallel=True)``
-    when :class:`~chirho.robust.handlers.predictive.PredictiveModel` is used to construct
+    when :class:`~chirho.observational.handlers.predictive.PredictiveModel` is used to construct
     the ``model`` argument and infer the ``sample`` sites whose values should be returned,
     and uses :class:`~BatchedLatents` to parallelize over samples from the model.
 
