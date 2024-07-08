@@ -11,6 +11,7 @@ _shapes = [tuple(), (1,), (1, 1), (2,), (2, 3)]
 def _exec_pytree_generalized_manual_revjvp(
     batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
 ):
+
     # TODO add tests of subdicts and sublists to really exercise the pytree structure.
     # TODO add permutations for single tensors params/batch_vector/outputs (i.e. not in an explicit tree structure.
 
@@ -57,6 +58,7 @@ def _exec_pytree_generalized_manual_revjvp(
 def test_smoke_pytree_generalized_manual_revjvp(
     batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
 ):
+
     broadcasted_reverse_jvp_result, _ = _exec_pytree_generalized_manual_revjvp(
         batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
     )
@@ -78,12 +80,11 @@ def test_smoke_pytree_generalized_manual_revjvp(
 def test_pytree_generalized_manual_revjvp(
     batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
 ):
-    broadcasted_reverse_jvp_result, (
-        fn,
-        params,
-        batch_vector,
-    ) = _exec_pytree_generalized_manual_revjvp(
-        batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
+
+    broadcasted_reverse_jvp_result, (fn, params, batch_vector) = (
+        _exec_pytree_generalized_manual_revjvp(
+            batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
+        )
     )
 
     vmapped_forward_jvp_result = torch.vmap(
@@ -127,6 +128,7 @@ def test_memory_pytree_generalized_manual_revjvp():
         profile_memory=True,
         with_stack=False,
     ) as prof:
+
         broadcasted_reverse_jvp_result, _ = _exec_pytree_generalized_manual_revjvp(
             batch_shape, output_shape1, output_shape2, params_shape1, params_shape2
         )
