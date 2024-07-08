@@ -163,7 +163,9 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
         # move data plate dimension to the left
         for name in reversed(plate_name_to_dim.keys()):
             log_weights = torch.transpose(
-                log_weights[None], -len(log_weights.shape) - 1, plate_name_to_dim[name].dim
+                log_weights[None],
+                -len(log_weights.shape) - 1,
+                plate_name_to_dim[name].dim,
             )
 
         # pack log_weights by squeezing out rightmost dimensions
