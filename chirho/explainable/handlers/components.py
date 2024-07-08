@@ -40,6 +40,7 @@ def sufficiency_intervention(
     """
 
     def _sufficiency_intervention(value: T) -> T:
+
         indices = IndexSet(
             **{
                 name: sufficiency_world
@@ -83,6 +84,7 @@ def random_intervention(
     """
 
     def _random_intervention(value: T) -> T:
+
         event_shape = value.shape[len(value.shape) - support.event_dim :]  # type: ignore
 
         proposal_dist = uniform_proposal(
@@ -228,6 +230,7 @@ def consequent_eq_neq(
     """
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
+
         factual_indices = IndexSet(
             **{
                 name: ind

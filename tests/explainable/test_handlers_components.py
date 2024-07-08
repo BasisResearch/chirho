@@ -35,7 +35,9 @@ SUPPORT_CASES = [
 @pytest.mark.parametrize("support", SUPPORT_CASES)
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_sufficiency_intervention(support, event_shape):
+
     with MultiWorldCounterfactual():
+
         if event_shape:
             support = pyro.distributions.constraints.independent(
                 support, len(event_shape)
