@@ -10,7 +10,6 @@ from typing_extensions import ParamSpec
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
 from chirho.observational.handlers.predictive import BatchedLatents, BatchedObservations
-from chirho.observational.internals import bind_leftmost_dim
 from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
@@ -163,7 +162,9 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
 
         # move data plate dimension to the left
         for name in reversed(plate_name_to_dim.keys()):
-            log_weights = bind_leftmost_dim(log_weights, name)
+            log_weights = torch.transpose(
+                log_weights[None], -len(log_weights.shape) - 1, plate_name_to_dim[name].dim
+            )
 
         # pack log_weights by squeezing out rightmost dimensions
         for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):
