@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import functools
-import math
-from typing import Any, Callable, Mapping, Optional, Tuple, TypeVar
+from typing import Mapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -157,42 +156,3 @@ def _bind_leftmost_dim_tensor(
     return torch.transpose(
         v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
     )
-
-
-def get_importance_traces(
-    model: Callable[P, Any],
-    guide: Optional[Callable[P, Any]] = None,
-) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
-    """
-    Thin functional wrapper around :func:`~pyro.infer.enum.get_importance_trace`
-    that cleans up the original interface to avoid unnecessary arguments
-    and efficiently supports using the prior in a model as a default guide.
-
-    :param model: Model to run.
-    :param guide: Guide to run. If ``None``, use the prior in ``model`` as a guide.
-    :returns: A function that takes the same arguments as ``model`` and ``guide`` and returns
-        a tuple of importance traces ``(model_trace, guide_trace)``.
-    """
-
-    def _fn(
-        *args: P.args, **kwargs: P.kwargs
-    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
-        if guide is not None:
-            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, guide, args, kwargs
-            )
-            return model_trace, guide_trace
-        else:  # use prior as default guide, but don't run model twice
-            model_trace, _ = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
-            )
-
-            guide_trace = model_trace.copy()
-            for name, node in list(guide_trace.nodes.items()):
-                if node["type"] != "sample":
-                    del model_trace.nodes[name]
-                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
-                    del guide_trace.nodes[name]
-            return model_trace, guide_trace
-
-    return _fn

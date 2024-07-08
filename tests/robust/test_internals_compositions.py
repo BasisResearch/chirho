@@ -9,7 +9,6 @@ from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import indices_of
 from chirho.observational.handlers.predictive import (
     BatchedLatents,
-    BatchedNMCLogMarginalLikelihood,
     BatchedObservations,
     PredictiveModel,
 )
@@ -17,6 +16,7 @@ from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     make_empirical_fisher_vp,
 )
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.utils import make_functional_call, reset_rng_state
 
 from .robust_fixtures import SimpleGuide, SimpleModel
