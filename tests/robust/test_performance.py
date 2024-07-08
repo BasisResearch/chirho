@@ -11,9 +11,11 @@ from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import DependentMaskMessenger, guess_max_plate_nesting
 from chirho.observational.handlers import condition
-from chirho.observational.handlers.predictive import PredictiveModel
+from chirho.observational.handlers.predictive import (
+    BatchedNMCLogMarginalLikelihood,
+    PredictiveModel,
+)
 from chirho.robust.internals.linearize import make_empirical_fisher_vp
-from chirho.observational.handlers.predictive import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.utils import make_functional_call
 from chirho.robust.ops import Point
 

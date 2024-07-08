@@ -15,7 +15,6 @@ from torch.utils._pytree import (
 )
 from typing_extensions import Concatenate, ParamSpec
 
-
 P = ParamSpec("P")
 Q = ParamSpec("Q")
 S = TypeVar("S")
@@ -190,7 +189,6 @@ def pytree_generalized_manual_revjvp(
     for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(
         pytree=jac, sub_tspec=param_tspec
     ):
-
         flat_sub_out: List[torch.Tensor] = []
 
         # Then map that subtree (with tree structure matching that of params) onto the params and batched_vector.
@@ -271,5 +269,3 @@ def reset_rng_state(rng_state: T):
         yield pyro.util.set_rng_state(rng_state)
     finally:
         pyro.util.set_rng_state(prev_rng_state)
-
-

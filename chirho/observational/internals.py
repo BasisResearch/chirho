@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import functools
+import math
 from typing import Any, Callable, Mapping, Optional, Tuple, TypeVar
 
-from chirho.indexed.handlers import add_indices
-from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 import pyro
 import pyro.distributions
 import torch
+from typing_extensions import ParamSpec
 
+from chirho.indexed.handlers import add_indices
+from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 from chirho.observational.ops import AtomicObservation, observe
 
+P = ParamSpec("P")
 K = TypeVar("K")
 T = TypeVar("T")
 

@@ -7,11 +7,7 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.robust.handlers.cut import (
-    CutComplementModule,
-    CutModule,
-    SingleStageCut,
-)
+from chirho.robust.handlers.cut import CutComplementModule, CutModule, SingleStageCut
 
 pyro.settings.set(module_local_params=True)
 
@@ -212,7 +208,10 @@ def run_svi_inference(model, n_steps=1000, verbose=True, lr=0.03, **model_kwargs
 def analytical_linear_gaussian_cut_posterior(data):
     post_sd_mod_one = math.sqrt((1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2) ** (-1))
     pr_eta_cut = dist.Normal(
-        1 / SIGMA_ONE**2 * data["w"].sum() / (1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2),
+        1
+        / SIGMA_ONE**2
+        * data["w"].sum()
+        / (1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2),
         scale=post_sd_mod_one,
     )
     post_mean_mod_two = lambda eta: (  # noqa

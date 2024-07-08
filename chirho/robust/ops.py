@@ -17,7 +17,8 @@ Point = Mapping[str, Observation[T]]
 class Functional(Protocol[P, S]):
     def __call__(
         self, __model: Callable[P, Any], *models: Callable[P, Any]
-    ) -> Callable[P, S]: ...
+    ) -> Callable[P, S]:
+        ...
 
 
 def influence_fn(

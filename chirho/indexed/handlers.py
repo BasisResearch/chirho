@@ -4,6 +4,7 @@ from typing import Any, Callable, Dict, Hashable, List, Optional
 
 import pyro
 import torch
+from typing_extensions import ParamSpec
 
 from chirho.indexed.internals import (
     _LazyPlateMessenger,
@@ -11,6 +12,8 @@ from chirho.indexed.internals import (
     get_sample_msg_device,
 )
 from chirho.indexed.ops import union
+
+P = ParamSpec("P")
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):

@@ -1,18 +1,22 @@
-from typing import Any, Callable, Generic, Mapping, Optional, TypeVar
 import collections
 import math
 import typing
+from typing import Any, Callable, Generic, Mapping, Optional, TypeVar
 
-from chirho.indexed.ops import get_index_plates, indices_of
-from chirho.observational.handlers.condition import Observations
-from chirho.observational.internals import get_importance_traces, site_is_delta, unbind_leftmost_dim
-from chirho.observational.ops import Observation
 import pyro
 import torch
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.internals import bind_leftmost_dim
+from chirho.indexed.ops import get_index_plates, indices_of
+from chirho.observational.handlers.condition import Observations
+from chirho.observational.internals import (
+    bind_leftmost_dim,
+    get_importance_traces,
+    site_is_delta,
+    unbind_leftmost_dim,
+)
+from chirho.observational.ops import Observation
 
 P = ParamSpec("P")
 S = TypeVar("S")
