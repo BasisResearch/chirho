@@ -42,11 +42,11 @@ def make_flatten_unflatten(
     """
     flat_v, treespec = torch.utils._pytree.tree_flatten(v)
 
-    def flatten(unflat_v: T) -> torch.Tensor:
+    def _flatten(unflat_v: T) -> torch.Tensor:
         parts, _ = torch.utils._pytree.tree_flatten(unflat_v)
         return torch.hstack([x.reshape((x.shape[0], -1)) for x in parts])
 
-    def unflatten(single_flat_v: torch.Tensor) -> T:
+    def _unflatten(single_flat_v: torch.Tensor) -> T:
         parts = [
             v_flat.reshape(v.shape)
             for v, v_flat in zip(
@@ -60,7 +60,7 @@ def make_flatten_unflatten(
         ]
         return torch.utils._pytree.tree_unflatten(parts, treespec)
 
-    return flatten, unflatten
+    return _flatten, _unflatten
 
 
 SPyTree = TypeVar("SPyTree", bound=PyTree)
