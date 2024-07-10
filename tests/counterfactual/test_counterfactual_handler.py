@@ -42,31 +42,35 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
         # x --> y
         Z = pyro.sample("z", dist.Normal(0, 1))
         X = pyro.sample("x", dist.Normal(Z, 1))
-        X = intervene(X, torch.tensor(x_cf_value))
+        X = intervene(X, torch.tensor(x_cf_value), name="X")
         Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1))
         return Z, X, Y
 
     with SingleWorldFactual():
         z_factual, x_factual, y_factual = model()
-
-    assert x_factual != x_cf_value
-    assert z_factual.shape == x_factual.shape == y_factual.shape == torch.Size([])
+        assert (
+            indices_of(z_factual)
+            == indices_of(x_factual)
+            == indices_of(y_factual)
+            == IndexSet()
+        )
+        assert x_factual != x_cf_value
 
     with SingleWorldCounterfactual():
         z_cf, x_cf, y_cf = model()
-
-    assert x_cf == x_cf_value
-    assert z_cf.shape == x_cf.shape == y_cf.shape == torch.Size([])
+        assert indices_of(z_cf) == indices_of(x_cf) == indices_of(y_cf) == IndexSet()
+        assert x_cf == x_cf_value
 
     with TwinWorldCounterfactual(cf_dim):
         z_cf_twin, x_cf_twin, y_cf_twin = model()
-
-    assert torch.all(x_cf_twin[0] != x_cf_value)
-    assert torch.all(x_cf_twin[1] == x_cf_value)
-    assert z_cf_twin.shape == torch.Size([])
-    assert (
-        x_cf_twin.shape == y_cf_twin.shape == (2,) + (1,) * (len(y_cf_twin.shape) - 1)
-    )
+        assert indices_of(z_cf_twin) == IndexSet()
+        assert (
+            indices_of(x_cf_twin)
+            == indices_of(y_cf_twin)
+            == IndexSet(__fresh_split__={0, 1})
+        )
+        assert gather(x_cf_twin, IndexSet(__fresh_split__={0})) != x_cf_value
+        assert gather(x_cf_twin, IndexSet(__fresh_split__={1})) == x_cf_value
 
 
 @pytest.mark.parametrize("num_splits", [1, 2, 3])
@@ -129,13 +133,16 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
             "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
         Z = intervene(
-            Z, torch.full(event_shape, x_cf_value - 1.0), event_dim=len(event_shape)
+            Z,
+            torch.full(event_shape, x_cf_value - 1.0),
+            event_dim=len(event_shape),
+            name="Z",
         )
         X = pyro.sample(
             "x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
         X = intervene(
-            X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape)
+            X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape), name="X"
         )
         Y = pyro.sample(
             "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
@@ -144,14 +151,9 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
 
     with MultiWorldCounterfactual(cf_dim):
         Z, X, Y = model()
-
-    assert Z.shape == (2,) + (1,) * (len(Z.shape) - len(event_shape) - 1) + event_shape
-    assert (
-        X.shape == (2, 1) + (1,) * (len(X.shape) - len(event_shape) - 2) + event_shape
-    )
-    assert (
-        Y.shape == (2, 2) + (1,) * (len(Y.shape) - len(event_shape) - 2) + event_shape
-    )
+        assert indices_of(Z, event_dim=len(event_shape)) == IndexSet(Z={0, 1})
+        assert indices_of(X, event_dim=len(event_shape)) == IndexSet(X={0, 1})
+        assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
 
 
 @pytest.mark.parametrize("nested", [False, True])
@@ -678,7 +680,7 @@ def test_cf_inference_with_soft_conditioner():
     h_cond = condition(data={"x": torch.tensor(0.0), "y": torch.tensor(1.0)})
     h_do = do(actions={"z": torch.tensor(0.0)})
     scale = 0.01
-    reparam_config = AutoSoftConditioning(scale=scale, alpha=0.5)
+    reparam_config = AutoSoftConditioning(scale=scale)
 
     def model_cf():
         with pyro.poutine.reparam(config=reparam_config):

@@ -31,6 +31,7 @@ Table of Contents
    sdid
    dr_learner
    dynamical_intro
+   explainable_categorical
    actual_causality
 
 .. toctree::

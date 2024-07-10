@@ -41,7 +41,7 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/source/requirements.txt`
-        "pyro-ppl>=1.8.5",
+        "pyro-ppl==1.8.6",
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
@@ -61,6 +61,7 @@ setup(
             "myst_parser",
             "nbsphinx",
             "nbval",
+            "nbqa",
         ],
     },
     python_requires=">=3.8",

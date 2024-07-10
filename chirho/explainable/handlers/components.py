@@ -1,22 +1,68 @@
 import itertools
-from typing import Callable, Iterable, MutableMapping, TypeVar
+from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 
 import pyro
 import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
-from chirho.explainable.internals import soft_neq, uniform_proposal
+from chirho.explainable.internals import uniform_proposal
 from chirho.indexed.ops import IndexSet, gather, indices_of, scatter_n
+from chirho.observational.handlers import soft_eq, soft_neq
+from chirho.observational.ops import Observation
 
 S = TypeVar("S")
 T = TypeVar("T")
 
 
+def sufficiency_intervention(
+    support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
+    sufficiency_world=2,
+) -> Callable[[T], T]:
+    """
+    Creates a sufficiency intervention for a single sample site, determined by
+    the site name, intervening to keep the value as in the factual world with
+    respect to the antecedents.
+
+    :param support: The support constraint for the site.
+    :param name: The sample site name.
+
+    :return: A function that takes a `torch.Tensor` as input
+        and returns the factual value at the named site as a tensor.
+
+    Example::
+
+        >>> with MultiWorldCounterfactual() as mwc:
+        >>>     value = pyro.sample("value", proposal_dist)
+        >>>     intervention = sufficiency_intervention(support)
+        >>>     value = intervene(value, intervention)
+    """
+
+    def _sufficiency_intervention(value: T) -> T:
+
+        indices = IndexSet(
+            **{
+                name: sufficiency_world
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+
+        sufficiency_value = gather(
+            value,
+            indices,
+            event_dim=support.event_dim,
+        )
+        return sufficiency_value
+
+    return _sufficiency_intervention
+
+
 def random_intervention(
     support: constraints.Constraint,
     name: str,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+) -> Callable[[T], T]:
     """
     Creates a random-valued intervention for a single sample site, determined by
     by the distribution support, and site name.
@@ -37,8 +83,10 @@ def random_intervention(
         >>> assert x != 2
     """
 
-    def _random_intervention(value: torch.Tensor) -> torch.Tensor:
-        event_shape = value.shape[len(value.shape) - support.event_dim :]
+    def _random_intervention(value: T) -> T:
+
+        event_shape = value.shape[len(value.shape) - support.event_dim :]  # type: ignore
+
         proposal_dist = uniform_proposal(
             support,
             event_shape=event_shape,
@@ -91,7 +139,43 @@ def undo_split(
     return _undo_split
 
 
-def consequent_differs(
+def consequent_eq(
+    support: constraints.Constraint,
+    antecedents: Iterable[str] = [],
+    **kwargs,
+) -> Callable[[T], torch.Tensor]:
+    """
+    A helper function for assessing whether values at a site are close to their observed values, assigning
+    a small negative value close to zero if a value is close to its observed state and a large negative value otherwise.
+
+    :param support: The support constraint for the consequent site.
+    :param antecedents: A list of names of upstream intervened sites to consider when assessing similarity.
+
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor where each
+             element indicates the extent to which the corresponding element of ``consequent``
+             is close to its factual value.
+    """
+
+    def _consequent_eq(consequent: T) -> torch.Tensor:
+        indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+        eq = soft_eq(
+            support,
+            consequent,
+            gather(consequent, indices, event_dim=support.event_dim),
+            **kwargs,
+        )
+        return eq
+
+    return _consequent_eq
+
+
+def consequent_neq(
     support: constraints.Constraint,
     antecedents: Iterable[str] = [],
     **kwargs,
@@ -104,11 +188,11 @@ def consequent_differs(
     :param support: The support constraint for the consequent site.
     :param antecedents: A list of names of upstream intervened sites to consider when assessing differences.
 
-    :return: A callable which applied to a site value object (`consequent`), returns a tensor where each
-             element indicates whether the corresponding element of `consequent` differs from its factual value.
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor where each
+             element indicates whether the corresponding element of ``consequent`` differs from its factual value.
     """
 
-    def _consequent_differs(consequent: T) -> torch.Tensor:
+    def _consequent_neq(consequent: T) -> torch.Tensor:
         indices = IndexSet(
             **{
                 name: ind
@@ -124,7 +208,115 @@ def consequent_differs(
         )
         return diff
 
-    return _consequent_differs
+    return _consequent_neq
+
+
+def consequent_eq_neq(
+    support: constraints.Constraint,
+    proposed_consequent: Optional[Observation[T]],
+    antecedents: Iterable[str] = [],
+    **kwargs,
+) -> Callable[[T], torch.Tensor]:
+    """
+    A helper function for obtaining joint log prob of necessity and sufficiency. Assumes that
+    the necessity intervention has been applied in counterfactual world 1 and sufficiency intervention in
+    counterfactual world 2 (these can be passed as kwargs).
+
+    :param support: The support constraint for the consequent site.
+    :param antecedents: A list of names of upstream intervened sites to consider when composing the joint log prob.
+
+    :return: A callable which applied to a site value object (``consequent``), returns a tensor with log prob sums
+    of values resulting from necessity and sufficiency interventions, in appropriate counterfactual worlds.
+    """
+
+    def _consequent_eq_neq(consequent: T) -> torch.Tensor:
+
+        factual_indices = IndexSet(
+            **{
+                name: ind
+                for name, ind in get_factual_indices().items()
+                if name in antecedents
+            }
+        )
+
+        necessity_world = kwargs.get("necessity_world", 1)
+        sufficiency_world = kwargs.get("sufficiency_world", 2)
+
+        necessity_indices = IndexSet(
+            **{
+                name: {necessity_world}
+                for name in indices_of(consequent, event_dim=support.event_dim).keys()
+                if name in antecedents
+            }
+        )
+
+        sufficiency_indices = IndexSet(
+            **{
+                name: {sufficiency_world}
+                for name in indices_of(consequent, event_dim=support.event_dim).keys()
+                if name in antecedents
+            }
+        )
+
+        necessity_value = gather(
+            consequent, necessity_indices, event_dim=support.event_dim
+        )
+        sufficiency_value = gather(
+            consequent, sufficiency_indices, event_dim=support.event_dim
+        )
+
+        # compare to proposed consequent if provided
+        # as then the sufficiency value can be different
+        # due to witness preemption
+        necessity_log_probs = (
+            soft_neq(
+                support,
+                necessity_value,
+                proposed_consequent,
+                **kwargs,
+            )
+            if proposed_consequent is not None
+            else soft_neq(
+                support,
+                necessity_value,
+                sufficiency_value,
+                **kwargs,
+            )
+        )
+
+        sufficiency_log_probs = (
+            soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
+            if proposed_consequent is not None
+            else torch.zeros_like(necessity_log_probs)
+        )
+
+        FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
+
+        nec_suff_log_probs_partitioned = {
+            **{
+                factual_indices: FACTUAL_NEC_SUFF,
+            },
+            **{
+                IndexSet(**{antecedent: {ind}}): log_prob
+                for antecedent in (
+                    set(antecedents)
+                    & set(indices_of(consequent, event_dim=support.event_dim))
+                )
+                for ind, log_prob in zip(
+                    [necessity_world, sufficiency_world],
+                    [necessity_log_probs, sufficiency_log_probs],
+                )
+            },
+        }
+
+        new_value = scatter_n(
+            nec_suff_log_probs_partitioned,
+            event_dim=0,
+        )
+
+        return new_value
+
+    return _consequent_eq_neq
 
 
 class ExtractSupports(pyro.poutine.messenger.Messenger):
