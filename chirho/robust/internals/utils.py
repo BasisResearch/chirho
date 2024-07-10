@@ -2,7 +2,7 @@ import contextlib
 import functools
 import math
 from math import prod
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
