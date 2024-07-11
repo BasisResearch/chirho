@@ -2,7 +2,7 @@ import contextlib
 import functools
 import math
 from math import prod
-from typing import Any, Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
+from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
@@ -28,9 +28,8 @@ U = TypeVar("U")
 ParamDict = Mapping[str, torch.Tensor]
 
 
-@functools.singledispatch
 def make_flatten_unflatten(
-    v,
+    v: T,
 ) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
     """
     Returns functions to flatten and unflatten an object. Used as a helper
@@ -41,66 +40,27 @@ def make_flatten_unflatten(
     :return: flatten and unflatten functions
     :rtype: Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]
     """
-    raise NotImplementedError
+    flat_v, treespec = torch.utils._pytree.tree_flatten(v)
 
+    def _flatten(unflat_v: T) -> torch.Tensor:
+        parts, _ = torch.utils._pytree.tree_flatten(unflat_v)
+        return torch.hstack([x.reshape((x.shape[0], -1)) for x in parts])
 
-@make_flatten_unflatten.register(torch.Tensor)
-def _make_flatten_unflatten_tensor(v: torch.Tensor):
-    """
-    Returns functions to flatten and unflatten a `torch.Tensor`.
-    """
-    batch_size = v.shape[0]
-
-    def flatten(v: torch.Tensor) -> torch.Tensor:
-        r"""
-        Flatten a tensor into a single vector.
-        """
-        return v.reshape((batch_size, -1))
-
-    def unflatten(x: torch.Tensor) -> torch.Tensor:
-        r"""
-        Unflatten a vector into a tensor.
-        """
-        return x.reshape(v.shape)
-
-    return flatten, unflatten
-
-
-@make_flatten_unflatten.register(dict)
-def _make_flatten_unflatten_dict(d: Dict[str, torch.Tensor]):
-    """
-    Returns functions to flatten and unflatten a dictionary of `torch.Tensor`s.
-    """
-    batch_size = next(iter(d.values())).shape[0]
-
-    def flatten(d: Dict[str, torch.Tensor]) -> torch.Tensor:
-        r"""
-        Flatten a dictionary of tensors into a single vector.
-        """
-        return torch.hstack([v.reshape((batch_size, -1)) for k, v in d.items()])
-
-    def unflatten(x: torch.Tensor) -> Dict[str, torch.Tensor]:
-        r"""
-        Unflatten a vector into a dictionary of tensors.
-        """
-        return dict(
-            zip(
-                d.keys(),
-                [
-                    v_flat.reshape(v.shape)
-                    for v, v_flat in zip(
-                        d.values(),
-                        torch.split(
-                            x,
-                            [int(v.numel() / batch_size) for k, v in d.items()],
-                            dim=1,
-                        ),
-                    )
-                ],
+    def _unflatten(single_flat_v: torch.Tensor) -> T:
+        parts = [
+            v_flat.reshape(v.shape)
+            for v, v_flat in zip(
+                flat_v,
+                torch.split(
+                    single_flat_v,
+                    [int(vi.numel() / flat_v[0].shape[0]) for vi in flat_v],
+                    dim=1,
+                ),
             )
-        )
+        ]
+        return torch.utils._pytree.tree_unflatten(parts, treespec)
 
-    return flatten, unflatten
+    return _flatten, _unflatten
 
 
 SPyTree = TypeVar("SPyTree", bound=PyTree)
