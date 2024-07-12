@@ -124,7 +124,7 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_sample(self, msg) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
 

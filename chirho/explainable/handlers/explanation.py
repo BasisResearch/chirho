@@ -1,4 +1,5 @@
 import contextlib
+import typing
 from typing import Callable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions.constraints as constraints

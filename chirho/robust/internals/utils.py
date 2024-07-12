@@ -1,7 +1,7 @@
 import contextlib
 import functools
 import math
-from math import prod
+import typing
 from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
@@ -163,7 +163,7 @@ def pytree_generalized_manual_revjvp(
             # Infer the parameter shapes directly from passed parameters.
             og_param_shape = p.shape
             param_shape = og_param_shape if len(og_param_shape) else (1,)
-            param_numel = prod(param_shape)
+            param_numel = math.prod(param_shape)
             og_param_ndim = len(og_param_shape)
 
             # Infer the batch shape by subtracting off the param shape on the right.
@@ -174,7 +174,7 @@ def pytree_generalized_manual_revjvp(
             # Infer the output shape by subtracting off the param shape from the jacobian.
             og_output_shape = j.shape[:-og_param_ndim] if og_param_ndim else j.shape
             output_shape = og_output_shape if len(og_output_shape) else (1,)
-            output_numel = prod(output_shape)
+            output_numel = math.prod(output_shape)
 
             # Reshape for matmul and s.t. that the jacobian can be broadcast over the batch dims.
             j_bm = j.reshape(*(1,) * batch_ndim, output_numel, param_numel)
@@ -285,7 +285,7 @@ def _unbind_leftmost_dim_tensor(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.shape
     while new_dim - event_dim < -len(v.shape):
         v = v[None]
@@ -294,10 +294,10 @@ def _unbind_leftmost_dim_tensor(
     return v
 
 
-@unbind_leftmost_dim.register
+@unbind_leftmost_dim.register(pyro.distributions.Distribution)
 def _unbind_leftmost_dim_distribution(
-    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
-) -> pyro.distributions.Distribution:
+    v: pyro.distributions.TorchDistribution, name: str, size: int = 1, **kwargs
+) -> pyro.distributions.TorchDistribution:
     size = max(size, v.batch_shape[0])
     if v.batch_shape[0] != 1:
         raise NotImplementedError("Cannot freely reshape distribution")
@@ -305,7 +305,7 @@ def _unbind_leftmost_dim_distribution(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim: int = typing.cast(int, get_index_plates()[name].dim)
     orig_shape = v.batch_shape
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
@@ -330,7 +330,9 @@ def _bind_leftmost_dim_tensor(
     if name not in indices_of(v, event_dim=event_dim):
         return v
     return torch.transpose(
-        v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
+        v[None],
+        -len(v.shape) - 1,
+        typing.cast(int, get_index_plates()[name].dim) - event_dim,
     )
 
 

@@ -1,3 +1,4 @@
+import typing
 from typing import Generic, TypeVar
 
 import pyro
@@ -55,7 +56,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         super().__init__()
 
-    def _pyro_post_simulate(self, msg: dict) -> None:
+    def _pyro_post_simulate(self, msg) -> None:
         initial_state: State[T] = msg["args"][1]
         start_time = msg["args"][2]
 
@@ -74,7 +75,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         if self.is_traced:
             # This adds the trajectory to the trace so that it can be accessed later.
-            [pyro.deterministic(name, value) for name, value in self.trajectory.items()]
+            [
+                pyro.deterministic(name, typing.cast(torch.Tensor, value))
+                for name, value in self.trajectory.items()
+            ]
 
     def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
@@ -100,7 +104,9 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         # TODO support dim != -1
         idx_name = "__time"
-        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim = {
+            k: typing.cast(int, f.dim) - 1 for k, f in get_index_plates().items()
+        }
         name_to_dim[idx_name] = -1
 
         if len(timespan) > 2:

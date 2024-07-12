@@ -1,4 +1,5 @@
 import itertools
+import typing
 from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 
 import pyro
@@ -91,7 +92,7 @@ def random_intervention(
             support,
             event_shape=event_shape,
         )
-        return pyro.sample(name, proposal_dist)
+        return typing.cast(T, pyro.sample(name, proposal_dist))
 
     return _random_intervention
 
@@ -309,7 +310,7 @@ def consequent_eq_neq(
             },
         }
 
-        new_value = scatter_n(
+        new_value: torch.Tensor = scatter_n(
             nec_suff_log_probs_partitioned,
             event_dim=0,
         )
@@ -343,6 +344,6 @@ class ExtractSupports(pyro.poutine.messenger.Messenger):
 
         self.supports = {}
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg) -> None:
         if not pyro.poutine.util.site_is_subsample(msg):
             self.supports[msg["name"]] = msg["fn"].support
