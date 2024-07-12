@@ -91,7 +91,7 @@ def random_intervention(
             support,
             event_shape=event_shape,
         )
-        return pyro.sample(name, proposal_dist)
+        return typing.cast(T, pyro.sample(name, proposal_dist))
 
     return _random_intervention
 
@@ -309,7 +309,7 @@ def consequent_eq_neq(
             },
         }
 
-        new_value = scatter_n(
+        new_value: torch.Tensor = scatter_n(
             nec_suff_log_probs_partitioned,
             event_dim=0,
         )
