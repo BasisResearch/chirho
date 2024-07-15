@@ -106,10 +106,14 @@ def test_start_end_time_collisions(solver, dynamics, simulate_kwargs):
     )  # previously failed bc len(X) == 3
 
 
-@pytest.mark.parametrize("solver,dynamics1,simulate_kwargs1,dynamics2,simulate_kwargs2", [
-    (TorchDiffEq, bayes_sir_model(), dict(), bayes_sir_model(), dict())
+@pytest.mark.parametrize("solver,dynamics1_simulate_kwargs1,dynamics2_simulate_kwargs2", [
+    (TorchDiffEq, (bayes_sir_model(), dict()), (bayes_sir_model(), dict()))
 ])
-def test_multiple_simulates(solver, dynamics1, simulate_kwargs1, dynamics2, simulate_kwargs2):
+def test_multiple_simulates(solver, dynamics1_simulate_kwargs1, dynamics2_simulate_kwargs2):
+
+    # These are grouped so that outside reparametrization of these tests can handle these together.
+    dynamics1, simulate_kwargs1 = dynamics1_simulate_kwargs1
+    dynamics2, simulate_kwargs2 = dynamics2_simulate_kwargs2
 
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
