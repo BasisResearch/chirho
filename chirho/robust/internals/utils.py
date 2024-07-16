@@ -1,7 +1,6 @@
 import contextlib
-import functools
 from math import prod
-from typing import Callable, Dict, List, Mapping, Optional, Tuple, TypeVar
+from typing import Callable, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
