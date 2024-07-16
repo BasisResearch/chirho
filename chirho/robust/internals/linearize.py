@@ -276,7 +276,7 @@ def linearize(
             import pyro.distributions as dist
             import torch
 
-            from chirho.robust.handlers.predictive import PredictiveModel
+            from chirho.observational.handlers.predictive import PredictiveModel
             from chirho.robust.internals.linearize import linearize
 
             pyro.settings.set(module_local_params=True)

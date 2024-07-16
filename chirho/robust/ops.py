@@ -41,7 +41,7 @@ def influence_fn(
             import pyro.distributions as dist
             import torch
 
-            from chirho.robust.handlers.predictive import PredictiveModel
+            from chirho.observational.handlers.predictive import PredictiveModel
             from chirho.robust.handlers.estimators import MonteCarloInfluenceEstimator
             from chirho.robust.ops import influence_fn
 
