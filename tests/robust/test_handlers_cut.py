@@ -7,11 +7,7 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.observational.handlers.cut import (
-    CutComplementModule,
-    CutModule,
-    SingleStageCut,
-)
+from chirho.robust.handlers.cut import CutComplementModule, CutModule, SingleStageCut
 
 pyro.settings.set(module_local_params=True)
 
