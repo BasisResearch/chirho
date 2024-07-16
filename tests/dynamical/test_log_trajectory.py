@@ -26,10 +26,12 @@ end_time = torch.tensor(4.0)
 logging_times = torch.tensor([1.0, 2.0, 3.0])
 
 
-@pytest.mark.parametrize("solver,dynamics,simulate_kwargs", [
-    (TorchDiffEq, bayes_sir_model(), dict())
+@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
+    (TorchDiffEq, (bayes_sir_model(), dict()))
 ])
-def test_logging(solver, dynamics, simulate_kwargs):
+def test_logging(solver, dynamics_simulate_kwargs):
+    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+
     with solver():
         with LogTrajectory(times=logging_times) as dt1:
             result1 = simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
@@ -48,10 +50,12 @@ def test_logging(solver, dynamics, simulate_kwargs):
     assert check_states_match(result1, result3)
 
 
-@pytest.mark.parametrize("solver,dynamics,simulate_kwargs", [
-    (TorchDiffEq, bayes_sir_model(), dict())
+@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
+    (TorchDiffEq, (bayes_sir_model(), dict()))
 ])
-def test_logging_with_colliding_interruption(solver, dynamics, simulate_kwargs):
+def test_logging_with_colliding_interruption(solver, dynamics_simulate_kwargs):
+    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
             simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
@@ -80,10 +84,12 @@ def test_append():
     ), "append() failed to append a trajectory"
 
 
-@pytest.mark.parametrize("solver,dynamics,simulate_kwargs", [
-    (TorchDiffEq, lambda s: dict(X=s["X"] * (1 - s["X"])), dict())
+@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
+    (TorchDiffEq, (lambda s: dict(X=s["X"] * (1 - s["X"])), dict()))
 ])
-def test_start_end_time_collisions(solver, dynamics, simulate_kwargs):
+def test_start_end_time_collisions(solver, dynamics_simulate_kwargs):
+    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+
     start_time, end_time = torch.tensor(0.0), torch.tensor(3.0)
     init_state = dict(X=torch.tensor(0.5))
 
