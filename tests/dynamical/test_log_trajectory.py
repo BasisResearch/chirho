@@ -26,20 +26,18 @@ end_time = torch.tensor(4.0)
 logging_times = torch.tensor([1.0, 2.0, 3.0])
 
 
-@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
-    (TorchDiffEq, (bayes_sir_model(), dict()))
-])
-def test_logging(solver, dynamics_simulate_kwargs):
-    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("dynamics", [bayes_sir_model()])
+def test_logging(solver, dynamics):
 
     with solver():
         with LogTrajectory(times=logging_times) as dt1:
-            result1 = simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+            result1 = simulate(dynamics, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt2:
         with solver():
-            result2 = simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
-    result3 = solver()(simulate)(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+            result2 = simulate(dynamics, init_state, start_time, end_time)
+    result3 = solver()(simulate)(dynamics, init_state, start_time, end_time)
 
     assert len(dt1.trajectory.keys()) == 3
     assert len(dt2.trajectory.keys()) == 3
@@ -50,22 +48,20 @@ def test_logging(solver, dynamics_simulate_kwargs):
     assert check_states_match(result1, result3)
 
 
-@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
-    (TorchDiffEq, (bayes_sir_model(), dict()))
-])
-def test_logging_with_colliding_interruption(solver, dynamics_simulate_kwargs):
-    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("dynamics", [bayes_sir_model()])
+def test_logging_with_colliding_interruption(solver, dynamics):
 
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
-            simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+            simulate(dynamics, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt2:
         with solver():
             with StaticInterruption(
                 time=torch.tensor(2.0),
             ):
-                simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+                simulate(dynamics, init_state, start_time, end_time)
 
     check_states_match(dt1.trajectory, dt2.trajectory)
 
@@ -84,22 +80,20 @@ def test_append():
     ), "append() failed to append a trajectory"
 
 
-@pytest.mark.parametrize("solver,dynamics_simulate_kwargs", [
-    (TorchDiffEq, (lambda s: dict(X=s["X"] * (1 - s["X"])), dict()))
-])
-def test_start_end_time_collisions(solver, dynamics_simulate_kwargs):
-    dynamics, simulate_kwargs = dynamics_simulate_kwargs
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("dynamics", [lambda s: dict(X=s["X"] * (1 - s["X"]))])
+def test_start_end_time_collisions(solver, dynamics):
 
     start_time, end_time = torch.tensor(0.0), torch.tensor(3.0)
     init_state = dict(X=torch.tensor(0.5))
 
     with solver():
         with LogTrajectory(times=torch.tensor([0.0, 1.0, 2.0, 3.0])) as log1:
-            simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+            simulate(dynamics, init_state, start_time, end_time)
 
     with LogTrajectory(times=torch.tensor([0.0, 1.0, 2.0, 3.0])) as log2:
         with solver():
-            simulate(dynamics, init_state, start_time, end_time, **simulate_kwargs)
+            simulate(dynamics, init_state, start_time, end_time)
 
     assert check_states_match(log1.trajectory, log2.trajectory)
 
@@ -112,27 +106,23 @@ def test_start_end_time_collisions(solver, dynamics_simulate_kwargs):
     )  # previously failed bc len(X) == 3
 
 
-@pytest.mark.parametrize("solver,dynamics1_simulate_kwargs1,dynamics2_simulate_kwargs2", [
-    (TorchDiffEq, (bayes_sir_model(), dict()), (bayes_sir_model(), dict()))
-])
-def test_multiple_simulates(solver, dynamics1_simulate_kwargs1, dynamics2_simulate_kwargs2):
-
-    # These are grouped so that outside reparametrization of these tests can handle these together.
-    dynamics1, simulate_kwargs1 = dynamics1_simulate_kwargs1
-    dynamics2, simulate_kwargs2 = dynamics2_simulate_kwargs2
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+# These need to be the same dynamics fn but with different atemporal parameters.
+@pytest.mark.parametrize("dynamics1,dynamics2", [(bayes_sir_model(), bayes_sir_model())])
+def test_multiple_simulates(solver, dynamics1, dynamics2):
 
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
-            result11 = simulate(dynamics1, init_state, start_time, end_time, **simulate_kwargs1)
-            result12 = simulate(dynamics2, init_state, start_time, end_time, **simulate_kwargs2)
+            result11 = simulate(dynamics1, init_state, start_time, end_time)
+            result12 = simulate(dynamics2, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt2:
         with solver():
-            result21 = simulate(dynamics1, init_state, start_time, end_time, **simulate_kwargs1)
+            result21 = simulate(dynamics1, init_state, start_time, end_time)
 
     with LogTrajectory(times=logging_times) as dt3:
         with solver():
-            result22 = simulate(dynamics2, init_state, start_time, end_time, **simulate_kwargs2)
+            result22 = simulate(dynamics2, init_state, start_time, end_time)
 
     # Simulation outputs do not depend on LogTrajectory context
     assert check_states_match(result11, result21)

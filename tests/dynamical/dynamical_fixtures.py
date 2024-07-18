@@ -1,8 +1,9 @@
-from typing import TypeVar
+from typing import TypeVar, Mapping, Tuple
 
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
+from torch import Tensor as Tnsr
 
 from chirho.dynamical.ops import State
 
@@ -10,8 +11,54 @@ pyro.settings.set(module_local_params=True)
 
 T = TypeVar("T")
 
+ATempParams = Mapping[str, T]
 
-class UnifiedFixtureDynamics(pyro.nn.PyroModule):
+
+# SIR dynamics written as a pure function of state and parameters.
+def pure_sir_dynamics(state: State[Tnsr], atemp_params: ATempParams[Tnsr]) -> State[Tnsr]:
+    beta = atemp_params["beta"]
+    gamma = atemp_params["gamma"]
+
+    dX: State[torch.Tensor] = dict()
+
+    beta = beta * (
+            1.0 + 0.1 * torch.sin(0.1 * state["t"])
+    )  # beta oscilates slowly in time.
+
+    dX["S"] = -beta * state["S"] * state["I"]  # noqa
+    dX["I"] = beta * state["S"] * state["I"] - gamma * state["I"]  # noqa
+    dX["R"] = gamma * state["I"]  # noqa
+
+    return dX
+
+
+class SIRObservationMixin:
+    def _unit_measurement_error(self, name: str, x: torch.Tensor):
+        if x.ndim == 0:
+            return pyro.sample(name, Normal(x, 1))
+        else:
+            return pyro.sample(name, Normal(x, 1).to_event(1))
+
+    @pyro.nn.pyro_method
+    def observation(self, X: State[torch.Tensor]):
+        self._unit_measurement_error("S_obs", X["S"])
+        self._unit_measurement_error("I_obs", X["I"])
+        self._unit_measurement_error("R_obs", X["R"])
+
+
+class SIRReparamObservationMixin(SIRObservationMixin):
+    def observation(self, X: State[torch.Tensor]):
+        # super().observation(X)
+
+        # A flight arrives in a country that tests all arrivals for a disease. The number of people infected on the
+        #  plane is a noisy function of the number of infected people in the country of origin at that time.
+        u_ip = pyro.sample(
+            "u_ip", Normal(7.0, 2.0).expand(X["I"].shape[-1:]).to_event(1)
+        )
+        pyro.deterministic("infected_passengers", X["I"] + u_ip, event_dim=1)
+
+
+class UnifiedFixtureDynamicsBase(pyro.nn.PyroModule):
     def __init__(self, beta=None, gamma=None):
         super().__init__()
 
@@ -24,27 +71,12 @@ class UnifiedFixtureDynamics(pyro.nn.PyroModule):
             self.gamma = pyro.param("gamma", torch.tensor(0.7), constraints.positive)
 
     def forward(self, X: State[torch.Tensor]):
-        dX: State[torch.Tensor] = dict()
-        beta = self.beta * (
-            1.0 + 0.1 * torch.sin(0.1 * X["t"])
-        )  # beta oscilates slowly in time.
+        atemp_params = dict(beta=self.beta, gamma=self.gamma)
+        return pure_sir_dynamics(X, atemp_params)
 
-        dX["S"] = -beta * X["S"] * X["I"]
-        dX["I"] = beta * X["S"] * X["I"] - self.gamma * X["I"]  # noqa
-        dX["R"] = self.gamma * X["I"]
-        return dX
 
-    def _unit_measurement_error(self, name: str, x: torch.Tensor):
-        if x.ndim == 0:
-            return pyro.sample(name, Normal(x, 1))
-        else:
-            return pyro.sample(name, Normal(x, 1).to_event(1))
-
-    @pyro.nn.pyro_method
-    def observation(self, X: State[torch.Tensor]):
-        self._unit_measurement_error("S_obs", X["S"])
-        self._unit_measurement_error("I_obs", X["I"])
-        self._unit_measurement_error("R_obs", X["R"])
+class UnifiedFixtureDynamics(UnifiedFixtureDynamicsBase, SIRObservationMixin):
+    pass
 
 
 def bayes_sir_model():

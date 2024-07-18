@@ -17,7 +17,8 @@ from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
-    UnifiedFixtureDynamics,
+    UnifiedFixtureDynamicsBase,
+    SIRReparamObservationMixin,
     run_svi_inference_torch_direct,
 )
 
@@ -88,16 +89,8 @@ def conditioned_model():
 
 
 # A reparameterized observation function of various flight arrivals.
-class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamics):
-    def observation(self, X: State[torch.Tensor]):
-        # super().observation(X)
-
-        # A flight arrives in a country that tests all arrivals for a disease. The number of people infected on the
-        #  plane is a noisy function of the number of infected people in the country of origin at that time.
-        u_ip = pyro.sample(
-            "u_ip", Normal(7.0, 2.0).expand(X["I"].shape[-1:]).to_event(1)
-        )
-        pyro.deterministic("infected_passengers", X["I"] + u_ip, event_dim=1)
+class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamicsBase, SIRReparamObservationMixin):
+    pass
 
 
 def test_shape_twincounterfactual_observation_intervention_commutes():
