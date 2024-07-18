@@ -8,7 +8,7 @@ import torch
 from pyro.infer.predictive import Predictive
 from typing_extensions import ParamSpec
 
-from chirho.robust.handlers.predictive import PredictiveModel
+from chirho.observational.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import (
     conjugate_gradient_solve,
     linearize,

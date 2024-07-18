@@ -1,8 +1,6 @@
 import contextlib
-import functools
-import math
 from math import prod
-from typing import Any, Callable, List, Mapping, Optional, Tuple, TypeVar
+from typing import Callable, List, Mapping, Optional, Tuple, TypeVar
 
 import pyro
 import torch
@@ -15,9 +13,6 @@ from torch.utils._pytree import (
     tree_unflatten,
 )
 from typing_extensions import Concatenate, ParamSpec
-
-from chirho.indexed.handlers import add_indices
-from chirho.indexed.ops import IndexSet, get_index_plates, indices_of
 
 P = ParamSpec("P")
 Q = ParamSpec("Q")
@@ -153,7 +148,6 @@ def pytree_generalized_manual_revjvp(
     for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(
         pytree=jac, sub_tspec=param_tspec
     ):
-
         flat_sub_out: List[torch.Tensor] = []
 
         # Then map that subtree (with tree structure matching that of params) onto the params and batched_vector.
@@ -224,27 +218,6 @@ def make_functional_call(
     return param_dict, mod_func
 
 
-@pyro.poutine.block()
-@pyro.validation_enabled(False)
-@torch.no_grad()
-def guess_max_plate_nesting(
-    model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs
-) -> int:
-    """
-    Guesses the maximum plate nesting level by running `pyro.infer.Trace_ELBO`
-
-    :param model: Python callable containing Pyro primitives.
-    :type model: Callable[P, Any]
-    :param guide: Python callable containing Pyro primitives.
-    :type guide: Callable[P, Any]
-    :return: maximum plate nesting level
-    :rtype: int
-    """
-    elbo = pyro.infer.Trace_ELBO()
-    elbo._guess_max_plate_nesting(model, guide, args, kwargs)
-    return elbo.max_plate_nesting
-
-
 @contextlib.contextmanager
 def reset_rng_state(rng_state: T):
     """
@@ -255,126 +228,3 @@ def reset_rng_state(rng_state: T):
         yield pyro.util.set_rng_state(rng_state)
     finally:
         pyro.util.set_rng_state(prev_rng_state)
-
-
-@functools.singledispatch
-def unbind_leftmost_dim(v, name: str, size: int = 1, **kwargs):
-    """
-    Helper function to move the leftmost dimension of a ``torch.Tensor``
-    or ``pyro.distributions.Distribution`` or other batched value
-    into a fresh named dimension using the machinery in ``chirho.indexed`` ,
-    allocating a new dimension with the given name if necessary
-    via an enclosing :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
-
-    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
-
-    :param v: Batched value.
-    :param name: Name of the fresh dimension.
-    :param size: Size of the fresh dimension. If 1, the size is inferred from ``v`` .
-    """
-    raise NotImplementedError
-
-
-@unbind_leftmost_dim.register
-def _unbind_leftmost_dim_tensor(
-    v: torch.Tensor, name: str, size: int = 1, *, event_dim: int = 0
-) -> torch.Tensor:
-    size = max(size, v.shape[0])
-    v = v.expand((size,) + v.shape[1:])
-
-    if name not in get_index_plates():
-        add_indices(IndexSet(**{name: set(range(size))}))
-
-    new_dim: int = get_index_plates()[name].dim
-    orig_shape = v.shape
-    while new_dim - event_dim < -len(v.shape):
-        v = v[None]
-    if v.shape[0] == 1 and orig_shape[0] != 1:
-        v = torch.transpose(v, -len(orig_shape), new_dim - event_dim)
-    return v
-
-
-@unbind_leftmost_dim.register
-def _unbind_leftmost_dim_distribution(
-    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
-) -> pyro.distributions.Distribution:
-    size = max(size, v.batch_shape[0])
-    if v.batch_shape[0] != 1:
-        raise NotImplementedError("Cannot freely reshape distribution")
-
-    if name not in get_index_plates():
-        add_indices(IndexSet(**{name: set(range(size))}))
-
-    new_dim: int = get_index_plates()[name].dim
-    orig_shape = v.batch_shape
-
-    new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
-    return v.expand(new_shape)
-
-
-@functools.singledispatch
-def bind_leftmost_dim(v, name: str, **kwargs):
-    """
-    Helper function to move a named dimension managed by ``chirho.indexed``
-    into a new unnamed dimension to the left of all named dimensions in the value.
-
-    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
-    """
-    raise NotImplementedError
-
-
-@bind_leftmost_dim.register
-def _bind_leftmost_dim_tensor(
-    v: torch.Tensor, name: str, *, event_dim: int = 0, **kwargs
-) -> torch.Tensor:
-    if name not in indices_of(v, event_dim=event_dim):
-        return v
-    return torch.transpose(
-        v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
-    )
-
-
-def get_importance_traces(
-    model: Callable[P, Any],
-    guide: Optional[Callable[P, Any]] = None,
-) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
-    """
-    Thin functional wrapper around :func:`~pyro.infer.enum.get_importance_trace`
-    that cleans up the original interface to avoid unnecessary arguments
-    and efficiently supports using the prior in a model as a default guide.
-
-    :param model: Model to run.
-    :param guide: Guide to run. If ``None``, use the prior in ``model`` as a guide.
-    :returns: A function that takes the same arguments as ``model`` and ``guide`` and returns
-        a tuple of importance traces ``(model_trace, guide_trace)``.
-    """
-
-    def _fn(
-        *args: P.args, **kwargs: P.kwargs
-    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
-        if guide is not None:
-            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, guide, args, kwargs
-            )
-            return model_trace, guide_trace
-        else:  # use prior as default guide, but don't run model twice
-            model_trace, _ = pyro.infer.enum.get_importance_trace(
-                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
-            )
-
-            guide_trace = model_trace.copy()
-            for name, node in list(guide_trace.nodes.items()):
-                if node["type"] != "sample":
-                    del model_trace.nodes[name]
-                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
-                    del guide_trace.nodes[name]
-            return model_trace, guide_trace
-
-    return _fn
-
-
-def site_is_delta(msg: dict) -> bool:
-    d = msg["fn"]
-    while hasattr(d, "base_dist"):
-        d = d.base_dist
-    return isinstance(d, pyro.distributions.Delta)
