@@ -49,8 +49,9 @@ def run_svi_inference(model, n_steps=10, verbose=False, lr=0.03, **model_kwargs)
     return guide
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
-def test_multiple_point_observations(model):
+def test_multiple_point_observations(solver, model):
     """
     Tests if multiple StaticObservation handlers can be composed.
     """
@@ -59,7 +60,7 @@ def test_multiple_point_observations(model):
     data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
     obs1 = condition(data=data1)(model.observation)
     obs2 = condition(data=data2)(model.observation)
-    with TorchDiffEq():
+    with solver():
         result1 = simulate(model, init_state, start_time, end_time)
         with StaticObservation(time=3.1, observation=obs2):
             with StaticObservation(time=2.9, observation=obs1):
@@ -68,9 +69,10 @@ def test_multiple_point_observations(model):
     check_states_match(result1, result2)
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("obs_handler_cls", [StaticObservation, StaticBatchObservation])
-def test_log_prob_exists(model, obs_handler_cls):
+def test_log_prob_exists(solver, model, obs_handler_cls):
     """
     Tests if the log_prob exists at the observed site.
     """
@@ -85,16 +87,17 @@ def test_log_prob_exists(model, obs_handler_cls):
         obs = condition(data=data)(model.observation)
 
     with pyro.poutine.trace() as tr:
-        with TorchDiffEq():
+        with solver():
             with obs_handler_cls(time, observation=obs):
                 simulate(model, init_state, start_time, end_time)
 
     assert isinstance(tr.trace.log_prob_sum(), torch.Tensor), "No log_prob found!"
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("obs_handler_cls", [StaticObservation, StaticBatchObservation])
-def test_tspan_collision(model, obs_handler_cls):
+def test_tspan_collision(solver, model, obs_handler_cls):
     """
     Tests if observation times that intersect with tspan do not raise an error or create
     shape mismatches.
@@ -110,7 +113,7 @@ def test_tspan_collision(model, obs_handler_cls):
         time = torch.tensor([time, time + 0.1])
 
     with LogTrajectory(logging_times) as dt:
-        with TorchDiffEq():
+        with solver():
             with obs_handler_cls(time, observation=obs):
                 simulate(model, init_state, start_time, end_time)
     result = dt.trajectory
@@ -119,9 +122,10 @@ def test_tspan_collision(model, obs_handler_cls):
     assert result["R"].shape[0] == len(logging_times)
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [bayes_sir_model])
 @pytest.mark.parametrize("obs_handler_cls", [StaticObservation, StaticBatchObservation])
-def test_svi_composition_test_one(model, obs_handler_cls):
+def test_svi_composition_test_one(solver, model, obs_handler_cls):
     data = {
         "S_obs": torch.tensor(10.0),
         "I_obs": torch.tensor(5.0),
@@ -141,7 +145,7 @@ def test_svi_composition_test_one(model, obs_handler_cls):
                 obs = condition(data=data_)(sir.observation)
                 time_ = torch.tensor([time, time + 0.1])
 
-            with TorchDiffEq():
+            with solver():
                 with obs_handler_cls(time_, observation=obs):
                     traj = simulate(sir, init_state, start_time, end_time)
             return traj
@@ -153,8 +157,9 @@ def test_svi_composition_test_one(model, obs_handler_cls):
     assert guide is not None
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
-def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
+def test_interrupting_and_non_interrupting_observation_array_equivalence(solver, model):
     S_obs = torch.tensor([10.0, 5.0, 3.0])
     I_obs = torch.tensor([1.0, 4.0, 4.0])
     R_obs = torch.tensor([0.0, 1.0, 3.0])
@@ -171,7 +176,7 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     obs2 = condition(data={k: v[2] for k, v in data.items()})(model.observation)
 
     with pyro.poutine.trace() as tr1:
-        with TorchDiffEq():
+        with solver():
             with StaticObservation(time=times[1].item(), observation=obs1):
                 with StaticObservation(time=times[0].item(), observation=obs0):
                     with StaticObservation(time=times[2].item(), observation=obs2):
@@ -183,7 +188,7 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
                         )
 
     with pyro.poutine.trace() as tr2:
-        with TorchDiffEq():
+        with solver():
             with StaticBatchObservation(times=times, observation=obs):
                 non_interrupting_ret = simulate(model, init_state, start_time, end_time)
 
@@ -192,8 +197,9 @@ def test_interrupting_and_non_interrupting_observation_array_equivalence(model):
     assert torch.isclose(tr1.trace.log_prob_sum(), tr2.trace.log_prob_sum())
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [bayes_sir_model])
-def test_svi_composition_test_multi_point_obs(model):
+def test_svi_composition_test_multi_point_obs(solver, model):
     data1 = {
         "S_obs": torch.tensor(10.0),
         "I_obs": torch.tensor(5.0),
@@ -218,7 +224,7 @@ def test_svi_composition_test_multi_point_obs(model):
                 obs_data = obs[1]
                 obs_model = condition(data=obs_data)(sir.observation)
                 observation_managers.append(StaticObservation(obs_time, obs_model))
-            with TorchDiffEq():
+            with solver():
                 with ExitStack() as stack:
                     for manager in observation_managers:
                         stack.enter_context(manager)
@@ -232,8 +238,9 @@ def test_svi_composition_test_multi_point_obs(model):
     assert guide is not None
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [bayes_sir_model])
-def test_svi_composition_vectorized_obs(model):
+def test_svi_composition_vectorized_obs(solver, model):
     times = torch.tensor([0.1, 1.5, 2.3, 3.1])
     data = {
         "S_obs": torch.tensor([10.0, 8.0, 5.0, 3.0]),
@@ -245,7 +252,7 @@ def test_svi_composition_vectorized_obs(model):
         def forward(self):
             sir = model()
             obs = condition(data=data)(sir.observation)
-            with TorchDiffEq():
+            with solver():
                 with StaticBatchObservation(times=times, observation=obs):
                     traj = simulate(sir, init_state, start_time, end_time)
             return traj
@@ -257,8 +264,9 @@ def test_svi_composition_vectorized_obs(model):
     assert guide is not None
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("use_event_loop", [True, False])
-def test_simulate_persistent_pyrosample(use_event_loop):
+def test_simulate_persistent_pyrosample(solver, use_event_loop):
     class RandBetaUnifiedFixtureDynamics(UnifiedFixtureDynamics):
         @pyro.nn.PyroSample
         def beta(self):
@@ -272,14 +280,14 @@ def test_simulate_persistent_pyrosample(use_event_loop):
 
     with LogTrajectory(logging_times) as dt:
         if not use_event_loop:
-            TorchDiffEq()(simulate)(model, init_state, start_time, end_time)
+            solver()(simulate)(model, init_state, start_time, end_time)
         else:
             S_obs = torch.tensor(10.0)
             data1 = {"S_obs": S_obs}
             data2 = {"I_obs": torch.tensor(5.0), "R_obs": torch.tensor(5.0)}
             obs1 = condition(data=data1)(model.observation)
             obs2 = condition(data=data2)(model.observation)
-            with TorchDiffEq():
+            with solver():
                 with StaticObservation(time=3.1, observation=obs2):
                     with StaticObservation(time=2.9, observation=obs1):
                         simulate(
