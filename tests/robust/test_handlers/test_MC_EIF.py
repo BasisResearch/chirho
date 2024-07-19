@@ -7,8 +7,11 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
+from chirho.observational.handlers.predictive import (
+    PredictiveFunctional,
+    PredictiveModel,
+)
 from chirho.robust.handlers.estimators import MonteCarloInfluenceEstimator
-from chirho.robust.handlers.predictive import PredictiveFunctional, PredictiveModel
 from chirho.robust.ops import influence_fn
 
 from ..robust_fixtures import SimpleGuide, SimpleModel
