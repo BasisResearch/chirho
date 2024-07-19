@@ -34,7 +34,9 @@ class StaticInterruption(Generic[T], DependentInterruption[T]):
         super().__init__()
 
     def event_fn(self, time: R, state: State[T]) -> R:
-        return cond(0.0, self.time - time, case=time < self.time)
+        # FIXME jd0120dh cond seems backwards to me? But this returns the second val
+        #  where case is true and first if false...
+        return cond(self.time - time, 0.0, case=time >= self.time)
 
 
 class DynamicInterruption(Generic[T], DependentInterruption[T]):

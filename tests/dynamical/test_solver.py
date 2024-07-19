@@ -1,17 +1,20 @@
-import juliacall  # Must precede even indirect torch imports to prevent segfault.
-
 import logging
 
+import juliacall  # Must precede even indirect torch imports to prevent segfault.
 import numpy as np
 import pyro
 import pytest
 import torch
 
-from chirho.dynamical.handlers.solver import TorchDiffEq, DiffEqDotJL
-from chirho.dynamical.ops import State, simulate
-from chirho.dynamical.internals.backends.diffeqdotjl import _diffeqdotjl_ode_simulate_inner
-from chirho.dynamical.internals.backends.torchdiffeq import _torchdiffeq_ode_simulate_inner
 from chirho.dynamical.handlers import LogTrajectory
+from chirho.dynamical.handlers.solver import DiffEqDotJL, TorchDiffEq
+from chirho.dynamical.internals.backends.diffeqdotjl import (
+    _diffeqdotjl_ode_simulate_inner,
+)
+from chirho.dynamical.internals.backends.torchdiffeq import (
+    _torchdiffeq_ode_simulate_inner,
+)
+from chirho.dynamical.ops import State, simulate
 
 from .dynamical_fixtures import bayes_sir_model
 
@@ -40,23 +43,36 @@ def test_backend_arg():
 
 @pytest.mark.parametrize("solver", [DiffEqDotJL, TorchDiffEq])
 def test_inner_simulates_of_solvers_match_forward(solver):
-    sp0 = State(x=torch.tensor(10.).double(), c=torch.tensor(0.1).double())
-    timespan = torch.linspace(1.0, 10., 10).double()
+    sp0 = State(x=torch.tensor(10.0).double(), c=torch.tensor(0.1).double())
+    timespan = torch.linspace(1.0, 10.0, 10).double()
 
     def dynamics(s: State):
         # FIXME
         #  -(s['x'] * s['c']) works but (-s['x']) * s['c'] errors on exceeding max ndim of 32. This occurs
         #  despite the fact that at every stage everything is a proper ndarray of dtype object.
-        return State(x=-(s['x'] * s['c']))
+        return State(x=-(s["x"] * s["c"]))
 
     with LogTrajectory(timespan) as lt:
         with solver():
-            simulate(dynamics, sp0, timespan[0] - 1., timespan[-1] + 1.)
+            simulate(dynamics, sp0, timespan[0] - 1.0, timespan[-1] + 1.0)
 
-    correct = torch.tensor([9.0484, 8.1873, 7.4082, 6.7032, 6.0653, 5.4881,
-                            4.9659, 4.4933, 4.0657, 3.6788], dtype=torch.float64)
+    correct = torch.tensor(
+        [
+            9.0484,
+            8.1873,
+            7.4082,
+            6.7032,
+            6.0653,
+            5.4881,
+            4.9659,
+            4.4933,
+            4.0657,
+            3.6788,
+        ],
+        dtype=torch.float64,
+    )
 
-    assert torch.allclose(lt.trajectory['x'], correct, atol=1e-4)
+    assert torch.allclose(lt.trajectory["x"], correct, atol=1e-4)
 
 
 # @pytest.mark.parametrize(
@@ -64,29 +80,41 @@ def test_inner_simulates_of_solvers_match_forward(solver):
 # @pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
 # @pytest.mark.parametrize("c_", [torch.tensor(0.1), torch.tensor([0.1, 0.2])])
 
+
 @pytest.mark.parametrize(
     # torchdiffeq needs torch versions of the last three dynfuncs, or to skip them.
-    "solver", [DiffEqDotJL])  # , TorchDiffEq])
-@pytest.mark.parametrize("x0", [torch.tensor(10.), torch.tensor([10., 5.])])
+    "solver",
+    [DiffEqDotJL],
+)  # , TorchDiffEq])
+@pytest.mark.parametrize("x0", [torch.tensor(10.0), torch.tensor([10.0, 5.0])])
 @pytest.mark.parametrize("c_", [torch.tensor(0.5), torch.tensor([0.5, 0.3])])
-@pytest.mark.parametrize("dynfunc", [
-    # Unsimplified defs just ensure the solutions are stable but still exercise the relevant ops. Julia does compile
-    #  these away, but not until it's able to successfully push symbolics through the unsimplified python func.
-    lambda s: -s['x'] * s['c'],
-    lambda s: -(s['x'] * s['c']),
-    lambda s: -.5 * s['x'] * s['c'],  # w/ python numeric type
-    lambda s: -s['x'] / (1. / s['c']),
-    lambda s: -s['x'] * (s['c'] + s['c'] - s['c']),
-    lambda s: -s['x'] ** (s['c'] / s['c']),
-    # The last three dynfuncs test numpy ufunc dispatch to julia.
-    # .ravel and slice ensure that the return here always matches the initial state (the 2x2 matmul gives you 4 elems).
-    lambda s: -((np.atleast_2d(s['x']).T @ np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
-    lambda s: -(np.matmul(np.atleast_2d(s['x']).T, np.atleast_2d(s['c'])) * s['x']).ravel()[:s['x'].size],
-    lambda s: np.sin(s['t']) + np.sin(np.pi + s['t']) - s['x'] * np.exp(np.log(s['c']))
-])
+@pytest.mark.parametrize(
+    "dynfunc",
+    [
+        # Unsimplified defs just ensure the solutions are stable but still exercise the relevant ops. Julia does compile
+        #  these away, but not until it's able to successfully push symbolics through the unsimplified python func.
+        lambda s: -s["x"] * s["c"],
+        lambda s: -(s["x"] * s["c"]),
+        lambda s: -0.5 * s["x"] * s["c"],  # w/ python numeric type
+        lambda s: -s["x"] / (1.0 / s["c"]),
+        lambda s: -s["x"] * (s["c"] + s["c"] - s["c"]),
+        lambda s: -s["x"] ** (s["c"] / s["c"]),
+        # The last three dynfuncs test numpy ufunc dispatch to julia.
+        # .ravel and slice ensure that the return here always matches the initial state (the 2x2 matmul gives you 4 elems).
+        lambda s: -((np.atleast_2d(s["x"]).T @ np.atleast_2d(s["c"])) * s["x"]).ravel()[
+            : s["x"].size
+        ],
+        lambda s: -(
+            np.matmul(np.atleast_2d(s["x"]).T, np.atleast_2d(s["c"])) * s["x"]
+        ).ravel()[: s["x"].size],
+        lambda s: np.sin(s["t"])
+        + np.sin(np.pi + s["t"])
+        - s["x"] * np.exp(np.log(s["c"])),
+    ],
+)
 def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_, dynfunc):
     c_ = c_.double().requires_grad_()
-    timespan = torch.linspace(1.0, 10., 10).double()
+    timespan = torch.linspace(1.0, 10.0, 10).double()
 
     # TODO gradcheck wrt time.
 
@@ -105,8 +133,8 @@ def test_gradcheck_inner_simulates_of_solvers_wrt_param(solver, x0, c_, dynfunc)
     def wrapped_simulate(c):
         sp0 = State(x=x0.double(), c=c)
         with LogTrajectory(timespan) as lt:
-            simulate(dynamics, sp0, timespan[0] - 1., timespan[-1] + 1.)
-        return lt.trajectory['x']
+            simulate(dynamics, sp0, timespan[0] - 1.0, timespan[-1] + 1.0)
+        return lt.trajectory["x"]
 
     # This goes outside the gradcheck b/c DiffEqDotJl lazily compiles the problem.
     with solver():
