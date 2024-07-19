@@ -264,19 +264,21 @@ def test_svi_composition_vectorized_obs(solver, model):
     assert guide is not None
 
 
+class RandBetaUnifiedFixtureDynamics(UnifiedFixtureDynamics):
+    @pyro.nn.PyroSample
+    def beta(self):
+        return pyro.distributions.Beta(1, 1)
+
+    def forward(self, X: State[torch.Tensor]):
+        assert torch.allclose(self.beta, self.beta)
+        return super().forward(X)
+
+
 @pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("model_class", [RandBetaUnifiedFixtureDynamics])
 @pytest.mark.parametrize("use_event_loop", [True, False])
-def test_simulate_persistent_pyrosample(solver, use_event_loop):
-    class RandBetaUnifiedFixtureDynamics(UnifiedFixtureDynamics):
-        @pyro.nn.PyroSample
-        def beta(self):
-            return pyro.distributions.Beta(1, 1)
-
-        def forward(self, X: State[torch.Tensor]):
-            assert torch.allclose(self.beta, self.beta)
-            return super().forward(X)
-
-    model = RandBetaUnifiedFixtureDynamics()
+def test_simulate_persistent_pyrosample(solver, model_class, use_event_loop):
+    model = model_class()
 
     with LogTrajectory(logging_times) as dt:
         if not use_event_loop:
