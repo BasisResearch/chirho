@@ -79,9 +79,14 @@ class UnifiedFixtureDynamics(UnifiedFixtureDynamicsBase, SIRObservationMixin):
     pass
 
 
-def bayes_sir_model():
+def sir_param_prior():
     beta = pyro.sample("beta", Uniform(0, 1))
     gamma = pyro.sample("gamma", Uniform(0, 1))
+    return beta, gamma
+
+
+def bayes_sir_model():
+    beta, gamma = sir_param_prior()
     sir = UnifiedFixtureDynamics(beta, gamma)
     return sir
 
