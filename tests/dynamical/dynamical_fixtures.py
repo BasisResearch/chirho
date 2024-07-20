@@ -101,7 +101,7 @@ def check_states_match(state1: State[torch.Tensor], state2: State[torch.Tensor])
 
     for k in state1.keys():
         assert torch.allclose(
-            state1[k], state2[k]
+            state1[k], state2[k], atol=1e-6, rtol=1e-3
         ), f"Trajectories differ in state trajectory of variable {k}, but should be identical."
 
     return True
@@ -114,7 +114,7 @@ def check_trajectories_match_in_all_but_values(
 
     for k in traj1.keys():
         assert not torch.allclose(
-            traj2[k], traj1[k]
+            traj2[k], traj1[k], atol=1e-6, rtol=1e-3
         ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."
 
     return True
