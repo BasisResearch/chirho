@@ -11,7 +11,7 @@ from chirho.dynamical.handlers import (
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import simulate
 
-from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match
+from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match, build_event_fn_zero_after_tt
 
 logger = logging.getLogger(__name__)
 
@@ -160,9 +160,9 @@ def test_point_interruption_at_start(solver, model, init_state, start_time, end_
 @pytest.mark.parametrize("init_state", [init_state_values])
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
-@pytest.mark.parametrize("intervene_state", intervene_states)
+@pytest.mark.parametrize("event_fn_builder", [build_event_fn_zero_after_tt])
 def test_noop_dynamic_interruption(
-    solver, model, init_state, start_time, end_time, intervene_state
+    solver, model, init_state, start_time, end_time, event_fn_builder
 ):
     observational_execution_result = solver()(simulate)(
         model, init_state, start_time, end_time
@@ -170,7 +170,8 @@ def test_noop_dynamic_interruption(
 
     with solver():
         tt = (end_time - start_time) / 2.0
-        with DynamicInterruption(lambda t, _: torch.where(t < tt, tt - t, 0.0)):
+        event_fn = event_fn_builder(tt)
+        with DynamicInterruption(event_fn):
             result_dint = simulate(model, init_state, start_time, end_time)
 
     assert check_states_match(observational_execution_result, result_dint)

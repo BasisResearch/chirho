@@ -1,5 +1,6 @@
+import functools
 import numbers
-from typing import Dict, Hashable, Optional, TypeVar, Union
+from typing import Dict, Hashable, Optional, TypeVar, Union, List
 
 import pyro
 import pyro.infer.reparam
@@ -37,6 +38,19 @@ def _gather_number(
     )
 
 
+@functools.singledispatch
+def index_select_from_array_like(arr: T, dim: int, indices: List[int]) -> T:
+    raise NotImplementedError(f"index_select not implemented for {type(arr)}")
+
+
+@index_select_from_array_like.register
+def _index_select_from_array_like_tensor(arr: torch.Tensor, dim: int, indices: List[int]) -> torch.Tensor:
+    indices_tensor = torch.tensor(indices, device=arr.device, dtype=torch.long)
+    return arr.index_select(dim=dim, index=indices_tensor)
+
+
+# TODO _gather_tensor now works for any array like with an index_select_from_array_like implementation.
+#  Can we dispatch for array like objects generally?
 @gather.register
 def _gather_tensor(
     value: torch.Tensor,
@@ -59,10 +73,7 @@ def _gather_tensor(
         dim = name_to_dim[name] - event_dim
         if len(result.shape) < -dim or result.shape[dim] == 1:
             continue
-        result = result.index_select(
-            name_to_dim[name] - event_dim,
-            torch.tensor(list(sorted(indices)), device=value.device, dtype=torch.long),
-        )
+        result = index_select_from_array_like(result, name_to_dim[name] - event_dim, list(sorted(indices)))
     return result
 
 

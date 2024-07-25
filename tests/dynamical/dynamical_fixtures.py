@@ -135,3 +135,10 @@ def run_svi_inference_torch_direct(model, n_steps=100, verbose=True, **model_kwa
         if (step % 100 == 0) or (step == 1) & verbose:
             print("[iteration %04d] loss: %.4f" % (step, loss))
     return guide
+
+
+def build_event_fn_zero_after_tt(tt: torch.Tensor):
+    def zero_after_tt(t: torch.Tensor, state: State[torch.Tensor]):
+        return torch.where(t < tt, tt - t, 0.0)
+
+    return zero_after_tt
