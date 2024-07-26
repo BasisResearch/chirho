@@ -3,7 +3,6 @@ import logging
 import pyro
 import pytest
 import torch
-from pyro.distributions import Normal
 
 from chirho.counterfactual.handlers import TwinWorldCounterfactual
 from chirho.dynamical.handlers import (
@@ -13,7 +12,7 @@ from chirho.dynamical.handlers import (
 )
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import ShallowMessenger
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops import simulate
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (

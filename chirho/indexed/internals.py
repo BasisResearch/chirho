@@ -39,7 +39,7 @@ def _gather_number(
 
 
 @functools.singledispatch
-def index_select_from_array_like(arr: T, dim: int, indices: List[int]) -> T:
+def index_select_from_array_like(arr, dim: int, indices: List[int]):
     raise NotImplementedError(f"index_select not implemented for {type(arr)}")
 
 

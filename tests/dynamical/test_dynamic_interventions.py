@@ -12,7 +12,7 @@ from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.indexed.ops import IndexSet, gather, indices_of, union
 
-from .dynamical_fixtures import UnifiedFixtureDynamics, build_event_fn_zero_after_tt
+from .dynamical_fixtures import UnifiedFixtureDynamics
 
 logger = logging.getLogger(__name__)
 

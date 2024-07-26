@@ -7,7 +7,7 @@ import torch
 from chirho.dynamical.handlers import LogTrajectory, StaticInterruption
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
-from chirho.dynamical.ops import State, simulate
+from chirho.dynamical.ops import simulate
 
 from .dynamical_fixtures import (
     bayes_sir_model,

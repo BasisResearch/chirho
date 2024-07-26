@@ -1,4 +1,4 @@
-from typing import Mapping, Tuple, TypeVar
+from typing import Mapping, TypeVar
 
 import pyro
 import torch
