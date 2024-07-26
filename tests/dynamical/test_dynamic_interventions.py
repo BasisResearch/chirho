@@ -75,7 +75,7 @@ def test_nested_dynamic_intervention_causes_change(
     logging_times,
     trigger_states,
     intervene_states,
-    event_fn_builder
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -180,7 +180,7 @@ def test_dynamic_intervention_causes_change(
     logging_times,
     trigger_state,
     intervene_state,
-    event_fn_builder
+    event_fn_builder,
 ):
     with LogTrajectory(
         times=logging_times,
@@ -255,7 +255,7 @@ def test_split_twinworld_dynamic_intervention(
     logging_times,
     trigger_states,
     intervene_states,
-    event_fn_builder
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -304,7 +304,14 @@ def test_split_twinworld_dynamic_intervention(
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_multiworld_dynamic_intervention(
-    solver, model, init_state, start_time, end_time, trigger_states, intervene_states, event_fn_builder
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    trigger_states,
+    intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -353,7 +360,14 @@ def test_split_multiworld_dynamic_intervention(
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_twinworld_dynamic_matches_output(
-    solver, model, init_state, start_time, end_time, trigger_states, intervene_states, event_fn_builder
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    trigger_states,
+    intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states

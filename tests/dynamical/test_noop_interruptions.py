@@ -11,7 +11,11 @@ from chirho.dynamical.handlers import (
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import simulate
 
-from .dynamical_fixtures import UnifiedFixtureDynamics, check_states_match, build_event_fn_zero_after_tt
+from .dynamical_fixtures import (
+    UnifiedFixtureDynamics,
+    build_event_fn_zero_after_tt,
+    check_states_match,
+)
 
 logger = logging.getLogger(__name__)
 

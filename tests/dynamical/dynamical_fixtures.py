@@ -1,4 +1,4 @@
-from typing import TypeVar, Mapping, Tuple
+from typing import Mapping, Tuple, TypeVar
 
 import pyro
 import torch
@@ -15,14 +15,16 @@ ATempParams = Mapping[str, T]
 
 
 # SIR dynamics written as a pure function of state and parameters.
-def pure_sir_dynamics(state: State[Tnsr], atemp_params: ATempParams[Tnsr]) -> State[Tnsr]:
+def pure_sir_dynamics(
+    state: State[Tnsr], atemp_params: ATempParams[Tnsr]
+) -> State[Tnsr]:
     beta = atemp_params["beta"]
     gamma = atemp_params["gamma"]
 
     dX: State[torch.Tensor] = dict()
 
     beta = beta * (
-            1.0 + 0.1 * torch.sin(0.1 * state["t"])
+        1.0 + 0.1 * torch.sin(0.1 * state["t"])
     )  # beta oscilates slowly in time.
 
     dX["S"] = -beta * state["S"] * state["I"]  # noqa

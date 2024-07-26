@@ -1,13 +1,13 @@
 import logging
 
 import pyro
+import pytest
 import torch
 
 from chirho.dynamical.handlers import LogTrajectory, StaticInterruption
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.internals._utils import append
 from chirho.dynamical.ops import State, simulate
-import pytest
 
 from .dynamical_fixtures import (
     bayes_sir_model,
@@ -108,7 +108,9 @@ def test_start_end_time_collisions(solver, dynamics):
 
 @pytest.mark.parametrize("solver", [TorchDiffEq])
 # These need to be the same dynamics fn but with different atemporal parameters.
-@pytest.mark.parametrize("dynamics1,dynamics2", [(bayes_sir_model(), bayes_sir_model())])
+@pytest.mark.parametrize(
+    "dynamics1,dynamics2", [(bayes_sir_model(), bayes_sir_model())]
+)
 def test_multiple_simulates(solver, dynamics1, dynamics2):
 
     with LogTrajectory(times=logging_times) as dt1:

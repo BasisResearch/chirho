@@ -17,8 +17,8 @@ from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.soft_conditioning import AutoSoftConditioning
 from tests.dynamical.dynamical_fixtures import (
-    UnifiedFixtureDynamicsBase,
     SIRReparamObservationMixin,
+    UnifiedFixtureDynamicsBase,
     run_svi_inference_torch_direct,
 )
 
@@ -89,7 +89,9 @@ def conditioned_model():
 
 
 # A reparameterized observation function of various flight arrivals.
-class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamicsBase, SIRReparamObservationMixin):
+class UnifiedFixtureDynamicsReparam(
+    UnifiedFixtureDynamicsBase, SIRReparamObservationMixin
+):
     pass
 
 
