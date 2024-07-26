@@ -99,6 +99,9 @@ def test_nested_dynamic_intervention_causes_change(
 
     trajectory = dt.trajectory
 
+    for k, v in trajectory.items():
+        assert len(v) == len(logging_times)
+
     postint_mask1 = trajectory["R"] > ts1["R"]
     postint_mask2 = trajectory["R"] > ts2["R"]
     preint_mask = ~(postint_mask1 | postint_mask2)
@@ -192,6 +195,9 @@ def test_dynamic_intervention_causes_change(
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
     trajectory = dt.trajectory
+
+    for k, v in trajectory.items():
+        assert len(v) == len(logging_times)
 
     # The intervention just "adds" (sets) 50 "people" to the susceptible population.
     #  It happens that the susceptible population is roughly 0 at the intervention point,
