@@ -242,6 +242,8 @@ def consequent_eq_neq(
         necessity_world = kwargs.get("necessity_world", 1)
         sufficiency_world = kwargs.get("sufficiency_world", 2)
 
+        # print(indices_of(consequent, event_dim=support.event_dim).keys())
+
         necessity_indices = IndexSet(
             **{
                 name: {necessity_world}
@@ -265,6 +267,11 @@ def consequent_eq_neq(
             consequent, sufficiency_indices, event_dim=support.event_dim
         )
 
+        # print("necessity_indices: ", necessity_indices)
+        # print("sufficiency_indices: ", sufficiency_indices)
+        # print("necessity_value: ", necessity_value)
+        # print("sufficiency_value: ", sufficiency_value)
+
         # compare to proposed consequent if provided
         # as then the sufficiency value can be different
         # due to witness preemption
@@ -284,11 +291,15 @@ def consequent_eq_neq(
             )
         )
 
+        print("necessity_log_probs", necessity_log_probs)
+
         sufficiency_log_probs = (
             soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
             if proposed_consequent is not None
             else torch.zeros_like(necessity_log_probs)
         )
+
+        print("sufficiency_log_probs", sufficiency_log_probs)
 
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
@@ -313,6 +324,30 @@ def consequent_eq_neq(
             nec_suff_log_probs_partitioned,
             event_dim=0,
         )
+
+        for ind, log_prob in zip([necessity_world, sufficiency_world], [necessity_log_probs, sufficiency_log_probs]):
+            print(ind, log_prob)
+
+        print(set(antecedents))
+        print(set(indices_of(consequent, event_dim=support.event_dim)))
+        print(set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)))
+
+        for antecedent in (
+                    set(antecedents)
+                    & set(indices_of(consequent, event_dim=support.event_dim))
+                ):
+            print("yo")
+            print(antecedent)
+
+        print({factual_indices: FACTUAL_NEC_SUFF})
+        # print(**{factual_indices: FACTUAL_NEC_SUFF})
+
+
+
+        print("nec_suff_log_prob_partitioned", nec_suff_log_probs_partitioned)
+        print("new_value", new_value)
+
+        # print(necessity_log_probs, sufficiency_log_probs)
 
         return new_value
 

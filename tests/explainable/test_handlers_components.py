@@ -43,12 +43,19 @@ def test_sufficiency_intervention(support, event_shape):
                 support, len(event_shape)
             )
 
+        print(support)
+
         proposal_dist = uniform_proposal(
             support,
             event_shape=event_shape,
         )
 
+
+
         value = pyro.sample("value", proposal_dist)
+        print(value)
+        print(indices_of(value))
+        print(indices_of(value).keys())
 
         intervention = sufficiency_intervention(support, indices_of(value).keys())
 
@@ -63,6 +70,8 @@ def test_sufficiency_intervention(support, event_shape):
         intervened = gather(
             value, IndexSet(**{index: {1} for index in indices}), event_dim=0
         )
+        print(observed)
+        print(intervened)
 
     assert torch.allclose(observed, intervened)
     assert torch.all(support.check(value))
