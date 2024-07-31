@@ -53,7 +53,7 @@ class Factors(Generic[T], pyro.poutine.messenger.Messenger):
         except KeyError:
             return
         
-        print("factor msg value", factor(msg["value"]))
+        # print("factor msg value", factor(msg["value"]))
 
         pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
 

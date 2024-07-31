@@ -291,7 +291,7 @@ def consequent_eq_neq(
             )
         )
 
-        print("necessity_log_probs", necessity_log_probs)
+        # print("necessity_log_probs", necessity_log_probs)
 
         sufficiency_log_probs = (
             soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
@@ -299,7 +299,7 @@ def consequent_eq_neq(
             else torch.zeros_like(necessity_log_probs)
         )
 
-        print("sufficiency_log_probs", sufficiency_log_probs)
+        # print("sufficiency_log_probs", sufficiency_log_probs)
 
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
@@ -325,27 +325,27 @@ def consequent_eq_neq(
             event_dim=0,
         )
 
-        for ind, log_prob in zip([necessity_world, sufficiency_world], [necessity_log_probs, sufficiency_log_probs]):
-            print(ind, log_prob)
+        # for ind, log_prob in zip([necessity_world, sufficiency_world], [necessity_log_probs, sufficiency_log_probs]):
+        #     print(ind, log_prob)
 
-        print(set(antecedents))
-        print(set(indices_of(consequent, event_dim=support.event_dim)))
-        print(set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)))
+        # print(set(antecedents))
+        # print(set(indices_of(consequent, event_dim=support.event_dim)))
+        # print(set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)))
 
-        for antecedent in (
-                    set(antecedents)
-                    & set(indices_of(consequent, event_dim=support.event_dim))
-                ):
-            print("yo")
-            print(antecedent)
+        # for antecedent in (
+        #             set(antecedents)
+        #             & set(indices_of(consequent, event_dim=support.event_dim))
+        #         ):
+        #     print("yo")
+        #     print(antecedent)
 
-        print({factual_indices: FACTUAL_NEC_SUFF})
+        # print({factual_indices: FACTUAL_NEC_SUFF})
         # print(**{factual_indices: FACTUAL_NEC_SUFF})
 
 
 
-        print("nec_suff_log_prob_partitioned", nec_suff_log_probs_partitioned)
-        print("new_value", new_value)
+        # print("nec_suff_log_prob_partitioned", nec_suff_log_probs_partitioned)
+        # print("new_value", new_value)
 
         # print(necessity_log_probs, sufficiency_log_probs)
 

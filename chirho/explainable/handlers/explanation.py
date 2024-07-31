@@ -134,7 +134,7 @@ def SearchForExplanation(
         for a in antecedents.keys()
     }
 
-    print(sufficiency_actions)
+    # print(sufficiency_actions)
 
     # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
@@ -158,13 +158,13 @@ def SearchForExplanation(
         prefix=f"{prefix}__witness_",
     )
 
-    print(consequent_eq_neq(
-                    support=supports[c],
-                    proposed_consequent=consequents[c],  # added this
-                    antecedents=antecedents.keys(),
-                    scale=consequent_scale,
-                )
-                for c in consequents.keys())
+    # print(consequent_eq_neq(
+    #                 support=supports[c],
+    #                 proposed_consequent=consequents[c],  # added this
+    #                 antecedents=antecedents.keys(),
+    #                 scale=consequent_scale,
+    #             )
+    #             for c in consequents.keys())
     consequent_handler: Factors[T] = Factors(
         (
             {c: factors[c] for c in consequents.keys()}
