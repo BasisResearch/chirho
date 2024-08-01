@@ -292,16 +292,17 @@ def consequent_eq_neq(
 
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
+        index_keys = set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)) if indices_of(consequent, event_dim=support.event_dim) else set(antecedents)
+
+        print(index_keys)
+        print("poorva«")
         nec_suff_log_probs_partitioned = {
             **{
                 factual_indices: FACTUAL_NEC_SUFF,
             },
             **{
                 IndexSet(**{antecedent: {ind}}): log_prob
-                for antecedent in (
-                    set(antecedents)
-                    & set(indices_of(consequent, event_dim=support.event_dim))
-                )
+                for antecedent in index_keys
                 for ind, log_prob in zip(
                     [necessity_world, sufficiency_world],
                     [necessity_log_probs, sufficiency_log_probs],
