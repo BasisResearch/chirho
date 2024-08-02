@@ -371,54 +371,62 @@ def test_consequent_eq(plate_size, event_shape):
     assert nd["__factor_consequent"]["log_prob"].sum() < -10
 
 
+
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_consequent_eq_neq(plate_size, event_shape):
     factors = {
         "consequent": consequent_eq_neq(
-            support=constraints.independent(constraints.real, len(event_shape)),
-            proposed_consequent=torch.Tensor([0.1]),  # added this
+            support=constraints.independent(constraints.real, 0),
+            proposed_consequent=torch.Tensor([0.01]), 
             antecedents=["w"],
         )
     }
 
-    @Factors(factors=factors)
-    @pyro.plate("data", size=plate_size, dim=-1)
-    def model_ce():
-        w = pyro.sample(
-            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
-        )
-        consequent = pyro.deterministic(
-            "consequent", w * 0.1, event_dim=len(event_shape)
-        )
+    w_initial =  dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)).sample()
 
-        return consequent
+    @Factors(factors=factors)
+    @pyro.plate("data", size=plate_size, dim=-4)
+    def model_ce():
+        w = pyro.sample("w", dist.Normal(w_initial, .001))
+        consequent = pyro.deterministic("consequent", w * torch.tensor(0.1))
+        assert w.shape == consequent.shape
+
 
     antecedents = {
-        "w": (
-            torch.tensor(5.0).expand(event_shape),
-            sufficiency_intervention(
-                constraints.independent(constraints.real, len(event_shape)), ["w"]
-            ),
-        )
-    }
+            "w": (
+                torch.tensor(0.1).expand(event_shape),
+                sufficiency_intervention(
+                    constraints.independent(constraints.real, len(event_shape)),
+                ["w"]
+                ),
+            )
+        }
 
-    with MultiWorldCounterfactual() as mwc:
-        with do(actions=antecedents):
-            with pyro.poutine.trace() as tr:
+    with MultiWorldCounterfactual() as mwc_ce:
+        with do(actions = antecedents):
+            with pyro.poutine.trace() as trace_ce: 
                 model_ce()
-        # with pyro.poutine.trace() as tr:
-        #     model_ce()
 
-    tr.trace.compute_log_prob()
-    nd = tr.trace.nodes
-
-    with mwc:
-        eq_neq_log_probs = gather(
-            nd["__factor_consequent"]["log_prob"], IndexSet(**{"w": {1}})
+    nd = trace_ce.trace.nodes
+    trace_ce.trace.compute_log_prob
+    with mwc_ce:
+        eq_neq_log_probs_fact = gather(
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {0}},  event_dim = 0)
+        )
+        eq_neq_log_probs_nec = gather(
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {1}}, event_dim = 0)
+        )
+        consequent_suff = gather(
+            nd["consequent"]["value"], IndexSet(**{"w": {2}}, event_dim = 0 )
+        )
+        eq_neq_log_probs_suff = gather(
+                nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {2}})
         )
 
-    assert eq_neq_log_probs.sum() == 0
+        assert eq_neq_log_probs_nec.shape == consequent_suff.shape
+        assert torch.equal(eq_neq_log_probs_suff, dist.Normal(0.0, .1).log_prob(consequent_suff - torch.tensor(.01)))
+        assert eq_neq_log_probs_nec.sum().exp() == 0   
 
 
 options = [
