@@ -8,7 +8,7 @@ import torch
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.explainable.handlers.components import undo_split
 from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
-from chirho.explainable.handlers import ExportSupports
+from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import condition
@@ -317,7 +317,6 @@ def test_SplitSubsets_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 def test_edge_eq_neq():
-
     def model_independent():
         X = pyro.sample("X", dist.Bernoulli(0.5))
         Y = pyro.sample("Y", dist.Bernoulli(0.5))
@@ -360,12 +359,53 @@ def test_edge_eq_neq():
                     with pyro.poutine.trace() as trace_connected:
                         model_connected()
 
+    with MultiWorldCounterfactual() as mwc_reverse:  
+            with SearchForExplanation(
+                supports=supports_connected.supports,
+                antecedents={"Y": torch.tensor(1.0)},
+                consequents={"X": torch.tensor(1.0)},
+                witnesses={},
+                alternatives={"Y": torch.tensor(0.0)},
+                antecedent_bias=-0.5,
+                consequent_scale=0,
+            ):
+                with pyro.plate("sample", size=3):
+                    with pyro.poutine.trace() as trace_reverse:
+                        model_connected()
+
 
     trace_connected.trace.compute_log_prob
     trace_independent.trace.compute_log_prob
+    trace_reverse.trace.compute_log_prob
 
-    print(trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor)
+    Y_values_ind = trace_independent.trace.nodes["Y"]["value"]
 
-    assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[1,0,0,0,:].sum() <0
-    assert torch.all(trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[2,0,0,0,:] == 0)
-    assert torch.all(trace_connected.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[0,0,0,0,:] == 0)
+    if torch.any(Y_values_ind == 1.):
+        print("testing with ", Y_values_ind)
+        assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 0.
+    else:
+        assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 1.
+
+    assert torch.all(trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum().exp() == 0)
+
+    if torch.any(Y_values_ind == 0.):
+        assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[2,0,0,0,:].sum().exp() == 0.
+    else:
+        assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[2,0,0,0,:].sum().exp() == 1.
+
+    Y_values_con = trace_connected.trace.nodes["Y"]["value"]
+    assert torch.all(trace_connected.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum() == 0)
+        
+    X_values_rev = trace_reverse.trace.nodes["X"]["value"]
+    if torch.any(X_values_rev == 1.):
+        print("testing with ", Y_values_ind)
+        assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 0.
+    else:
+        assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 1.
+
+    if torch.any(X_values_rev == 0.):
+        assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[2,0,0,0,:].sum().exp() == 0.
+    else:
+        assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[2,0,0,0,:].sum().exp() == 1.
+
+    assert torch.all(trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor.sum().exp() == 0)

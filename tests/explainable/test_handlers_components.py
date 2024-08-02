@@ -407,8 +407,8 @@ def test_consequent_eq_neq(plate_size, event_shape):
         with do(actions=antecedents):
             with pyro.poutine.trace() as tr:
                 model_ce()
-        with pyro.poutine.trace() as tr:
-            model_ce()
+        # with pyro.poutine.trace() as tr:
+        #     model_ce()
 
     tr.trace.compute_log_prob()
     nd = tr.trace.nodes

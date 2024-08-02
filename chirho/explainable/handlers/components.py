@@ -233,7 +233,7 @@ def consequent_eq_neq(
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
 
-        print("consequent", consequent)
+        # print("consequent", consequent)
         factual_indices = IndexSet(
             **{
                 name: ind
