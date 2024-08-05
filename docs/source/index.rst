@@ -27,6 +27,7 @@ Table of Contents
    deepscm
    slc
    mediation
+   instrumental_var
    sciplex
    sdid
    dr_learner
