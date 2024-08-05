@@ -234,13 +234,13 @@ def consequent_eq_neq(
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
 
         # print("consequent", consequent)
-        factual_indices = IndexSet(
-            **{
-                name: ind
-                for name, ind in get_factual_indices().items()
-                if name in antecedents
-            }
-        )
+        # factual_indices = IndexSet(
+        #     **{
+        #         name: ind
+        #         for name, ind in get_factual_indices().items()
+        #         if name in antecedents
+        #     }
+        # )
 
         necessity_world = kwargs.get("necessity_world", 1)
         sufficiency_world = kwargs.get("sufficiency_world", 2)
@@ -307,7 +307,14 @@ def consequent_eq_neq(
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
         index_keys = set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)) if indices_of(consequent, event_dim=support.event_dim) else set(antecedents)
-        null_index = factual_indices if factual_indices != {} else IndexSet(
+        # null_index = factual_indices if factual_indices != {} else IndexSet(
+        #     **{
+        #         name: {0}
+        #         for name in index_keys
+        #     }
+        # )
+
+        null_index = IndexSet(
             **{
                 name: {0}
                 for name in index_keys
@@ -315,20 +322,36 @@ def consequent_eq_neq(
         )
 
 
+        # nec_suff_log_probs_partitioned = {
+        #     **{
+        #         #factual_indices: FACTUAL_NEC_SUFF,
+        #         null_index: FACTUAL_NEC_SUFF for antecedent in index_keys
+        #     },
+        #     **{
+        #         IndexSet(**{antecedent: {ind}}): log_prob
+        #         for antecedent in index_keys
+        #         for ind, log_prob in zip(
+        #             [necessity_world, sufficiency_world],
+        #             [necessity_log_probs, sufficiency_log_probs],
+        #         )
+        #     },
+        # }
+
         nec_suff_log_probs_partitioned = {
             **{
                 #factual_indices: FACTUAL_NEC_SUFF,
-                null_index: FACTUAL_NEC_SUFF for antecedent in index_keys
+                null_index: FACTUAL_NEC_SUFF # for antecedent in index_keys
             },
             **{
-                IndexSet(**{antecedent: {ind}}): log_prob
-                for antecedent in index_keys
+                IndexSet(**{antecedent: {ind} for antecedent in index_keys}): log_prob
                 for ind, log_prob in zip(
                     [necessity_world, sufficiency_world],
                     [necessity_log_probs, sufficiency_log_probs],
                 )
             },
         }
+
+
 
         # nec_suff_log_probs_partitioned = {
         #     **{
