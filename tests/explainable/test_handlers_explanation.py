@@ -4,6 +4,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import torch
+import pytest
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.explainable.handlers.components import undo_split
@@ -409,3 +410,86 @@ def test_edge_eq_neq():
         assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[2,0,0,0,:].sum().exp() == 1.
 
     assert torch.all(trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor.sum().exp() == 0)
+
+
+def model_three_converge():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5))
+    Z = pyro.sample("Z", dist.Bernoulli(torch.min(X, Y)))
+    return {"X": X, "Y": Y, "Z": Z}
+
+def model_three_diverge():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(X))
+    return {"X": X, "Y": Y, "Z": Z}
+
+def model_three_chain():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(Y))
+    return {"X": X, "Y": Y, "Z": Z}
+
+def model_three_complete():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(torch.max(X, Y)))
+    return {"X": X, "Y": Y, "Z": Z}
+
+def model_three_isolate():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(0.5))
+    return {"X": X, "Y": Y, "Z": Z}
+
+def model_three_independent():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5))
+    Z = pyro.sample("Z", dist.Bernoulli(0.5))
+    return {"X": X, "Y": Y, "Z": Z}
+
+@pytest.mark.parametrize("ante_cons", [("X", "Y", "Z"), ("X", "Z", "Y")])
+@pytest.mark.parametrize("model", [model_three_converge, model_three_diverge, model_three_chain, model_three_complete, model_three_isolate, model_three_independent])
+def test_eq_neq_three_variables(model, ante_cons):
+    ante1, ante2, cons = ante_cons    
+    with ExtractSupports() as supports:
+        model()
+
+    with MultiWorldCounterfactual() as mwc: 
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={ante1: torch.tensor(1.0), ante2: torch.tensor(1.0)},
+            consequents={cons: torch.tensor(1.0)},
+            witnesses={},
+            alternatives={ante1: torch.tensor(0.0), ante2: torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=1):
+                with pyro.poutine.trace() as trace:
+                    model()
+
+    trace.trace.compute_log_prob
+    nodes = trace.trace.nodes
+
+    values = nodes[cons]["value"]
+    log_probs = nodes[f"__cause____consequent_{cons}"]["fn"].log_factor
+
+    assert log_probs.shape == torch.Size([3, 3, 1, 1, 1, 1])
+
+    fact_worlds = IndexSet(**{name : {0} for name in [ante1, ante2]})
+    nec_worlds = IndexSet(**{name : {1} for name in [ante1, ante2]})
+    suff_worlds = IndexSet(**{name : {2} for name in [ante1, ante2]})
+    with mwc:
+        fact_lp = gather(log_probs, fact_worlds)
+        assert fact_lp.exp().item() == 1
+
+        nec_value = gather(values, nec_worlds)
+        nec_lp = gather(log_probs, nec_worlds)
+        assert nec_lp.exp().item() == 1 - nec_value.item()
+
+        suff_value = gather(values, suff_worlds)
+        suff_lp = gather(log_probs, suff_worlds)
+        assert suff_lp.exp().item() == suff_value.item()
+
+    assert torch.allclose(log_probs.squeeze().fill_diagonal_(0.0), torch.tensor(0.0))
