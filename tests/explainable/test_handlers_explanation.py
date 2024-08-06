@@ -411,37 +411,42 @@ def test_edge_eq_neq():
 
     assert torch.all(trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor.sum().exp() == 0)
 
-
+# X -> Z, Y -> Z
 def model_three_converge():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(0.5))
     Z = pyro.sample("Z", dist.Bernoulli(torch.min(X, Y)))
     return {"X": X, "Y": Y, "Z": Z}
 
+# X -> Y, X -> Z
 def model_three_diverge():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(X))
     Z = pyro.sample("Z", dist.Bernoulli(X))
     return {"X": X, "Y": Y, "Z": Z}
 
+# X -> Y -> Z
 def model_three_chain():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(X))
     Z = pyro.sample("Z", dist.Bernoulli(Y))
     return {"X": X, "Y": Y, "Z": Z}
 
+# X -> Y, X -> Z, Y -> Z
 def model_three_complete():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(X))
     Z = pyro.sample("Z", dist.Bernoulli(torch.max(X, Y)))
     return {"X": X, "Y": Y, "Z": Z}
 
+# X -> Y    Z
 def model_three_isolate():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(X))
     Z = pyro.sample("Z", dist.Bernoulli(0.5))
     return {"X": X, "Y": Y, "Z": Z}
 
+# X     Y    Z
 def model_three_independent():
     X = pyro.sample("X", dist.Bernoulli(0.5))
     Y = pyro.sample("Y", dist.Bernoulli(0.5))

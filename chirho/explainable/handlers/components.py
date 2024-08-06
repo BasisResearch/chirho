@@ -233,19 +233,8 @@ def consequent_eq_neq(
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
 
-        # print("consequent", consequent)
-        # factual_indices = IndexSet(
-        #     **{
-        #         name: ind
-        #         for name, ind in get_factual_indices().items()
-        #         if name in antecedents
-        #     }
-        # )
-
         necessity_world = kwargs.get("necessity_world", 1)
         sufficiency_world = kwargs.get("sufficiency_world", 2)
-
-        # print(indices_of(consequent, event_dim=support.event_dim).keys())
 
         necessity_indices = IndexSet(
             **{
@@ -270,14 +259,6 @@ def consequent_eq_neq(
             consequent, sufficiency_indices, event_dim=support.event_dim
         )
 
-        # print("necessity_indices: ", necessity_indices)
-        # print("sufficiency_indices: ", sufficiency_indices)
-        # print("necessity_value: ", necessity_value)
-        # print("sufficiency_value: ", sufficiency_value)
-
-        # compare to proposed consequent if provided
-        # as then the sufficiency value can be different
-        # due to witness preemption
         necessity_log_probs = (
             soft_neq(
                 support,
@@ -294,28 +275,15 @@ def consequent_eq_neq(
             )
         )
 
-        # print("necessity_log_probs", necessity_log_probs)
-
         sufficiency_log_probs = (
             soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
             if proposed_consequent is not None
             else torch.zeros_like(necessity_log_probs)
         )
 
-        # print("sufficiency_log_probs", sufficiency_log_probs)
-
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
-        # index_keys = set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)) if indices_of(consequent, event_dim=support.event_dim) else set(antecedents)
         index_keys = set(antecedents)
-        # null_index = factual_indices if factual_indices != {} else IndexSet(
-        #     **{
-        #         name: {0}
-        #         for name in index_keys
-        #     }
-        # )
-
-
         null_index = IndexSet(
             **{
                 name: {0}
@@ -323,26 +291,9 @@ def consequent_eq_neq(
             }
         )
 
-
-        # nec_suff_log_probs_partitioned = {
-        #     **{
-        #         #factual_indices: FACTUAL_NEC_SUFF,
-        #         null_index: FACTUAL_NEC_SUFF for antecedent in index_keys
-        #     },
-        #     **{
-        #         IndexSet(**{antecedent: {ind}}): log_prob
-        #         for antecedent in index_keys
-        #         for ind, log_prob in zip(
-        #             [necessity_world, sufficiency_world],
-        #             [necessity_log_probs, sufficiency_log_probs],
-        #         )
-        #     },
-        # }
-
         nec_suff_log_probs_partitioned = {
             **{
-                #factual_indices: FACTUAL_NEC_SUFF,
-                null_index: FACTUAL_NEC_SUFF # for antecedent in index_keys
+                null_index: FACTUAL_NEC_SUFF
             },
             **{
                 IndexSet(**{antecedent: {ind} for antecedent in index_keys}): log_prob
@@ -353,53 +304,10 @@ def consequent_eq_neq(
             },
         }
 
-
-
-        # nec_suff_log_probs_partitioned = {
-        #     **{
-        #         factual_indices: FACTUAL_NEC_SUFF,
-        #     },
-        #     **{
-        #         IndexSet(**{antecedent: {ind}}): log_prob
-        #         for antecedent in (
-        #             set(antecedents)
-        #            & set(indices_of(consequent, event_dim=support.event_dim))
-        #         )
-        #         for ind, log_prob in zip(
-        #             [necessity_world, sufficiency_world],
-        #             [necessity_log_probs, sufficiency_log_probs],
-        #         )
-        #     },
-        # }
-
         new_value = scatter_n(
             nec_suff_log_probs_partitioned,
             event_dim=0,
         )
-
-        # for ind, log_prob in zip([necessity_world, sufficiency_world], [necessity_log_probs, sufficiency_log_probs]):
-        #     print(ind, log_prob)
-
-        # print(set(antecedents))
-        # print(set(indices_of(consequent, event_dim=support.event_dim)))
-        # print(set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)))
-
-        # for antecedent in (
-        #             set(antecedents)
-        #             & set(indices_of(consequent, event_dim=support.event_dim))
-        #         ):
-        #     print("yo")
-        #     print(antecedent)
-
-        # print({factual_indices: FACTUAL_NEC_SUFF})
-        # print(**{factual_indices: FACTUAL_NEC_SUFF})
-
-
-
-        # print("nec_suff_log_prob_partitioned", nec_suff_log_probs_partitioned)
-        # print("new_value", new_value)
-
-        # print(necessity_log_probs, sufficiency_log_probs)
         return new_value
 
     return _consequent_eq_neq
