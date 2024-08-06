@@ -306,13 +306,15 @@ def consequent_eq_neq(
 
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
-        index_keys = set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)) if indices_of(consequent, event_dim=support.event_dim) else set(antecedents)
+        # index_keys = set(antecedents) & set(indices_of(consequent, event_dim=support.event_dim)) if indices_of(consequent, event_dim=support.event_dim) else set(antecedents)
+        index_keys = set(antecedents)
         # null_index = factual_indices if factual_indices != {} else IndexSet(
         #     **{
         #         name: {0}
         #         for name in index_keys
         #     }
         # )
+
 
         null_index = IndexSet(
             **{
