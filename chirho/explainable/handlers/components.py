@@ -193,8 +193,6 @@ def consequent_neq(
     """
 
     def _consequent_neq(consequent: T) -> torch.Tensor:
-
-
         indices = IndexSet(
             **{
                 name: ind
@@ -232,7 +230,6 @@ def consequent_eq_neq(
     """
 
     def _consequent_eq_neq(consequent: T) -> torch.Tensor:
-
         necessity_world = kwargs.get("necessity_world", 1)
         sufficiency_world = kwargs.get("sufficiency_world", 2)
 
@@ -243,7 +240,6 @@ def consequent_eq_neq(
                 if name in antecedents
             }
         )
-
         sufficiency_indices = IndexSet(
             **{
                 name: {sufficiency_world}
@@ -274,7 +270,6 @@ def consequent_eq_neq(
                 **kwargs,
             )
         )
-
         sufficiency_log_probs = (
             soft_eq(support, sufficiency_value, proposed_consequent, **kwargs)
             if proposed_consequent is not None
@@ -284,17 +279,10 @@ def consequent_eq_neq(
         FACTUAL_NEC_SUFF = torch.zeros_like(sufficiency_log_probs)
 
         index_keys = set(antecedents)
-        null_index = IndexSet(
-            **{
-                name: {0}
-                for name in index_keys
-            }
-        )
+        null_index = IndexSet(**{name: {0} for name in index_keys})
 
         nec_suff_log_probs_partitioned = {
-            **{
-                null_index: FACTUAL_NEC_SUFF
-            },
+            **{null_index: FACTUAL_NEC_SUFF},
             **{
                 IndexSet(**{antecedent: {ind} for antecedent in index_keys}): log_prob
                 for ind, log_prob in zip(
