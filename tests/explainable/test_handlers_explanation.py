@@ -382,7 +382,6 @@ def test_edge_eq_neq():
     Y_values_ind = trace_independent.trace.nodes["Y"]["value"]
 
     if torch.any(Y_values_ind == 1.):
-        print("testing with ", Y_values_ind)
         assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 0.
     else:
         assert trace_independent.trace.nodes["__cause____consequent_Y"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 1.
@@ -399,7 +398,6 @@ def test_edge_eq_neq():
         
     X_values_rev = trace_reverse.trace.nodes["X"]["value"]
     if torch.any(X_values_rev == 1.):
-        print("testing with ", Y_values_ind)
         assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 0.
     else:
         assert trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor[1,0,0,0,:].sum().exp() == 1.
