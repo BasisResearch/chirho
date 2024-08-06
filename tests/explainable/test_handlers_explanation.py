@@ -3,13 +3,13 @@ import math
 import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
-import torch
 import pytest
+import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.components import undo_split
 from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
-from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather
 from chirho.observational.handlers.condition import condition
