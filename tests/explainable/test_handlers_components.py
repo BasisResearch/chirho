@@ -424,6 +424,7 @@ def test_consequent_eq_neq(plate_size, event_shape):
                 nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {2}})
         )
 
+        assert torch.equal(eq_neq_log_probs_fact, torch.zeros(eq_neq_log_probs_fact.shape))
         assert eq_neq_log_probs_nec.shape == consequent_suff.shape
         assert torch.equal(eq_neq_log_probs_suff, dist.Normal(0.0, .1).log_prob(consequent_suff - torch.tensor(.01)))
         assert eq_neq_log_probs_nec.sum().exp() == 0   
