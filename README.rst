@@ -125,6 +125,8 @@ approximations that power much of the modern probabilistic machine learning land
   - Causal inference with deep models and proxy variables
 - `Example: Mediation analysis and (in)direct effects <https://basisresearch.github.io/chirho/mediation.html>`_
   - Mediation analysis for path specific effects
+- `Example: Estimating causal effects using instrumental variables <https://basisresearch.github.io/chirho/instrumental_var.html>`_
+  - Causal effect estimation with instrumental variables
 - `Example: Deep structural causal model counterfactuals <https://basisresearch.github.io/chirho/deepscm.html>`_
   - Counterfactuals with normalizing flows
 - `Example: Structured Latent Confounders <https://basisresearch.github.io/chirho/slc.html>`_
