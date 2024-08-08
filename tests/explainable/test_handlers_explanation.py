@@ -3,9 +3,11 @@ import math
 import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
+import pytest
 import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.components import undo_split
 from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
 from chirho.explainable.handlers.preemptions import Preemptions
@@ -314,3 +316,236 @@ def test_SplitSubsets_two_layers():
         ).item()
 
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
+
+
+def test_edge_eq_neq():
+    def model_independent():
+        X = pyro.sample("X", dist.Bernoulli(0.5))
+        Y = pyro.sample("Y", dist.Bernoulli(0.5))
+        return {"X": X, "Y": Y}
+
+    def model_connected():
+        X = pyro.sample("X", dist.Bernoulli(0.5))
+        Y = pyro.sample("Y", dist.Bernoulli(X))
+        return {"X": X, "Y": Y}
+
+    with ExtractSupports() as supports_independent:
+        model_independent()
+
+    with ExtractSupports() as supports_connected:
+        model_connected()
+
+    with MultiWorldCounterfactual():
+        with SearchForExplanation(
+            supports=supports_independent.supports,
+            antecedents={"X": torch.tensor(1.0)},
+            consequents={"Y": torch.tensor(1.0)},
+            witnesses={},
+            alternatives={"X": torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace_independent:
+                    model_independent()
+
+    with MultiWorldCounterfactual():
+        with SearchForExplanation(
+            supports=supports_connected.supports,
+            antecedents={"X": torch.tensor(1.0)},
+            consequents={"Y": torch.tensor(1.0)},
+            witnesses={},
+            alternatives={"X": torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace_connected:
+                    model_connected()
+
+    with MultiWorldCounterfactual():
+        with SearchForExplanation(
+            supports=supports_connected.supports,
+            antecedents={"Y": torch.tensor(1.0)},
+            consequents={"X": torch.tensor(1.0)},
+            witnesses={},
+            alternatives={"Y": torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace_reverse:
+                    model_connected()
+
+    trace_connected.trace.compute_log_prob
+    trace_independent.trace.compute_log_prob
+    trace_reverse.trace.compute_log_prob
+
+    Y_values_ind = trace_independent.trace.nodes["Y"]["value"]
+
+    log_probs_ind = trace_independent.trace.nodes["__cause____consequent_Y"][
+        "fn"
+    ].log_factor
+    if torch.any(Y_values_ind == 1.0):
+        assert log_probs_ind[1, 0, 0, 0, :].sum().exp() == 0.0
+    else:
+        assert log_probs_ind[1, 0, 0, 0, :].sum().exp() == 1.0
+
+    assert torch.all(log_probs_ind.sum().exp() == 0)
+
+    if torch.any(Y_values_ind == 0.0):
+        assert log_probs_ind[2, 0, 0, 0, :].sum().exp() == 0.0
+    else:
+        assert log_probs_ind[2, 0, 0, 0, :].sum().exp() == 1.0
+
+    assert torch.all(
+        trace_connected.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum()
+        == 0
+    )
+
+    X_values_rev = trace_reverse.trace.nodes["X"]["value"]
+    if torch.any(X_values_rev == 1.0):
+        assert (
+            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
+            .log_factor[1, 0, 0, 0, :]
+            .sum()
+            .exp()
+            == 0.0
+        )
+    else:
+        assert (
+            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
+            .log_factor[1, 0, 0, 0, :]
+            .sum()
+            .exp()
+            == 1.0
+        )
+
+    if torch.any(X_values_rev == 0.0):
+        assert (
+            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
+            .log_factor[2, 0, 0, 0, :]
+            .sum()
+            .exp()
+            == 0.0
+        )
+    else:
+        assert (
+            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
+            .log_factor[2, 0, 0, 0, :]
+            .sum()
+            .exp()
+            == 1.0
+        )
+
+    assert torch.all(
+        trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
+        .log_factor.sum()
+        .exp()
+        == 0
+    )
+
+
+# X -> Z, Y -> Z
+def model_three_converge():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5))
+    Z = pyro.sample("Z", dist.Bernoulli(torch.min(X, Y)))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y, X -> Z
+def model_three_diverge():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(X))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y -> Z
+def model_three_chain():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(Y))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y, X -> Z, Y -> Z
+def model_three_complete():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(torch.max(X, Y)))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y    Z
+def model_three_isolate():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    Z = pyro.sample("Z", dist.Bernoulli(0.5))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X     Y    Z
+def model_three_independent():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5))
+    Z = pyro.sample("Z", dist.Bernoulli(0.5))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+@pytest.mark.parametrize("ante_cons", [("X", "Y", "Z"), ("X", "Z", "Y")])
+@pytest.mark.parametrize(
+    "model",
+    [
+        model_three_converge,
+        model_three_diverge,
+        model_three_chain,
+        model_three_complete,
+        model_three_isolate,
+        model_three_independent,
+    ],
+)
+def test_eq_neq_three_variables(model, ante_cons):
+    ante1, ante2, cons = ante_cons
+    with ExtractSupports() as supports:
+        model()
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={ante1: torch.tensor(1.0), ante2: torch.tensor(1.0)},
+            consequents={cons: torch.tensor(1.0)},
+            witnesses={},
+            alternatives={ante1: torch.tensor(0.0), ante2: torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=1):
+                with pyro.poutine.trace() as trace:
+                    model()
+
+    trace.trace.compute_log_prob
+    nodes = trace.trace.nodes
+
+    values = nodes[cons]["value"]
+    log_probs = nodes[f"__cause____consequent_{cons}"]["fn"].log_factor
+
+    assert log_probs.shape == torch.Size([3, 3, 1, 1, 1, 1])
+
+    fact_worlds = IndexSet(**{name: {0} for name in [ante1, ante2]})
+    nec_worlds = IndexSet(**{name: {1} for name in [ante1, ante2]})
+    suff_worlds = IndexSet(**{name: {2} for name in [ante1, ante2]})
+    with mwc:
+        fact_lp = gather(log_probs, fact_worlds)
+        assert fact_lp.exp().item() == 1
+
+        nec_value = gather(values, nec_worlds)
+        nec_lp = gather(log_probs, nec_worlds)
+        assert nec_lp.exp().item() == 1 - nec_value.item()
+
+        suff_value = gather(values, suff_worlds)
+        suff_lp = gather(log_probs, suff_worlds)
+        assert suff_lp.exp().item() == suff_value.item()
+
+    assert torch.allclose(log_probs.squeeze().fill_diagonal_(0.0), torch.tensor(0.0))
