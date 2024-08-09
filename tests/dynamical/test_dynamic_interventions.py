@@ -51,6 +51,7 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     return event_f
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
@@ -64,7 +65,9 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_nested_dynamic_intervention_causes_change(
+    solver,
     model,
     init_state,
     start_time,
@@ -72,19 +75,20 @@ def test_nested_dynamic_intervention_causes_change(
     logging_times,
     trigger_states,
     intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with TorchDiffEq():
+        with solver():
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(ts1),
+                event_fn=event_fn_builder(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_fn=get_state_reached_event_f(ts2),
+                    event_fn=event_fn_builder(ts2),
                     intervention=is2,
                 ):
                     simulate(model, init_state, start_time, end_time)
@@ -94,6 +98,9 @@ def test_nested_dynamic_intervention_causes_change(
     # Each intervention just adds a certain amount of susceptible people after the recovered count exceeds some amount
 
     trajectory = dt.trajectory
+
+    for k, v in trajectory.items():
+        assert len(v) == len(logging_times)
 
     postint_mask1 = trajectory["R"] > ts1["R"]
     postint_mask2 = trajectory["R"] > ts2["R"]
@@ -155,6 +162,7 @@ def test_nested_dynamic_intervention_causes_change(
     )
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
@@ -162,7 +170,9 @@ def test_nested_dynamic_intervention_causes_change(
 @pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize("trigger_state", [trigger_state1])
 @pytest.mark.parametrize("intervene_state", [intervene_state1])
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_dynamic_intervention_causes_change(
+    solver,
     model,
     init_state,
     start_time,
@@ -170,13 +180,14 @@ def test_dynamic_intervention_causes_change(
     logging_times,
     trigger_state,
     intervene_state,
+    event_fn_builder,
 ):
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with TorchDiffEq():
+        with solver():
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(trigger_state),
+                event_fn=event_fn_builder(trigger_state),
                 intervention=intervene_state,
             ):
                 simulate(model, init_state, start_time, end_time)
@@ -184,6 +195,9 @@ def test_dynamic_intervention_causes_change(
     preint_total = init_state["S"] + init_state["I"] + init_state["R"]
 
     trajectory = dt.trajectory
+
+    for k, v in trajectory.items():
+        assert len(v) == len(logging_times)
 
     # The intervention just "adds" (sets) 50 "people" to the susceptible population.
     #  It happens that the susceptible population is roughly 0 at the intervention point,
@@ -217,6 +231,7 @@ def test_dynamic_intervention_causes_change(
     )
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
@@ -230,7 +245,9 @@ def test_dynamic_intervention_causes_change(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_twinworld_dynamic_intervention(
+    solver,
     model,
     init_state,
     start_time,
@@ -238,6 +255,7 @@ def test_split_twinworld_dynamic_intervention(
     logging_times,
     trigger_states,
     intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -246,13 +264,13 @@ def test_split_twinworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with TorchDiffEq():
+        with solver():
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(ts1),
+                event_fn=event_fn_builder(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_fn=get_state_reached_event_f(ts2),
+                    event_fn=event_fn_builder(ts2),
                     intervention=is2,
                 ):
                     with TwinWorldCounterfactual() as cf:
@@ -271,6 +289,7 @@ def test_split_twinworld_dynamic_intervention(
             assert cf.fresh_prefix in indices_of(cf_trajectory[k], event_dim=1)
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
@@ -283,8 +302,16 @@ def test_split_twinworld_dynamic_intervention(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_multiworld_dynamic_intervention(
-    model, init_state, start_time, end_time, trigger_states, intervene_states
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    trigger_states,
+    intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
@@ -293,13 +320,13 @@ def test_split_multiworld_dynamic_intervention(
     with LogTrajectory(
         times=logging_times,
     ) as dt:
-        with TorchDiffEq():
+        with solver():
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(ts1),
+                event_fn=event_fn_builder(ts1),
                 intervention=is1,
             ):
                 with DynamicIntervention(
-                    event_fn=get_state_reached_event_f(ts2),
+                    event_fn=event_fn_builder(ts2),
                     intervention=is2,
                 ):
                     with MultiWorldCounterfactual() as cf:
@@ -318,6 +345,7 @@ def test_split_multiworld_dynamic_intervention(
             assert cf.fresh_prefix in indices_of(cf_trajectory[k], event_dim=1)
 
 
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
 @pytest.mark.parametrize("init_state", [init_state])
 @pytest.mark.parametrize("start_time", [start_time])
@@ -330,36 +358,44 @@ def test_split_multiworld_dynamic_intervention(
     "intervene_states",
     [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
 )
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_twinworld_dynamic_matches_output(
-    model, init_state, start_time, end_time, trigger_states, intervene_states
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    trigger_states,
+    intervene_states,
+    event_fn_builder,
 ):
     ts1, ts2 = trigger_states
     is1, is2 = intervene_states
 
-    with TorchDiffEq():
+    with solver():
         with DynamicIntervention(
-            event_fn=get_state_reached_event_f(ts1),
+            event_fn=event_fn_builder(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(ts2),
+                event_fn=event_fn_builder(ts2),
                 intervention=is2,
             ):
                 with TwinWorldCounterfactual() as cf:
                     cf_result = simulate(model, init_state, start_time, end_time)
 
-    with TorchDiffEq():
+    with solver():
         with DynamicIntervention(
-            event_fn=get_state_reached_event_f(ts1),
+            event_fn=event_fn_builder(ts1),
             intervention=is1,
         ):
             with DynamicIntervention(
-                event_fn=get_state_reached_event_f(ts2),
+                event_fn=event_fn_builder(ts2),
                 intervention=is2,
             ):
                 cf_expected = simulate(model, init_state, start_time, end_time)
 
-    with TorchDiffEq():
+    with solver():
         factual_expected = simulate(model, init_state, start_time, end_time)
 
     with cf:
@@ -394,16 +430,20 @@ def test_split_twinworld_dynamic_matches_output(
         ), f"Trajectories differ in state result of variable {k}, but should be identical."
 
 
-def test_grad_of_dynamic_intervention_event_f_params():
-    def model(X: State[torch.Tensor]):
-        dX = dict()
-        dX["x"] = torch.tensor(1.0)
-        dX["z"] = X["dz"]
-        dX["dz"] = torch.tensor(0.0)  # also a constant, this gets set by interventions.
-        dX["param"] = torch.tensor(
-            0.0
-        )  # this is a constant event function parameter, so no change.
-        return dX
+def model_with_param_in_state(X: State[torch.Tensor]):
+    dX = dict()
+    dX["x"] = torch.tensor(1.0)
+    dX["z"] = X["dz"]
+    dX["dz"] = torch.tensor(0.0)  # also a constant, this gets set by interventions.
+    dX["param"] = torch.tensor(
+        0.0
+    )  # this is a constant event function parameter, so no change.
+    return dX
+
+
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("model", [model_with_param_in_state])
+def test_grad_of_dynamic_intervention_event_f_params(solver, model):
 
     param = torch.nn.Parameter(torch.tensor(5.0))
     # Param has to be part of the state in order to take gradients with respect to it.
@@ -412,12 +452,12 @@ def test_grad_of_dynamic_intervention_event_f_params():
     )
 
     dynamic_intervention = DynamicIntervention(
-        event_fn=lambda t, s: t - s["param"],
+        event_fn=lambda t, s, *args: t - s["param"],
         intervention=dict(dz=torch.tensor(1.0)),
     )
 
     # noinspection DuplicatedCode
-    with TorchDiffEq():
+    with solver():
         with dynamic_intervention:
             result = simulate(model, s0, start_time, end_time)
 
