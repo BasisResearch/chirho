@@ -1,21 +1,15 @@
 import collections
 import math
 import typing
-from typing import Any, Callable, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, Tuple, TypeVar
 
 import pyro
 import torch
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.indexed.ops import get_index_plates, indices_of
-from chirho.observational.handlers.condition import Observations
-from chirho.robust.internals.utils import (
-    bind_leftmost_dim,
-    get_importance_traces,
-    site_is_delta,
-    unbind_leftmost_dim,
-)
+from chirho.indexed.ops import get_index_plates
+from chirho.observational.handlers.predictive import BatchedLatents, BatchedObservations
 from chirho.robust.ops import Point
 
 pyro.settings.set(module_local_params=True)
@@ -26,80 +20,43 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-class BatchedLatents(pyro.poutine.messenger.Messenger):
+def get_importance_traces(
+    model: Callable[P, Any],
+    guide: Optional[Callable[P, Any]] = None,
+) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
     """
-    Effect handler that adds a fresh batch dimension to all latent ``sample`` sites.
-    Similar to wrapping a Pyro model in a ``pyro.plate`` context, but uses the machinery
-    in ``chirho.indexed`` to automatically allocate and track the fresh batch dimension
-    based on the ``name`` argument to ``BatchedLatents`` .
+    Thin functional wrapper around :func:`~pyro.infer.enum.get_importance_trace`
+    that cleans up the original interface to avoid unnecessary arguments
+    and efficiently supports using the prior in a model as a default guide.
 
-    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
-
-    :param int num_particles: Number of particles to use for parallelization.
-    :param str name: Name of the fresh batch dimension.
+    :param model: Model to run.
+    :param guide: Guide to run. If ``None``, use the prior in ``model`` as a guide.
+    :returns: A function that takes the same arguments as ``model`` and ``guide`` and returns
+        a tuple of importance traces ``(model_trace, guide_trace)``.
     """
 
-    num_particles: int
-    name: str
-
-    def __init__(self, num_particles: int, *, name: str = "__particles_mc"):
-        assert num_particles > 0
-        assert len(name) > 0
-        self.num_particles = num_particles
-        self.name = name
-        super().__init__()
-
-    def _pyro_sample(self, msg: dict) -> None:
-        if (
-            self.num_particles > 1
-            and msg["value"] is None
-            and not pyro.poutine.util.site_is_factor(msg)
-            and not pyro.poutine.util.site_is_subsample(msg)
-            and not site_is_delta(msg)
-            and self.name not in indices_of(msg["fn"])
-        ):
-            msg["fn"] = unbind_leftmost_dim(
-                msg["fn"].expand((1,) + msg["fn"].batch_shape),
-                self.name,
-                size=self.num_particles,
+    def _fn(
+        *args: P.args, **kwargs: P.kwargs
+    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
+        if guide is not None:
+            model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
+                "flat", math.inf, model, guide, args, kwargs
+            )
+            return model_trace, guide_trace
+        else:  # use prior as default guide, but don't run model twice
+            model_trace, _ = pyro.infer.enum.get_importance_trace(
+                "flat", math.inf, model, lambda *_, **__: None, args, kwargs
             )
 
+            guide_trace = model_trace.copy()
+            for name, node in list(guide_trace.nodes.items()):
+                if node["type"] != "sample":
+                    del model_trace.nodes[name]
+                elif pyro.poutine.util.site_is_factor(node) or node["is_observed"]:
+                    del guide_trace.nodes[name]
+            return model_trace, guide_trace
 
-class BatchedObservations(Generic[T], Observations[T]):
-    """
-    Effect handler that takes a dictionary of observation values for ``sample`` sites
-    that are assumed to be batched along their leftmost dimension, adds a fresh named
-    dimension using the machinery in ``chirho.indexed``, and reshapes the observation
-    values so that the new ``chirho.observational.observe`` sites are batched along
-    the fresh named dimension.
-
-    Useful in combination with ``pyro.infer.Predictive`` which returns a dictionary
-    of values whose leftmost dimension is a batch dimension over independent samples.
-
-    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
-
-    :param Point[T] data: Dictionary of observation values.
-    :param str name: Name of the fresh batch dimension.
-    """
-
-    name: str
-
-    def __init__(self, data: Point[T], *, name: str = "__particles_data"):
-        assert len(name) > 0
-        self.name = name
-        super().__init__(data)
-
-    def _pyro_observe(self, msg: dict) -> None:
-        super()._pyro_observe(msg)
-        if msg["kwargs"]["name"] in self.data:
-            rv, obs = msg["args"]
-            event_dim = (
-                len(rv.event_shape)
-                if hasattr(rv, "event_shape")
-                else msg["kwargs"].get("event_dim", 0)
-            )
-            batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
-            msg["args"] = (rv, batch_obs)
+    return _fn
 
 
 class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
@@ -205,7 +162,11 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
 
         # move data plate dimension to the left
         for name in reversed(plate_name_to_dim.keys()):
-            log_weights = bind_leftmost_dim(log_weights, name)
+            log_weights = torch.transpose(
+                log_weights[None],
+                -len(log_weights.shape) - 1,
+                plate_name_to_dim[name].dim,
+            )
 
         # pack log_weights by squeezing out rightmost dimensions
         for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):

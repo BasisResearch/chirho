@@ -27,9 +27,11 @@ Table of Contents
    deepscm
    slc
    mediation
+   instrumental_var
    sciplex
    sdid
    dr_learner
+   automated_dr_learner
    dynamical_intro
    explainable_categorical
    actual_causality
