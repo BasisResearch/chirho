@@ -20,6 +20,7 @@ from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamicsBase,
     run_svi_inference_torch_direct,
 )
+from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +60,13 @@ intervention = StaticIntervention(time=superspreader_time, intervention=counterf
 reparam = pyro.poutine.reparam(config=reparam_config)
 
 
-def counterf_model():
-    model = UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7)
+def counterf_model(solver, model):
+    # model = UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7)
     obs = condition(data=flight_landing_data)(model.observation)
     vec_obs3 = StaticBatchObservation(times=flight_landing_times, observation=obs)
     with vec_obs3:
-        with TorchDiffEq():
+        # with TorchDiffEq():
+        with solver():
             with reparam, twin_world, intervention:
                 return simulate(
                     model,
@@ -74,7 +76,7 @@ def counterf_model():
                 )
 
 
-def conditioned_model():
+def conditioned_model(*args, **kwargs):
     # This is equivalent to the following:
     # with Solver():
     #   with vec_obs3:
@@ -84,7 +86,7 @@ def conditioned_model():
     with pyro.poutine.messenger.block_messengers(
         lambda m: m in (reparam, twin_world, intervention)
     ):
-        return counterf_model()
+        return counterf_model(*args, **kwargs)
 
 
 # A reparameterized observation function of various flight arrivals.
@@ -94,10 +96,16 @@ class UnifiedFixtureDynamicsReparam(
     pass
 
 
-def test_shape_twincounterfactual_observation_intervention_commutes():
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("model", [
+    UnifiedFixtureDynamicsReparam(
+        beta=torch.tensor(0.5),
+        gamma=torch.tensor(0.7))
+])
+def test_shape_twincounterfactual_observation_intervention_commutes(solver, model):
     with LogTrajectory(logging_times) as dt:
         with pyro.poutine.trace() as tr:
-            conditioned_model()
+            conditioned_model(solver, model)
 
     ret = dt.trajectory
 
@@ -114,12 +122,26 @@ def test_shape_twincounterfactual_observation_intervention_commutes():
     assert nodes["infected_passengers"]["value"].squeeze().shape == obs_shape
 
 
-def test_smoke_inference_twincounterfactual_observation_intervention_commutes():
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("model", [
+    UnifiedFixtureDynamicsReparam(
+        beta=torch.tensor(0.5),
+        gamma=torch.tensor(0.7))
+])
+def test_smoke_inference_twincounterfactual_observation_intervention_commutes(solver, model):
     # Run inference on factual model.
-    guide = run_svi_inference_torch_direct(conditioned_model, n_steps=2, verbose=False)
+    guide = run_svi_inference_torch_direct(
+        partial(conditioned_model, solver, model),
+        n_steps=2,
+        verbose=False
+    )
 
     num_samples = 100
-    pred = pyro.infer.Predictive(counterf_model, guide=guide, num_samples=num_samples)()
+    pred = pyro.infer.Predictive(
+        partial(counterf_model, solver, model),
+        guide=guide,
+        num_samples=num_samples
+    )()
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
     assert pred["infected_passengers"].squeeze().shape == (
