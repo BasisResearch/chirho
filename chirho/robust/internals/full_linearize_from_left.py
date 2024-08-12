@@ -1,6 +1,6 @@
 import pyro.infer
 
-from .linearize import conjugate_gradient_solve, make_empirical_fisher_vp
+from .linearize import conjugate_gradient_solve, make_empirical_fisher_vp, ParamDict
 from ..ops import Functional, P, S, Point, T
 from chirho.robust.internals.utils import make_functional_call
 import torch
@@ -13,31 +13,38 @@ from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
 import typing
 from collections import OrderedDict
-from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
+from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood, get_importance_traces
 
 
 # In this case, we can pull the log probability directly from the model, but
 #  we want to preserve the same signature that the BatchedNMCLogMarginalLikelihood has.
 # TODO fiddle with BatchedNMCLogMarginalLikelihood to support this more trivial use case,
-#  and use that instead.
+#  and use that instead. Keep the sig here but make thing wrapper that e.g. doesn't take a guide and checks
+#  that all of the sites in the model are in the data?
+# TODO also this seems way overkill for this purpose? But I guess e.g. the
+#  cond_indep_stack stuff needs to be handled?
 class ExactLogProb(torch.nn.Module):
     def __init__(self, model, max_plate_nesting: Optional[int] = None):
         super().__init__()
         self.model = model
         self.max_plate_nesting = max_plate_nesting
+        self._data_plate_name = "__particles_data"
 
     def forward(self, data: Point[T], *args, **kwargs) -> torch.Tensor:
+
+        # A normal trace gives you log_prob_sum. We need the individual log probs for each observation in data.
+        get_trace_with_individual_log_prob = get_importance_traces(self.model)
+
         first_available_dim = -self.max_plate_nesting - 1 if self.max_plate_nesting is not None else None
         with IndexPlatesMessenger(first_available_dim=first_available_dim):
-            with BatchedObservations(data, name="__particles_data"):
-                with pyro.poutine.trace() as tr:
-                    self.model(*args, **kwargs)
-                    model_trace = tr.get_trace()
+            with BatchedObservations(data, name=self._data_plate_name):
+                model_trace, _ = get_trace_with_individual_log_prob(*args, **kwargs)
             index_plates = get_index_plates()
 
+        # TODO Can simplify cz we're only interested in the data plate?
         plate_name_to_dim = OrderedDict(
             (p, index_plates[p])
-            for p in [self._mc_plate_name, self._data_plate_name]
+            for p in [self._data_plate_name]
             if p in index_plates
         )
         plate_frames = set(plate_name_to_dim.values())
@@ -71,8 +78,6 @@ class ExactLogProb(torch.nn.Module):
 def full_linearize_from_left(
         *models: Callable[P, Any],
         functional: Functional[P, S],
-        functional_args: Tuple[Any, ...],
-        functional_kwargs: Dict[str, Any],
         num_samples_outer: int,
         num_samples_inner: int,
         max_plate_nesting: Optional[int] = None,
@@ -122,9 +127,10 @@ def full_linearize_from_left(
     func_target_params, func_target = make_functional_call(target)
 
     func_jac_fn = torch.func.jacrev(
-        partial(func_target, *functional_args, **functional_kwargs),
+        # TODO args, kwargs here?
+        func_target,
     )
-    func_jac = func_jac_fn(func_target_params)
+    func_jac: TPyTree = func_jac_fn(func_target_params)
     # </Jacobian wrt Functional>
 
     # <Fisher Information Matrix Setup>
@@ -157,8 +163,11 @@ def full_linearize_from_left(
     #  make_functional_call for why).
     assert isinstance(model, torch.nn.Module)
 
+    # TODO we also want to support marginalization wrt the latent space. E.g. to answer
+    #  questions about the influence of some marginal prior? Which I guess would
+    #  amount to influence of the prior marginal with the non-marginals held constant?
+    # I'm not entirely sure of how to think about that.
     if points_omit_latent_sites:
-        raise NotImplementedError("WIP")
         # Assume that the model is a chirho.observational.PredictiveModel (i.e. don't
         #  pass the guide explicitly to BatchedNMCLogMarginalLikelihood), but use
         #  BatchedNMCLogMarginalLikelihood to compute the log probability of the points
@@ -176,12 +185,15 @@ def full_linearize_from_left(
                 "num_samples_inner.")
 
         exact_log_prob = ExactLogProb(model, max_plate_nesting=max_plate_nesting)
-        log_prob_params, func_log_prob = make_functional_call(exact_log_prob)
+        log_prob_params, func_log_prob = make_functional_call(exact_log_prob)  # type: TPyTree, Callable
 
     # The target params and log prob params should be the same.
-    # TODO what types are these? How to assert equality? Are these just flat PyTrees?
-    for k, v in func_target_params.keys():
-        assert log_prob_params[k] is v
+    # TODO generalize for arbitrary pytree structure? (and not just flat maps).
+    for k, v in func_target_params.items():
+        if k not in log_prob_params or log_prob_params[k] is not v:
+            raise ValueError(f"Parameter {k} of target functional does not match parameter in model. MC-EIF requires "
+                             f" that the functional jacobian, and log probability first and second derivatives can all"
+                             f" be taken with respect to the same parameters.\n")
     # </Fisher Information Matrix Setup>
 
     # <Conjugate Gradient Setup>
@@ -200,23 +212,18 @@ def full_linearize_from_left(
 
     with torch.no_grad():
         # Sample points by which to estimate the fisher information matrix.
-        data: Point[T] = predictive(*args, **kwargs)
-        if points_omit_latent_sites:
-            data = {k: data[k] for k in points.keys()}
-        elif data.keys() != points.keys():
-            raise ValueError(
-                "The sites in the predictive sample do not match the sites in the points, but "
-                "points_omit_latent_sites is False. To resolve, check whether the distribution of "
-                "interest requires any marginalization and set points_omit_latent_sites accordingly."
-            )
+        # TODO *args, **kwargs here?
+        samples_for_empirical_fisher: Point[T] = predictive()
 
     func_fvp = make_empirical_fisher_vp(
-        func_log_prob, log_prob_params, data, *args, **kwargs
+        # TODO *args, **kwargs here?
+        func_log_prob, log_prob_params, samples_for_empirical_fisher,
     )
     pinned_func_fvp = reset_rng_state(pyro.util.get_rng_state())(func_fvp)
-    # TODO Does this need to be batched now? Cz the jacobian of the functional isn't batched...
+    # TODO Does this actually need to be batched now? Cz the jacobian of the functional isn't batched...
     pinned_func_fvp_batched = torch.func.vmap(
-        lambda v: pinned_func_fvp(v), randomness="different"
+        # Why this seemingly no-op lambda?
+        lambda x: pinned_func_fvp(x), randomness="different"
     )
 
     # Let F^-1 be the inverse fisher, and y be the functional jacobian.
@@ -230,6 +237,20 @@ def full_linearize_from_left(
         *args: P.args,
         **kwargs: P.kwargs,
     ) -> ParamDict:
+
+        # Sanity check now that we have access to points.
+        if points_omit_latent_sites:
+            # Ignore latent sites for the empirical fisher, as these will be marginalized out.
+            subset_samples_for_empirical_fisher = {
+                k: samples_for_empirical_fisher[k] for k in points.keys()
+            }
+        elif samples_for_empirical_fisher.keys() != points.keys():
+            raise ValueError(
+                "The sites in the predictive sample do not match the sites in the points, but "
+                "points_omit_latent_sites is False. To resolve, check whether the distribution of "
+                "interest requires any marginalization and set points_omit_latent_sites accordingly."
+            )
+
         # Now, we're left with a far simpler vector-vector product between the above solution and
         #  the jacobian of the log probability of the user-provided points under the model.
         estimate_of_eif_at_points = pytree_generalized_manual_revjvp(

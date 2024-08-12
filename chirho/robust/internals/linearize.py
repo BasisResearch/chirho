@@ -105,7 +105,9 @@ def conjugate_gradient_solve(f_Ax: Callable[[T], T], b: T, **kwargs) -> T:
         result_unflattened = f_Ax(v_unflattened)
         return flatten(result_unflattened)
 
-    return unflatten(_flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs))
+    flat_res = _flat_conjugate_gradient_solve(f_Ax_flat, flatten(b), **kwargs)
+
+    return unflatten(flat_res)
 
 
 def make_empirical_fisher_vp(

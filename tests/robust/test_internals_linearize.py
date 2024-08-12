@@ -14,6 +14,10 @@ from chirho.robust.internals.linearize import (
     linearize,
     make_empirical_fisher_vp,
 )
+from chirho.robust.internals.full_linearize_from_left import (
+    full_linearize_from_left,
+    ExactLogProb
+)
 
 from .robust_fixtures import (
     BenchmarkLinearModel,
@@ -366,3 +370,73 @@ def test_linearize_against_analytic_ate():
         analytic_eif_at_test_pts.mean(),
         atol=0.5,
     )
+
+
+class TrivariateGaussian(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.loc_ab = torch.nn.Parameter(torch.tensor([0., 1.0]))
+        self.loc_c = torch.nn.Parameter(torch.tensor([2.0]))
+
+    def forward(self):
+        ab = pyro.sample("ab", dist.Normal(self.loc_ab, 1.0).to_event(1))
+        c = pyro.sample("c", dist.Normal(self.loc_c, 1.0).to_event(1))
+
+        return dict(
+            ab=ab,
+            c=c,
+        )
+
+
+def test_exact_log_prob():
+
+    model = TrivariateGaussian()
+    elp = ExactLogProb(model)
+
+    data = Predictive(model, num_samples=11)()
+
+    # Manually compute exact log probability.
+    expected_log_prob = torch.zeros(11)
+    for i in range(11):
+        ab = data["ab"][i]
+        c = data["c"][i]
+        expected_log_prob[i] = (
+                dist.Normal(model.loc_ab, 1.0).log_prob(ab).sum()
+                + dist.Normal(model.loc_c, 1.0).log_prob(c).sum())
+
+    res = elp(data)
+
+    assert torch.allclose(res, expected_log_prob)
+
+
+class FunctionWithPostModelRandomness(torch.nn.Module):
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self):
+        with pyro.plate("mc", 111):
+            res = self.model()
+
+        ab = res["ab"]
+        c = res["c"]
+
+        return (ab + c).mean()
+
+
+def test_full_linearize_from_left_smoke():
+    model = TrivariateGaussian()
+
+    full_eif_fn = full_linearize_from_left(
+        model,
+        functional=FunctionWithPostModelRandomness,
+        num_samples_outer=100,
+        num_samples_inner=1,
+        points_omit_latent_sites=False,
+    )
+
+    assert False, "WIP"
+
+
+
+
