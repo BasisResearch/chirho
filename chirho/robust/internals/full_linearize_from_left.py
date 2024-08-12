@@ -164,10 +164,12 @@ def full_linearize_from_left(
     assert isinstance(model, torch.nn.Module)
 
     # TODO we also want to support marginalization wrt the latent space. E.g. to answer
-    #  questions about the influence of some marginal prior? Which I guess would
-    #  amount to influence of the prior marginal with the non-marginals held constant?
-    # I'm not entirely sure of how to think about that.
+    #  questions about the influence of some marginal of the prior?
     if points_omit_latent_sites:
+        raise NotImplementedError(
+            "This version of the linearization is not fully tested for computing the influence"
+            " of distributions on that require marginalization"
+        )
         # Assume that the model is a chirho.observational.PredictiveModel (i.e. don't
         #  pass the guide explicitly to BatchedNMCLogMarginalLikelihood), but use
         #  BatchedNMCLogMarginalLikelihood to compute the log probability of the points
@@ -189,11 +191,16 @@ def full_linearize_from_left(
 
     # The target params and log prob params should be the same.
     # TODO generalize for arbitrary pytree structure? (and not just flat maps).
-    for k, v in func_target_params.items():
-        if k not in log_prob_params or log_prob_params[k] is not v:
-            raise ValueError(f"Parameter {k} of target functional does not match parameter in model. MC-EIF requires "
-                             f" that the functional jacobian, and log probability first and second derivatives can all"
-                             f" be taken with respect to the same parameters.\n")
+    for (k1, v1), (k2, v2) in zip(func_target_params.items(), log_prob_params.items()):
+        if v1 is not v2:
+            raise ValueError(f"Parameter {k1} of target functional does not match parameter {k2} in model."
+                             f" MC-EIF requires that the functional jacobian, and log probability first and second"
+                             f" derivatives can all be taken with respect to the same parameters.")
+        elif k1 != k2:
+            warnings.warn(f"Parameter {k1} of target functional correctly matches parameter {k2} in model,"
+                          f" except the naming is different. This could cause issues during downstream jacobian "
+                          f" computation, but should be resolveable by resolving parameter pathing differences in "
+                          f" the model and target functional torch modules.")
     # </Fisher Information Matrix Setup>
 
     # <Conjugate Gradient Setup>
