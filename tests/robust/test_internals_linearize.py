@@ -375,6 +375,7 @@ def test_linearize_against_analytic_ate():
 class TrivariateGaussian(torch.nn.Module):
     def __init__(self):
         super().__init__()
+        # Parameters of different shapes.
         self.loc_ab = torch.nn.Parameter(torch.tensor([0., 1.0]))
         self.loc_c = torch.nn.Parameter(torch.tensor([2.0]))
 
@@ -420,13 +421,16 @@ class FunctionWithPostModelRandomness(torch.nn.Module):
 
         ab = res["ab"]
         c = res["c"]
+        cr = pyro.sample("cr", dist.Normal(c, 1.0).to_event(1))
 
-        return (ab + c).mean()
+        return (ab + cr).mean()
 
 
 def test_full_linearize_from_left_smoke():
     model = TrivariateGaussian()
 
+    # Precompute the left vector matrix product of the eif to get a function
+    #  that can be applied repeatedly to arbitrary points.
     full_eif_fn = full_linearize_from_left(
         model,
         functional=FunctionWithPostModelRandomness,
@@ -435,8 +439,9 @@ def test_full_linearize_from_left_smoke():
         points_omit_latent_sites=False,
     )
 
-    assert False, "WIP"
+    # Now we want to evaluate it on samples from the model.
+    points = Predictive(model, num_samples=100)()
+    res = full_eif_fn(points)
 
-
-
-
+    assert res.shape == (100,)
+    assert not torch.isnan(res).any()

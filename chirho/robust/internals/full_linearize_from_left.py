@@ -226,6 +226,11 @@ def full_linearize_from_left(
         lambda x: pinned_func_fvp(x), randomness="different"
     )
 
+    # The .linearize.linearize implementation has to batch the cg_solver, but here
+    #  we only have a single func_jac. To make compatible, add a batch dimension to the func_jac.
+    # TODO generalize for arbitrary pytree structure and not just flat maps.
+    func_jac = {k: v.unsqueeze(0) for k, v in func_jac.items()}
+
     # Let F^-1 be the inverse fisher, and y be the functional jacobian.
     # Then y = Fb <=> yF^-1 = b
     # Solve for b to get the left-side product.
@@ -254,13 +259,15 @@ def full_linearize_from_left(
         # Now, we're left with a far simpler vector-vector product between the above solution and
         #  the jacobian of the log probability of the user-provided points under the model.
         estimate_of_eif_at_points = pytree_generalized_manual_revjvp(
-            fn=func_log_prob,
+            # TODO args, kwargs here?
+            fn=lambda p: func_log_prob(p, points),
             params=log_prob_params,
             # TODO add unary batch dimension here?
             batched_vector=func_jac_inv_fisher_product,
-        )
+        )  # .shape == (1, batch_size)
 
-        return estimate_of_eif_at_points
+        # Squeeze out the column vector.
+        return estimate_of_eif_at_points.squeeze(0)
 
     return _fn
 
