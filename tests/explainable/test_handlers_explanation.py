@@ -318,40 +318,89 @@ def test_SplitSubsets_two_layers():
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
 
 
-def test_edge_eq_neq():
-    def model_independent():
-        X = pyro.sample("X", dist.Bernoulli(0.5))
-        Y = pyro.sample("Y", dist.Bernoulli(0.5))
-        return {"X": X, "Y": Y}
+def model_independent():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5))
+    return {"X": X, "Y": Y}
 
-    def model_connected():
+
+def model_connected():
+    X = pyro.sample("X", dist.Bernoulli(0.5))
+    Y = pyro.sample("Y", dist.Bernoulli(X))
+    return {"X": X, "Y": Y}
+
+
+@pytest.mark.parametrize("ante_cons", [("Y", "X")])
+@pytest.mark.parametrize(
+    "model",
+    [
+        model_independent,
+        model_connected
+    ],
+)
+def test_edge_eq_neq(model, ante_cons):
+    with ExtractSupports() as supports:
+        model()
+
+    antecedent = ante_cons[0]
+    consequent = ante_cons[1]
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={antecedent: torch.tensor(1.0)},
+            consequents={consequent: torch.tensor(1.0)},
+            witnesses={},
+            alternatives={antecedent: torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace:
+                    model()
+
+    trace.trace.compute_log_prob()
+
+    cons_values = trace.trace.nodes[consequent]["value"]
+
+    log_probs = trace.trace.nodes[f"__cause____consequent_{consequent}"][
+        "fn"
+    ].log_factor
+
+    with mwc:
+        nec_log_probs = gather(log_probs, IndexSet(**{antecedent: {1}}))
+        suff_log_probs = gather(log_probs, IndexSet(**{antecedent: {2}}))
+
+    if torch.any(cons_values == 1.0):
+        assert nec_log_probs.sum().exp() == 0.0
+    else:
+        assert nec_log_probs.sum().exp() == 1.0
+
+    assert torch.all(log_probs.sum().exp() == 0)
+
+    if torch.any(cons_values == 0.0):
+        assert suff_log_probs.sum().exp() == 0.0
+    else:
+        assert suff_log_probs.sum().exp() == 1.0
+
+    assert torch.all(
+        trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"].log_factor.sum().exp()
+        == 0
+    )
+
+
+def test_eq_neq_causal():
+    def model():
         X = pyro.sample("X", dist.Bernoulli(0.5))
         Y = pyro.sample("Y", dist.Bernoulli(X))
         return {"X": X, "Y": Y}
 
-    with ExtractSupports() as supports_independent:
-        model_independent()
-
-    with ExtractSupports() as supports_connected:
-        model_connected()
-
-    with MultiWorldCounterfactual() as mwc_ind:
-        with SearchForExplanation(
-            supports=supports_independent.supports,
-            antecedents={"X": torch.tensor(1.0)},
-            consequents={"Y": torch.tensor(1.0)},
-            witnesses={},
-            alternatives={"X": torch.tensor(0.0)},
-            antecedent_bias=-0.5,
-            consequent_scale=0,
-        ):
-            with pyro.plate("sample", size=3):
-                with pyro.poutine.trace() as trace_independent:
-                    model_independent()
+    with ExtractSupports() as supports:
+        model()
 
     with MultiWorldCounterfactual():
         with SearchForExplanation(
-            supports=supports_connected.supports,
+            supports=supports.supports,
             antecedents={"X": torch.tensor(1.0)},
             consequents={"Y": torch.tensor(1.0)},
             witnesses={},
@@ -360,93 +409,13 @@ def test_edge_eq_neq():
             consequent_scale=0,
         ):
             with pyro.plate("sample", size=3):
-                with pyro.poutine.trace() as trace_connected:
-                    model_connected()
+                with pyro.poutine.trace() as trace:
+                    model()
 
-    with MultiWorldCounterfactual() as mwc_rev:
-        with SearchForExplanation(
-            supports=supports_connected.supports,
-            antecedents={"Y": torch.tensor(1.0)},
-            consequents={"X": torch.tensor(1.0)},
-            witnesses={},
-            alternatives={"Y": torch.tensor(0.0)},
-            antecedent_bias=-0.5,
-            consequent_scale=0,
-        ):
-            with pyro.plate("sample", size=3):
-                with pyro.poutine.trace() as trace_reverse:
-                    model_connected()
-
-    trace_connected.trace.compute_log_prob()
-    trace_independent.trace.compute_log_prob()
-    trace_reverse.trace.compute_log_prob()
-
-    Y_values_ind = trace_independent.trace.nodes["Y"]["value"]
-
-    log_probs_ind = trace_independent.trace.nodes["__cause____consequent_Y"][
-        "fn"
-    ].log_factor
-
-    with mwc_ind:
-        nec_log_probs_ind = gather(log_probs_ind, IndexSet(**{"X": {1}}))
-        suff_log_probs_ind = gather(log_probs_ind, IndexSet(**{"X": {2}}))
-
-    if torch.any(Y_values_ind == 1.0):
-        assert nec_log_probs_ind.sum().exp() == 0.0
-    else:
-        assert nec_log_probs_ind.sum().exp() == 1.0
-
-    assert torch.all(log_probs_ind.sum().exp() == 0)
-
-    if torch.any(Y_values_ind == 0.0):
-        assert suff_log_probs_ind.sum().exp() == 0.0
-    else:
-        assert suff_log_probs_ind.sum().exp() == 1.0
+    trace.trace.compute_log_prob()
 
     assert torch.all(
-        trace_connected.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum()
-        == 0
-    )
-
-    log_probs_rev = trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor
-    with mwc_rev:
-        nec_log_probs_rev = gather(log_probs_rev, IndexSet(**{"Y": {1}}))
-        suff_log_probs_rev = gather(log_probs_rev, IndexSet(**{"Y": {2}}))
-
-    X_values_rev = trace_reverse.trace.nodes["X"]["value"]
-    if torch.any(X_values_rev == 1.0):
-        assert (
-            nec_log_probs_rev
-            .sum()
-            .exp()
-            == 0.0
-        )
-    else:
-        assert (
-            nec_log_probs_rev
-            .sum()
-            .exp()
-            == 1.0
-        )
-
-    if torch.any(X_values_rev == 0.0):
-        assert (
-            suff_log_probs_rev
-            .sum()
-            .exp()
-            == 0.0
-        )
-    else:
-        assert (
-            suff_log_probs_rev
-            .sum()
-            .exp()
-            == 1.0
-        )
-
-    assert torch.all(
-        log_probs_rev.sum()
-        .exp()
+        trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum()
         == 0
     )
 
