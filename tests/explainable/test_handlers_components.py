@@ -408,7 +408,7 @@ def test_consequent_eq_neq(plate_size, event_shape):
                 model_ce()
 
     nd = trace_ce.trace.nodes
-    trace_ce.trace.compute_log_prob
+    trace_ce.trace.compute_log_prob()
     with mwc_ce:
         eq_neq_log_probs_fact = gather(
             nd["__factor_consequent"]["fn"].log_factor,

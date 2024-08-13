@@ -335,7 +335,7 @@ def test_edge_eq_neq():
     with ExtractSupports() as supports_connected:
         model_connected()
 
-    with MultiWorldCounterfactual():
+    with MultiWorldCounterfactual() as mwc_ind:
         with SearchForExplanation(
             supports=supports_independent.supports,
             antecedents={"X": torch.tensor(1.0)},
@@ -363,7 +363,7 @@ def test_edge_eq_neq():
                 with pyro.poutine.trace() as trace_connected:
                     model_connected()
 
-    with MultiWorldCounterfactual():
+    with MultiWorldCounterfactual() as mwc_rev:
         with SearchForExplanation(
             supports=supports_connected.supports,
             antecedents={"Y": torch.tensor(1.0)},
@@ -377,45 +377,53 @@ def test_edge_eq_neq():
                 with pyro.poutine.trace() as trace_reverse:
                     model_connected()
 
-    trace_connected.trace.compute_log_prob
-    trace_independent.trace.compute_log_prob
-    trace_reverse.trace.compute_log_prob
+    trace_connected.trace.compute_log_prob()
+    trace_independent.trace.compute_log_prob()
+    trace_reverse.trace.compute_log_prob()
 
     Y_values_ind = trace_independent.trace.nodes["Y"]["value"]
 
     log_probs_ind = trace_independent.trace.nodes["__cause____consequent_Y"][
         "fn"
     ].log_factor
+
+    with mwc_ind:
+        nec_log_probs_ind = gather(log_probs_ind, IndexSet(**{"X": {1}}))
+        suff_log_probs_ind = gather(log_probs_ind, IndexSet(**{"X": {2}}))
+
     if torch.any(Y_values_ind == 1.0):
-        assert log_probs_ind[1, 0, 0, 0, :].sum().exp() == 0.0
+        assert nec_log_probs_ind.sum().exp() == 0.0
     else:
-        assert log_probs_ind[1, 0, 0, 0, :].sum().exp() == 1.0
+        assert nec_log_probs_ind.sum().exp() == 1.0
 
     assert torch.all(log_probs_ind.sum().exp() == 0)
 
     if torch.any(Y_values_ind == 0.0):
-        assert log_probs_ind[2, 0, 0, 0, :].sum().exp() == 0.0
+        assert suff_log_probs_ind.sum().exp() == 0.0
     else:
-        assert log_probs_ind[2, 0, 0, 0, :].sum().exp() == 1.0
+        assert suff_log_probs_ind.sum().exp() == 1.0
 
     assert torch.all(
         trace_connected.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum()
         == 0
     )
 
+    log_probs_rev = trace_reverse.trace.nodes["__cause____consequent_X"]["fn"].log_factor
+    with mwc_rev:
+        nec_log_probs_rev = gather(log_probs_rev, IndexSet(**{"Y": {1}}))
+        suff_log_probs_rev = gather(log_probs_rev, IndexSet(**{"Y": {2}}))
+
     X_values_rev = trace_reverse.trace.nodes["X"]["value"]
     if torch.any(X_values_rev == 1.0):
         assert (
-            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
-            .log_factor[1, 0, 0, 0, :]
+            nec_log_probs_rev
             .sum()
             .exp()
             == 0.0
         )
     else:
         assert (
-            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
-            .log_factor[1, 0, 0, 0, :]
+            nec_log_probs_rev
             .sum()
             .exp()
             == 1.0
@@ -423,24 +431,21 @@ def test_edge_eq_neq():
 
     if torch.any(X_values_rev == 0.0):
         assert (
-            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
-            .log_factor[2, 0, 0, 0, :]
+            suff_log_probs_rev
             .sum()
             .exp()
             == 0.0
         )
     else:
         assert (
-            trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
-            .log_factor[2, 0, 0, 0, :]
+            suff_log_probs_rev
             .sum()
             .exp()
             == 1.0
         )
 
     assert torch.all(
-        trace_reverse.trace.nodes["__cause____consequent_X"]["fn"]
-        .log_factor.sum()
+        log_probs_rev.sum()
         .exp()
         == 0
     )
@@ -525,7 +530,7 @@ def test_eq_neq_three_variables(model, ante_cons):
                 with pyro.poutine.trace() as trace:
                     model()
 
-    trace.trace.compute_log_prob
+    trace.trace.compute_log_prob()
     nodes = trace.trace.nodes
 
     values = nodes[cons]["value"]
