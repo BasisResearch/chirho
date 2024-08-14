@@ -70,7 +70,7 @@ def _flat_conjugate_gradient_solve(
     newrdotr = rdotr
     mu = newrdotr / rdotr
     zeros_xr = torch.zeros_like(x)
-    for _ in range(cg_iters):
+    for i in range(cg_iters):
         not_converged = rdotr > residual_tol
         not_converged_broadcasted = not_converged.unsqueeze(0).t()
         z = torch.where(not_converged_broadcasted, f_Ax(p), z)
@@ -83,6 +83,7 @@ def _flat_conjugate_gradient_solve(
         rdotr = torch.where(not_converged, newrdotr, rdotr)
         if torch.all(~not_converged):
             return x
+        print(f"CG Solve Progress: {i + 1}/{cg_iters}", end="\r")
     return x
 
 

@@ -40,3 +40,6 @@ class ZukoGuide(torch.nn.Module):
 
     def forward(self, *args, **kwargs):
         return self.zuko_guide(*args, **kwargs)
+
+    def get_posterior(self):
+        return self.flow()
