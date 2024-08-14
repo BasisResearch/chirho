@@ -20,6 +20,7 @@ def build_svi_iter(
         model_for_guide_init=None,
         block_latents=None,
         enumeration=False,
+        detach_losses=True,
         **kwargs
 ):
     if model_for_guide_init is None:
@@ -47,7 +48,10 @@ def build_svi_iter(
         loss.backward()
         optim.step()
 
-        losses.append(loss.detach().item())
+        if detach_losses:
+            losses.append(loss.detach().item())
+        else:
+            losses.append(loss)
 
     # return svi_iter, guide, losses
     return SVIIterStruct(svi_iter, guide, losses)
