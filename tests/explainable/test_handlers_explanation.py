@@ -3,13 +3,15 @@ import math
 import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
+import pytest
 import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.components import undo_split
 from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
 from chirho.explainable.handlers.preemptions import Preemptions
-from chirho.indexed.ops import IndexSet, gather
+from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.observational.handlers.condition import condition
 
 
@@ -314,3 +316,260 @@ def test_SplitSubsets_two_layers():
         ).item()
 
     assert obs_bill_hits == 0.0 and int_bill_hits == 0.0 and int_bottle_shatters == 0.0
+
+
+def model_independent(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    return {"X": X, "Y": Y}
+
+
+def model_connected(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
+    return {"X": X, "Y": Y}
+
+
+@pytest.mark.parametrize("ante_cons", [("Y", "X")])
+@pytest.mark.parametrize(
+    "model",
+    [model_independent, model_connected],
+)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_edge_eq_neq(model, ante_cons, event_shape):
+    with ExtractSupports() as supports:
+        model(event_shape)
+
+    antecedent = ante_cons[0]
+    consequent = ante_cons[1]
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={antecedent: torch.tensor(1.0).expand(event_shape)},
+            consequents={consequent: torch.tensor(1.0).expand(event_shape)},
+            witnesses={},
+            alternatives={antecedent: torch.tensor(0.0).expand(event_shape)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace:
+                    model(event_shape)
+
+    trace.trace.compute_log_prob()
+
+    cons_values = trace.trace.nodes[consequent]["value"]
+
+    log_probs = trace.trace.nodes[f"__cause____consequent_{consequent}"][
+        "fn"
+    ].log_factor
+
+    with mwc:
+        nec_log_probs = gather(log_probs, IndexSet(**{antecedent: {1}}))
+        suff_log_probs = gather(log_probs, IndexSet(**{antecedent: {2}}))
+
+    if torch.any(cons_values == 1.0):
+        assert nec_log_probs.sum().exp() == 0.0
+    else:
+        assert nec_log_probs.sum().exp() == 1.0
+
+    assert torch.all(log_probs.sum().exp() == 0)
+
+    if torch.any(cons_values == 0.0):
+        assert suff_log_probs.sum().exp() == 0.0
+    else:
+        assert suff_log_probs.sum().exp() == 1.0
+
+    assert torch.all(
+        trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"]
+        .log_factor.sum()
+        .exp()
+        == 0
+    )
+
+
+def test_eq_neq_causal():
+    def model():
+        X = pyro.sample("X", dist.Bernoulli(0.5))
+        Y = pyro.sample("Y", dist.Bernoulli(X))
+        return {"X": X, "Y": Y}
+
+    with ExtractSupports() as supports:
+        model()
+
+    with MultiWorldCounterfactual():
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={"X": torch.tensor(1.0)},
+            consequents={"Y": torch.tensor(1.0)},
+            witnesses={},
+            alternatives={"X": torch.tensor(0.0)},
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=3):
+                with pyro.poutine.trace() as trace:
+                    model()
+
+    trace.trace.compute_log_prob()
+
+    assert torch.all(
+        trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum() == 0
+    )
+
+
+# X -> Z, Y -> Z
+def model_three_converge(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Z = pyro.deterministic("Z", torch.min(X, Y), event_dim=len(event_shape))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y, X -> Z
+def model_three_diverge(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
+    Z = pyro.deterministic("Z", X, event_dim=len(event_shape))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y -> Z
+def model_three_chain(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
+    Z = pyro.deterministic("Z", Y, event_dim=len(event_shape))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y, X -> Z, Y -> Z
+def model_three_complete(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
+    Z = pyro.deterministic("Z", torch.max(X, Y), event_dim=len(event_shape))
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X -> Y    Z
+def model_three_isolate(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
+    Z = pyro.sample(
+        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+# X     Y    Z
+def model_three_independent(event_shape):
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Z = pyro.sample(
+        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    return {"X": X, "Y": Y, "Z": Z}
+
+
+@pytest.mark.parametrize("ante_cons", [("X", "Y", "Z"), ("X", "Z", "Y")])
+@pytest.mark.parametrize(
+    "model",
+    [
+        model_three_converge,
+        model_three_diverge,
+        model_three_chain,
+        model_three_complete,
+        model_three_isolate,
+        model_three_independent,
+    ],
+)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_eq_neq_three_variables(model, ante_cons, event_shape):
+    ante1, ante2, cons = ante_cons
+    with ExtractSupports() as supports:
+        model(event_shape)
+        for var, sup in supports.supports.items():
+            if isinstance(sup, constraints.independent):
+                sup.base_constraint = constraints.boolean
+            else:
+                sup.base_constraint = constraints.boolean
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForExplanation(
+            supports=supports.supports,
+            antecedents={
+                ante1: torch.tensor(1.0).expand(event_shape),
+                ante2: torch.tensor(1.0).expand(event_shape),
+            },
+            consequents={cons: torch.tensor(1.0).expand(event_shape)},
+            witnesses={},
+            alternatives={
+                ante1: torch.tensor(0.0).expand(event_shape),
+                ante2: torch.tensor(0.0).expand(event_shape),
+            },
+            antecedent_bias=-0.5,
+            consequent_scale=0,
+        ):
+            with pyro.plate("sample", size=1):
+                with pyro.poutine.trace() as trace:
+                    model(event_shape)
+
+    trace.trace.compute_log_prob()
+    nodes = trace.trace.nodes
+
+    values = nodes[cons]["value"]
+    log_probs = nodes[f"__cause____consequent_{cons}"]["fn"].log_factor
+
+    fact_worlds = IndexSet(**{name: {0} for name in [ante1, ante2]})
+    nec_worlds = IndexSet(**{name: {1} for name in [ante1, ante2]})
+    suff_worlds = IndexSet(**{name: {2} for name in [ante1, ante2]})
+    with mwc:
+        assert indices_of(log_probs) == {ante1: {0, 1, 2}, ante2: {0, 1, 2}}
+
+        fact_lp = gather(log_probs, fact_worlds)
+        fact_value = gather(values, fact_worlds, event_dim=len(event_shape))
+        assert fact_lp.exp().item() == 1
+
+        nec_value = gather(values, nec_worlds, event_dim=len(event_shape))
+        nec_lp = gather(log_probs, nec_worlds)
+
+        if torch.equal(nec_value, fact_value) & (
+            not torch.allclose(nec_value, torch.tensor(0.0))
+        ):
+            assert nec_lp.exp().item() == 0.0
+        elif torch.allclose(nec_value, torch.tensor(0.0)):
+            assert nec_lp.exp().item() == 1.0
+
+        suff_value = gather(values, suff_worlds, event_dim=len(event_shape))
+        suff_lp = gather(log_probs, suff_worlds)
+
+        if torch.equal(suff_value, fact_value) & (
+            not torch.allclose(suff_value, torch.tensor(1.0))
+        ):
+            assert suff_lp.exp().item() == 0.0
+        elif torch.allclose(suff_value, torch.tensor(1.0)):
+            assert suff_lp.exp().item() == 1.0
+
+    assert torch.allclose(log_probs.squeeze().fill_diagonal_(0.0), torch.tensor(0.0))
