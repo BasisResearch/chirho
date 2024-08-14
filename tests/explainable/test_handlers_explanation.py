@@ -319,13 +319,19 @@ def test_SplitSubsets_two_layers():
 
 
 def model_independent(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
-    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     return {"X": X, "Y": Y}
 
 
 def model_connected(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     return {"X": X, "Y": Y}
 
@@ -333,10 +339,7 @@ def model_connected(event_shape):
 @pytest.mark.parametrize("ante_cons", [("Y", "X")])
 @pytest.mark.parametrize(
     "model",
-    [
-        model_independent,
-        model_connected
-    ],
+    [model_independent, model_connected],
 )
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
 def test_edge_eq_neq(model, ante_cons, event_shape):
@@ -385,7 +388,9 @@ def test_edge_eq_neq(model, ante_cons, event_shape):
         assert suff_log_probs.sum().exp() == 1.0
 
     assert torch.all(
-        trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"].log_factor.sum().exp()
+        trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"]
+        .log_factor.sum()
+        .exp()
         == 0
     )
 
@@ -416,22 +421,27 @@ def test_eq_neq_causal():
     trace.trace.compute_log_prob()
 
     assert torch.all(
-        trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum()
-        == 0
+        trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum() == 0
     )
 
 
 # X -> Z, Y -> Z
 def model_three_converge(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
-    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Z = pyro.deterministic("Z", torch.min(X, Y), event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
 
 
 # X -> Y, X -> Z
 def model_three_diverge(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", X, event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -439,7 +449,9 @@ def model_three_diverge(event_shape):
 
 # X -> Y -> Z
 def model_three_chain(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", Y, event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -447,7 +459,9 @@ def model_three_chain(event_shape):
 
 # X -> Y, X -> Z, Y -> Z
 def model_three_complete(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", torch.max(X, Y), event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -455,17 +469,27 @@ def model_three_complete(event_shape):
 
 # X -> Y    Z
 def model_three_isolate(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
-    Z = pyro.sample("Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    Z = pyro.sample(
+        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     return {"X": X, "Y": Y, "Z": Z}
 
 
 # X     Y    Z
 def model_three_independent(event_shape):
-    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
-    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
-    Z = pyro.sample("Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    X = pyro.sample(
+        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Y = pyro.sample(
+        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
+    Z = pyro.sample(
+        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
+    )
     return {"X": X, "Y": Y, "Z": Z}
 
 
@@ -495,10 +519,16 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
     with MultiWorldCounterfactual() as mwc:
         with SearchForExplanation(
             supports=supports.supports,
-            antecedents={ante1: torch.tensor(1.0).expand(event_shape), ante2: torch.tensor(1.0).expand(event_shape)},
+            antecedents={
+                ante1: torch.tensor(1.0).expand(event_shape),
+                ante2: torch.tensor(1.0).expand(event_shape),
+            },
             consequents={cons: torch.tensor(1.0).expand(event_shape)},
             witnesses={},
-            alternatives={ante1: torch.tensor(0.0).expand(event_shape), ante2: torch.tensor(0.0).expand(event_shape)},
+            alternatives={
+                ante1: torch.tensor(0.0).expand(event_shape),
+                ante2: torch.tensor(0.0).expand(event_shape),
+            },
             antecedent_bias=-0.5,
             consequent_scale=0,
         ):
@@ -525,7 +555,9 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
         nec_value = gather(values, nec_worlds, event_dim=len(event_shape))
         nec_lp = gather(log_probs, nec_worlds)
 
-        if torch.equal(nec_value, fact_value) & (not torch.allclose(nec_value, torch.tensor(0.0))):
+        if torch.equal(nec_value, fact_value) & (
+            not torch.allclose(nec_value, torch.tensor(0.0))
+        ):
             assert nec_lp.exp().item() == 0.0
         elif torch.allclose(nec_value, torch.tensor(0.0)):
             assert nec_lp.exp().item() == 1.0
@@ -533,7 +565,9 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
         suff_value = gather(values, suff_worlds, event_dim=len(event_shape))
         suff_lp = gather(log_probs, suff_worlds)
 
-        if torch.equal(suff_value, fact_value) & (not torch.allclose(suff_value, torch.tensor(1.0))):
+        if torch.equal(suff_value, fact_value) & (
+            not torch.allclose(suff_value, torch.tensor(1.0))
+        ):
             assert suff_lp.exp().item() == 0.0
         elif torch.allclose(suff_value, torch.tensor(1.0)):
             assert suff_lp.exp().item() == 1.0

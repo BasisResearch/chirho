@@ -385,8 +385,12 @@ def test_consequent_eq_neq(plate_size, event_shape):
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-4)
     def model_ce():
-        w = pyro.sample("w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)))
-        consequent = pyro.deterministic("consequent", w * torch.tensor(0.1), event_dim=len(event_shape))
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        consequent = pyro.deterministic(
+            "consequent", w * torch.tensor(0.1), event_dim=len(event_shape)
+        )
         assert w.shape == consequent.shape
 
     antecedents = {
@@ -407,17 +411,17 @@ def test_consequent_eq_neq(plate_size, event_shape):
     nd = trace_ce.trace.nodes
     with mwc_ce:
         eq_neq_log_probs_fact = gather(
-            nd["__factor_consequent"]["fn"].log_factor,
-            IndexSet(**{"w": {0}})
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {0}})
         )
 
         eq_neq_log_probs_nec = gather(
-            nd["__factor_consequent"]["fn"].log_factor,
-            IndexSet(**{"w": {1}})
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {1}})
         )
 
         consequent_suff = gather(
-            nd["consequent"]["value"], IndexSet(**{"w": {2}}), event_dim=len(event_shape)
+            nd["consequent"]["value"],
+            IndexSet(**{"w": {2}}),
+            event_dim=len(event_shape),
         )
         eq_neq_log_probs_suff = gather(
             nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {2}})
