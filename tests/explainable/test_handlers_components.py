@@ -376,8 +376,8 @@ def test_consequent_eq(plate_size, event_shape):
 def test_consequent_eq_neq(plate_size, event_shape):
     factors = {
         "consequent": consequent_eq_neq(
-            support=constraints.independent(constraints.real, 0),
-            proposed_consequent=torch.Tensor([0.01]),
+            support=constraints.independent(constraints.real, len(event_shape)),
+            proposed_consequent=torch.tensor(0.01).expand(event_shape),
             antecedents=["w"],
         )
     }
@@ -389,8 +389,12 @@ def test_consequent_eq_neq(plate_size, event_shape):
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-4)
     def model_ce():
-        w = pyro.sample("w", dist.Normal(w_initial, 0.001))
-        consequent = pyro.deterministic("consequent", w * torch.tensor(0.1))
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        consequent = pyro.deterministic(
+            "consequent", w * torch.tensor(0.1), event_dim=len(event_shape)
+        )
         assert w.shape == consequent.shape
 
     antecedents = {
@@ -407,19 +411,21 @@ def test_consequent_eq_neq(plate_size, event_shape):
             with pyro.poutine.trace() as trace_ce:
                 model_ce()
 
+    trace_ce.trace.compute_log_prob()
     nd = trace_ce.trace.nodes
-    trace_ce.trace.compute_log_prob
     with mwc_ce:
         eq_neq_log_probs_fact = gather(
-            nd["__factor_consequent"]["fn"].log_factor,
-            IndexSet(**{"w": {0}}, event_dim=0),
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {0}})
         )
+
         eq_neq_log_probs_nec = gather(
-            nd["__factor_consequent"]["fn"].log_factor,
-            IndexSet(**{"w": {1}}, event_dim=0),
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {1}})
         )
+
         consequent_suff = gather(
-            nd["consequent"]["value"], IndexSet(**{"w": {2}}, event_dim=0)
+            nd["consequent"]["value"],
+            IndexSet(**{"w": {2}}),
+            event_dim=len(event_shape),
         )
         eq_neq_log_probs_suff = gather(
             nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {2}})
@@ -428,12 +434,16 @@ def test_consequent_eq_neq(plate_size, event_shape):
         assert torch.equal(
             eq_neq_log_probs_fact, torch.zeros(eq_neq_log_probs_fact.shape)
         )
-        assert eq_neq_log_probs_nec.shape == consequent_suff.shape
-        assert torch.equal(
-            eq_neq_log_probs_suff,
-            dist.Normal(0.0, 0.1).log_prob(consequent_suff - torch.tensor(0.01)),
+
+        result = dist.Normal(0.0, 0.1).log_prob(consequent_suff - torch.tensor(0.01))
+        for _ in range(len(event_shape)):
+            result = torch.sum(result, dim=-1)
+
+        assert torch.allclose(
+            eq_neq_log_probs_suff.squeeze(),
+            result.squeeze(),
         )
-        assert eq_neq_log_probs_nec.sum().exp() == 0
+        assert eq_neq_log_probs_nec.sum().exp().item() == 0
 
 
 options = [

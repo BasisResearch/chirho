@@ -51,7 +51,7 @@ setup(
             "pytest",
             "pytest-cov",
             "pytest-xdist",
-            "mypy",
+            "mypy==1.10",
             "black",
             "flake8",
             "isort",
