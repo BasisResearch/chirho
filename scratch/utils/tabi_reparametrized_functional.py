@@ -49,15 +49,18 @@ class TABIReparametrizedFunctionalOfPrior(torch.nn.Module):
 
     def build_svi_iters(self, *args, **kwargs):
         self.pos_comp_svi_iter = build_svi_iter(self.pos_comp, *args, **kwargs)
+        self.add_module("pos_comp_guide", self.pos_comp_svi_iter.guide)
         self.neg_comp_svi_iter = build_svi_iter(self.neg_comp, *args, **kwargs)
+        self.add_module("neg_comp_guide", self.neg_comp_svi_iter.guide)
         self.den_comp_svi_iter = build_svi_iter(self.den_comp, *args, **kwargs)
+        self.add_module("den_comp_guide", self.den_comp_svi_iter.guide)
 
     @contextmanager
     def _set_module_requires_grad(self, svi: bool):
 
         with ExitStack() as stack:
-            # # SVI should not change prior parameters.
-            # stack.enter_context(module_requires_grad_(self.prior, not svi))
+            # SVI should not change prior parameters.
+            stack.enter_context(module_requires_grad_(self.prior, not svi))
 
             # SVI should change guide parameters.
             guides = [

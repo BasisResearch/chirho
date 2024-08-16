@@ -6,14 +6,16 @@ import torch
 import pyro
 
 
-class FunctionalFactorAdded(torch.nn.Module):
+# class FunctionalFactorAdded(torch.nn.Module):
+class FunctionalFactorAdded:
     def __init__(self, prior, full_model_functional_of_prior, data, functional, pos_factor: bool):
-        super().__init__()
         self.full_model_functional_of_prior = full_model_functional_of_prior
-        self.prior = prior
         self.data = data
         self.pos_factor = pos_factor
 
+        super().__init__()
+
+        self.prior = prior
         self.unconditioned_model = self.full_model_functional_of_prior(self.prior)
 
         # FIXME HACK for a specific situation.
@@ -22,13 +24,17 @@ class FunctionalFactorAdded(torch.nn.Module):
         self.conditioned_model = condition(plated_unconditioned_model, data=self.data)
         self.functional_estimator = functional(self.unconditioned_model)
 
-    def forward(self):
+    # def forward(self):
+    def __call__(self):
         # This is a bit weird, because we need to
         # 1. run the conditioned model to add the prior and likelihood log probability contributions.
         # 2. run the functional wrt the model, but not conditioned on data, and instead just propagating the latents forward into the functional.
         # So ideally, we could block the functional from outside traces, except that the same guide trace replay from the conditioned model also needs to
         #  be replayed when the functional is computed.
         # 3. add a log factor for the functional.
+
+        # FIXME this approach also runs the model "twice" both for the conditional log probs
+        #  and the functional evaluation.
 
         # Apply a trace here to recover any latent sites that the guide is replaying to. Note that this runs on post sample, while the guide runs on sample.
         with pyro.poutine.trace() as tr:
