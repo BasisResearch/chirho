@@ -382,10 +382,6 @@ def test_consequent_eq_neq(plate_size, event_shape):
         )
     }
 
-    w_initial = (
-        dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)).sample()
-    )
-
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-4)
     def model_ce():
