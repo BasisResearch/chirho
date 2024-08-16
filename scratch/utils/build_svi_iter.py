@@ -31,7 +31,9 @@ def build_svi_iter(
     else:
         elbo = pyro.infer.Trace_ELBO()(model, guide)
     elbo()  # initialize parameters.
-    optim = torch.optim.Adam(elbo.parameters(), lr=lr)
+    # Don't use elbo parameters generally, as we don't want to include
+    #  parameters that are outside of the guide.
+    optim = torch.optim.Adam(guide.parameters(), lr=lr)
     losses = []
 
     maybe_mle = nullcontext() if block_latents is None else pyro.poutine.block(hide=block_latents)

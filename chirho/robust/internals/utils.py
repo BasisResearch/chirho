@@ -196,7 +196,8 @@ def pytree_generalized_manual_revjvp(
 
 
 def make_functional_call(
-    mod: Callable[P, T]
+    mod: Callable[P, T],
+    ignore_params_not_requiring_grad: bool = True,
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
     """
     Converts a PyTorch module into a functional call for use with
@@ -204,11 +205,16 @@ def make_functional_call(
 
     :param mod: PyTorch module
     :type mod: Callable[P, T]
+    :param ignore_params_not_requiring_grad: whether treat params that don't require_grad as normal tensors.
+    :type ignore_params_not_requiring_grad: bool
     :return: parameter dictionary and functional call
     :rtype: Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]
     """
     assert isinstance(mod, torch.nn.Module)
     param_dict: ParamDict = dict(mod.named_parameters())
+
+    if ignore_params_not_requiring_grad:
+        param_dict = {k: v for k, v in param_dict.items() if v.requires_grad}
 
     @torch.func.functionalize
     def mod_func(params: ParamDict, *args: P.args, **kwargs: P.kwargs) -> T:
