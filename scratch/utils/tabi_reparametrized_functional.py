@@ -48,16 +48,16 @@ class TABIReparametrizedFunctionalOfPrior(torch.nn.Module):
         self._is_in_eif_mode = False
 
     def build_svi_iters(self, *args, **kwargs):
-        self.pos_comp_svi_iter = build_svi_iter(self.pos_comp, *args, detach_losses=False, **kwargs)
-        self.neg_comp_svi_iter = build_svi_iter(self.neg_comp, *args, detach_losses=False, **kwargs)
-        self.den_comp_svi_iter = build_svi_iter(self.den_comp, *args, detach_losses=False, **kwargs)
+        self.pos_comp_svi_iter = build_svi_iter(self.pos_comp, *args, **kwargs)
+        self.neg_comp_svi_iter = build_svi_iter(self.neg_comp, *args, **kwargs)
+        self.den_comp_svi_iter = build_svi_iter(self.den_comp, *args, **kwargs)
 
     @contextmanager
     def _set_module_requires_grad(self, svi: bool):
 
         with ExitStack() as stack:
-            # SVI should not change prior parameters.
-            stack.enter_context(module_requires_grad_(self.prior, not svi))
+            # # SVI should not change prior parameters.
+            # stack.enter_context(module_requires_grad_(self.prior, not svi))
 
             # SVI should change guide parameters.
             guides = [
@@ -85,6 +85,12 @@ class TABIReparametrizedFunctionalOfPrior(torch.nn.Module):
                 self.neg_comp_svi_iter.svi_iter()
                 self.den_comp_svi_iter.svi_iter()
 
+    def _compute_forward_losses_only(self):
+        for i in range(self.num_monte_carlo):
+            self.pos_comp_svi_iter.svi_iter(step_optimizer=False, detach_losses_override=False)
+            self.neg_comp_svi_iter.svi_iter(step_optimizer=False, detach_losses_override=False)
+            self.den_comp_svi_iter.svi_iter(step_optimizer=False, detach_losses_override=False)
+
     PARAMETER_EIF_MODE_ERR = ("Parameters should only be retrieved in EIF mode. Use the `in_eif_mode` context manager "
                               "to enter and automatically exit EIF mode.")
 
@@ -104,8 +110,7 @@ class TABIReparametrizedFunctionalOfPrior(torch.nn.Module):
             raise ValueError("This forward method should only be run in EIF mode. Use the `in_eif_mode`"
                              " context manager to enter and automatically exit EIF mode.")
 
-        if len(self.pos_comp_svi_iter.losses) < self.num_monte_carlo:
-            raise ValueError(f"Must run `adapt_proposals` first for at least {self.num_monte_carlo} iterations.")
+        self._compute_forward_losses_only()
 
         # No computation is actually happening here, just indexing.
         pos_comp_elbos = -torch.stack(self.pos_comp_svi_iter.losses[-self.num_monte_carlo:])

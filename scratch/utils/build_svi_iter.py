@@ -31,9 +31,7 @@ def build_svi_iter(
     else:
         elbo = pyro.infer.Trace_ELBO()(model, guide)
     elbo()  # initialize parameters.
-    # Don't use elbo parameters generally, as we don't want to include
-    #  parameters that are outside of the guide.
-    optim = torch.optim.Adam(guide.parameters(), lr=lr)
+    optim = torch.optim.Adam(elbo.parameters(), lr=lr)
     losses = []
 
     maybe_mle = nullcontext() if block_latents is None else pyro.poutine.block(hide=block_latents)
@@ -43,17 +41,22 @@ def build_svi_iter(
         print(f"In MLE mode. Ignoring log prob contributions from sites:\n {'\n'.join(block_latents)}].")
         assert isinstance(guide, AutoDelta), "MLE only supported for AutoDelta guides."
 
-    def svi_iter():
+    def svi_iter(step_optimizer=True, detach_losses_override=None, retain_graph=False):
         optim.zero_grad()
         with maybe_mle:
             loss = elbo()
-        loss.backward()
-        optim.step()
+        if step_optimizer:
+            loss.backward(retain_graph=retain_graph)
+            optim.step()
 
-        if detach_losses:
+        detach_losses_inner = detach_losses if detach_losses_override is None else detach_losses_override
+
+        if detach_losses_inner:
             losses.append(loss.detach().item())
         else:
             losses.append(loss)
+
+        return losses[-1]
 
     # return svi_iter, guide, losses
     return SVIIterStruct(svi_iter, guide, losses)
