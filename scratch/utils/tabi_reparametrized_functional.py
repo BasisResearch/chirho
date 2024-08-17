@@ -83,10 +83,12 @@ class TABIReparametrizedFunctionalOfPrior(torch.nn.Module):
     def adapt_proposals(self, iters):
         # This handler blocks svi from changing the parameters registered with the prior.
         with self._set_module_requires_grad(svi=True):
-            for _ in range(iters):
+            for i in range(iters):
                 self.pos_comp_svi_iter.svi_iter()
                 self.neg_comp_svi_iter.svi_iter()
                 self.den_comp_svi_iter.svi_iter()
+
+                print(f"Progress: {i}/{iters}", end="\r")
 
     def _compute_forward_losses_only(self):
         for i in range(self.num_monte_carlo):

@@ -56,4 +56,4 @@ class FunctionalFactorAdded:
                     raise  # just for breakpoint.
 
         sign = torch.tensor(1.) if self.pos_factor else torch.tensor(-1.)
-        pyro.factor("functional_factor", torch.log(torch.relu(sign * functional_estimate) + 1e-20))
+        pyro.factor("functional_factor", torch.log(torch.relu(sign * functional_estimate) + 1e-30))
