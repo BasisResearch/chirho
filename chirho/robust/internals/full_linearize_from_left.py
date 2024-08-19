@@ -87,7 +87,8 @@ def full_linearize_from_left(
         points_omit_latent_sites: bool = True,
         remap_parameter_paths: bool = False,
         log_prob_computer: Optional[Callable] = None,
-        predictive_sites: Optional[Tuple] = None
+        predictive_sites: Optional[Tuple] = None,
+        ignore_params_not_requiring_grad: bool = True,
 ):
     """
     Returns the vector/inverse-fisher product of the jacobian of the functional
@@ -127,13 +128,15 @@ def full_linearize_from_left(
     # Required to make_functional_call (which extracts the parameters from the module
     #  and creates a pure function of those parameters).
     assert isinstance(target, torch.nn.Module)
-    func_target_params, func_target = make_functional_call(target)
+    func_target_params, func_target = make_functional_call(
+        target,
+        ignore_params_not_requiring_grad=ignore_params_not_requiring_grad
+    )
 
     func_jac_fn = torch.func.jacrev(
         # TODO args, kwargs here?
         func_target,
     )
-    func_jac: TPyTree = func_jac_fn(func_target_params)
     # </Jacobian wrt Functional>
 
     # <Fisher Information Matrix Setup>
@@ -171,10 +174,6 @@ def full_linearize_from_left(
     #  questions about the influence of some marginal of the prior?
     if log_prob_computer is None:
         if points_omit_latent_sites:
-            raise NotImplementedError(
-                "This version of the linearization is not fully tested for computing the influence"
-                " of distributions on that require marginalization"
-            )
             # Assume that the model is a chirho.observational.PredictiveModel (i.e. don't
             #  pass the guide explicitly to BatchedNMCLogMarginalLikelihood), but use
             #  BatchedNMCLogMarginalLikelihood to compute the log probability of the points
@@ -182,7 +181,10 @@ def full_linearize_from_left(
             batched_log_prob = BatchedNMCLogMarginalLikelihood(
                 model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
             )
-            log_prob_params, func_log_prob = make_functional_call(batched_log_prob)
+            log_prob_params, func_log_prob = make_functional_call(
+                batched_log_prob,
+                ignore_params_not_requiring_grad=ignore_params_not_requiring_grad
+            )
         else:
             if num_samples_inner != 1:
                 warnings.warn(
@@ -192,9 +194,15 @@ def full_linearize_from_left(
                     "num_samples_inner.")
 
             exact_log_prob = ExactLogProb(model, max_plate_nesting=max_plate_nesting)
-            log_prob_params, func_log_prob = make_functional_call(exact_log_prob)  # type: TPyTree, Callable
+            log_prob_params, func_log_prob = make_functional_call(
+                exact_log_prob,
+                ignore_params_not_requiring_grad=ignore_params_not_requiring_grad
+            )  # type: TPyTree, Callable
     else:
-        log_prob_params, func_log_prob = make_functional_call(log_prob_computer(model))
+        log_prob_params, func_log_prob = make_functional_call(
+            log_prob_computer(model),
+            ignore_params_not_requiring_grad=ignore_params_not_requiring_grad
+        )
 
     # The target params and log prob params should be the same.
     # TODO generalize for arbitrary pytree structure? (and not just flat maps).
@@ -250,6 +258,14 @@ def full_linearize_from_left(
         lambda x: pinned_func_fvp(x), randomness="different"
     )
 
+    # Now compute the functional jacobian — we haven't needed it up till now.
+    # Also, pytorch's functionalization is finicky, and can sometimes fail to properly unwrap
+    #  parameters from their FunctionalTensor forms after forward compute. It wraps in place,
+    #  upon execution, which can break make_functional_call, making it think that the module
+    #  has no parameters, but only FunctionalTensors. So we execute this here only after
+    #  the make_functional_call executions above, which pre-extract the parameters.
+    func_jac: TPyTree = func_jac_fn(func_target_params)
+
     # The .linearize.linearize implementation has to batch the cg_solver, but here
     #  we only have a single func_jac. To make compatible, add a batch dimension to the func_jac.
     # TODO generalize for arbitrary pytree structure and not just flat maps.
@@ -294,19 +310,6 @@ def full_linearize_from_left(
                 f"Predictive sample sites: {samples_for_empirical_fisher.keys()}\n"
                 f"User provided points: {points.keys()}"
             )
-
-        # TODO under this implementation, a batched precomputed jac fn makes a lot more sense here.
-        #  Otherwise, we're asking pytorch to try to compute this massive compute graph of the log prob
-        #  of ALL of the points wrt the parameters. This is super redundant.
-        # Now, we're left with a far simpler vector-vector product between the above solution and
-        #  the jacobian of the log probability of the user-provided points under the model.
-        # estimate_of_eif_at_points = pytree_generalized_manual_revjvp(
-        #     # TODO args, kwargs here?
-        #     fn=lambda p: func_log_prob(p, points),
-        #     params=log_prob_params,
-        #     # TODO add unary batch dimension here?
-        #     batched_vector=func_jac_inv_fisher_product,
-        # )  # .shape == (1, batch_size)
 
         return torch.func.jvp(
             func=lambda p: func_log_prob(p, points),
