@@ -125,7 +125,7 @@ def undo_split(
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-        index_keys: list[dict[str, set[int]]] = list()
+        index_keys: Iterable[MutableMapping[str, Iterable[int]]] = list()
         for a, v in antecedents_.items():
             if index_keys == []:
                 index_keys = [dict({a: {value}}.items()) for value in v]
