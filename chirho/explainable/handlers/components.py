@@ -126,22 +126,25 @@ def undo_split(
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
 
-        index_keys = []
+        index_keys: list[dict[str, set[int]]] = list()
         for a, v in antecedents_.items():
             if index_keys == []:
-                for value in v:
-                    index_keys.append({a: {value}})
+                index_keys = [dict({a: {value}}.items()) for value in v]
             else:
                 temp_index_keys = []
                 for i in index_keys:
-                    for value in v:
-                        t = dict(i)
-                        t[a] = {value}
-                        temp_index_keys.append(t)
+                    # for value in v:
+                    #     t = dict(i)
+                    #     t[a] = {value}
+                    #     temp_index_keys.append(set(t))
+                    temp_index_keys.extend([dict(tuple(dict(i).items()) + tuple({a: {value}}.items())) for value in v])
                 index_keys = temp_index_keys
         index_keys = index_keys if index_keys != [] else [{}]
 
-        return scatter_n({IndexSet(**ind_key): factual_value for ind_key in index_keys}, event_dim=support.event_dim)
+        return scatter_n(
+            {IndexSet(**ind_key): factual_value for ind_key in index_keys},
+            event_dim=support.event_dim,
+        )
 
     return _undo_split
 
