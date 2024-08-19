@@ -125,7 +125,6 @@ def undo_split(
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-
         index_keys: list[dict[str, set[int]]] = list()
         for a, v in antecedents_.items():
             if index_keys == []:
@@ -133,11 +132,12 @@ def undo_split(
             else:
                 temp_index_keys = []
                 for i in index_keys:
-                    # for value in v:
-                    #     t = dict(i)
-                    #     t[a] = {value}
-                    #     temp_index_keys.append(set(t))
-                    temp_index_keys.extend([dict(tuple(dict(i).items()) + tuple({a: {value}}.items())) for value in v])
+                    temp_index_keys.extend(
+                        [
+                            dict(tuple(dict(i).items()) + tuple({a: {value}}.items()))
+                            for value in v
+                        ]
+                    )
                 index_keys = temp_index_keys
         index_keys = index_keys if index_keys != [] else [{}]
 
