@@ -89,7 +89,7 @@ def test_undo_split():
         x_cf_1 = torch.ones(10)
         x_cf_2 = 2 * x_cf_1
         x_split = split(x_obs, (x_cf_1,), name="split1", event_dim=1)
-        x_split = split(x_split, (x_cf_2,), name="split2", event_dim=1)
+        x_split = split(x_split, (x_cf_2), name="split2", event_dim=1)
 
         undo_split2 = undo_split(
             support=constraints.independent(constraints.real, 1), antecedents=["split2"]

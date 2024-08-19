@@ -1,4 +1,3 @@
-import itertools
 from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 
 import pyro
@@ -113,28 +112,36 @@ def undo_split(
     """
 
     def _undo_split(value: T) -> T:
-        antecedents_ = [
-            a
-            for a in antecedents
-            if a in indices_of(value, event_dim=support.event_dim)
-        ]
+        antecedents_ = {
+            a: v
+            for a, v in indices_of(value, event_dim=support.event_dim).items()
+            if a in antecedents
+        }
 
         factual_value = gather(
             value,
-            IndexSet(**{antecedent: {0} for antecedent in antecedents_}),
+            IndexSet(**{antecedent: {0} for antecedent in antecedents_.keys()}),
             event_dim=support.event_dim,
         )
 
         # TODO exponential in len(antecedents) - add an indexed.ops.expand to do this cheaply
-        return scatter_n(
-            {
-                IndexSet(
-                    **{antecedent: {ind} for antecedent, ind in zip(antecedents_, inds)}
-                ): factual_value
-                for inds in itertools.product(*[[0, 1]] * len(antecedents_))
-            },
-            event_dim=support.event_dim,
-        )
+
+        index_keys = []
+        for a, v in antecedents_.items():
+            if index_keys == []:
+                for value in v:
+                    index_keys.append({a: {value}})
+            else:
+                temp_index_keys = []
+                for i in index_keys:
+                    for value in v:
+                        t = dict(i)
+                        t[a] = {value}
+                        temp_index_keys.append(t)
+                index_keys = temp_index_keys
+        index_keys = index_keys if index_keys != [] else [{}]
+
+        return scatter_n({IndexSet(**ind_key): factual_value for ind_key in index_keys}, event_dim=support.event_dim)
 
     return _undo_split
 
