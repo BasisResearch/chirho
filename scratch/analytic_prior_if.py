@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import norm, multivariate_normal
+import torch
 
 
 # Define the marginal likelihood function
@@ -13,7 +14,9 @@ def marginal_likelihood(x, mu_z, Sigma_z):
 # Define the posterior expectation function for z1
 def posterior_expectation(x, mu_z, Sigma_z):
     H = np.array([1, 1])  # since x = z1 + z2
-    posterior_mean = mu_z + Sigma_z @ H / (H @ Sigma_z @ H.T + 1) * (x - H @ mu_z)
+    if isinstance(x, torch.Tensor):
+        H = torch.tensor(H, dtype=x.dtype)
+    posterior_mean = mu_z + Sigma_z @ H / (H @ Sigma_z @ H.T + 1) * (x.mean() - H @ mu_z)
     return posterior_mean[0]  # Expectation of z1
 
 
@@ -37,80 +40,100 @@ def perturbed_expectation_vectorized(epsilon, x, mu_z, Sigma_z, z_prime_array):
     return F_eps_phi_array
 
 
-# Set true values of z_1 and z_2
-true_z1 = 1.0
-true_z2 = -3.0
+TRUE_Z1 = 1.0
+TRUE_Z2 = -3.0
+NUM_SAMPLES = 100
 
-# Generate noisy x data based on the true values
-np.random.seed(42)
-num_samples = 100
-x_data = true_z1 + true_z2 + np.random.normal(0, 1, num_samples)  # x = z_1 + z_2 + noise
 
-# Given prior information (mean and covariance matrix)
-mu_z_prior = np.array([0.0, 0.0])  # Prior mean for z_1 and z_2
-Sigma_z_prior = np.array([[1.0, 0.0], [0.0, 1.0]])  # Prior covariance (uncorrelated, unit variance)
+def simulate_data(num_samples):
+    x_data = TRUE_Z1 + TRUE_Z2 + np.random.normal(0, 1, num_samples)  # x = z_1 + z_2 + noise
+    return x_data
 
-# Calculate the posterior mean and covariance given the data x_data
-H = np.array([1, 1])  # because x = z_1 + z_2
 
-# Compute posterior covariance
-posterior_cov = np.linalg.inv(np.linalg.inv(Sigma_z_prior) + num_samples * np.outer(H, H))
+MU_Z_PRIOR = np.array([0.0, 0.0])
+# This has to have some covariance, else the FIM is singular?
+SIGMA_Z_PRIOR = np.array([[1.0, 0.1], [0.1, 1.0]])
 
-# Compute posterior mean
-posterior_mean = posterior_cov @ (np.linalg.inv(Sigma_z_prior) @ mu_z_prior + H * np.sum(x_data))
 
-# Draw samples from the posterior distribution
-posterior_samples = np.random.multivariate_normal(posterior_mean, posterior_cov, size=1000)
+def main():
+    # Set true values of z_1 and z_2
+    true_z1 = TRUE_Z1
+    true_z2 = TRUE_Z2
 
-# Re-plotting the posterior samples with adjusted limits and square aspect ratio
-plt.figure(figsize=(8, 8))
-plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.5, color='blue', label='Posterior Samples')
-plt.xlim(-6, 6)
-plt.ylim(-6, 6)
-plt.xlabel('$z_1$')
-plt.ylabel('$z_2$')
-plt.title('Scatter Plot of Samples from the Posterior Distribution')
-plt.legend()
-plt.grid(True)
-plt.gca().set_aspect('equal', adjustable='box')
-plt.show()
+    # Generate noisy x data based on the true values
+    np.random.seed(42)
+    num_samples = NUM_SAMPLES
+    x_data = true_z1 + true_z2 + np.random.normal(0, 1, num_samples)  # x = z_1 + z_2 + noise
 
-# Compute \mathcal{F}_0 using the simulated x_data
-F0_phi = posterior_expectation(np.mean(x_data), mu_z_prior, Sigma_z_prior)
+    # Given prior information (mean and covariance matrix)
+    mu_z_prior = MU_Z_PRIOR
+    Sigma_z_prior = SIGMA_Z_PRIOR
 
-# Create a meshgrid for z_1' and z_2'
-z1_vals = np.linspace(-6, 6, 100)
-z2_vals = np.linspace(-6, 6, 100)
-z1_mesh, z2_mesh = np.meshgrid(z1_vals, z2_vals)
-z_prime_mesh = np.vstack([z1_mesh.ravel(), z2_mesh.ravel()]).T
+    # Calculate the posterior mean and covariance given the data x_data
+    H = np.array([1, 1])  # because x = z_1 + z_2
 
-# Compute \mathcal{F}_{0.001} over the meshgrid
-epsilon = 0.001
-F_eps_phi_mesh = perturbed_expectation_vectorized(epsilon, np.mean(x_data), mu_z_prior, Sigma_z_prior, z_prime_mesh)
+    # Compute posterior covariance
+    posterior_cov = np.linalg.inv(np.linalg.inv(Sigma_z_prior) + num_samples * np.outer(H, H))
 
-# Reshape the result to the shape of the meshgrid
-F_eps_phi_mesh = F_eps_phi_mesh.reshape(z1_mesh.shape)
+    # Compute posterior mean
+    posterior_mean = posterior_cov @ (np.linalg.inv(Sigma_z_prior) @ mu_z_prior + H * np.sum(x_data))
 
-# Compute finite difference: \mathcal{F}_{0.001} - \mathcal{F}_0
-finite_difference = F_eps_phi_mesh - F0_phi
+    # Draw samples from the posterior distribution
+    posterior_samples = np.random.multivariate_normal(posterior_mean, posterior_cov, size=1000)
 
-# Overlaying the posterior samples on the influence function contours
-plt.figure(figsize=(8, 8))
+    # Re-plotting the posterior samples with adjusted limits and square aspect ratio
+    plt.figure(figsize=(8, 8))
+    plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.5, color='blue', label='Posterior Samples')
+    plt.xlim(-6, 6)
+    plt.ylim(-6, 6)
+    plt.xlabel('$z_1$')
+    plt.ylabel('$z_2$')
+    plt.title('Scatter Plot of Samples from the Posterior Distribution')
+    plt.legend()
+    plt.grid(True)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.show()
 
-# Plot the contours of the finite difference estimates
-contour = plt.contour(z1_mesh, z2_mesh, finite_difference, levels=20, cmap='viridis')
-plt.colorbar(contour)
+    # Compute \mathcal{F}_0 using the simulated x_data
+    F0_phi = posterior_expectation(np.mean(x_data), mu_z_prior, Sigma_z_prior)
 
-# Overlay the scatter plot of the posterior samples
-plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.1, color='blue', label='Posterior Samples')
+    # Create a meshgrid for z_1' and z_2'
+    z1_vals = np.linspace(-6, 6, 100)
+    z2_vals = np.linspace(-6, 6, 100)
+    z1_mesh, z2_mesh = np.meshgrid(z1_vals, z2_vals)
+    z_prime_mesh = np.vstack([z1_mesh.ravel(), z2_mesh.ravel()]).T
 
-# Set the limits and labels
-plt.xlim(-6, 6)
-plt.ylim(-6, 6)
-plt.xlabel('$z_1$')
-plt.ylabel('$z_2$')
-plt.title('Posterior Samples and Finite Difference Contours')
-plt.grid(True)
-plt.gca().set_aspect('equal', adjustable='box')
-plt.legend()
-plt.show()
+    # Compute \mathcal{F}_{0.001} over the meshgrid
+    epsilon = 0.001
+    F_eps_phi_mesh = perturbed_expectation_vectorized(epsilon, np.mean(x_data), mu_z_prior, Sigma_z_prior, z_prime_mesh)
+
+    # Reshape the result to the shape of the meshgrid
+    F_eps_phi_mesh = F_eps_phi_mesh.reshape(z1_mesh.shape)
+
+    # Compute finite difference: \mathcal{F}_{0.001} - \mathcal{F}_0
+    finite_difference = F_eps_phi_mesh - F0_phi
+
+    # Overlaying the posterior samples on the influence function contours
+    plt.figure(figsize=(8, 8))
+
+    # Plot the contours of the finite difference estimates
+    contour = plt.contour(z1_mesh, z2_mesh, finite_difference, levels=20, cmap='viridis')
+    plt.colorbar(contour)
+
+    # Overlay the scatter plot of the posterior samples
+    plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.1, color='blue', label='Posterior Samples')
+
+    # Set the limits and labels
+    plt.xlim(-6, 6)
+    plt.ylim(-6, 6)
+    plt.xlabel('$z_1$')
+    plt.ylabel('$z_2$')
+    plt.title('Posterior Samples and Finite Difference Contours')
+    plt.grid(True)
+    plt.gca().set_aspect('equal', adjustable='box')
+    plt.legend()
+    plt.show()
+
+
+if __name__ == "__main__":
+    main()
