@@ -1,18 +1,20 @@
 import contextlib
-from typing import Callable, Mapping, TypeVar, Union
+from typing import Callable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions.constraints as constraints
 import torch
 
 from chirho.explainable.handlers.components import (
-    consequent_differs,
+    consequent_eq_neq,
     random_intervention,
+    sufficiency_intervention,
     undo_split,
 )
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.interventional.handlers import do
 from chirho.interventional.ops import Intervention
 from chirho.observational.handlers.condition import Factors
+from chirho.observational.ops import Observation
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -50,108 +52,132 @@ def SplitSubsets(
 
 @contextlib.contextmanager
 def SearchForExplanation(
-    antecedents: Union[
-        Mapping[str, Intervention[T]],
-        Mapping[str, constraints.Constraint],
-    ],
-    witnesses: Union[
-        Mapping[str, Intervention[T]], Mapping[str, constraints.Constraint]
-    ],
-    consequents: Union[
-        Mapping[str, Callable[[T], Union[float, torch.Tensor]]],
-        Mapping[str, constraints.Constraint],
-    ],
+    supports: Mapping[str, constraints.Constraint],
+    antecedents: Mapping[str, Optional[Observation[S]]],
+    consequents: Mapping[str, Optional[Observation[T]]],
+    witnesses: Optional[
+        Mapping[str, Optional[Union[Observation[S], Observation[T]]]]
+    ] = None,
     *,
+    alternatives: Optional[Mapping[str, Intervention[S]]] = None,
+    factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
+    preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
+    consequent_scale: float = 1e-2,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
-    consequent_scale: float = 1e-2,
-    antecedent_prefix: str = "__antecedent_",
-    witness_prefix: str = "__witness_",
-    consequent_prefix: str = "__consequent_",
+    prefix: str = "__cause__",
 ):
     """
-    Effect handler used for causal explanation search. On each run:
+    A handler for transforming causal explanation queries into probabilistic inferences.
 
-      1. The antecedent nodes are intervened on with the values in ``antecedents`` \
-        using :func:`~chirho.counterfactual.ops.split` . \
-        Unless alternative interventions are provided, \
-        counterfactual values are uniformly sampled for each antecedent node \
-        using :func:`~chirho.explainable.internals.uniform_proposal` \
-        given its support as a :class:`~pyro.distributions.constraints.Constraint`.
+    When used as a context manager, ``SearchForExplanation`` yields a dictionary of observations
+    that can be used with ``condition`` to simultaneously impose an additional factivity constraint
+    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation`` ::
 
-      2. These interventions are randomly :func:`~chirho.explainable.ops.preempt`-ed \
-        using :func:`~chirho.explainable.handlers.undo_split` \
-        by a :func:`~chirho.explainable.handlers.SplitSubsets` handler.
+        with SearchForExplanation(supports, antecedents, consequents, ...) as evidence:
+            with condition(data=evidence):
+                model()
 
-      3. The witness nodes are randomly :func:`~chirho.explainable.ops.preempt`-ed \
-        to be kept at the values given in ``witnesses``.
+    :param supports: A mapping of sites to their support constraints.
+    :param antecedents: A mapping of antecedent names to optional observations.
+    :param consequents: A mapping of consequent names to optional observations.
+    :param witnesses: A mapping of witness names to optional observations.
+    :param alternatives: An optional mapping of names to alternative antecedent interventions.
+    :param factors: An optional mapping of names to consequent constraint factors.
+    :param preemptions: An optional mapping of names to witness preemption values.
+    :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
+    :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
 
-      4. A :func:`~pyro.factor` node is added tracking whether the consequent nodes differ \
-        between the factual and counterfactual worlds.
-
-    :param antecedents: A mapping from antecedent names to interventions or to constraints.
-    :param witnesses: A mapping from witness names to interventions or to constraints.
-    :param consequents: A mapping from consequent names to factor functions or to constraints.
+    :return: A context manager that can be used to query the evidence.
     """
-    if antecedents and isinstance(
-        next(iter(antecedents.values())),
-        constraints.Constraint,
-    ):
-        antecedents_supports = {a: s for a, s in antecedents.items()}
-        antecedents = {
-            a: random_intervention(s, name=f"{antecedent_prefix}_proposal_{a}")
-            for a, s in antecedents.items()
-        }
+    ########################################
+    # Validate input arguments
+    ########################################
+    assert len(antecedents) > 0
+    assert len(consequents) > 0
+    assert not set(consequents.keys()) & set(antecedents.keys())
+    assert set(antecedents.keys()) <= set(supports.keys())
+    assert set(consequents.keys()) <= set(supports.keys())
+    if witnesses is not None:
+        assert set(witnesses.keys()) <= set(supports.keys())
+        assert not set(witnesses.keys()) & set(consequents.keys())
     else:
-        antecedents_supports = {a: constraints.boolean for a in antecedents.keys()}
-        # TODO generalize to non-scalar antecedents
+        # if witness candidates are not provided, use all non-consequent nodes
+        witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
-    if witnesses and isinstance(
-        next(iter(witnesses.values())),
-        constraints.Constraint,
-    ):
-        witnesses = {
-            w: undo_split(s, antecedents=list(antecedents.keys()))
-            for w, s in witnesses.items()
+    ##################################################################
+    # Fill in default argument values and create constituent handlers
+    ##################################################################
+
+    # defaults for necessity interventions
+    alternatives = (
+        {a: alternatives[a] for a in antecedents.keys()}
+        if alternatives is not None
+        else {
+            a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+            for a in antecedents.keys()
         }
+    )
 
-    if consequents and isinstance(
-        next(iter(consequents.values())),
-        constraints.Constraint,
-    ):
-        consequents = {
-            c: consequent_differs(
-                support=s,
-                antecedents=list(antecedents.keys()),
-                scale=consequent_scale,
-            )
-            for c, s in consequents.items()
-        }
+    # defaults for sufficiency interventions
+    sufficiency_actions = {
+        a: (
+            antecedents[a]
+            if antecedents[a] is not None
+            else sufficiency_intervention(supports[a], antecedents=antecedents.keys())
+        )
+        for a in antecedents.keys()
+    }
 
-    if len(consequents) == 0:
-        raise ValueError("must have at least one consequent")
-
-    if len(antecedents) == 0:
-        raise ValueError("must have at least one antecedent")
-
-    if set(consequents.keys()) & set(antecedents.keys()):
-        raise ValueError("consequents and possible antecedents must be disjoint")
-
-    if set(consequents.keys()) & set(witnesses.keys()):
-        raise ValueError("consequents and possible witnesses must be disjoint")
-
+    # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
-        supports=antecedents_supports,
-        actions=antecedents,
+        {a: supports[a] for a in antecedents.keys()},
+        {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},  # type: ignore
         bias=antecedent_bias,
-        prefix=antecedent_prefix,
+        prefix=f"{prefix}__antecedent_",
     )
 
-    witness_handler: Preemptions = Preemptions(
-        actions=witnesses, bias=witness_bias, prefix=witness_prefix
+    # defaults for witness_preemptions
+    witness_handler = Preemptions(
+        (
+            {w: preemptions[w] for w in witnesses}
+            if preemptions is not None
+            else {
+                w: undo_split(supports[w], antecedents=antecedents.keys())
+                for w in witnesses
+            }
+        ),
+        bias=witness_bias,
+        prefix=f"{prefix}__witness_",
     )
 
-    consequent_handler = Factors(factors=consequents, prefix=consequent_prefix)
+    #
+    consequent_handler: Factors[T] = Factors(
+        (
+            {c: factors[c] for c in consequents.keys()}
+            if factors is not None
+            else {
+                c: consequent_eq_neq(
+                    support=supports[c],
+                    proposed_consequent=consequents[c],  # added this
+                    antecedents=antecedents.keys(),
+                    scale=consequent_scale,
+                )
+                for c in consequents.keys()
+            }
+        ),
+        prefix=f"{prefix}__consequent_",
+    )
 
+    ######################################################################
+    # Apply handlers and yield evidence for optional factual conditioning
+    ######################################################################
+    evidence: Mapping[str, Union[Observation[S], Observation[T]]] = {
+        **{a: aa for a, aa in antecedents.items() if aa is not None},
+        **{c: cc for c, cc in consequents.items() if cc is not None},
+        **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
+    }
     with antecedent_handler, witness_handler, consequent_handler:
-        yield
+        yield evidence

@@ -6,14 +6,18 @@ import torch
 
 from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
 from chirho.counterfactual.ops import split
-from chirho.explainable.handlers import random_intervention
-from chirho.explainable.handlers.components import (
+from chirho.explainable.handlers import random_intervention, sufficiency_intervention
+from chirho.explainable.handlers.components import (  # consequent_eq_neq,
     ExtractSupports,
-    consequent_differs,
+    consequent_eq,
+    consequent_eq_neq,
+    consequent_neq,
     undo_split,
 )
+from chirho.explainable.internals import uniform_proposal
 from chirho.explainable.ops import preempt
 from chirho.indexed.ops import IndexSet, gather, indices_of
+from chirho.interventional.handlers import do
 from chirho.interventional.ops import intervene
 from chirho.observational.handlers.condition import Factors
 
@@ -26,6 +30,42 @@ SUPPORT_CASES = [
     pyro.distributions.constraints.integer_interval(0, 2),
     pyro.distributions.constraints.integer_interval(0, 100),
 ]
+
+
+@pytest.mark.parametrize("support", SUPPORT_CASES)
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_sufficiency_intervention(support, event_shape):
+
+    with MultiWorldCounterfactual():
+
+        if event_shape:
+            support = pyro.distributions.constraints.independent(
+                support, len(event_shape)
+            )
+
+        proposal_dist = uniform_proposal(
+            support,
+            event_shape=event_shape,
+        )
+
+        value = pyro.sample("value", proposal_dist)
+
+        intervention = sufficiency_intervention(support, indices_of(value).keys())
+
+        value = intervene(value, intervention, event_dim=0)
+
+        indices = indices_of(value)
+        observed = gather(
+            value,
+            IndexSet(**{index: {0} for index in indices}),
+            event_dim=0,
+        )
+        intervened = gather(
+            value, IndexSet(**{index: {1} for index in indices}), event_dim=0
+        )
+
+    assert torch.allclose(observed, intervened)
+    assert torch.all(support.check(value))
 
 
 @pytest.mark.parametrize("support", SUPPORT_CASES)
@@ -225,15 +265,11 @@ def test_undo_split_with_interaction():
         assert (x_00, x_10, x_01, x_11) == (5.0, 5.0, 2.0, 2.0)
 
 
-# @pytest.mark.parametrize("plate_size", [4])
-# @pytest.mark.parametrize("event_shape", [()], ids=str)
-
-
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
-def test_consequent_differs(plate_size, event_shape):
+def test_consequent_neq(plate_size, event_shape):
     factors = {
-        "consequent": consequent_differs(
+        "consequent": consequent_neq(
             antecedents=["split"],
             support=constraints.independent(constraints.real, len(event_shape)),
         )
@@ -253,7 +289,7 @@ def test_consequent_differs(plate_size, event_shape):
         )
         con_dif = pyro.deterministic(
             "con_dif",
-            consequent_differs(
+            consequent_neq(
                 support=constraints.independent(constraints.real, len(event_shape)),
                 antecedents=["split"],
             )(consequent),
@@ -277,6 +313,133 @@ def test_consequent_differs(plate_size, event_shape):
 
     assert int_con_dif.squeeze().shape == nd["w"]["fn"].batch_shape
     assert nd["__factor_consequent"]["log_prob"].sum() < -1e2
+
+
+# potentially, the following test could be merged with the previous one
+# as they share quite a bit of code
+# but despite some repeated code left separate to test two functionalities
+# in isolation
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_consequent_eq(plate_size, event_shape):
+    factors = {
+        "consequent": consequent_eq(
+            antecedents=["split"],
+            support=constraints.independent(constraints.real, len(event_shape)),
+        )
+    }
+
+    @Factors(factors=factors)
+    @pyro.plate("data", size=plate_size, dim=-1)
+    def model_ce():
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        new_w = w.clone()
+        new_w[1::2] = 10
+        w = split(w, (new_w,), name="split", event_dim=len(event_shape))
+        consequent = pyro.deterministic(
+            "consequent", w * 0.1, event_dim=len(event_shape)
+        )
+        con_eq = pyro.deterministic(
+            "con_eq",
+            consequent_eq(
+                support=constraints.independent(constraints.real, len(event_shape)),
+                antecedents=["split"],
+            )(consequent),
+            event_dim=0,
+        )
+
+        return con_eq
+
+    with MultiWorldCounterfactual() as mwc:
+        with pyro.poutine.trace() as tr:
+            model_ce()
+
+    tr.trace.compute_log_prob()
+    nd = tr.trace.nodes
+
+    with mwc:
+        int_con_eq = gather(nd["con_eq"]["value"], IndexSet(**{"split": {1}}))
+
+        assert "split" not in indices_of(int_con_eq)
+        assert not indices_of(int_con_eq)
+
+    assert int_con_eq.squeeze().shape == nd["w"]["fn"].batch_shape
+    assert nd["__factor_consequent"]["log_prob"].sum() < -10
+
+
+@pytest.mark.parametrize("plate_size", [4, 50, 200])
+@pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)], ids=str)
+def test_consequent_eq_neq(plate_size, event_shape):
+    factors = {
+        "consequent": consequent_eq_neq(
+            support=constraints.independent(constraints.real, len(event_shape)),
+            proposed_consequent=torch.tensor(0.01).expand(event_shape),
+            antecedents=["w"],
+        )
+    }
+
+    @Factors(factors=factors)
+    @pyro.plate("data", size=plate_size, dim=-4)
+    def model_ce():
+        w = pyro.sample(
+            "w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape))
+        )
+        consequent = pyro.deterministic(
+            "consequent", w * torch.tensor(0.1), event_dim=len(event_shape)
+        )
+        assert w.shape == consequent.shape
+
+    antecedents = {
+        "w": (
+            torch.tensor(0.1).expand(event_shape),
+            sufficiency_intervention(
+                constraints.independent(constraints.real, len(event_shape)), ["w"]
+            ),
+        )
+    }
+
+    with MultiWorldCounterfactual() as mwc_ce:
+        with do(actions=antecedents):
+            with pyro.poutine.trace() as trace_ce:
+                model_ce()
+
+    trace_ce.trace.compute_log_prob()
+    nd = trace_ce.trace.nodes
+    with mwc_ce:
+        eq_neq_log_probs_fact = gather(
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {0}})
+        )
+
+        eq_neq_log_probs_nec = gather(
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {1}})
+        )
+
+        consequent_suff = gather(
+            nd["consequent"]["value"],
+            IndexSet(**{"w": {2}}),
+            event_dim=len(event_shape),
+        )
+        eq_neq_log_probs_suff = gather(
+            nd["__factor_consequent"]["fn"].log_factor, IndexSet(**{"w": {2}})
+        )
+
+        assert torch.equal(
+            eq_neq_log_probs_fact, torch.zeros(eq_neq_log_probs_fact.shape)
+        )
+
+        result = dist.Normal(0.0, 0.1).log_prob(consequent_suff - torch.tensor(0.01))
+        for _ in range(len(event_shape)):
+            result = torch.sum(result, dim=-1)
+
+        assert torch.allclose(
+            eq_neq_log_probs_suff.squeeze(),
+            result.squeeze(),
+        )
+        assert eq_neq_log_probs_nec.sum().exp().item() == 0
 
 
 options = [
