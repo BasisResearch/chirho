@@ -42,8 +42,8 @@ def perturbed_expectation_vectorized(epsilon, x, mu_z, Sigma_z, z_prime_array):
 
 TRUE_Z1 = 1.0
 TRUE_Z2 = -3.0
-NUM_SAMPLES = 100
-X_NOISE = 0.5
+NUM_SAMPLES = 50
+X_NOISE = 1.0
 
 
 def simulate_data(num_samples):
