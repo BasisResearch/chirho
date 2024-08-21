@@ -95,7 +95,8 @@ def functional_jac_fn(observed_x, loc, scale_tril):
     def functional(flat_params_):
         loc_ = flat_params_[:ndim]
         scale_tril_ = flat_params_[ndim:].reshape(ndim, ndim)
-        return posterior_expectation(observed_x, loc_, scale_tril_)
+        sigma = scale_tril_ @ scale_tril_.t()
+        return posterior_expectation(observed_x, loc_, sigma)
 
     out = jacrev(functional)(torch.cat([loc, scale_tril.flatten()]))
     return out.detach()
@@ -136,10 +137,6 @@ def main():
 
     # Reshape the result to the shape of the meshgrid
     eif = eif.reshape(100, 100)
-
-    # # DEBUG
-    # import numpy as np
-    # eif = np.rot90(eif.numpy())
 
     # Plot the eif
     plt.figure(figsize=(8, 8))

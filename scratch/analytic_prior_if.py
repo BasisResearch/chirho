@@ -16,7 +16,7 @@ def posterior_expectation(x, mu_z, Sigma_z):
     H = np.array([1, 1])  # since x = z1 + z2
     if isinstance(x, torch.Tensor):
         H = torch.tensor(H, dtype=x.dtype)
-    posterior_mean = mu_z + Sigma_z @ H / (H @ Sigma_z @ H.T + 1) * (x.mean() - H @ mu_z)
+    posterior_mean = mu_z + Sigma_z @ H / (H @ Sigma_z @ H + 1) * (x.mean() - H @ mu_z)
     return posterior_mean[0]  # Expectation of z1
 
 
@@ -43,10 +43,11 @@ def perturbed_expectation_vectorized(epsilon, x, mu_z, Sigma_z, z_prime_array):
 TRUE_Z1 = 1.0
 TRUE_Z2 = -3.0
 NUM_SAMPLES = 100
+X_NOISE = 0.5
 
 
 def simulate_data(num_samples):
-    x_data = TRUE_Z1 + TRUE_Z2 + np.random.normal(0, 1, num_samples)  # x = z_1 + z_2 + noise
+    x_data = TRUE_Z1 + TRUE_Z2 + np.random.normal(0, X_NOISE, num_samples)  # x = z_1 + z_2 + noise
     return x_data
 
 
