@@ -1,18 +1,15 @@
 import warnings
 from typing import Dict
 
-
 import pyro
 import pyro.distributions as dist
 import torch
-from chirho.dynamical.handlers import (
-    StaticBatchObservation,
-)
+from pyro.infer.autoguide import AutoMultivariateNormal
+
+from chirho.dynamical.handlers import StaticBatchObservation
 from chirho.dynamical.handlers.solver import TorchDiffEq
 from chirho.dynamical.ops import State, simulate
 from chirho.observational.handlers import condition
-from pyro.infer.autoguide import AutoMultivariateNormal
-
 
 seed = 123
 
