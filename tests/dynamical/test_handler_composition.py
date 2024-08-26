@@ -1,4 +1,5 @@
 import logging
+from functools import partial
 
 import pyro
 import pytest
@@ -20,7 +21,6 @@ from tests.dynamical.dynamical_fixtures import (
     UnifiedFixtureDynamicsBase,
     run_svi_inference_torch_direct,
 )
-from functools import partial
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +97,10 @@ class UnifiedFixtureDynamicsReparam(
 
 
 @pytest.mark.parametrize("solver", [TorchDiffEq])
-@pytest.mark.parametrize("model", [
-    UnifiedFixtureDynamicsReparam(
-        beta=torch.tensor(0.5),
-        gamma=torch.tensor(0.7))
-])
+@pytest.mark.parametrize(
+    "model",
+    [UnifiedFixtureDynamicsReparam(beta=torch.tensor(0.5), gamma=torch.tensor(0.7))],
+)
 def test_shape_twincounterfactual_observation_intervention_commutes(solver, model):
     with LogTrajectory(logging_times) as dt:
         with pyro.poutine.trace() as tr:
@@ -123,24 +122,21 @@ def test_shape_twincounterfactual_observation_intervention_commutes(solver, mode
 
 
 @pytest.mark.parametrize("solver", [TorchDiffEq])
-@pytest.mark.parametrize("model", [
-    UnifiedFixtureDynamicsReparam(
-        beta=torch.tensor(0.5),
-        gamma=torch.tensor(0.7))
-])
-def test_smoke_inference_twincounterfactual_observation_intervention_commutes(solver, model):
+@pytest.mark.parametrize(
+    "model",
+    [UnifiedFixtureDynamicsReparam(beta=torch.tensor(0.5), gamma=torch.tensor(0.7))],
+)
+def test_smoke_inference_twincounterfactual_observation_intervention_commutes(
+    solver, model
+):
     # Run inference on factual model.
     guide = run_svi_inference_torch_direct(
-        partial(conditioned_model, solver, model),
-        n_steps=2,
-        verbose=False
+        partial(conditioned_model, solver, model), n_steps=2, verbose=False
     )
 
     num_samples = 100
     pred = pyro.infer.Predictive(
-        partial(counterf_model, solver, model),
-        guide=guide,
-        num_samples=num_samples
+        partial(counterf_model, solver, model), guide=guide, num_samples=num_samples
     )()
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
