@@ -1,4 +1,3 @@
-import warnings
 from typing import Dict
 
 import pyro
@@ -391,7 +390,7 @@ def run_svi_inference(
 def test_batched_inference():
     pyro.clear_param_store()
 
-    guide = run_svi_inference(
+    run_svi_inference(
         conditioned_cannibalistic,
         num_steps=num_steps,
         obs_n=len(obs_logging_times),
