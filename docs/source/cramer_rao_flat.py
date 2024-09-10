@@ -1,4 +1,4 @@
-from typing import Any, Callable, TypeVar, ParamSpec, List
+from typing import Any, Callable, TypeVar, ParamSpec, List, Tuple, Concatenate
 import torch
 import pyro
 from tqdm import tqdm
@@ -7,16 +7,6 @@ import pyro.distributions as dist
 
 P = ParamSpec("P")
 T = TypeVar("T")
-
-
-
-# def compute_crb(target: Functional[P]) -> Functional[P]:
-#     def _crb_functional(model: Model[P]) -> Callable[P, torch.Tensor]:
-#         def _crb_function(*args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
-#             ...  # TODO implement me
-#         return _crb_function
-    
-#     return _crb_functional
 
 from chirho.robust.internals.nmc import BatchedNMCLogMarginalLikelihood
 from chirho.robust.internals.linearize import make_empirical_fisher_vp, conjugate_gradient_solve
@@ -30,19 +20,7 @@ from chirho.robust.internals.utils import (
 from chirho.robust.ops import Point
 
 Model = Callable[P, ParamDict]
-Functional = Callable[[Model[P]], Callable[P, torch.Tensor]]
-
-# class SinusoidalModel(pyro.nn.PyroModule):
-#     def __init__(self, f0, N=10, snr=1.0):
-#         super().__init__()
-#         self.f0 = torch.nn.Parameter(torch.tensor(f0))
-#         self.n_vec = torch.arange(N)
-#         self.N = N
-#         self.sigma = 1.0/torch.sqrt(torch.tensor(snr))
-
-#     def forward(self):
-#         s = pyro.sample("s", dist.Normal(torch.cos(2*torch.pi * self.f0 * self.n_vec), self.sigma).to_event(1))
-#         return {'f0': self.f0}
+Functional = Callable[[Model[P]], torch.Tensor]
 
 class SinusoidalModel(pyro.nn.PyroModule):
     def __init__(self, f0, N=10, snr=1.0):
@@ -54,20 +32,23 @@ class SinusoidalModel(pyro.nn.PyroModule):
 
     def forward(self):
         s = pyro.sample("s", dist.Normal(torch.cos(2*torch.pi * self.f0 * self.n_vec), self.sigma).to_event(1)) 
-        return s
+        return {'f0': self.f0}
     
 class TrivialFunctional(torch.nn.Module):
     def __init__(self, model : Model[P]):
         super().__init__()
-        self.model = model
+        self.mm = model
         
-    def forward(self):
-        return self.model.f0
+    def forward(self, *args : P.args, **kwargs : P.kwargs):
+        model_params : ParamDict = self.mm(*args, **kwargs)
+        # convert paramdict to a flat tensor
+        return torch.cat([v.flatten() for v in model_params.values()])
+        # return model_params
 
     
 def do_the_thing(
         model: torch.nn.Module,
-        functional: Callable[[torch.nn.Module], Callable[..., torch.Tensor]], 
+        functional: Functional[P], 
         num_samples_outer: int = 50000,
         *args: P.args,
         **kwargs: P.kwargs
@@ -78,7 +59,11 @@ def do_the_thing(
     with torch.no_grad():
         data: Point[T] = pyro.infer.Predictive(model, num_samples=num_samples_outer, parallel=True)() # (*args, **kwargs)
 
-    ######## Option 1 ########            
+    #### OPTION 0: ###
+    # target_grad = {'model.f0': torch.tensor([1.0])}
+
+    ######## Option 1 ########          
+    # model_params, model_func = make_functional_call(model)  ### ????
     # def target_func(params: Any, *args, **kwargs) -> torch.Tensor:
     #     return functional(lambda *args, **kwargs: model_func(params, *args, **kwargs))(*args, **kwargs)
     
@@ -93,15 +78,17 @@ def do_the_thing(
     #     batched_func_log_prob, model_params, data
     # ) # (*args, **kwargs)
     
-    # target_grad = torch.func.grad(target_func)(model_params, *args, **kwargs)
+    # target_grad = torch.func.jacrev(target_func)(model_params, *args, **kwargs)
+    # inverse_fisher_target_product = conjugate_gradient_solve(pinned_fvp, target_grad) # nested dict
+
 
     ######## Option 2 ########
-    # model_params, model_func = make_functional_call(model)
+    # model_params : ParamDict = model(*args, **kwargs)
+    model_params, model_func = make_functional_call(model)
+    def target_func(params: Any, *args, **kwargs) -> torch.Tensor:
+        return functional(model_func)(params,*args, **kwargs)
 
-    # def target_func(params: Any, *args, **kwargs) -> torch.Tensor:
-    #     for p in params:
-    #         model[p.name] = p.value
-    #     return lambda *args, **kwargs : functional(model)(*args, **kwargs)
+    target_grad = torch.func.jacrev(target_func)(model_params, *args, **kwargs)
         
     batched_log_prob = BatchedNMCLogMarginalLikelihood(
         model, num_samples=1, max_plate_nesting=None
@@ -115,15 +102,16 @@ def do_the_thing(
     pinned_fvp_batched = torch.func.vmap(
         lambda v: pinned_fvp(v), randomness="different"
     )
-    # target_grad = torch.func.grad(target_func)(model_params, *args, **kwargs)
-    target_grad = {'model.f0': torch.tensor([1.0])}
 
-    inverse_fisher_target_product = conjugate_gradient_solve(pinned_fvp_batched, target_grad) # nested dict
-    # inverse_fisher_target_product = conjugate_gradient_solve(pinned_fvp, target_grad) # nested dict
+    # add prefix "model." to the keys of the target_grad
 
-    flat_target_grad: torch.Tensor = torch.tensor([1.0]) # torch.flatten(target_grad)
-    flat_inverse_fisher_target_product: torch.Tensor = torch.flatten(inverse_fisher_target_product['model.f0'])
-    return torch.einsum("s,t->st", flat_target_grad, flat_inverse_fisher_target_product)    
+    target_grad_aug = {f"model.{k}": v for k, v in target_grad.items()}
+
+    inverse_fisher_target_product = conjugate_gradient_solve(pinned_fvp_batched, target_grad_aug) # nested dict
+
+    flat_target_grad: torch.Tensor = torch.cat([v.flatten() for v in target_grad.values()])
+    flat_inv_ftp = torch.cat([v.flatten() for v in inverse_fisher_target_product.values()])
+    return torch.einsum("s,t->st", flat_target_grad, flat_inv_ftp)    
 
 # the analytic CRB
 def CRLB_analytic(model,f0):
