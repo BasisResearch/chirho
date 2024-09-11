@@ -19,26 +19,26 @@ start_time = torch.tensor(0.0)
 end_time = torch.tensor(4.0)
 
 
-def test_no_backend_error():
+def test_no_solver_error():
     sir = bayes_sir_model()
     with pytest.raises(NotImplementedError):
         simulate(sir, init_state, start_time, end_time)
 
 
-@pytest.mark.parametrize("backend", [TorchDiffEq])
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("dynamics", [bayes_sir_model()])
-def test_backend_arg(backend, dynamics):
-    with backend():
+def test_solver_arg(solver, dynamics):
+    with solver():
         result = simulate(dynamics, init_state, start_time, end_time)
     assert result is not None
 
 
-@pytest.mark.parametrize("backend", [TorchDiffEq])
+@pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("dynamics_builder", [bayes_sir_model])
-def test_broadcasting(backend, dynamics_builder):
+def test_broadcasting(solver, dynamics_builder):
     with pyro.plate("plate", 3):
         dynamics = dynamics_builder()
-        with backend():
+        with solver():
             result = simulate(dynamics, init_state, start_time, end_time)
 
     for v in result.values():

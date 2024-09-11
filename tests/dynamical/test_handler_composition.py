@@ -61,11 +61,9 @@ reparam = pyro.poutine.reparam(config=reparam_config)
 
 
 def counterf_model(solver, model):
-    # model = UnifiedFixtureDynamicsReparam(beta=0.5, gamma=0.7)
     obs = condition(data=flight_landing_data)(model.observation)
     vec_obs3 = StaticBatchObservation(times=flight_landing_times, observation=obs)
     with vec_obs3:
-        # with TorchDiffEq():
         with solver():
             with reparam, twin_world, intervention:
                 return simulate(

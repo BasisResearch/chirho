@@ -3,7 +3,6 @@ from typing import Mapping, TypeVar
 import pyro
 import torch
 from pyro.distributions import Normal, Uniform, constraints
-from torch import Tensor as Tnsr
 
 from chirho.dynamical.ops import State
 
@@ -16,8 +15,8 @@ ATempParams = Mapping[str, T]
 
 # SIR dynamics written as a pure function of state and parameters.
 def pure_sir_dynamics(
-    state: State[Tnsr], atemp_params: ATempParams[Tnsr]
-) -> State[Tnsr]:
+    state: State[torch.Tensor], atemp_params: ATempParams[torch.Tensor]
+) -> State[torch.Tensor]:
     beta = atemp_params["beta"]
     gamma = atemp_params["gamma"]
 
@@ -50,7 +49,6 @@ class SIRObservationMixin:
 
 class SIRReparamObservationMixin(SIRObservationMixin):
     def observation(self, X: State[torch.Tensor]):
-        # super().observation(X)
 
         # A flight arrives in a country that tests all arrivals for a disease. The number of people infected on the
         #  plane is a noisy function of the number of infected people in the country of origin at that time.
