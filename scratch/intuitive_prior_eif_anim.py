@@ -89,6 +89,7 @@ def generate_plot(z1_prime, z2_prime):
 
     # Step 3: Compute the mean and covariance of the perturbed prior
     combined_samples = torch.cat([prior_samples, perturbation_samples])
+    # combined_samples = prior_samples
     perturbed_mean = combined_samples.mean(dim=0)
     perturbed_cov = torch.cov(combined_samples.T)
 
@@ -119,44 +120,44 @@ def generate_plot(z1_prime, z2_prime):
         fontsize=8
     )
 
-    # Step 2: Show the perturbation point with a big x marker
-    plt.scatter(z1_prime, z2_prime, color='red', marker='x', s=200, label='Perturbation Point')
-
+    # # Step 2: Show the perturbation point with a big x marker
+    plt.scatter(z1_prime, z2_prime, color='red', marker='x', s=300, label='Perturbation Point')
+    #
     # Step 3: Show the prior as an unfilled contour
     plt.contour(z1_mesh, z2_mesh, prior_pdf, levels=4, colors='purple', linestyles='solid')
     # # low alpha original prior.
-    # plt.contour(z1_mesh, z2_mesh, og_prior_pdf, levels=4, colors='purple', alpha=0.1)
-
-    # Step 4: Show the posterior as an unfilled contour.
-    # Clip at 1e-6 or so to avoid a contour way out in the middle of nowhere.
+    # plt.contour(z1_mesh, z2_mesh, og_prior_pdf, levels=4, colors='purple', linestyles='solid')
+    #
+    # # Step 4: Show the posterior as an unfilled contour.
+    # # Clip at 1e-6 or so to avoid a contour way out in the middle of nowhere.
     posterior_pdf = np.clip(posterior_pdf, 1e-6, None)
-    plt.contour(z1_mesh, z2_mesh, posterior_pdf, levels=1, colors='deeppink', linestyles='solid')
-
+    # plt.contour(z1_mesh, z2_mesh, posterior_pdf, levels=1, colors='deeppink', linestyles='solid')
+    #
     # Step 5: Show the MLE surface as a line plot
-    plt.plot(z1_line, z2_line, color='black', linestyle='dotted', label='MLE Surface (Z2 = -2 - Z1)')
-
-    # Step 6: Plot original posterior_expectation, and new as a vline. Show an arrow in between the
-    #  the two to show the shift.
+    # plt.plot(z1_line, z2_line, color='black', linestyle='dotted', label='MLE Surface (Z2 = -2 - Z1)')
+    #
+    # # Step 6: Plot original posterior_expectation, and new as a vline. Show an arrow in between the
+    # #  the two to show the shift.
     # Original
-    plt.axvline(x=posterior_expectation(x_data, prior_loc, prior_cov), color='black', linestyle='dashed')
-    # New
-    plt.axvline(x=posterior_mean[0], color='deeppink', linestyle='solid')
-    # Arrow
-    og_z1 = posterior_expectation(x_data, prior_loc, prior_cov)
-
-    head_pos = posterior_mean[0]
-    tail_pos = og_z1
-    style = '<-'
-    if posterior_mean[0] > og_z1:
-        head_pos, tail_pos = tail_pos, head_pos
-        style = '->'
-
-    for h in [-5.5, 5.5]:
-        plt.annotate(
-            '', xy=(tail_pos, h), xycoords='data',
-            xytext=(head_pos, h), textcoords='data',
-            arrowprops=dict(arrowstyle=style, color='black', lw=2)
-        )
+    # plt.axvline(x=posterior_expectation(x_data, prior_loc, prior_cov), color='black', linestyle='dashed')
+    # # New
+    # plt.axvline(x=posterior_mean[0], color='deeppink', linestyle='solid')
+    # # Arrow
+    # og_z1 = posterior_expectation(x_data, prior_loc, prior_cov)
+    #
+    # head_pos = posterior_mean[0]
+    # tail_pos = og_z1
+    # style = '<-'
+    # if posterior_mean[0] > og_z1:
+    #     head_pos, tail_pos = tail_pos, head_pos
+    #     style = '->'
+    #
+    # for h in [-5.5, 5.5]:
+    #     plt.annotate(
+    #         '', xy=(tail_pos, h), xycoords='data',
+    #         xytext=(head_pos, h), textcoords='data',
+    #         arrowprops=dict(arrowstyle=style, color='black', lw=2)
+    #     )
 
     # Set plot limits and labels
     plt.xlim(-6, 6)
@@ -181,26 +182,29 @@ def generate_plot(z1_prime, z2_prime):
 
 
 def main():
-    # # Example perturbation points
-    # z1_prime = 5.0
-    # z2_prime = -0.0
+    # Example perturbation points
+    z1_prime = -5.5
+    z2_prime = 0.0
 
-    import os.path as osp
-    import os
+    generate_plot(z1_prime, z2_prime)
+    plt.show()
 
-    os.makedirs('figures', exist_ok=True)
-
-    # Generate a circle of perturbation points around 0, 0, with radius of 4.5
-    NUM_FRAMES = 100
-    R = 5.5
-    for i in range(NUM_FRAMES):
-        theta = 2 * np.pi * i / NUM_FRAMES
-        z1_prime = R * np.cos(theta)
-        z2_prime = R * np.sin(theta)
-
-        generate_plot(z1_prime, z2_prime)
-
-        plt.savefig(osp.join('figures', f'perturbation_{i:03d}.png'))
+    # import os.path as osp
+    # import os
+    #
+    # os.makedirs('figures', exist_ok=True)
+    #
+    # # Generate a circle of perturbation points around 0, 0, with radius of 4.5
+    # NUM_FRAMES = 100
+    # R = 5.5
+    # for i in range(NUM_FRAMES):
+    #     theta = 2 * np.pi * i / NUM_FRAMES
+    #     z1_prime = R * np.cos(theta)
+    #     z2_prime = R * np.sin(theta)
+    #
+    #     generate_plot(z1_prime, z2_prime)
+    #
+    #     plt.savefig(osp.join('figures', f'perturbation_{i:03d}.png'))
 
 
 if __name__ == "__main__":

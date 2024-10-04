@@ -13,6 +13,7 @@ def marginal_likelihood(x, mu_z, Sigma_z):
 
 # Define the posterior expectation function for z1
 def posterior_expectation(x, mu_z, Sigma_z):
+    # FIXME This is wrong, it's missing the posterior covariance matmul
     H = np.array([1, 1])  # since x = z1 + z2
     if isinstance(x, torch.Tensor):
         H = torch.tensor(H, dtype=x.dtype)
@@ -117,22 +118,39 @@ def main():
     # Overlaying the posterior samples on the influence function contours
     plt.figure(figsize=(8, 8))
 
-    # Plot the contours of the finite difference estimates
-    contour = plt.contour(z1_mesh, z2_mesh, finite_difference, levels=20, cmap='viridis')
-    plt.colorbar(contour)
+    finite_difference[np.where(np.isclose(finite_difference, 0., atol=0.003))] = 0.0
 
+    # Plot the contours of the finite difference estimates
+    contour = plt.contourf(z1_mesh, z2_mesh, finite_difference, levels=15, cmap='copper')
+    # plt.colorbar(contour)
+
+    og_prior_pdf = multivariate_normal(mean=mu_z_prior, cov=Sigma_z_prior).pdf(z_prime_mesh).reshape(z1_mesh.shape)
+    # purple, unfilled contour with 4 levels
+    plt.contour(z1_mesh, z2_mesh, og_prior_pdf, levels=4, colors='purple')
+
+
+    z1_ = np.linspace(-6, 6, 2)
+    plt.plot(
+        z1_,
+        x_data.mean() - z1_,
+        color='lime',
+        linestyle='--',
+    )
+
+    plt.tight_layout()
     # Overlay the scatter plot of the posterior samples
-    plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.1, color='blue', label='Posterior Samples')
+    # plt.scatter(posterior_samples[:, 0], posterior_samples[:, 1], alpha=0.1, color='blue', label='Posterior Samples')
 
     # Set the limits and labels
     plt.xlim(-6, 6)
     plt.ylim(-6, 6)
     plt.xlabel('$z_1$')
     plt.ylabel('$z_2$')
-    plt.title('Posterior Samples and Finite Difference Contours')
+    # plt.title('Posterior Samples and Finite Difference Contours')
     plt.grid(True)
     plt.gca().set_aspect('equal', adjustable='box')
     plt.legend()
+    plt.tight_layout()
     plt.show()
 
 
