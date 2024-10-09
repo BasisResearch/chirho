@@ -23,7 +23,7 @@ def tmle_scipy_optimize_wrapper(
     from scipy.optimize import LinearConstraint
 
     # Turn things into numpy. This makes us sad... :(
-    D = packed_influence.detach().numpy()
+    D = packed_influence.detach().numpy().astype(np.float64)
 
     N, L = D.shape[0], D.shape[1]
 
