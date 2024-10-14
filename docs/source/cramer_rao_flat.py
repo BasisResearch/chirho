@@ -3,6 +3,7 @@ import torch
 import pyro
 from tqdm import tqdm
 import pyro.distributions as dist
+import os, sys
 
 
 P = ParamSpec("P")
@@ -145,4 +146,8 @@ if __name__=="__main__":
     plt.legend()
     plt.xlabel("f0")
     plt.title("Empirical CRB vs Analytic CRB")
+    
+    # get current script directory
+    curdir = os.path.dirname(os.path.realpath(__file__))
+    plt.savefig(os.path.join(curdir,"figures/crb_example.pdf"))
     plt.show()
