@@ -41,7 +41,8 @@ setup(
     install_requires=[
         # if you add any additional libraries, please also
         # add them to `docs/source/requirements.txt`
-        "pyro-ppl==1.8.6",
+        "pyro-ppl==1.9.1",
+        "torch==2.4.1"
     ],
     extras_require={
         "dynamical": DYNAMICAL_REQUIRE,
