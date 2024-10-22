@@ -37,7 +37,7 @@ def tmle_scipy_optimize_wrapper(
     )
 
     epsilon_solve = scipy.optimize.minimize(
-        loss, np.zeros(L, dtype=D.dtype), constraints=positive_density_constraint
+        loss, np.zeros(L, dtype=np.float64), constraints=positive_density_constraint
     )
 
     if not epsilon_solve.success:
