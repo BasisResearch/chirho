@@ -83,13 +83,16 @@ def test_random_intervention(support, event_shape):
     assert torch.all(support.check(samples))
 
 
-def test_undo_split():
+@pytest.mark.parametrize("num_splits", [1, 2, 5])
+def test_undo_split(num_splits):
     with MultiWorldCounterfactual():
         x_obs = torch.zeros(10)
         x_cf_1 = torch.ones(10)
         x_cf_2 = 2 * x_cf_1
-        x_split = split(x_obs, (x_cf_1,), name="split1", event_dim=1)
-        x_split = split(x_split, (x_cf_2,), name="split2", event_dim=1)
+        x_split = split(x_obs, (x_cf_1,) * num_splits, name="split1", event_dim=1)
+        x_split = split(
+            x_split, (x_cf_2,) * (num_splits + 1), name="split2", event_dim=1
+        )
 
         undo_split2 = undo_split(
             support=constraints.independent(constraints.real, 1), antecedents=["split2"]
@@ -100,9 +103,31 @@ def test_undo_split():
         assert torch.all(gather(x_split, IndexSet(split2={0}), event_dim=1) == x_undone)
 
 
+def test_undo_split_multi_dim():
+    with MultiWorldCounterfactual():
+        x_obs = torch.ones(10)
+        x_cf_1 = 2 * x_obs
+        x_cf_2 = 3 * x_cf_1
+        x_split = split(x_obs, (x_cf_1,), name="split1", event_dim=1)
+        x_split = split(x_split, (x_cf_2, x_cf_1, x_cf_2), name="split2", event_dim=1)
+        x_split = split(x_split, (x_cf_2, x_cf_1), name="split3", event_dim=1)
+
+        undo_split23 = undo_split(
+            support=constraints.independent(constraints.real, 1),
+            antecedents=["split2", "split3"],
+        )
+        x_undone = undo_split23(x_split)
+
+        assert indices_of(x_split, event_dim=1) == indices_of(x_undone, event_dim=1)
+        assert torch.all(
+            gather(x_split, IndexSet(split2={0}, split3={0}), event_dim=1) == x_undone
+        )
+
+
 @pytest.mark.parametrize("plate_size", [4, 50, 200])
 @pytest.mark.parametrize("event_shape", [(), (3,), (3, 2)])
-def test_undo_split_parametrized(event_shape, plate_size):
+@pytest.mark.parametrize("num_splits", [1, 2, 5])
+def test_undo_split_parametrized(event_shape, plate_size, num_splits):
     joint_dims = torch.Size([plate_size, *event_shape])
 
     replace1 = torch.ones(joint_dims)
@@ -114,7 +139,9 @@ def test_undo_split_parametrized(event_shape, plate_size):
         w = pyro.sample(
             "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
         )
-        w = split(w, (replace1,), name="split1", event_dim=len(event_shape))
+        w = split(
+            w, (replace1,) * num_splits, name="split1", event_dim=len(event_shape)
+        )
 
         w = pyro.deterministic(
             "w_preempted",
@@ -146,11 +173,11 @@ def test_undo_split_parametrized(event_shape, plate_size):
     with mwc:
         assert indices_of(
             nd["w_undone"]["value"], event_dim=len(event_shape)
-        ) == IndexSet(split1={0, 1})
+        ) == IndexSet(split1=set(range(num_splits + 1)))
 
         w_undone_shape = list(nd["w_undone"]["value"].shape)
         desired_shape = list(
-            (2,)
+            (num_splits + 1,)
             + (1,) * (len(w_undone_shape) - len(event_shape) - 2)
             + (plate_size,)
             + event_shape
