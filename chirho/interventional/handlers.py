@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import collections
 import functools
-from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar
+from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -60,12 +60,25 @@ def _intervene_atom_distribution(
 
 @intervene.register(dict)
 def _dict_intervene(
-    obs: Dict[K, T], act: Dict[K, AtomicIntervention[T]], **kwargs
+    obs: Dict[K, T],
+    act: Union[Dict[K, AtomicIntervention[T]], Callable[[Dict[K, T]], Dict[K, T]]],
+    **kwargs,
 ) -> Dict[K, T]:
+
+    if callable(act):
+        return _dict_intervene_callable(obs, act, **kwargs)
+
     result: Dict[K, T] = {}
     for k in obs.keys():
         result[k] = intervene(obs[k], act[k] if k in act else None, **kwargs)
     return result
+
+
+@pyro.poutine.runtime.effectful(type="intervene")
+def _dict_intervene_callable(
+    obs: Dict[K, T], act: Callable[[Dict[K, T]], Dict[K, T]], **kwargs
+) -> Dict[K, T]:
+    return act(obs)
 
 
 @intervene.register
