@@ -55,7 +55,8 @@ extensions = [
     "myst_parser",
     # "sphinx_gallery.gen_gallery",
     # "sphinx_search.extension",
-    "sphinxcontrib.bibtex"
+    "sphinxcontrib.bibtex",
+    "sphinxcontrib.jquery",
 ]
 
 # Point sphinxcontrib.bibtex to the bibtex file.
@@ -101,7 +102,6 @@ html_theme = "sphinx_rtd_theme"
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 # logo
 html_logo = "_static/img/chirho_logo_wide.png"
-
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,

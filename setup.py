@@ -57,6 +57,7 @@ setup(
             "isort",
             "sphinx==7.1.2",
             "sphinxcontrib-bibtex",
+            "sphinxcontrib-jquery",
             "sphinx_rtd_theme==1.3.0",
             "myst_parser",
             "nbsphinx",
