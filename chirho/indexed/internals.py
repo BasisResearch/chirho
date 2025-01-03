@@ -1,5 +1,5 @@
 import numbers
-from typing import Dict, Hashable, Optional, TypeVar, Union
+from typing import Any, Dict, Hashable, Optional, TypeVar, Union
 
 import pyro
 import pyro.infer.reparam
@@ -67,7 +67,7 @@ def _gather_tensor(
 
 
 @gather.register(dict)
-def _gather_state(
+def _gather_dict(
     value: Dict[K, T], indices: IndexSet, *, event_dim: int = 0, **kwargs
 ) -> Dict[K, T]:
     return {
@@ -140,6 +140,31 @@ def _scatter_tensor(
             ).reshape((-1,) + (1,) * (event_dim - name_to_dim[name] - 1))
 
     result[tuple(index)] = value
+    return result
+
+
+@scatter.register(dict)
+def _scatter_dict(
+    value: Dict[K, T],
+    indexset: IndexSet,
+    *,
+    result: Optional[Dict[K, Optional[T]]] = None,
+    event_dim: Optional[int] = None,
+    name_to_dim: Optional[Dict[Hashable, int]] = None,
+) -> Dict[K, Any]:
+
+    if result is None:
+        result = {k: None for k in value.keys()}
+
+    for k in value.keys():
+        result[k] = scatter(
+            value[k],
+            indexset,
+            result=result[k],
+            event_dim=event_dim,
+            name_to_dim=name_to_dim,
+        )
+
     return result
 
 
