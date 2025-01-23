@@ -34,6 +34,7 @@ intervene_states = [
     dict(I=torch.tensor(50.0)),
     dict(S=torch.tensor(50.0), R=torch.tensor(50.0)),
     dict(S=torch.tensor(50.0), I=torch.tensor(50.0), R=torch.tensor(50.0)),
+    lambda X: {k: v / 2 for k, v in X.items()},
 ]
 
 # Define intervention times before all tspan values.
