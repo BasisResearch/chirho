@@ -1,7 +1,9 @@
 from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 
 import pyro
+import pyro.distributions
 import pyro.distributions.constraints as constraints
+import pyro.distributions.distribution
 import torch
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
@@ -93,6 +95,28 @@ def random_intervention(
         return pyro.sample(name, proposal_dist)
 
     return _random_intervention
+
+
+def proposal_intervention(
+    distribution: pyro.distributions.distribution, name: str
+) -> Callable[[torch.Tensor], torch.Tensor]:
+    """
+    Wraps a distribution to create a proposal intervention function.
+
+
+    :param: distribution (Distribution): A Pyro distribution object.
+    :param: name (str): name for the Pyro sample site.
+
+    Returns:
+        Callable[[torch.Tensor], torch.Tensor]: A function that takes a tensor `value`
+        and returns a Pyro sample from the expanded distribution.
+    """
+
+    def _proposal_intervention(value: torch.Tensor) -> torch.Tensor:
+        proposal_dist = distribution.expand(value.shape)
+        return pyro.sample(name, proposal_dist)
+
+    return _proposal_intervention
 
 
 def undo_split(

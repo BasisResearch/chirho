@@ -1,11 +1,13 @@
 import contextlib
-from typing import Callable, Mapping, Optional, TypeVar, Union
+from typing import Callable, Mapping, Optional, TypeVar, Union, cast
 
 import pyro.distributions.constraints as constraints
 import torch
+import warnings
 
 from chirho.explainable.handlers.components import (
     consequent_eq_neq,
+    proposal_intervention,
     random_intervention,
     sufficiency_intervention,
     undo_split,
@@ -62,6 +64,9 @@ def SearchForExplanation(
     alternatives: Optional[Mapping[str, Intervention[S]]] = None,
     factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
     preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
+    proposal_distributions: Optional[
+        Mapping[str, torch.distributions.Distribution]
+    ] = None,
     consequent_scale: float = 1e-2,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
@@ -105,21 +110,66 @@ def SearchForExplanation(
         assert not set(witnesses.keys()) & set(consequents.keys())
     else:
         # if witness candidates are not provided, use all non-consequent nodes
+        warnings.warn("Witness candidates were not provided. Using all non-consequent nodes.", UserWarning)
+
         witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
     ##################################################################
     # Fill in default argument values and create constituent handlers
     ##################################################################
 
-    # defaults for necessity interventions
-    alternatives = (
-        {a: alternatives[a] for a in antecedents.keys()}
-        if alternatives is not None
-        else {
-            a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
-            for a in antecedents.keys()
-        }
-    )
+    #defaults for necessity interventions
+    # alternatives = (
+    #     {a: alternatives[a] for a in antecedents.keys()}
+    #     if alternatives is not None
+    #     else {
+    #         a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+    #         for a in antecedents.keys()
+    #     }
+    # )
+
+    # TODO: simplify
+    _alternatives = {}
+    for a in antecedents.keys():
+        if alternatives is not None and a in alternatives.keys():
+            _alternatives[a] = alternatives[a] 
+        else:
+            if proposal_distributions is not None and a in proposal_distributions.keys():
+                _alternatives[a] = cast(
+                    Intervention[S],
+                    proposal_intervention(
+                        proposal_distributions[a], name=f"{prefix}_alternative_{a}"
+                    )
+                )
+            else:
+                _alternatives[a] = random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+
+    alternatives = _alternatives
+
+
+
+    
+
+
+    # alternatives = (
+    #     {a: alternatives[a] for a in antecedents.keys()}
+    #     if alternatives is not None and alternatives[a] is not None
+    #     else {
+    #         a: (
+    #             cast(
+    #                 Intervention[S],
+    #                 proposal_intervention(
+    #                     proposal_distributions[a], name=f"{prefix}_alternative_{a}"
+    #                 ),
+    #             )
+    #             if proposal_distributions and a in proposal_distributions
+    #             else random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+    #         )
+    #         for a in antecedents.keys()
+    #     }
+    # )
+
+    print("alternatives", alternatives)
 
     # defaults for sufficiency interventions
     sufficiency_actions = {
@@ -140,18 +190,29 @@ def SearchForExplanation(
     )
 
     # defaults for witness_preemptions
-    witness_handler = Preemptions(
-        (
-            {w: preemptions[w] for w in witnesses}
-            if preemptions is not None
-            else {
-                w: undo_split(supports[w], antecedents=antecedents.keys())
-                for w in witnesses
-            }
-        ),
-        bias=witness_bias,
-        prefix=f"{prefix}__witness_",
-    )
+
+    _preemptions = {}
+    for w in witnesses.keys():
+        if witnesses[w] is not None:
+            _preemptions[w] = witnesses[w]
+        else:
+            _preemptions[w] = undo_split(supports[w], antecedents=antecedents.keys())
+
+    print("preemptions", _preemptions)
+
+    witness_handler = Preemptions(_preemptions, bias=witness_bias, prefix=f"{prefix}__witness_")
+    # witness_handler = Preemptions(
+    #     (
+    #         {w: preemptions[w] for w in witnesses}
+    #         if preemptions is not None
+    #         else {
+    #             w: undo_split(supports[w], antecedents=antecedents.keys())
+    #             for w in witnesses
+    #         }
+    #     ),
+    #     bias=witness_bias,
+    #     prefix=f"{prefix}__witness_",
+    # )
 
     #
     consequent_handler: Factors[T] = Factors(
