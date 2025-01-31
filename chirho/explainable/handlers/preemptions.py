@@ -1,4 +1,4 @@
-from typing import Generic, Mapping, TypeVar
+from typing import Generic, Mapping, Optional, TypeVar
 
 import pyro
 import torch
@@ -53,11 +53,13 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
         *,
         prefix: str = "__witness_split_",
         bias: float = 0.0,
+        case: Optional[torch.Tensor] = None,
     ):
         assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
         self.actions = actions
         self.bias = bias
         self.prefix = prefix
+        self.case = case
         super().__init__()
 
     def _pyro_post_sample(self, msg):
@@ -73,7 +75,7 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
             device=msg["value"].device,
         )
         case_dist = pyro.distributions.Categorical(probs=weights)
-        case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist)
+        case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist, obs=self.case)
 
         msg["value"] = preempt(
             msg["value"],

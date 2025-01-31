@@ -1,9 +1,9 @@
 import contextlib
+import warnings
 from typing import Callable, Mapping, Optional, TypeVar, Union, cast
 
 import pyro.distributions.constraints as constraints
 import torch
-import warnings
 
 from chirho.explainable.handlers.components import (
     consequent_eq_neq,
@@ -110,7 +110,10 @@ def SearchForExplanation(
         assert not set(witnesses.keys()) & set(consequents.keys())
     else:
         # if witness candidates are not provided, use all non-consequent nodes
-        warnings.warn("Witness candidates were not provided. Using all non-consequent nodes.", UserWarning)
+        warnings.warn(
+            "Witness candidates were not provided. Using all non-consequent nodes.",
+            UserWarning,
+        )
 
         witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
@@ -118,7 +121,7 @@ def SearchForExplanation(
     # Fill in default argument values and create constituent handlers
     ##################################################################
 
-    #defaults for necessity interventions
+    # defaults for necessity interventions
     # alternatives = (
     #     {a: alternatives[a] for a in antecedents.keys()}
     #     if alternatives is not None
@@ -132,24 +135,24 @@ def SearchForExplanation(
     _alternatives = {}
     for a in antecedents.keys():
         if alternatives is not None and a in alternatives.keys():
-            _alternatives[a] = alternatives[a] 
+            _alternatives[a] = alternatives[a]
         else:
-            if proposal_distributions is not None and a in proposal_distributions.keys():
+            if (
+                proposal_distributions is not None
+                and a in proposal_distributions.keys()
+            ):
                 _alternatives[a] = cast(
                     Intervention[S],
                     proposal_intervention(
                         proposal_distributions[a], name=f"{prefix}_alternative_{a}"
-                    )
+                    ),
                 )
             else:
-                _alternatives[a] = random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+                _alternatives[a] = random_intervention(
+                    supports[a], name=f"{prefix}_alternative_{a}"
+                )
 
     alternatives = _alternatives
-
-
-
-    
-
 
     # alternatives = (
     #     {a: alternatives[a] for a in antecedents.keys()}
@@ -200,7 +203,9 @@ def SearchForExplanation(
 
     print("preemptions", _preemptions)
 
-    witness_handler = Preemptions(_preemptions, bias=witness_bias, prefix=f"{prefix}__witness_")
+    witness_handler = Preemptions(
+        _preemptions, bias=witness_bias, prefix=f"{prefix}__witness_"
+    )
     # witness_handler = Preemptions(
     #     (
     #         {w: preemptions[w] for w in witnesses}
