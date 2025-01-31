@@ -53,13 +53,13 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
         *,
         prefix: str = "__witness_split_",
         bias: float = 0.0,
-        case: Optional[torch.Tensor] = None,
+        cases: Optional[Mapping[str, torch.Tensor]] = None,
     ):
         assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
         self.actions = actions
         self.bias = bias
         self.prefix = prefix
-        self.case = case
+        self.cases = cases
         super().__init__()
 
     def _pyro_post_sample(self, msg):
@@ -75,7 +75,12 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
             device=msg["value"].device,
         )
         case_dist = pyro.distributions.Categorical(probs=weights)
-        case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist, obs=self.case)
+        case = pyro.sample(
+            f"{self.prefix}{msg['name']}",
+            case_dist,
+            obs=self.cases[msg["name"]] if self.cases is not None else None,
+        )
+        # TODO consider removing the distribution from here and converting to pyro.deterministic
 
         msg["value"] = preempt(
             msg["value"],

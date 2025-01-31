@@ -2,6 +2,7 @@ import contextlib
 import warnings
 from typing import Callable, Mapping, Optional, TypeVar, Union, cast
 
+import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import torch
 
@@ -29,6 +30,7 @@ def SplitSubsets(
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
+    cases: Optional[Mapping[str, torch.Tensor]] = None,
 ):
     """
     A context manager used for a stochastic search of minimal but-for causes among potential interventions.
@@ -48,7 +50,7 @@ def SplitSubsets(
     }
 
     with do(actions=actions):
-        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix, cases=cases):
             yield
 
 
@@ -71,6 +73,8 @@ def SearchForExplanation(
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
     prefix: str = "__cause__",
+    num_samples: Optional[int] = None,
+    sampling_dim: Optional[int] = None,
 ):
     """
     A handler for transforming causal explanation queries into probabilistic inferences.
@@ -184,12 +188,50 @@ def SearchForExplanation(
         for a in antecedents.keys()
     }
 
+    antecedent_actions = {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()}  # type: ignore
+
+    if num_samples is not None:
+        if sampling_dim is None:
+            raise ValueError("sampling_dim must be provided if num_samples is provided")
+
+        case_shape = [1] * torch.abs(torch.tensor(sampling_dim))
+        case_shape[sampling_dim] = num_samples
+
+        antecedent_probs = torch.tensor(
+            [0.5 - antecedent_bias] + ([(0.5 + antecedent_bias)])
+        )
+
+        antecedent_case_dist = dist.Categorical(probs=antecedent_probs)
+
+        antecedent_cases = {
+            key: antecedent_case_dist.sample(case_shape) for key in antecedents.keys()
+        }
+
+        # for key in antecedents.keys():
+        #     antecedent_cases[key] = antecedent_case_dist.sample(case_shape)
+
+        witness_probs = torch.tensor([0.5 - witness_bias] + ([(0.5 + witness_bias)]))
+
+        witness_case_dist = dist.Categorical(probs=witness_probs)
+
+        witness_cases = {
+            key: witness_case_dist.sample(case_shape) for key in witnesses.keys()
+        }
+
+        witness_cases = {
+            key: value * antecedent_cases[key] if key in antecedent_cases else value
+            for key, value in witness_cases.items()
+        }
+
+    # for key, value in antecedents.items():
+
     # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
-        {a: supports[a] for a in antecedents.keys()},
-        {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},  # type: ignore
+        supports={a: supports[a] for a in antecedents.keys()},
+        actions=antecedent_actions,
         bias=antecedent_bias,
         prefix=f"{prefix}__antecedent_",
+        cases=antecedent_cases if num_samples is not None else None,
     )
 
     # defaults for witness_preemptions
@@ -204,7 +246,10 @@ def SearchForExplanation(
     print("preemptions", _preemptions)
 
     witness_handler = Preemptions(
-        _preemptions, bias=witness_bias, prefix=f"{prefix}__witness_"
+        _preemptions,
+        bias=witness_bias,
+        prefix=f"{prefix}__witness_",
+        cases=witness_cases if num_samples is not None else None,
     )
     # witness_handler = Preemptions(
     #     (
