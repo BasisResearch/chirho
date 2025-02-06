@@ -135,7 +135,7 @@ def SearchForExplanation(
     #     }
     # )
 
-    # TODO: simplify
+    # TODO: simplify?
     _alternatives = {}
     for a in antecedents.keys():
         if alternatives is not None and a in alternatives.keys():
