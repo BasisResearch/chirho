@@ -38,9 +38,9 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     and the probability of each counterfactual case is ``(0.5 + bias) / num_actions``,
     where ``num_actions`` is the number of counterfactual actions for the sample site (usually 1).
 
-    In tasks where a site is both a potential antecedent and a potential witness, 
-    sampling needs to be coordinated so that the site is neither antecedent-preempted nor witness-preempted. In such 
-    cases, the ``cases`` argument can be used to pass coordinated preemption case tensors for the sites. 
+    In tasks where a site is both a potential antecedent and a potential witness,
+    sampling needs to be coordinated so that the site is neither antecedent-preempted nor witness-preempted. In such
+    cases, the ``cases`` argument can be used to pass coordinated preemption case tensors for the sites.
 
     :param actions: A mapping from sample site names to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5.

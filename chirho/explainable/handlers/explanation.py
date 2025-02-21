@@ -42,7 +42,7 @@ def SplitSubsets(
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional preemption nodes. Defaults to ``__cause_split_``.
-    :param cases: A mapping of sites to their preemption cases (for possible coordination between sites). 
+    :param cases: A mapping of sites to their preemption cases (for possible coordination between sites).
     """
     preemptions = {
         antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
@@ -162,7 +162,6 @@ def SearchForExplanation(
         antecedent_cases = {
             key: antecedent_case_dist.sample(case_shape) for key in antecedents.keys()
         }
-
 
         witness_probs = torch.tensor([0.5 - witness_bias] + ([(0.5 + witness_bias)]))
 
