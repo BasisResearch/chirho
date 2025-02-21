@@ -14,7 +14,7 @@ from chirho.indexed.ops import cond
 from chirho.interventional.ops import Intervention, intervene
 from chirho.observational.ops import Observation, observe
 
-R = Union[numbers.Real, torch.Tensor]
+R = Union[float, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 
