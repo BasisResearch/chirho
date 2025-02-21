@@ -76,8 +76,8 @@ def SearchForExplanation(
     A handler for transforming causal explanation queries into probabilistic inferences.
 
     When used as a context manager, ``SearchForExplanation`` yields a dictionary of observations
-    that can be used with ``condition`` to simultaneously impose an additional factivity constraint
-    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation`` ::
+    that can be used with ``condition`` to impose an additional factivity constraint
+    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation``::
 
         with SearchForExplanation(supports, antecedents, consequents, ...) as evidence:
             with condition(data=evidence):
@@ -90,13 +90,18 @@ def SearchForExplanation(
     :param alternatives: An optional mapping of names to alternative antecedent interventions.
     :param factors: An optional mapping of names to consequent constraint factors.
     :param preemptions: An optional mapping of names to witness preemption values.
-    :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
-    :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param antecedent_bias: A scalar bias towards not intervening. Must be between -0.5 and 0.5. Defaults to 0.0.
+    :param consequent_scale: The scale of the consequent factor functions. Defaults to 1e-2.
+    :param witness_bias: A scalar bias towards not preempting. Must be between -0.5 and 0.5. Defaults to 0.0.
     :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
+    :param num_samples: The number of samples to be drawn for each antecedent and witness. Needed if witness and antecedent samples are to be coordinated.
+    :param sampling_dim: The dimension along which the antecedent and witness nodes will be sampled, to be kept consistent with case sampling.
+
+    :note: If ``num_samples`` is not provided, the antecedent and witness nodes will be sampled independently.
 
     :return: A context manager that can be used to query the evidence.
     """
+
     ########################################
     # Validate input arguments
     ########################################
@@ -157,8 +162,6 @@ def SearchForExplanation(
             key: antecedent_case_dist.sample(case_shape) for key in antecedents.keys()
         }
 
-        # for key in antecedents.keys():
-        #     antecedent_cases[key] = antecedent_case_dist.sample(case_shape)
 
         witness_probs = torch.tensor([0.5 - witness_bias] + ([(0.5 + witness_bias)]))
 
