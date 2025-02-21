@@ -42,6 +42,7 @@ def SplitSubsets(
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional preemption nodes. Defaults to ``__cause_split_``.
+    :param cases: A mapping of sites to their preemption cases (for possible coordination between sites). 
     """
     preemptions = {
         antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
