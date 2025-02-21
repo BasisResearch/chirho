@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import heapq
 import math
-import numbers
 import typing
 import warnings
 from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
