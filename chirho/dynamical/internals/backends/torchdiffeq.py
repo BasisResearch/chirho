@@ -245,9 +245,12 @@ def torchdiffeq_simulate_to_interruption(
 ) -> Tuple[State[torch.Tensor], torch.Tensor, Optional[Interruption[torch.Tensor]]]:
     assert len(interruptions) > 0, "should have at least one interruption here"
 
-    (next_interruption,), interruption_time = _torchdiffeq_get_next_interruptions(
+    next_interruptions, interruption_time = _torchdiffeq_get_next_interruptions(
         dynamics, initial_state, start_time, interruptions, **kwargs
     )
+
+    # Choose one arbitrarily if there are multiple.
+    next_interruption = next_interruptions[0]
 
     value = simulate_point(
         dynamics, initial_state, start_time, interruption_time, **kwargs
