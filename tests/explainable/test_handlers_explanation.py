@@ -64,7 +64,8 @@ def stones_bayesian_model():
     }
 
 
-def test_SearchForExplanation():
+@pytest.fixture
+def test_search_setup():
     supports = {
         "sally_throws": constraints.boolean,
         "bill_throws": constraints.boolean,
@@ -74,12 +75,9 @@ def test_SearchForExplanation():
     }
 
     antecedents = {"sally_throws": torch.tensor(1.0)}
-
     consequents = {"bottle_shatters": torch.tensor(1.0)}
-
-    witnesses = {
-        "bill_throws": None,
-    }
+    witnesses = {"bill_throws": None}
+    wide_witness = {"sally_throws": torch.tensor(1.0), "bill_throws": None}
 
     observation_keys = [
         "prob_sally_throws",
@@ -96,6 +94,27 @@ def test_SearchForExplanation():
     )
 
     alternatives = {"sally_throws": 0.0}
+
+    return {
+        "supports": supports,
+        "antecedents": antecedents,
+        "consequents": consequents,
+        "witnesses": witnesses,
+        "wide_witness": wide_witness,
+        "observations_conditioning": observations_conditioning,
+        "alternatives": alternatives,
+    }
+
+
+def test_SearchForExplanation(test_search_setup):
+
+    supports = test_search_setup["supports"]
+    antecedents = test_search_setup["antecedents"]
+    consequents = test_search_setup["consequents"]
+    witnesses = test_search_setup["witnesses"]
+    observations_conditioning = test_search_setup["observations_conditioning"]
+    alternatives = test_search_setup["alternatives"]
+    observations_conditioning = test_search_setup["observations_conditioning"]
 
     with MultiWorldCounterfactual() as mwc:
         with SearchForExplanation(
@@ -189,6 +208,48 @@ def test_SearchForExplanation():
                 assert suff_log_probs[step] == 0.0
             else:
                 assert suff_log_probs[step] <= -10
+
+
+def test_dependent_sampling(test_search_setup):
+
+    supports = test_search_setup["supports"]
+    antecedents = test_search_setup["antecedents"]
+    consequents = test_search_setup["consequents"]
+    witnesses = test_search_setup[
+        "wide_witness"
+    ]  # this time we make sure `sally_throws` is in both.
+    observations_conditioning = test_search_setup["observations_conditioning"]
+    alternatives = test_search_setup["alternatives"]
+    observations_conditioning = test_search_setup["observations_conditioning"]
+
+    with MultiWorldCounterfactual() as mwc:
+        with SearchForExplanation(
+            supports=supports,
+            antecedents=antecedents,
+            consequents=consequents,
+            witnesses=witnesses,
+            alternatives=alternatives,
+            antecedent_bias=0.1,
+            consequent_scale=1e-8,
+            num_samples=100,
+            sampling_dim=-1,
+        ):
+            with observations_conditioning:
+                with pyro.plate("sample", 100):
+                    with pyro.poutine.trace() as tr:
+                        stones_bayesian_model()
+
+    tr.trace.compute_log_prob()
+    tr = tr.trace.nodes
+
+    sally_antecedent_preemption = tr["__cause____antecedent_sally_throws"]["value"]
+    sally_witness_preemption = tr["__cause____witness_sally_throws"]["value"]
+
+    assert torch.all(
+        torch.where(
+            sally_antecedent_preemption == 0, sally_witness_preemption == 0, True
+        )
+    )
 
 
 def test_SplitSubsets_single_layer():
