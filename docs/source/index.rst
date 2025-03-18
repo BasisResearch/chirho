@@ -33,6 +33,7 @@ Table of Contents
    dr_learner
    automated_dr_learner
    dynamical_intro
+   dynamical_multi
    explainable_categorical
    actual_causality
 
