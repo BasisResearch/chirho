@@ -34,6 +34,7 @@ Table of Contents
    automated_dr_learner
    dynamical_intro
    explainable_categorical
+   explainable_sir
    actual_causality
 
 .. toctree::

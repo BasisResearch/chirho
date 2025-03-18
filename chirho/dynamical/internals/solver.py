@@ -65,6 +65,10 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         start_time: R = msg["args"][2]
         end_time: R = msg["args"][3]
 
+        # needed to avoid mypy
+        assert isinstance(start_time, torch.Tensor)
+        assert isinstance(end_time, torch.Tensor)
+
         if pyro.settings.get("validate_dynamics"):
             check_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
 
