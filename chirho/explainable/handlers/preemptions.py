@@ -1,4 +1,4 @@
-from typing import Generic, Mapping, TypeVar
+from typing import Generic, Mapping, Optional, TypeVar
 
 import pyro
 import torch
@@ -38,9 +38,14 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
     and the probability of each counterfactual case is ``(0.5 + bias) / num_actions``,
     where ``num_actions`` is the number of counterfactual actions for the sample site (usually 1).
 
+    In tasks where a site is both a potential antecedent and a potential witness,
+    sampling needs to be coordinated so that the site is neither antecedent-preempted nor witness-preempted. In such
+    cases, the ``cases`` argument can be used to pass coordinated preemption case tensors for the sites.
+
     :param actions: A mapping from sample site names to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5.
     :param prefix: The prefix for naming the auxiliary discrete random variables.
+    :param cases: A mapping from sample site names to their preemption cases (for possible coordination between sites).
     """
 
     actions: Mapping[str, Intervention[T]]
@@ -53,11 +58,13 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
         *,
         prefix: str = "__witness_split_",
         bias: float = 0.0,
+        cases: Optional[Mapping[str, torch.Tensor]] = None,
     ):
         assert -0.5 <= bias <= 0.5, "bias must be between -0.5 and 0.5"
         self.actions = actions
         self.bias = bias
         self.prefix = prefix
+        self.cases = cases
         super().__init__()
 
     def _pyro_post_sample(self, msg):
@@ -73,7 +80,11 @@ class Preemptions(Generic[T], pyro.poutine.messenger.Messenger):
             device=msg["value"].device,
         )
         case_dist = pyro.distributions.Categorical(probs=weights)
-        case = pyro.sample(f"{self.prefix}{msg['name']}", case_dist)
+        case = pyro.sample(
+            f"{self.prefix}{msg['name']}",
+            case_dist,
+            obs=self.cases[msg["name"]] if self.cases is not None else None,
+        )
 
         msg["value"] = preempt(
             msg["value"],

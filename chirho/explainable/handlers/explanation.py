@@ -1,6 +1,8 @@
 import contextlib
+import warnings
 from typing import Callable, Mapping, Optional, TypeVar, Union
 
+import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import torch
 
@@ -27,6 +29,7 @@ def SplitSubsets(
     *,
     bias: float = 0.0,
     prefix: str = "__cause_split_",
+    cases: Optional[Mapping[str, torch.Tensor]] = None,
 ):
     """
     A context manager used for a stochastic search of minimal but-for causes among potential interventions.
@@ -39,6 +42,7 @@ def SplitSubsets(
     :param actions: A mapping of sites to interventions.
     :param bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional preemption nodes. Defaults to ``__cause_split_``.
+    :param cases: A mapping of sites to their preemption cases (for possible coordination between sites).
     """
     preemptions = {
         antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
@@ -46,7 +50,7 @@ def SplitSubsets(
     }
 
     with do(actions=actions):
-        with Preemptions(actions=preemptions, bias=bias, prefix=prefix):
+        with Preemptions(actions=preemptions, bias=bias, prefix=prefix, cases=cases):
             yield
 
 
@@ -66,13 +70,15 @@ def SearchForExplanation(
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
     prefix: str = "__cause__",
+    num_samples: Optional[int] = None,
+    sampling_dim: Optional[int] = None,
 ):
     """
     A handler for transforming causal explanation queries into probabilistic inferences.
 
     When used as a context manager, ``SearchForExplanation`` yields a dictionary of observations
-    that can be used with ``condition`` to simultaneously impose an additional factivity constraint
-    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation`` ::
+    that can be used with ``condition`` to impose an additional factivity constraint
+    alongside the necessity and sufficiency constraints implemented by ``SearchForExplanation``::
 
         with SearchForExplanation(supports, antecedents, consequents, ...) as evidence:
             with condition(data=evidence):
@@ -85,13 +91,18 @@ def SearchForExplanation(
     :param alternatives: An optional mapping of names to alternative antecedent interventions.
     :param factors: An optional mapping of names to consequent constraint factors.
     :param preemptions: An optional mapping of names to witness preemption values.
-    :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
-    :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
-    :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
+    :param antecedent_bias: A scalar bias towards not intervening. Must be between -0.5 and 0.5. Defaults to 0.0.
+    :param consequent_scale: The scale of the consequent factor functions. Defaults to 1e-2.
+    :param witness_bias: A scalar bias towards not preempting. Must be between -0.5 and 0.5. Defaults to 0.0.
     :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
+    :param num_samples: The number of samples to be drawn for each antecedent and witness. Needed if witness and antecedent samples are to be coordinated.
+    :param sampling_dim: The dimension along which the antecedent and witness nodes will be sampled, to be kept consistent with case sampling.
+
+    :note: If ``num_samples`` is not provided, the antecedent and witness nodes will be sampled independently.
 
     :return: A context manager that can be used to query the evidence.
     """
+
     ########################################
     # Validate input arguments
     ########################################
@@ -105,6 +116,10 @@ def SearchForExplanation(
         assert not set(witnesses.keys()) & set(consequents.keys())
     else:
         # if witness candidates are not provided, use all non-consequent nodes
+        warnings.warn(
+            "Witness candidates were not provided. Using all non-consequent nodes.",
+            UserWarning,
+        )
         witnesses = {w: None for w in set(supports.keys()) - set(consequents.keys())}
 
     ##################################################################
@@ -131,12 +146,43 @@ def SearchForExplanation(
         for a in antecedents.keys()
     }
 
+    if num_samples is not None:
+        if sampling_dim is None:
+            raise ValueError("sampling_dim must be provided if num_samples is provided")
+
+        case_shape = [1] * torch.abs(torch.tensor(sampling_dim))
+        case_shape[sampling_dim] = num_samples
+
+        antecedent_probs = torch.tensor(
+            [0.5 - antecedent_bias] + ([(0.5 + antecedent_bias)])
+        )
+
+        antecedent_case_dist = dist.Categorical(probs=antecedent_probs)
+
+        antecedent_cases = {
+            key: antecedent_case_dist.sample(case_shape) for key in antecedents.keys()
+        }
+
+        witness_probs = torch.tensor([0.5 - witness_bias] + ([(0.5 + witness_bias)]))
+
+        witness_case_dist = dist.Categorical(probs=witness_probs)
+
+        witness_cases = {
+            key: witness_case_dist.sample(case_shape) for key in witnesses.keys()
+        }
+
+        witness_cases = {
+            key: value * antecedent_cases[key] if key in antecedent_cases else value
+            for key, value in witness_cases.items()
+        }
+
     # interventions on subsets of antecedents
     antecedent_handler = SplitSubsets(
         {a: supports[a] for a in antecedents.keys()},
         {a: (alternatives[a], sufficiency_actions[a]) for a in antecedents.keys()},  # type: ignore
         bias=antecedent_bias,
         prefix=f"{prefix}__antecedent_",
+        cases=antecedent_cases if num_samples is not None else None,
     )
 
     # defaults for witness_preemptions
@@ -151,6 +197,7 @@ def SearchForExplanation(
         ),
         bias=witness_bias,
         prefix=f"{prefix}__witness_",
+        cases=witness_cases if num_samples is not None else None,
     )
 
     #
