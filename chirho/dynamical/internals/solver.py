@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import heapq
 import math
-import numbers
 import typing
 import warnings
 from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
@@ -13,7 +12,7 @@ import torch
 from chirho.dynamical.internals._utils import Prioritized, ShallowMessenger
 from chirho.dynamical.ops import Dynamics, State, on
 
-R = Union[numbers.Real, torch.Tensor]
+R = Union[float, torch.Tensor]
 S = TypeVar("S")
 T = TypeVar("T")
 
@@ -65,6 +64,10 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
         state: State[T] = msg["args"][1]
         start_time: R = msg["args"][2]
         end_time: R = msg["args"][3]
+
+        # needed to avoid mypy
+        assert isinstance(start_time, torch.Tensor)
+        assert isinstance(end_time, torch.Tensor)
 
         if pyro.settings.get("validate_dynamics"):
             check_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
