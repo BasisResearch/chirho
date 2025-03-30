@@ -237,6 +237,42 @@ def test_dynamic_intervention_causes_change(
 @pytest.mark.parametrize("start_time", [start_time])
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("logging_times", [logging_times])
+@pytest.mark.parametrize("trigger_state", [trigger_state1])
+@pytest.mark.parametrize("intervene_state", [intervene_state1])
+@pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
+def test_dynamic_intervention_collision(
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    logging_times,
+    trigger_state,
+    intervene_state,
+    event_fn_builder,
+):
+
+    with LogTrajectory(
+        times=logging_times,
+    ):
+        with solver():
+            with DynamicIntervention(
+                event_fn=event_fn_builder(trigger_state),
+                intervention=intervene_state,
+            ):
+                with DynamicIntervention(
+                    event_fn=event_fn_builder(trigger_state),
+                    intervention=intervene_state,
+                ):
+                    simulate(model, init_state, start_time, end_time)
+
+
+@pytest.mark.parametrize("solver", [TorchDiffEq])
+@pytest.mark.parametrize("model", [UnifiedFixtureDynamics()])
+@pytest.mark.parametrize("init_state", [init_state])
+@pytest.mark.parametrize("start_time", [start_time])
+@pytest.mark.parametrize("end_time", [end_time])
+@pytest.mark.parametrize("logging_times", [logging_times])
 @pytest.mark.parametrize(
     "trigger_states",
     [(trigger_state1, trigger_state2), (trigger_state2, trigger_state1)],
