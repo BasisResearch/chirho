@@ -95,8 +95,10 @@ def SearchForExplanation(
     :param consequent_scale: The scale of the consequent factor functions. Defaults to 1e-2.
     :param witness_bias: A scalar bias towards not preempting. Must be between -0.5 and 0.5. Defaults to 0.0.
     :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
-    :param num_samples: The number of samples to be drawn for each antecedent and witness. Needed if witness and antecedent samples are to be coordinated.
-    :param sampling_dim: The dimension along which the antecedent and witness nodes will be sampled, to be kept consistent with case sampling.
+    :param num_samples: The number of samples to be drawn for each antecedent and witness.
+                        Needed if witness and antecedent samples are to be coordinated.
+    :param sampling_dim: The dimension along which the antecedent and witness nodes will be sampled,
+                        to be kept consistent with case sampling.
 
     :note: If ``num_samples`` is not provided, the antecedent and witness nodes will be sampled independently.
 

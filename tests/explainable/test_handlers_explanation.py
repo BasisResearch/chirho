@@ -222,7 +222,7 @@ def test_dependent_sampling(test_search_setup):
     alternatives = test_search_setup["alternatives"]
     observations_conditioning = test_search_setup["observations_conditioning"]
 
-    with MultiWorldCounterfactual() as mwc:
+    with MultiWorldCounterfactual():
         with SearchForExplanation(
             supports=supports,
             antecedents=antecedents,
