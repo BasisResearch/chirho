@@ -196,7 +196,7 @@ def pytree_generalized_manual_revjvp(
 
 
 def make_functional_call(
-    mod: Callable[P, T]
+    mod: Callable[P, T],
 ) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
     """
     Converts a PyTorch module into a functional call for use with
