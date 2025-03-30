@@ -63,8 +63,8 @@ def stones_bayesian_model():
         "bottle_shatters": bottle_shatters,
     }
 
-@pytest.fixture
-def test_search_setup():
+
+def test_SearchForExplanation():
     supports = {
         "sally_throws": constraints.boolean,
         "bill_throws": constraints.boolean,
@@ -74,8 +74,12 @@ def test_search_setup():
     }
 
     antecedents = {"sally_throws": torch.tensor(1.0)}
+
     consequents = {"bottle_shatters": torch.tensor(1.0)}
-    witnesses = {"bill_throws": None}
+
+    witnesses = {
+        "bill_throws": None,
+    }
 
     observation_keys = [
         "prob_sally_throws",
@@ -92,60 +96,6 @@ def test_search_setup():
     )
 
     alternatives = {"sally_throws": 0.0}
-
-    return {
-        "supports": supports,
-        "antecedents": antecedents,
-        "consequents": consequents,
-        "witnesses": witnesses,
-        "observations_conditioning": observations_conditioning,
-        "alternatives": alternatives,
-    }
-
-
-def test_SearchForExplanation(test_search_setup):
-    # supports = {
-    #     "sally_throws": constraints.boolean,
-    #     "bill_throws": constraints.boolean,
-    #     "sally_hits": constraints.boolean,
-    #     "bill_hits": constraints.boolean,
-    #     "bottle_shatters": constraints.boolean,
-    # }
-
-    # antecedents = {"sally_throws": torch.tensor(1.0)}
-
-    # consequents = {"bottle_shatters": torch.tensor(1.0)}
-
-    # witnesses = {
-    #     "bill_throws": None,
-    # }
-
-    # observation_keys = [
-    #     "prob_sally_throws",
-    #     "prob_bill_throws",
-    #     "prob_sally_hits",
-    #     "prob_bill_hits",
-    #     "prob_bottle_shatters_if_sally",
-    #     "prob_bottle_shatters_if_bill",
-    # ]
-    # observations = {k: torch.tensor(1.0) for k in observation_keys}
-
-    # observations_conditioning = condition(
-    #     data={k: torch.as_tensor(v) for k, v in observations.items()}
-    # )
-
-    # alternatives = {"sally_throws": 0.0}
-
-
-    supports = test_search_setup["supports"]
-    antecedents = test_search_setup["antecedents"]
-    consequents = test_search_setup["consequents"]
-    witnesses = test_search_setup["witnesses"]
-    observations_conditioning = test_search_setup["observations_conditioning"]
-    alternatives = test_search_setup["alternatives"]
-    observations_conditioning = test_search_setup["observations_conditioning"]
-
-
 
     with MultiWorldCounterfactual() as mwc:
         with SearchForExplanation(
