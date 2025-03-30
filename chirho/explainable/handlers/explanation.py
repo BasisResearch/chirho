@@ -154,7 +154,7 @@ def SearchForExplanation(
         case_shape[sampling_dim] = num_samples
 
         antecedent_probs = torch.tensor(
-            [0.5 - antecedent_bias] + ([(0.5 + antecedent_bias)])
+            [0.5 - antecedent_bias] + ([0.5 + antecedent_bias])
         )
 
         antecedent_case_dist = dist.Categorical(probs=antecedent_probs)
@@ -163,7 +163,7 @@ def SearchForExplanation(
             key: antecedent_case_dist.sample(case_shape) for key in antecedents.keys()
         }
 
-        witness_probs = torch.tensor([0.5 - witness_bias] + ([(0.5 + witness_bias)]))
+        witness_probs = torch.tensor([0.5 - witness_bias] + ([0.5 + witness_bias]))
 
         witness_case_dist = dist.Categorical(probs=witness_probs)
 
