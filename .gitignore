@@ -87,3 +87,8 @@ docs/build
 site/
 out
 *.matrix.gz
+
+# auxiilary documentation files
+docs/source/fishery_samples.pkl
+docs/source/fishery_timed_samples.pkl
+
