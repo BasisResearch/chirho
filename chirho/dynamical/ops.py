@@ -94,7 +94,7 @@ def on(
     if callback is None:
 
         def _on(
-            callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
+            callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]],
         ):
             return on(predicate, callback)
 

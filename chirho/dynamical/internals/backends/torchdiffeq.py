@@ -249,6 +249,7 @@ def torchdiffeq_simulate_to_interruption(
         dynamics, initial_state, start_time, interruptions, **kwargs
     )
 
+    # Choose one arbitrarily if there are multiple.
     next_interruption = next_interruptions[0]
 
     value = simulate_point(
