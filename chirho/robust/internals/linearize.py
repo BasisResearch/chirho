@@ -342,7 +342,7 @@ def linearize(
         parallel=True,
     )
 
-    batched_log_prob = BatchedNMCLogMarginalLikelihood(
+    batched_log_prob: BatchedNMCLogMarginalLikelihood[P, torch.Tensor] = BatchedNMCLogMarginalLikelihood(
         model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)
