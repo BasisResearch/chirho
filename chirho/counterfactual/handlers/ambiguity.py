@@ -25,10 +25,10 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     """
 
     def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
-        assert isinstance(msg["fn"], TorchDistributionMixin)
 
         # expand latent values to include all index plates
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
+            assert isinstance(msg["fn"], TorchDistributionMixin)
             rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
             assert value is not None and isinstance(value, torch.Tensor)
             index_plates = get_index_plates()
