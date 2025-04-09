@@ -6,6 +6,7 @@ from typing import Mapping, Optional, TypeVar
 import pyro
 import pyro.distributions
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import add_indices
@@ -34,12 +35,12 @@ def _observe_deterministic(rv: T, obs: Optional[AtomicObservation[T]] = None, **
 @observe.register(pyro.distributions.Distribution)
 @pyro.poutine.runtime.effectful(type="observe")
 def _observe_distribution(
-    rv: pyro.distributions.Distribution,
-    obs: Optional[AtomicObservation[T]] = None,
+    rv: TorchDistributionMixin,
+    obs: Optional[AtomicObservation[torch.Tensor]] = None,
     *,
     name: Optional[str] = None,
     **kwargs,
-) -> T:
+) -> torch.Tensor:
     if name is None:
         raise ValueError("name must be specified when observing a distribution")
 
@@ -74,7 +75,7 @@ class ObserveNameMessenger(pyro.poutine.messenger.Messenger):
             msg["kwargs"]["name"] = msg["name"]
 
 
-def site_is_delta(msg: dict) -> bool:
+def site_is_delta(msg: pyro.poutine.messenger.Message) -> bool:
     d = msg["fn"]
     while hasattr(d, "base_dist"):
         d = d.base_dist
@@ -109,7 +110,8 @@ def _unbind_leftmost_dim_tensor(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim = get_index_plates()[name].dim
+    assert new_dim is not None
     orig_shape = v.shape
     while new_dim - event_dim < -len(v.shape):
         v = v[None]
@@ -120,8 +122,8 @@ def _unbind_leftmost_dim_tensor(
 
 @unbind_leftmost_dim.register
 def _unbind_leftmost_dim_distribution(
-    v: pyro.distributions.Distribution, name: str, size: int = 1, **kwargs
-) -> pyro.distributions.Distribution:
+    v: TorchDistributionMixin, name: str, size: int = 1, **kwargs
+) -> TorchDistributionMixin:
     size = max(size, v.batch_shape[0])
     if v.batch_shape[0] != 1:
         raise NotImplementedError("Cannot freely reshape distribution")
@@ -129,7 +131,8 @@ def _unbind_leftmost_dim_distribution(
     if name not in get_index_plates():
         add_indices(IndexSet(**{name: set(range(size))}))
 
-    new_dim: int = get_index_plates()[name].dim
+    new_dim = get_index_plates()[name].dim
+    assert new_dim is not None
     orig_shape = v.batch_shape
 
     new_shape = (size,) + (1,) * (-new_dim - len(orig_shape)) + orig_shape[1:]
@@ -153,6 +156,7 @@ def _bind_leftmost_dim_tensor(
 ) -> torch.Tensor:
     if name not in indices_of(v, event_dim=event_dim):
         return v
-    return torch.transpose(
-        v[None], -len(v.shape) - 1, get_index_plates()[name].dim - event_dim
-    )
+
+    plate_dim = get_index_plates()[name].dim
+    assert plate_dim is not None
+    return torch.transpose(v[None], -len(v.shape) - 1, plate_dim - event_dim)

@@ -3,6 +3,7 @@ from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
 import pyro
 import pyro.distributions.constraints as constraints
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 from chirho.counterfactual.handlers.selection import get_factual_indices
 from chirho.explainable.internals import uniform_proposal
@@ -61,7 +62,7 @@ def sufficiency_intervention(
 def random_intervention(
     support: constraints.Constraint,
     name: str,
-) -> Callable[[T], T]:
+) -> Callable[[torch.Tensor], torch.Tensor]:
     """
     Creates a random-valued intervention for a single sample site, determined by
     by the distribution support, and site name.
@@ -82,14 +83,11 @@ def random_intervention(
         >>> assert x != 2
     """
 
-    def _random_intervention(value: T) -> T:
+    def _random_intervention(value: torch.Tensor) -> torch.Tensor:
 
         event_shape = value.shape[len(value.shape) - support.event_dim :]  # type: ignore
 
-        proposal_dist = uniform_proposal(
-            support,
-            event_shape=event_shape,
-        )
+        proposal_dist = uniform_proposal(support, event_shape=event_shape)
         return pyro.sample(name, proposal_dist)
 
     return _random_intervention
@@ -335,6 +333,8 @@ class ExtractSupports(pyro.poutine.messenger.Messenger):
 
         self.supports = {}
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
         if not pyro.poutine.util.site_is_subsample(msg):
+            assert msg["name"] is not None
+            assert isinstance(msg["fn"], TorchDistributionMixin)
             self.supports[msg["name"]] = msg["fn"].support

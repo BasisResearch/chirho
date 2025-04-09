@@ -213,7 +213,7 @@ def make_functional_call(
     @torch.func.functionalize
     def mod_func(params: ParamDict, *args: P.args, **kwargs: P.kwargs) -> T:
         with pyro.validation_enabled(False):
-            return torch.func.functional_call(mod, params, args, dict(**kwargs))
+            return torch.func.functional_call(mod, dict(params), args, dict(**kwargs))
 
     return param_dict, mod_func
 

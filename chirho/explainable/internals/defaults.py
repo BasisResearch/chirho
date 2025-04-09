@@ -3,6 +3,7 @@ from typing import TypeVar
 
 import pyro
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 S = TypeVar("S")
 T = TypeVar("T")
@@ -10,9 +11,8 @@ T = TypeVar("T")
 
 @functools.singledispatch
 def uniform_proposal(
-    support: pyro.distributions.constraints.Constraint,
-    **kwargs,
-) -> pyro.distributions.Distribution:
+    support: pyro.distributions.constraints.Constraint, **kwargs
+) -> TorchDistributionMixin:
     """
     This function heuristically constructs a probability distribution over a specified
     support. The choice of distribution depends on the type of support provided.
@@ -44,7 +44,7 @@ def _uniform_proposal_indep(
     *,
     event_shape: torch.Size = torch.Size([]),
     **kwargs,
-) -> pyro.distributions.Distribution:
+) -> TorchDistributionMixin:
     d = uniform_proposal(support.base_constraint, event_shape=event_shape, **kwargs)
     return d.expand(event_shape).to_event(support.reinterpreted_batch_ndims)
 
@@ -53,7 +53,7 @@ def _uniform_proposal_indep(
 def _uniform_proposal_integer(
     support: pyro.distributions.constraints.integer_interval,
     **kwargs,
-) -> pyro.distributions.Distribution:
+) -> TorchDistributionMixin:
     if support.lower_bound != 0:
         raise NotImplementedError(
             "integer_interval with lower_bound > 0 not yet supported"

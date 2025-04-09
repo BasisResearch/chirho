@@ -4,6 +4,7 @@ from typing import TypeVar
 import pyro
 import pyro.distributions as dist
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 from chirho.counterfactual.handlers.selection import (
     SelectCounterfactual,
@@ -23,15 +24,19 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     counterfactual semantics handlers such as :class:`MultiWorldCounterfactual` .
     """
 
-    def _pyro_post_sample(self, msg: dict) -> None:
+    def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
+
         # expand latent values to include all index plates
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
+            assert isinstance(msg["fn"], TorchDistributionMixin)
             rv, value, event_dim = msg["fn"], msg["value"], len(msg["fn"].event_shape)
+            assert value is not None and isinstance(value, torch.Tensor)
             index_plates = get_index_plates()
 
             new_shape = list(value.shape)
             for k in set(indices_of(rv)) - set(indices_of(value, event_dim=event_dim)):
                 dim = index_plates[k].dim
+                assert dim is not None
                 new_shape = [1] * ((event_dim - dim) - len(new_shape)) + new_shape
                 new_shape[dim - event_dim] = rv.batch_shape[dim]
 
@@ -55,7 +60,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     @_dispatched_observe.register(dist.FoldedDistribution)
     @_dispatched_observe.register(dist.Distribution)
     def _observe_dist(
-        self, rv: dist.Distribution, obs: torch.Tensor, name: str
+        self, rv: TorchDistributionMixin, obs: torch.Tensor, name: str
     ) -> torch.Tensor:
         with pyro.poutine.infer_config(config_fn=no_ambiguity):
             with SelectFactual():

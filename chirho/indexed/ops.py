@@ -1,6 +1,6 @@
 import functools
 import operator
-from typing import Dict, Hashable, Iterable, List, Optional, Set, Tuple, TypeVar, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, TypeVar, Union
 
 import pyro
 import torch
@@ -312,9 +312,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
 
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> (
-    Dict[Hashable, pyro.poutine.indep_messenger.CondIndepStackFrame]
-):
+def get_index_plates() -> Dict[str, pyro.poutine.indep_messenger.CondIndepStackFrame]:
     return {}
 
 
@@ -322,16 +320,18 @@ def indexset_as_mask(
     indexset: IndexSet,
     *,
     event_dim: int = 0,
-    name_to_dim_size: Optional[Dict[Hashable, Tuple[int, int]]] = None,
+    name_to_dim_size: Optional[Dict[str, Tuple[int, int]]] = None,
     device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """
     Get a dense mask tensor for indexing into a tensor from an indexset.
     """
     if name_to_dim_size is None:
-        name_to_dim_size = {
-            name: (f.dim, f.size) for name, f in get_index_plates().items()
-        }
+        name_to_dim_size = {}
+        for name, f in get_index_plates().items():
+            assert f.dim is not None
+            name_to_dim_size[name] = (f.dim, f.size)
+
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
     inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
     for name, values in indexset.items():

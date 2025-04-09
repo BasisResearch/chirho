@@ -153,19 +153,19 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
 
         # sum out particle dimension and discard
         if self._mc_plate_name in index_plates:
+            dim = plate_name_to_dim[self._mc_plate_name].dim
+            assert dim is not None
             log_weights = torch.logsumexp(
-                log_weights,
-                dim=plate_name_to_dim[self._mc_plate_name].dim,
-                keepdim=True,
+                log_weights, dim=dim, keepdim=True
             ) - math.log(self.num_samples)
             plate_name_to_dim.pop(self._mc_plate_name)
 
         # move data plate dimension to the left
         for name in reversed(plate_name_to_dim.keys()):
+            dim = plate_name_to_dim[name].dim
+            assert dim is not None
             log_weights = torch.transpose(
-                log_weights[None],
-                -len(log_weights.shape) - 1,
-                plate_name_to_dim[name].dim,
+                log_weights[None], -len(log_weights.shape) - 1, dim
             )
 
         # pack log_weights by squeezing out rightmost dimensions

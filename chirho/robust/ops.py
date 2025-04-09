@@ -117,14 +117,7 @@ def influence_fn(
         """
 
         @pyro.poutine.runtime.effectful(type="influence")
-        def _influence(
-            *model_args: P.args,
-            models: Callable[P, Any],
-            functional: Functional[P, S],
-            points: Point[T],
-            pointwise_influence: bool,
-            **model_kwargs: P.kwargs,
-        ) -> S:
+        def _influence(*model_args: P.args, **model_kwargs: P.kwargs) -> S:
             """
             Evaluates the efficient influence function for ``functional`` at each
             point in ``points``.

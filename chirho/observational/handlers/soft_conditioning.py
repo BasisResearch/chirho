@@ -7,6 +7,7 @@ import pyro
 import pyro.distributions as dist
 import pyro.distributions.constraints as constraints
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from torch.distributions import biject_to
 
 from chirho.indexed.ops import cond
@@ -167,8 +168,11 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
         super().__init__()
 
     def apply(
-        self, msg: _DeterministicReparamMessage
+        self, msg: pyro.infer.reparam.reparam.ReparamMessage
     ) -> pyro.infer.reparam.reparam.ReparamResult:
+        assert isinstance(msg["fn"], TorchDistributionMixin)
+        assert msg["value"] is not None
+
         name = msg["name"]
         event_dim = msg["fn"].event_dim
         observed_value = msg["value"]
@@ -209,16 +213,15 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
         super().__init__()
 
     @staticmethod
-    def site_is_deterministic(msg: pyro.infer.reparam.reparam.ReparamMessage) -> bool:
+    def site_is_deterministic(msg: dict) -> bool:
         return (
-            msg["is_observed"]
+            msg["is_observed"] is True
             and isinstance(msg["fn"], pyro.distributions.MaskedDistribution)
             and isinstance(msg["fn"].base_dist, pyro.distributions.Delta)
         )
 
-    def configure(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
-    ) -> Optional[pyro.infer.reparam.reparam.Reparam]:
+    def configure(self, msg: dict) -> Optional[pyro.infer.reparam.reparam.Reparam]:
+        assert isinstance(msg["fn"], TorchDistributionMixin)
         if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None
 

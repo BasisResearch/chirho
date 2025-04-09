@@ -1,9 +1,10 @@
 import collections
 import functools
-from typing import Any, Callable, Dict, Hashable, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import pyro
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from typing_extensions import ParamSpec
 
 from chirho.indexed.internals import (
@@ -17,7 +18,7 @@ P = ParamSpec("P")
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
-    plates: Dict[Hashable, pyro.poutine.indep_messenger.IndepMessenger]
+    plates: Dict[str, pyro.poutine.indep_messenger.IndepMessenger]
     first_available_dim: int
 
     def __init__(self, first_available_dim: Optional[int] = None):
@@ -127,9 +128,11 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
     ) -> torch.Tensor:
         raise NotImplementedError
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: pyro.poutine.messenger.Message) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
+
+        assert isinstance(msg["fn"], TorchDistributionMixin)
 
         device = get_sample_msg_device(msg["fn"], msg["value"])
         name = msg["name"] if "name" in msg else None
