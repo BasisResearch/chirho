@@ -1,6 +1,6 @@
 import functools
 from dataclasses import dataclass
-from typing import Callable, List, Optional, Tuple, TypeVar, Union
+from typing import Callable, List, Optional, Tuple, TypeVar
 
 import pyro
 import torch

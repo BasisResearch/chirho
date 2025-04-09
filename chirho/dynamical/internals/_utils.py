@@ -2,7 +2,7 @@ import collections.abc
 import dataclasses
 import functools
 import typing
-from typing import Any, Callable, Dict, FrozenSet, Generic, Optional, Tuple, TypeVar
+from typing import FrozenSet, Generic, Tuple, TypeVar
 
 import pyro
 import torch

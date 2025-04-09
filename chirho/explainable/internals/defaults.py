@@ -5,8 +5,6 @@ import pyro
 import torch
 from pyro.distributions.torch_distribution import TorchDistributionMixin
 
-from chirho.types import PyroDistribution
-
 S = TypeVar("S")
 T = TypeVar("T")
 

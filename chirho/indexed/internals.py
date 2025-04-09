@@ -1,5 +1,5 @@
 import numbers
-from typing import Any, Dict, Hashable, Optional, TypeVar, Union
+from typing import Any, Dict, Optional, TypeVar, Union
 
 import pyro
 import pyro.infer.reparam
