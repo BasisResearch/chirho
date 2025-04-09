@@ -1,5 +1,5 @@
 import contextlib
-from typing import Callable, Mapping, Optional, TypeVar, Union
+from typing import Callable, Mapping, Optional, TypeVar, Union, cast
 
 import pyro.distributions.constraints as constraints
 import torch
@@ -116,7 +116,10 @@ def SearchForExplanation(
         {a: alternatives[a] for a in antecedents.keys()}
         if alternatives is not None
         else {
-            a: random_intervention(supports[a], name=f"{prefix}_alternative_{a}")
+            a: cast(
+                Callable,
+                random_intervention(supports[a], name=f"{prefix}_alternative_{a}"),
+            )
             for a in antecedents.keys()
         }
     )

@@ -53,7 +53,7 @@ class Factors(Generic[T], pyro.poutine.messenger.Messenger):
         except KeyError:
             return
 
-        pyro.factor(f"{self.prefix}{msg['name']}", factor(msg["value"]))
+        pyro.factor(f"{self.prefix}{msg['name']}", torch.tensor(factor(msg["value"])))
 
 
 class Observations(Generic[T], ObserveNameMessenger):

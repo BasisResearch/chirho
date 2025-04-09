@@ -1,6 +1,12 @@
 from typing import Any, Dict
 
+import pyro
+
 from chirho.indexed.ops import indices_of, union
+
+
+class SpecifiedConditioningInferDict(pyro.poutine.runtime.InferDict):
+    _specified_conditioning: bool
 
 
 def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
@@ -20,7 +26,7 @@ def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     ) or not msg["infer"].get("_specified_conditioning", True)
 
 
-def no_ambiguity(msg: Dict[str, Any]) -> Dict[str, Any]:
+def no_ambiguity(msg: pyro.poutine.messenger.Message) -> SpecifiedConditioningInferDict:
     """
     Helper function used with :func:`pyro.poutine.infer_config` to inform
     :class:`FactualConditioningMessenger` that all ambiguity in the current

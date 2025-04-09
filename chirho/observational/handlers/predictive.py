@@ -1,7 +1,8 @@
-from typing import Any, Callable, Generic, Mapping, Optional, TypeVar
+from typing import Any, Callable, Generic, Mapping, Optional, TypeVar, cast
 
 import pyro
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from typing_extensions import ParamSpec
 
 from chirho.indexed.handlers import IndexPlatesMessenger
@@ -44,7 +45,7 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
         self.name = name
         super().__init__()
 
-    def _pyro_sample(self, msg: dict) -> None:
+    def _pyro_sample(self, msg: pyro.poutine.messenger.Message) -> None:
         if (
             self.num_particles > 1
             and msg["value"] is None
@@ -53,6 +54,7 @@ class BatchedLatents(pyro.poutine.messenger.Messenger):
             and not site_is_delta(msg)
             and self.name not in indices_of(msg["fn"])
         ):
+            assert isinstance(msg["fn"], TorchDistributionMixin)
             msg["fn"] = unbind_leftmost_dim(
                 msg["fn"].expand((1,) + msg["fn"].batch_shape),
                 self.name,
@@ -97,6 +99,14 @@ class BatchedObservations(Generic[T], Observations[T]):
             msg["args"] = (rv, batch_obs)
 
 
+class InferDictPredictive(pyro.poutine.runtime.InferDict):
+    _model_predictive_site: bool
+
+
+def _predictive_site_config(model_predictive_site: bool) -> InferDictPredictive:
+    return {"_model_predictive_site": model_predictive_site}
+
+
 class PredictiveModel(Generic[P, T], torch.nn.Module):
     """
     Given a Pyro model and guide, constructs a new model that behaves as if
@@ -130,7 +140,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :rtype: T
         """
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: {"_model_predictive_site": False}
+            config_fn=lambda msg: _predictive_site_config(False)
         ):
             with pyro.poutine.trace() as guide_tr:
                 if self.guide is not None:
@@ -145,7 +155,7 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         )
 
         with pyro.poutine.infer_config(
-            config_fn=lambda msg: {"_model_predictive_site": True}
+            config_fn=lambda msg: _predictive_site_config(True)
         ):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
@@ -202,22 +212,26 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
             with pyro.poutine.trace() as model_tr:
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
                     with pyro.poutine.infer_config(
-                        config_fn=lambda msg: {
-                            "_model_predictive_site": msg["infer"].get(
-                                "_model_predictive_site", True
+                        config_fn=lambda msg: _predictive_site_config(
+                            cast(dict, msg.get("infer", {})).get(
+                                "_model_predictive_site", False
                             )
-                        }
+                        )
                     ):
                         self.model(*args, **kwargs)
 
-            return {
-                name: bind_leftmost_dim(
-                    node["value"],
-                    self._mc_plate_name,
-                    event_dim=len(node["fn"].event_shape),
-                )
-                for name, node in model_tr.trace.nodes.items()
-                if node["type"] == "sample"
-                and not pyro.poutine.util.site_is_subsample(node)
-                and node["infer"].get("_model_predictive_site", False)
-            }
+            result = {}
+            for name, node in model_tr.trace.nodes.items():
+                infer = cast(dict, node.get("infer", {}))
+                if (
+                    node["type"] == "sample"
+                    and not pyro.poutine.util.site_is_subsample(node)
+                    and infer.get("_model_predictive_site", False)
+                ):
+                    assert isinstance(node["fn"], TorchDistributionMixin)
+                    result[name] = bind_leftmost_dim(
+                        node["value"],
+                        self._mc_plate_name,
+                        event_dim=len(node["fn"].event_shape),
+                    )
+            return result

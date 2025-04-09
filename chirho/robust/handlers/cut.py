@@ -2,6 +2,7 @@ from typing import Any, Dict, Optional, Set, TypeVar
 
 import pyro
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 
 from chirho.indexed.handlers import DependentMaskMessenger, add_indices
 from chirho.indexed.ops import IndexSet, gather, indexset_as_mask, scatter_n
@@ -88,11 +89,12 @@ class SingleStageCut(DependentMaskMessenger):
             IndexSet(**{self.name: {0 if name in self.vars else 1}})
         )
 
-    def _pyro_post_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
         if pyro.poutine.util.site_is_subsample(msg):
             return
 
         if (not msg["is_observed"]) and (msg["name"] in self.vars):
+            assert isinstance(msg["fn"], TorchDistributionMixin)
             # discard the second value
             value_one = gather(
                 msg["value"],

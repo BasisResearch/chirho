@@ -4,6 +4,7 @@ from typing import Any, Dict, Hashable, Optional, TypeVar, Union
 import pyro
 import pyro.infer.reparam
 import torch
+from pyro.distributions.torch_distribution import TorchDistributionMixin
 from pyro.poutine.indep_messenger import CondIndepStackFrame, IndepMessenger
 
 from chirho.indexed.ops import (
@@ -28,7 +29,7 @@ def _gather_number(
     indexset: IndexSet,
     *,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim: Optional[Dict[str, int]] = None,
     **kwargs,
 ) -> Union[numbers.Number, torch.Tensor]:
     assert event_dim is None or event_dim == 0
@@ -37,20 +38,28 @@ def _gather_number(
     )
 
 
+def _index_plate_dims() -> dict[str, int]:
+    name_to_dim = {}
+    for name, f in get_index_plates().items():
+        assert f.dim is not None
+        name_to_dim[name] = f.dim
+    return name_to_dim
+
+
 @gather.register
 def _gather_tensor(
     value: torch.Tensor,
     indexset: IndexSet,
     *,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim: Optional[Dict[str, int]] = None,
     **kwargs,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        name_to_dim = _index_plate_dims()
 
     result = value
     for name, indices in indexset.items():
@@ -83,7 +92,7 @@ def _scatter_number(
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim: Optional[Dict[str, int]] = None,
 ) -> Union[numbers.Number, torch.Tensor]:
     assert event_dim is None or event_dim == 0
     return scatter(
@@ -102,13 +111,13 @@ def _scatter_tensor(
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim: Optional[Dict[str, int]] = None,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
 
     if name_to_dim is None:
-        name_to_dim = {name: f.dim for name, f in get_index_plates().items()}
+        name_to_dim = _index_plate_dims()
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
     indexset = union(
@@ -117,10 +126,16 @@ def _scatter_tensor(
 
     if result is None:
         index_plates = get_index_plates()
+
+        index_plate_dims = []
+        for name, f in index_plates.items():
+            assert f.dim is not None
+            index_plate_dims.append(f.dim)
+
         result_shape = list(
             torch.broadcast_shapes(
                 value.shape,
-                (1,) * max([event_dim - f.dim for f in index_plates.values()] + [0]),
+                (1,) * max([event_dim - dim for dim in index_plate_dims] + [0]),
             )
         )
         for name, indices in indexset.items():
@@ -150,7 +165,7 @@ def _scatter_dict(
     *,
     result: Optional[Dict[K, Optional[T]]] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[Hashable, int]] = None,
+    name_to_dim: Optional[Dict[str, int]] = None,
 ) -> Dict[K, Any]:
 
     if result is None:
@@ -213,9 +228,7 @@ def _indices_of_tensor(value: torch.Tensor, **kwargs) -> IndexSet:
 
 
 @indices_of.register
-def _indices_of_distribution(
-    value: pyro.distributions.Distribution, **kwargs
-) -> IndexSet:
+def _indices_of_distribution(value: TorchDistributionMixin, **kwargs) -> IndexSet:
     kwargs.pop("event_dim", None)
     return indices_of(value.batch_shape, event_dim=0, **kwargs)
 
@@ -277,7 +290,7 @@ class _LazyPlateMessenger(IndepMessenger):
 
 
 def get_sample_msg_device(
-    dist: pyro.distributions.Distribution,
+    dist: TorchDistributionMixin,
     value: Optional[Union[torch.Tensor, float, int, bool]],
 ) -> torch.device:
     # some gross code to infer the device of the obs_mask tensor

@@ -37,7 +37,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
     :type times: torch.Tensor
 
     :param is_traced: Whether to trace the trajectory. If True and executed within the context of a pyro trace,
-        the trajectory will appear in the trace.
+        the trajectory will appear in the trace. Requires T to be a torch.Tensor.
 
     """
 
@@ -73,8 +73,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         self._trajectory: State[T] = type(initial_state)()
 
         if self.is_traced:
-            # This adds the trajectory to the trace so that it can be accessed later.
-            [pyro.deterministic(name, value) for name, value in self.trajectory.items()]
+            for name, value in self.trajectory.items():
+                assert isinstance(value, torch.Tensor)
+                # This adds the trajectory to the trace so that it can be accessed later.
+                pyro.deterministic(name, value)
 
     def _pyro_simulate_point(self, msg) -> None:
         # Turn a simulate that returns a state into a simulate that returns a trajectory at each of the logging_times
@@ -100,7 +102,10 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
 
         # TODO support dim != -1
         idx_name = "__time"
-        name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+        name_to_dim = {}
+        for k, f in get_index_plates().items():
+            assert f.dim is not None
+            name_to_dim[k] = f.dim - 1
         name_to_dim[idx_name] = -1
 
         if len(timespan) > 2:

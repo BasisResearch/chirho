@@ -103,14 +103,14 @@ class ShallowMessenger(pyro.poutine.messenger.Messenger):
             super().__exit__(exc_type, exc_value, traceback)
 
     @typing.final
-    def _process_message(self, msg: Dict[str, Any]) -> None:
+    def _process_message(self, msg: pyro.poutine.messenger.Message) -> None:
         if not self.used and hasattr(self, f"_pyro_{msg['type']}"):
             self.used = True
             super()._process_message(msg)
 
-            prev_cont: Optional[Callable[[Dict[str, Any]], None]] = msg["continuation"]
+            prev_cont = msg["continuation"]
 
-            def cont(msg: Dict[str, Any]) -> None:
+            def cont(msg: pyro.poutine.messenger.Message) -> None:
                 ix = pyro.poutine.runtime._PYRO_STACK.index(self)
                 pyro.poutine.runtime._PYRO_STACK.pop(ix)
                 if prev_cont is not None:
@@ -119,7 +119,7 @@ class ShallowMessenger(pyro.poutine.messenger.Messenger):
             msg["continuation"] = cont
 
     @typing.final
-    def _postprocess_message(self, msg: Dict[str, Any]) -> None:
+    def _postprocess_message(self, msg: pyro.poutine.messenger.Message) -> None:
         if hasattr(self, f"_pyro_post_{msg['type']}"):
             raise NotImplementedError("ShallowHandler does not support postprocessing")
 

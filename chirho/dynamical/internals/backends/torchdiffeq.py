@@ -1,9 +1,10 @@
 import functools
-from typing import Callable, List, Optional, Tuple, TypeVar
+from dataclasses import dataclass
+from typing import Callable, List, Optional, Tuple, TypeVar, Union
 
 import pyro
 import torch
-import torchdiffeq
+import torchdiffeq  # type: ignore
 
 from chirho.dynamical.internals._utils import _squeeze_time_dim, _var_order
 from chirho.dynamical.internals.solver import Interruption, simulate_point
@@ -73,7 +74,7 @@ def _torchdiffeq_ode_simulate_inner(
             tuple(initial_state[v] for v in var_order),
             timespan_,
             **odeint_kwargs,
-        )
+        ).y
     else:
         solns = tuple(initial_state[v].unsqueeze(time_dim) for v in var_order)
 
@@ -91,6 +92,12 @@ def _torchdiffeq_ode_simulate_inner(
     return type(initial_state)(**dict(zip(var_order, solns)))
 
 
+@dataclass
+class OdeintResult:
+    y: Tuple[torch.Tensor, ...]
+    event: Optional[torch.Tensor]
+
+
 def _batched_odeint(
     func: Callable[[torch.Tensor, Tuple[torch.Tensor, ...]], Tuple[torch.Tensor, ...]],
     y0: Tuple[torch.Tensor, ...],
@@ -98,7 +105,7 @@ def _batched_odeint(
     *,
     event_fn=None,
     **odeint_kwargs,
-) -> Tuple[torch.Tensor, ...]:
+) -> OdeintResult:
     """
     Vectorized torchdiffeq.odeint.
     """
@@ -134,7 +141,7 @@ def _batched_odeint(
         )[0]
         for yt_ in yt_raw
     )
-    return yt if event_fn is None else (event_t, yt)
+    return OdeintResult(yt, event_t if event_fn is not None else None)
 
 
 def torchdiffeq_simulate_point(
@@ -151,7 +158,10 @@ def torchdiffeq_simulate_point(
 
     # TODO support dim != -1
     idx_name = "__time"
-    name_to_dim = {k: f.dim - 1 for k, f in get_index_plates().items()}
+    name_to_dim = {}
+    for k, f in get_index_plates().items():
+        assert f.dim is not None
+        name_to_dim[k] = f.dim - 1
     name_to_dim[idx_name] = -1
 
     final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
@@ -193,13 +203,16 @@ def _torchdiffeq_get_next_interruptions(
     combined_event_f = torchdiffeq_combined_event_f(interruptions, var_order)
 
     # Simulate to the event execution.
-    event_time, event_solutions = _batched_odeint(  # torchdiffeq.odeint_event(
+    solns = _batched_odeint(  # torchdiffeq.odeint_event(
         functools.partial(_deriv, dynamics, var_order),
         tuple(start_state[v] for v in var_order),
         start_time,
         event_fn=combined_event_f,
         **kwargs,
     )
+    event_time = solns.event
+    assert event_time is not None
+    event_solutions = solns.y
 
     # event_state has both the first and final state of the interrupted simulation. We just want the last.
     event_solution: Tuple[torch.Tensor, ...] = tuple(
@@ -252,7 +265,7 @@ def torchdiffeq_simulate_to_interruption(
     # Choose one arbitrarily if there are multiple.
     next_interruption = next_interruptions[0]
 
-    value = simulate_point(
+    value: State[torch.Tensor] = simulate_point(
         dynamics, initial_state, start_time, interruption_time, **kwargs
     )
     return value, interruption_time, next_interruption

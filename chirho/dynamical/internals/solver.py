@@ -109,6 +109,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
+            next_interruption: Optional[Interruption[T]]
             state, start_time, next_interruption = simulate_to_interruption(
                 possible_interruptions,
                 dynamics,
@@ -119,7 +120,8 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             )
 
             if next_interruption is not None:
-                dynamics, state = next_interruption.callback(dynamics, state)
+                # TODO reenable this check once we figure out why mypy is inferring "Never"s
+                dynamics, state = next_interruption.callback(dynamics, state)  # type: ignore
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
