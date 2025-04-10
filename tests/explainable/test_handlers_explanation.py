@@ -251,8 +251,13 @@ def test_dependent_sampling(test_search_setup):
     sally_witness_preemption = tr["__cause____witness_sally_throws"]["value"]
 
     assert torch.all(sally_throws_nec[sally_antecedent_preemption == 0] == 0)
-    assert torch.all(sally_throws_nec[(sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)] == 1)
-   
+    assert torch.all(
+        sally_throws_nec[
+            (sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)
+        ]
+        == 1
+    )
+
 
 def test_SplitSubsets_single_layer():
     observations = {

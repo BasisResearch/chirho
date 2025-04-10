@@ -182,5 +182,5 @@ def SearchForExplanation(
         **{c: cc for c, cc in consequents.items() if cc is not None},
         **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
     }
-    with witness_handler,antecedent_handler, consequent_handler:
+    with witness_handler, antecedent_handler, consequent_handler:
         yield evidence
