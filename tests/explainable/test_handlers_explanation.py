@@ -281,6 +281,7 @@ def test_dependent_sampling_witness(test_search_setup):
             antecedents=antecedents,
             consequents=consequents,
             witnesses=witnesses,
+            preemptions=witnesses,
             alternatives=alternatives,
             antecedent_bias=0.1,
             consequent_scale=1e-8,
