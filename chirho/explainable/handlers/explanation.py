@@ -61,7 +61,7 @@ def SearchForExplanation(
     *,
     alternatives: Optional[Mapping[str, Intervention[S]]] = None,
     factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,
-    # preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
+    preemptions: Optional[Mapping[str, Union[Intervention[S], Intervention[T]]]] = None,
     consequent_scale: float = 1e-2,
     antecedent_bias: float = 0.0,
     witness_bias: float = 0.0,
@@ -81,16 +81,17 @@ def SearchForExplanation(
     :param supports: A mapping of sites to their support constraints.
     :param antecedents: A mapping of antecedent names to optional observations.
     :param consequents: A mapping of consequent names to optional observations.
-    :param witnesses: A mapping of witness names to optional observations or custom preemption values.
+    :param witnesses: A mapping of witness names to optional observations.
     :param alternatives: An optional mapping of names to alternative antecedent interventions.
     :param factors: An optional mapping of names to consequent constraint factors.
+    :param preemptions: An optional mapping of names to witness preemption values.
     :param antecedent_bias: The scalar bias towards not intervening. Must be between -0.5 and 0.5, defaults to 0.0.
     :param consequent_scale: The scale of the consequent factor functions, defaults to 1e-2.
     :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
 
     .. note:: If both antedecent and witness auxiliary nodes are provided for a site, antecedent takes priority:
-    i.e., if the site is not antecedent-preempted (so the intervention is executed), it will not be witness-preempted.
+    i.e., if the site is not antecedent-preempted (so the intervention is executed), it will not be witness-preempted. 
     Witness preemption is applied only if the antecedent intervention is preempted.
 
     :return: A context manager that can be used to query the evidence.
@@ -145,21 +146,33 @@ def SearchForExplanation(
         prefix=f"{prefix}__antecedent_",
     )
 
-    # witness_preemptions
-    witness_preemptions = {
-        w: (
-            witnesses[w]
-            if witnesses[w] is not None
-            else undo_split(supports[w], antecedents=antecedents.keys())
-        )
-        for w in witnesses
-    }
-
+    # defaults for witness_preemptions
     witness_handler = Preemptions(
-        (witness_preemptions),
-        bias=witness_bias,
-        prefix=f"{prefix}__witness_",
+    (
+        {w: preemptions[w] for w in witnesses}
+        if preemptions is not None
+        else {
+            w: undo_split(supports[w], antecedents=antecedents.keys())
+            for w in witnesses
+        }
+    ),
+    bias=witness_bias,
+    prefix=f"{prefix}__witness_",
     )
+
+
+    # witness_handler = Preemptions(
+    #     (
+    #         {w: preemptions[w] for w in witnesses}
+    #         if preemptions is not None
+    #         else {
+    #             w: undo_split(supports[w], antecedents=antecedents.keys())
+    #             for w in witnesses
+    #         }
+    #     ),
+    #     bias=witness_bias,
+    #     prefix=f"{prefix}__witness_",
+    # )
 
     #
     consequent_handler: Factors[T] = Factors(
