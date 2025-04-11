@@ -90,6 +90,11 @@ def SearchForExplanation(
     :param witness_bias: The scalar bias towards not preempting. Must be between -0.5 and 0.5, defaults to 0.0.
     :param prefix: A prefix used for naming additional consequent nodes. Defaults to ``__consequent_``.
 
+    .. note:: If both antedecent and witness auxiliary nodes are provided for a site, antecedent takes priority:
+    i.e., if the site is not antecedent-preempted (so the antecedent intervention is executed), it will only be
+    witness-preempted in the factual world (non-trivial only if non-trivial preemptions are passed), and alternative
+    interventions will still be performed in the counterfactual worlds.
+
     :return: A context manager that can be used to query the evidence.
     """
     ########################################
@@ -142,21 +147,21 @@ def SearchForExplanation(
         prefix=f"{prefix}__antecedent_",
     )
 
-    # defaults for witness_preemptions
+    witness_preemptions = {
+        w: (
+            preemptions[w]
+            if preemptions is not None and preemptions[w] is not None
+            else undo_split(supports[w], antecedents=antecedents.keys())
+        )
+        for w in witnesses
+    }
+
     witness_handler = Preemptions(
-        (
-            {w: preemptions[w] for w in witnesses}
-            if preemptions is not None
-            else {
-                w: undo_split(supports[w], antecedents=antecedents.keys())
-                for w in witnesses
-            }
-        ),
+        (witness_preemptions),
         bias=witness_bias,
         prefix=f"{prefix}__witness_",
     )
 
-    #
     consequent_handler: Factors[T] = Factors(
         (
             {c: factors[c] for c in consequents.keys()}
@@ -182,5 +187,5 @@ def SearchForExplanation(
         **{c: cc for c, cc in consequents.items() if cc is not None},
         **{w: ww for w, ww in (witnesses or {}).items() if ww is not None},
     }
-    with antecedent_handler, witness_handler, consequent_handler:
+    with witness_handler, antecedent_handler, consequent_handler:
         yield evidence
