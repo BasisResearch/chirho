@@ -88,8 +88,12 @@ if __name__ == "__main__":
     elif mode == 'jac':
         # now all at once (as a jacobian)
         wass_jac = torch.func.jacrev(phi)(points["X"])
-        print(f"wass_jac.shape: {wass_jac.shape}")
         print(f"wass_jac: {wass_jac}")
+        # this is NxNxD but only (i,i,:) is non-zero, so we can just take the diagonal
+        wass_jac_diagonal = torch.diagonal(wass_jac, dim1=0, dim2=1).permute(1,0)
+        
+        print(f"wass_jac_diagonal.shape: {wass_jac_diagonal.shape}")
+        print(f"wass_jac_diagonal: {wass_jac_diagonal}")
 
 
 
