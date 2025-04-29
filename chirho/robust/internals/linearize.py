@@ -26,6 +26,7 @@ def _flat_conjugate_gradient_solve(
     *,
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-3,
+    allow_inplace: bool = True,
 ) -> torch.Tensor:
     """
     Use Conjugate Gradient iteration to solve Ax = b. Demmel p 312.
@@ -39,6 +40,8 @@ def _flat_conjugate_gradient_solve(
     :type cg_iters: Optional[int], optional
     :param residual_tol: tolerance for convergence, defaults to 1e-3
     :type residual_tol: float, optional
+    :param allow_inplace: if True, use in-place ops for speed (not differentiable). If False, use out-of-place ops (slower, but allows higher-order gradients).
+    :type allow_inplace: bool, optional
     :return: batch of solutions ``x*`` for equation Ax = b.
     :rtype: torch.Tensor
 
@@ -75,8 +78,12 @@ def _flat_conjugate_gradient_solve(
         not_converged_broadcasted = not_converged.unsqueeze(0).t()
         z = torch.where(not_converged_broadcasted, f_Ax(p), z)
         v = torch.where(not_converged, rdotr / _batched_dot(p, z), v)
-        x += torch.where(not_converged_broadcasted, _batched_product(v, p), zeros_xr)
-        r -= torch.where(not_converged_broadcasted, _batched_product(v, z), zeros_xr)
+        if allow_inplace:
+            x += torch.where(not_converged_broadcasted, _batched_product(v, p), zeros_xr)
+            r -= torch.where(not_converged_broadcasted, _batched_product(v, z), zeros_xr)
+        else:
+            x = x + torch.where(not_converged_broadcasted, _batched_product(v, p), zeros_xr)
+            r = r - torch.where(not_converged_broadcasted, _batched_product(v, z), zeros_xr)
         newrdotr = torch.where(not_converged, _batched_dot(r, r), newrdotr)
         mu = torch.where(not_converged, newrdotr / rdotr, mu)
         p = torch.where(not_converged_broadcasted, r + _batched_product(mu, p), p)
@@ -226,6 +233,7 @@ def linearize(
     cg_iters: Optional[int] = None,
     residual_tol: float = 1e-4,
     pointwise_influence: bool = True,
+    allow_inplace: bool = True,
 ) -> Callable[Concatenate[Point[T], P], ParamDict]:
     r"""
     Returns the influence function associated with the parameters
@@ -352,7 +360,7 @@ def linearize(
     else:
         cg_iters = min(cg_iters, log_prob_params_numel)
     cg_solver = functools.partial(
-        conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
+        conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol, allow_inplace=allow_inplace
     )
 
     def _fn(
