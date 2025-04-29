@@ -50,45 +50,46 @@ if __name__ == "__main__":
     print(f"entropy functional: {res}")
 
     # %%
-    num_monte_carlo = 1
+    num_monte_carlo = 17
     predictive = pyro.infer.Predictive(model,num_samples=num_monte_carlo, return_sites=["X"])
     points = predictive()
     # points["X"].requires_grad_(True)
     print(f"points: {points}")
+    
+    def phi(x):
+        mmm = PredictiveModel(model)
+        with MonteCarloInfluenceEstimator(num_samples_inner=1, num_samples_outer=10, allow_inplace=False):
+            return influence_fn(
+                functools.partial(EntropyFunctional, num_samples = 100),
+                {"X": x}
+            )(mmm)()
 
-    if False:
-        # %%
-        # Compute influence function
-        influence = influence_fn(
-            functools.partial(EntropyFunctional, num_samples = 100),
-            points,
-        )(PredictiveModel(model))
+    
+    mode = 'jac' # 'no_grad' 'jac'
 
-        with MonteCarloInfluenceEstimator(num_samples_inner=1, num_samples_outer=10):
-            ii = influence()
-
+    if mode == 'no_grad':
+        ii = phi(points["X"])
         print(f"ii.shape: {ii.shape}")
-        # print(f"ii: {ii}")
-    else:
-        def phi(x):
-            mmm = PredictiveModel(model)
-            with MonteCarloInfluenceEstimator(num_samples_inner=1, num_samples_outer=10, allow_inplace=False):
-                return influence_fn(
-                    functools.partial(EntropyFunctional, num_samples = 100),
-                    {"X": x}
-                )(mmm)()
+        print(f"ii: {ii}")
+    # elif mode == 'grad':
         
-        wass_grads = torch.zeros(points["X"].shape)
-        # Compute gradients manually
-        for i, x in enumerate(points["X"]):
-            x = x.clone().unsqueeze(0).requires_grad_(True)
-            with torch.autograd.set_detect_anomaly(True):
-                y = phi(x)
-                y.backward()
-            wass_grads[i] = x.grad
+    #     wass_grads = torch.zeros(points["X"].shape)
+    #     # Compute gradients manually
+    #     for i, x in enumerate(points["X"]):
+    #         x = x.clone().unsqueeze(0).requires_grad_(True)
+    #         with torch.autograd.set_detect_anomaly(True):
+    #             y = phi(x)
+    #             y.backward()
+    #         wass_grads[i] = x.grad
         
-        print(f"wass_grads.shape: {wass_grads.shape}")
-        print(f"wass_grads: {wass_grads}")
+    #     print(f"wass_grads.shape: {wass_grads.shape}")
+    #     print(f"wass_grads: {wass_grads}")
+    
+    elif mode == 'jac':
+        # now all at once (as a jacobian)
+        wass_jac = torch.func.jacrev(phi)(points["X"])
+        print(f"wass_jac.shape: {wass_jac.shape}")
+        print(f"wass_jac: {wass_jac}")
 
 
 
