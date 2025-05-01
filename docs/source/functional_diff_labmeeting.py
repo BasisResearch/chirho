@@ -45,12 +45,12 @@ if __name__ == "__main__":
     # %%
     # evaluate entropy functional
     model = ParamGaussian(D=2)
-    entropy_functional = EntropyFunctional(PredictiveModel(model), num_samples=1000)
+    entropy_functional = EntropyFunctional(PredictiveModel(model), num_samples=100)
     res = entropy_functional()
     print(f"entropy functional: {res}")
 
     # %%
-    num_monte_carlo = 17
+    num_monte_carlo = 1000
     predictive = pyro.infer.Predictive(model,num_samples=num_monte_carlo, return_sites=["X"])
     points = predictive()
     # points["X"].requires_grad_(True)
@@ -58,7 +58,7 @@ if __name__ == "__main__":
     
     def phi(x):
         mmm = PredictiveModel(model)
-        with MonteCarloInfluenceEstimator(num_samples_inner=1, num_samples_outer=10, allow_inplace=False):
+        with MonteCarloInfluenceEstimator(num_samples_inner=1, num_samples_outer=100, allow_inplace=False):
             return influence_fn(
                 functools.partial(EntropyFunctional, num_samples = 100),
                 {"X": x}
@@ -88,12 +88,13 @@ if __name__ == "__main__":
     elif mode == 'jac':
         # now all at once (as a jacobian)
         wass_jac = torch.func.jacrev(phi)(points["X"])
-        print(f"wass_jac: {wass_jac}")
+        print(f"wass_jac.shape: {wass_jac.shape}")
+        # print(f"wass_jac: {wass_jac}")
         # this is NxNxD but only (i,i,:) is non-zero, so we can just take the diagonal
         wass_jac_diagonal = torch.diagonal(wass_jac, dim1=0, dim2=1).permute(1,0)
         
         print(f"wass_jac_diagonal.shape: {wass_jac_diagonal.shape}")
-        print(f"wass_jac_diagonal: {wass_jac_diagonal}")
+        # print(f"wass_jac_diagonal: {wass_jac_diagonal}")
 
 
 
