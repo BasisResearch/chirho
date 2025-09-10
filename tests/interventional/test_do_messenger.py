@@ -4,13 +4,14 @@ import pyro
 import pyro.distributions as dist
 import pytest
 import torch
-
 from chirho.counterfactual.handlers import (
     SingleWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
 )
-from chirho.interventional.handlers import do
+from chirho.indexed.handlers import IndexPlatesMessenger
+from chirho.indexed.ops import IndexSet, indices_of
+from chirho.interventional.handlers import Interventions, batched_do, do
 from chirho.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,20 @@ def create_intervened_model_1(x_cf_value):
 
 def create_intervened_model_2(x_cf_value):
     return intervene(model, {"x": torch.tensor(x_cf_value)})
+
+
+def test_do_messenger_batched():
+    interventions = {
+        "y": (torch.tensor([1, 300, 0]), torch.tensor([True, True, False])),
+        "z": (torch.tensor([100, 0, 200]), torch.tensor([True, False, True])),
+    }
+
+    with IndexPlatesMessenger(), batched_do(interventions):
+        z, x, y = model()
+        assert indices_of(x) == indices_of(y) == indices_of(z) and indices_of(z)[
+            "batched_interventions"
+        ] == set(range(3))
+        assert ((z >= 100.0) | (y >= 100)).all()
 
 
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
