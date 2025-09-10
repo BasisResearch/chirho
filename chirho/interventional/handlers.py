@@ -183,8 +183,10 @@ class _BatchedInterventions(Interventions):
 
 @contextmanager
 def batched_do(
-    interventions: Mapping[Hashable, Tuple[torch.Tensor, torch.Tensor]]
-    | Collection[Mapping[Hashable, torch.Tensor]],
+    interventions: (
+        Mapping[Hashable, Tuple[torch.Tensor, torch.Tensor]]
+        | Collection[Mapping[Hashable, torch.Tensor]]
+    ),
     name="batched_interventions",
 ):
     """Perform a batch of interventions efficiently.

@@ -4,6 +4,7 @@ import pyro
 import pyro.distributions as dist
 import pytest
 import torch
+
 from chirho.counterfactual.handlers import (
     SingleWorldCounterfactual,
     SingleWorldFactual,
