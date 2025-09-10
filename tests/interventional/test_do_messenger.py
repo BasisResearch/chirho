@@ -11,8 +11,8 @@ from chirho.counterfactual.handlers import (
     TwinWorldCounterfactual,
 )
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.indexed.ops import IndexSet, indices_of
-from chirho.interventional.handlers import Interventions, batched_do, do
+from chirho.indexed.ops import indices_of
+from chirho.interventional.handlers import batched_do, do
 from chirho.interventional.ops import intervene
 
 logger = logging.getLogger(__name__)
