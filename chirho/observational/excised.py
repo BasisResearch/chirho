@@ -7,6 +7,34 @@ from torch.distributions.exp_family import ExponentialFamily
 from torch.distributions.utils import _standard_normal, broadcast_all
 from pyro.distributions.torch_distribution import TorchDistribution, TorchDistributionMixin
 import pyro.distributions as dist
+import matplotlib.pyplot as plt
+import pyro
+
+class ECDF(torch.nn.Module):
+    def __init__(self, x, side='right'):
+        super(ECDF, self).__init__()
+
+        if side.lower() not in ['right', 'left']:
+            msg = "side can take the values 'right' or 'left'"
+            raise ValueError(msg)
+        self.side = side
+
+        if len(x.shape) != 1:
+            msg = 'x must be 1-dimensional'
+            raise ValueError(msg)
+
+        x = x.sort()[0]
+        nobs = len(x)
+        y = torch.linspace(1./nobs, 1, nobs, device=x.device)
+
+        self.x = torch.cat((torch.tensor([-torch.inf], device=x.device), x))
+        self.y = torch.cat((torch.tensor([0], device=y.device), y))
+        self.n = self.x.shape[0]
+
+    def forward(self, time):
+        tind = torch.searchsorted(self.x, time, side=self.side) - 1
+        return self.y[tind]
+
 
 
 class Normal(ExponentialFamily):
@@ -154,6 +182,7 @@ class ExcisedNormal(TorchDistribution):
 
     def __init__(self, loc, scale, intervals, validate_args=None):
 
+
         lows, highs = zip(*intervals)   # each is a tuple of tensors/scalars
         
         self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
@@ -254,32 +283,32 @@ class ExcisedNormal(TorchDistribution):
         lp = self.base_normal.log_prob(value) - torch.log(normalization_constant_expanded)
         
         return torch.where(mask, torch.tensor(-float("inf"), device=self.loc.device), lp)
-            
+
     def cdf(self, value):
         if self._validate_args:
             self._validate_sample(value)
         
         base_cdf = self.base_normal.cdf(value)
+        adjusted_cdf = base_cdf.clone()  
 
         for l_cdf, mass in zip(self.lcdfs, self.interval_masses):
-            cdf = torch.where(base_cdf >= l_cdf, base_cdf - ( self.base_normal.cdf(value) - l_cdf), base_cdf)
+            adjusted_cdf = torch.where(base_cdf >= l_cdf, adjusted_cdf - torch.clamp(base_cdf - l_cdf, max = mass), adjusted_cdf)
 
-        return cdf / self.normalization_constant
+        adjusted_cdf = adjusted_cdf/ self.normalization_constant
 
-
-
-        # if self._validate_args:
-        #     self._validate_sample(value)
-        # # compute the variance
-        # var = (self.scale ** 2)
-        # log_scale = math.log(self.scale) if isinstance(self.scale, Number) else self.scale.log()
-        # return -((value - self.loc) ** 2) / (2 * var) - log_scale - math.log(math.sqrt(2 * math.pi))
+        return adjusted_cdf
 
 
+    def icdf(self, value):
+        if self._validate_args:
+            self._validate_sample(value)
+
+        
+        # return self.loc + self.scale * torch.erfinv(2 * value - 1) * math.sqrt(2)
 
 
 
-# simple tests for now
+
 
 true_mean = torch.tensor([[[1.0]] , [[3.0]]])
 true_stddev = torch.tensor([[[2.]] , [[3.]]])
@@ -411,5 +440,19 @@ for key, interval in interval_types.items():
     cdf_candidates = excised_normal.cdf(candidates)
     cdf_candidates_expanded = excised_normal_expanded.cdf(candidates_expanded)
 
-    
-    assert True
+ 
+    assert len(torch.unique(cdf_candidates[mask])) == len(excised_normal.intervals) *2
+    assert len(torch.unique(cdf_candidates_expanded[mask_expanded])) == len(excised_normal_expanded.intervals) *2
+    # assert all others are different from each other
+    assert len(torch.unique(cdf_candidates[~mask])) == len(cdf_candidates[~mask])
+    assert len(torch.unique(cdf_candidates_expanded[~mask_expanded])) == len(cdf_candidates_expanded[~mask_expanded])
+
+   
+    ecdf_sample = ECDF(sample[:, 0, 0, 0])(sample[:, 0, 0, 0])
+    ecdf_sample_expanded = ECDF(sample_expanded[:, 0, 0, 0])(sample_expanded[:, 0, 0, 0])
+    cdf_sample = excised_normal.cdf(sample)[:, 0, 0, 0]
+    cdf_sample_expanded = excised_normal_expanded.cdf(sample_expanded)[:, 0, 0, 0]
+
+    assert torch.allclose(ecdf_sample, cdf_sample, atol = 0.07)
+    assert torch.allclose(ecdf_sample_expanded, cdf_sample_expanded, atol = 0.07)
+
