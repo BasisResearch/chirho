@@ -28,6 +28,34 @@ def observe(rv, obs: Optional[Observation[T]] = None, **kwargs) -> T:
 
 
 class ExcisedNormal(TorchDistribution):
+    """
+    ExcisedNormal distribution represents a normal distribution from which specified intervals
+    have been "excised" (removed). Sampling uses inverse transform.
+    Probabilities within these intervals are set to zero, and
+    the remaining probability mass is renormalized.
+
+    Attributes
+    ----------
+    loc
+        Mean of the base normal distribution.
+    scale
+        Standard deviation of the base normal distribution.
+    intervals
+        List of excised intervals as tuples of (low, high).
+    base_normal
+        Underlying normal distribution used for calculations.
+    base_uniform
+        Uniform distribution used for inverse transform sampling.
+    interval_masses
+        Probability masses of each excised interval under the base normal.
+    lcdfs
+        CDF values at the lower edges of each excised interval.
+    removed_pr_mass
+        Total probability mass removed by all intervals.
+    normalization_constant
+        Renormalization factor after removing interval probability masses.
+    """
+
     arg_constraints = {"loc": constraints.real, "scale": constraints.positive}
     support = (
         constraints.real
