@@ -81,12 +81,24 @@ class ExcisedNormal(TorchDistribution):
 
         lows, highs = zip(*intervals)  # each is a tuple of tensors/scalars
 
-        self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
+        all_edges: tuple[Any, ...]
+
+        #        self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
+
+        edges = broadcast_all(loc, scale, *lows, *highs)
+        self.loc = edges[0]
+        self.scale = edges[1]
+        all_edges = edges[2:]
 
         n = len(lows)
         lows = all_edges[:n]
         highs = all_edges[n:]
-        self._intervals = list(zip(lows, highs))
+        self._intervals = tuple(zip(lows, highs))
+
+        for interval in intervals:
+            low, high = interval
+            if not torch.all(torch.as_tensor(low <= high)).item():
+                raise ValueError("Each interval must satisfy low <= high!")
 
         for i in range(len(self._intervals) - 1):
             _, high_i = self._intervals[i]
@@ -158,7 +170,8 @@ class ExcisedNormal(TorchDistribution):
         new._validate_args = self._validate_args
         return new
 
-    # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc, we can be more specific with type hints
+    # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc,
+    #  we can be more specific with type hints
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
 
         shape = value.shape
