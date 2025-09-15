@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from chirho.observational.ops import ExcisedNormal
+from chirho.observational.ops import ExcisedCategorical, ExcisedNormal
 
 
 # needed for testing interval CDFs
@@ -143,3 +143,77 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     )
     assert not torch.allclose(loc_before, loc_after)
     assert not torch.allclose(scale_before, scale_after)
+
+
+@pytest.mark.parametrize(
+    "logits",
+    [
+        torch.tensor([0.1, 1.0, 2.0, 3.0]),  # shape (4,)
+        torch.tensor([[0.1, 1.0, 2.0, 3.0]]),  # shape (1, 4)
+        torch.tensor([[0.1, 1.0, 2.0, 3.0], [0.3, 0.2, 0.1, 0.4]]),  # shape (2, 4)
+        torch.tensor(
+            [[[0.1, 1.0, 2.0, 3.0]], [[0.3, 0.2, 0.1, 0.4]]]
+        ),  # shape (2, 1, 4)
+    ],
+)
+@pytest.mark.parametrize(
+    "intervals",
+    [
+        [(torch.tensor(1), torch.tensor(2))],  # excise categories 1 and 2
+        [(torch.tensor(0), torch.tensor(0))],  # excise first category
+        [(torch.tensor(3), torch.tensor(3))],  # excise last category
+        [
+            (torch.tensor(0), torch.tensor(1)),
+            (torch.tensor(2), torch.tensor(2)),
+        ],  # multiple disjoint
+        [],  # no excision
+    ],
+)
+def test_excised_categorical_shapes_and_probs(logits, intervals):
+    excised = ExcisedCategorical(logits=logits, intervals=intervals)
+
+    # --- Basic shape checks ---
+    assert excised.probs.shape == logits.shape
+    assert excised.logits.shape == logits.shape
+
+    # --- Excised categories have zero prob ---
+    for low, high in intervals:
+        low_i = int(torch.clamp(torch.ceil(low), 0, logits.size(-1) - 1))
+        high_i = int(torch.clamp(torch.floor(high), 0, logits.size(-1) - 1))
+        for i in range(low_i, high_i + 1):
+            assert torch.all(excised.probs[..., i] == 0.0)
+
+    # --- Remaining probs renormalize ---
+    assert torch.allclose(
+        excised.probs.sum(-1), torch.tensor(1.0).expand_as(excised.probs.sum(-1))
+    )
+
+    # --- Sampling avoids excised categories ---
+    samples = excised.sample((5000,))
+    for low, high in intervals:
+        assert not torch.any((samples >= low) & (samples <= high))
+
+    # --- Log prob checks ---
+    num_categories = logits.size(-1)
+    for i in range(num_categories):
+        lp = excised.log_prob(torch.tensor(i))
+        if any((low <= i) & (i <= high) for (low, high) in intervals):
+            assert torch.all(lp == -float("inf"))
+        else:
+            assert torch.all(lp > -float("inf"))
+
+
+def test_excised_categorical_empirical_frequencies():
+    logits = torch.tensor([0.1, 1.0, 2.0, 3.0])
+    intervals = [(torch.tensor(1), torch.tensor(2))]  # drop categories 1 and 2
+    excised = ExcisedCategorical(logits=logits, intervals=intervals)
+
+    N = 20000
+    samples = excised.sample((N,))
+    freqs = torch.bincount(samples, minlength=logits.size(-1)) / N
+
+    # compare only on non-excised categories
+    mask = excised.probs > 0
+    assert torch.allclose(freqs[mask], excised.probs[mask], atol=0.02)
+    # excised categories have zero empirical freq
+    assert torch.allclose(freqs[~mask], torch.zeros_like(freqs[~mask]), atol=1e-3)

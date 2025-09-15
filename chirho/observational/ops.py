@@ -4,11 +4,12 @@ import functools
 from numbers import Number
 from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
 
+import pyro
 import pyro.distributions as dist
 import torch
 from pyro.distributions.torch_distribution import TorchDistribution
 from torch.distributions import constraints
-from torch.distributions.utils import broadcast_all
+from torch.distributions.utils import broadcast_all, probs_to_logits
 
 T = TypeVar("T")
 
@@ -72,7 +73,7 @@ class ExcisedNormal(TorchDistribution):
         self,
         loc: Union[float, torch.Tensor],
         scale: Union[float, torch.Tensor],
-        intervals: list[tuple[Union[float, torch.Tensor], Union[float, torch.Tensor]]],
+        intervals: list[tuple[torch.Tensor, torch.Tensor]],
         validate_args: bool | None = None,
     ) -> None:
 
@@ -249,3 +250,48 @@ class ExcisedNormal(TorchDistribution):
         x_icdf = self.icdf(uniform_sample)
 
         return x_icdf
+
+
+class ExcisedCategorical(pyro.distributions.Categorical):
+
+    def __init__(
+        self,
+        intervals: list[tuple[torch.Tensor, torch.Tensor]],
+        probs: torch.Tensor | None = None,
+        logits: torch.Tensor | None = None,
+        validate_args: bool | None = None,
+    ):
+
+        if probs is not None and logits is None:
+            logits = probs_to_logits(probs)
+        elif logits is not None and probs is not None:
+            raise ValueError(
+                "Either `probs` or `logits` should be specified, but not both."
+            )
+
+        assert logits is not None
+        num_categories = logits.size(-1)
+
+        mask = torch.ones_like(logits, dtype=torch.bool)
+        for low, high in intervals:
+
+            low_i = torch.clamp(torch.ceil(low), 0, num_categories - 1).to(torch.long)
+            high_i = torch.clamp(torch.floor(high), 0, num_categories - 1).to(
+                torch.long
+            )
+
+            # add category dimension
+            low_exp = low_i[..., None]
+            high_exp = high_i[..., None]
+
+            cat_idx = torch.arange(num_categories, device=logits.device).broadcast_to(
+                mask.shape
+            )
+
+            interval_mask = (cat_idx < low_exp) | (cat_idx > high_exp)
+
+            mask &= interval_mask
+
+        logits = logits.masked_fill(~mask, float("-inf"))
+
+        super().__init__(logits=logits, validate_args=validate_args)
