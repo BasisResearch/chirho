@@ -135,7 +135,7 @@ def _batched_odeint(
 
     yt = tuple(
         torch.transpose(
-            yt_[(..., None) + yt_.shape[len(yt_.shape) - event_dim :]],
+            yt_[(..., None) + tuple(yt_.shape[len(yt_.shape) - event_dim :])],
             -len(yt_.shape) - 1,
             -1 - event_dim,
         )[0]
