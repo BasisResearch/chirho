@@ -270,6 +270,9 @@ class ExcisedCategorical(pyro.distributions.Categorical):
             )
 
         assert logits is not None
+
+        self._intervals = intervals
+
         num_categories = logits.size(-1)
 
         mask = torch.ones_like(logits, dtype=torch.bool)
@@ -295,3 +298,11 @@ class ExcisedCategorical(pyro.distributions.Categorical):
         logits = logits.masked_fill(~mask, float("-inf"))
 
         super().__init__(logits=logits, validate_args=validate_args)
+
+    def expand(self, batch_shape, _instance=None):
+        new = super().expand(batch_shape, _instance)
+        new._intervals = [
+            (low.expand(batch_shape), high.expand(batch_shape))
+            for low, high in self._intervals
+        ]
+        return new
