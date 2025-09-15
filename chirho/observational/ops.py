@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from numbers import Number
-from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
+from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions as dist
 import torch
@@ -80,6 +80,8 @@ class ExcisedNormal(TorchDistribution):
             raise ValueError("intervals must be a list of (low, high) tuples.")
 
         lows, highs = zip(*intervals)  # each is a tuple of tensors/scalars
+
+        all_edges: tuple[Any, ...]
 
         self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
 
