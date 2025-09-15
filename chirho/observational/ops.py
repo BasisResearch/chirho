@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from numbers import Number
-from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
+from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions as dist
 import torch
@@ -86,7 +86,7 @@ class ExcisedNormal(TorchDistribution):
         n = len(lows)
         lows = all_edges[:n]
         highs = all_edges[n:]
-        self._intervals = list(zip(lows, highs))
+        self._intervals = tuple(zip(lows, highs))
 
         for i in range(len(self._intervals) - 1):
             _, high_i = self._intervals[i]
@@ -158,7 +158,8 @@ class ExcisedNormal(TorchDistribution):
         new._validate_args = self._validate_args
         return new
 
-    # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc, we can be more specific with type hints
+    # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc,
+    #  we can be more specific with type hints
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
 
         shape = value.shape
