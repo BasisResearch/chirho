@@ -300,9 +300,46 @@ class ExcisedCategorical(pyro.distributions.Categorical):
         super().__init__(logits=logits, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
-        new = super().expand(batch_shape, _instance)
-        new._intervals = [
-            (low.expand(batch_shape), high.expand(batch_shape))
-            for low, high in self._intervals
-        ]
+        new = self._get_checked_instance(type(self), _instance)
+
+        new_logits = self.logits.expand(
+            list(batch_shape) + list(self.logits.shape[-1:])
+        )
+
+        new_intervals = []
+        for low, high in self._intervals:
+            low_exp = low.expand(batch_shape)
+            high_exp = high.expand(batch_shape)
+            new_intervals.append((low_exp, high_exp))
+
+        new.__init__(logits=new_logits, intervals=new_intervals)
         return new
+
+
+def test_excised_categorical_expand():
+    # base logits
+    logits = torch.tensor([[0.1, 1.0, 2.0, 3.0]])
+    intervals = [(torch.tensor(1), torch.tensor(2))]
+
+    dist = ExcisedCategorical(logits=logits, intervals=intervals)
+
+    # expand to a new batch shape
+    new_batch_shape = (2, 3)
+    dist_exp = dist.expand(new_batch_shape)
+
+    # --- shapes ---
+    assert dist_exp.logits.shape[:-1] == new_batch_shape
+    assert dist_exp.probs.shape[:-1] == new_batch_shape
+
+    # --- intervals ---
+    for low, high in dist_exp._intervals:
+        assert low.shape == new_batch_shape
+        assert high.shape == new_batch_shape
+
+    # --- probabilities sum to 1 along categories ---
+    assert torch.allclose(dist_exp.probs.sum(-1), torch.ones(new_batch_shape))
+
+    # --- sampling avoids excised categories ---
+    samples = dist_exp.sample((5000,))
+    for low, high in dist_exp._intervals:
+        assert not torch.any((samples >= low.min()) & (samples <= high.max()))
