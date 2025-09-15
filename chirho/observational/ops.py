@@ -83,7 +83,12 @@ class ExcisedNormal(TorchDistribution):
 
         all_edges: tuple[Any, ...]
 
-        self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
+        #        self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
+
+        edges = broadcast_all(loc, scale, *lows, *highs)
+        self.loc = edges[0]
+        self.scale = edges[1]
+        all_edges = edges[2:]
 
         n = len(lows)
         lows = all_edges[:n]
