@@ -96,7 +96,7 @@ class ExcisedNormal(TorchDistribution):
         else:
             batch_shape = self.loc.size()
 
-        super(ExcisedNormal, self).__init__(batch_shape, validate_args=validate_args)
+        super().__init__(batch_shape, validate_args=validate_args)
 
         self._base_normal = dist.Normal(
             self.loc, self.scale, validate_args=validate_args
