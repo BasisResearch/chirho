@@ -91,8 +91,10 @@ class ExcisedNormal(TorchDistribution):
         self._intervals = tuple(zip(lows, highs))
 
         for i in range(len(self._intervals) - 1):
-            _, high_i = self._intervals[i]
+            low_i, high_i = self._intervals[i]
             low_next, _ = self._intervals[i + 1]
+            if not torch.all(low_i < high_i).item():
+                raise ValueError("Each interval must satisfy low < high.")
             if not torch.all(high_i < low_next).item():
                 raise ValueError("Intervals must be sorted and cannot overlap.")
 
