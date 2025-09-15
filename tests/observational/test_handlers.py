@@ -60,11 +60,7 @@ def discrete_scm_1():
 @pytest.mark.parametrize("z_obs", [3.5, None])
 def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
-    data = {
-        name: torch.as_tensor(obs)
-        for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
-        if obs is not None
-    }
+    data = {name: torch.as_tensor(obs) for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)] if obs is not None}
     if use_auto:
         reparam_config = AutoSoftConditioning(scale=scale)
     else:
@@ -87,10 +83,7 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_o
             assert torch.all(tr.trace.nodes[name]["value"] == data[name])
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
-            assert (
-                tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
-                == tr.trace.nodes[name]["log_prob"].shape
-            )
+            assert tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape == tr.trace.nodes[name]["log_prob"].shape
         else:
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
@@ -103,11 +96,7 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_o
 @pytest.mark.parametrize("z_obs", [3, None])
 def test_soft_conditioning_smoke_discrete_1(use_auto, scale, x_obs, y_obs, z_obs):
     names = ["x", "y", "z"]
-    data = {
-        name: torch.as_tensor(obs)
-        for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
-        if obs is not None
-    }
+    data = {name: torch.as_tensor(obs) for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)] if obs is not None}
     if use_auto:
         reparam_config = AutoSoftConditioning(scale=scale)
     else:
@@ -133,10 +122,7 @@ def test_soft_conditioning_smoke_discrete_1(use_auto, scale, x_obs, y_obs, z_obs
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
-            assert (
-                tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
-                == tr.trace.nodes[name]["log_prob"].shape
-            )
+            assert tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape == tr.trace.nodes[name]["log_prob"].shape
         else:
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
@@ -146,18 +132,10 @@ def test_soft_conditioning_smoke_discrete_1(use_auto, scale, x_obs, y_obs, z_obs
 @pytest.mark.parametrize("y_obs", [2.5, None])
 @pytest.mark.parametrize("z_obs", [3.5, None])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
-@pytest.mark.parametrize(
-    "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
-)
-def test_soft_conditioning_counterfactual_continuous_1(
-    x_obs, y_obs, z_obs, cf_dim, cf_class
-):
+@pytest.mark.parametrize("cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual])
+def test_soft_conditioning_counterfactual_continuous_1(x_obs, y_obs, z_obs, cf_dim, cf_class):
     names = ["x", "y", "z"]
-    data = {
-        name: torch.as_tensor(obs)
-        for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)]
-        if obs is not None
-    }
+    data = {name: torch.as_tensor(obs) for name, obs in [("x", x_obs), ("y", y_obs), ("z", z_obs)] if obs is not None}
     reparam_config = AutoSoftConditioning(scale=1.0)
 
     actions = {"x": torch.tensor(0.1234)}
@@ -181,10 +159,7 @@ def test_soft_conditioning_counterfactual_continuous_1(
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert torch.any(tr.trace.nodes[name]["value"] == expected_value)
             assert tr.trace.nodes[f"{name}_approx_log_prob"]["type"] == "sample"
-            assert (
-                tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape
-                == tr.trace.nodes[name]["log_prob"].shape
-            )
+            assert tr.trace.nodes[f"{name}_approx_log_prob"]["log_prob"].shape == tr.trace.nodes[name]["log_prob"].shape
         else:
             assert AutoSoftConditioning.site_is_deterministic(tr.trace.nodes[name])
             assert f"{name}_approx_log_prob" not in tr.trace.nodes
@@ -220,9 +195,7 @@ class HMM(pyro.nn.PyroModule):
 @pytest.mark.parametrize("use_guide", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5, 6])
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
-def test_smoke_condition_enumerate_hmm_elbo(
-    num_steps, Elbo, use_guide, max_plate_nesting, num_particles
-):
+def test_smoke_condition_enumerate_hmm_elbo(num_steps, Elbo, use_guide, max_plate_nesting, num_particles):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
     hmm_model = HMM()
 
@@ -237,9 +210,7 @@ def test_smoke_condition_enumerate_hmm_elbo(
 
     if use_guide:
         guide = pyro.infer.config_enumerate(default="parallel")(
-            pyro.infer.autoguide.AutoDiscreteParallel(
-                pyro.poutine.block(expose=["x"])(condition(data={})(model))
-            )
+            pyro.infer.autoguide.AutoDiscreteParallel(pyro.poutine.block(expose=["x"])(condition(data={})(model)))
         )
         model = pyro.infer.config_enumerate(default="parallel")(model)
     else:
@@ -261,9 +232,7 @@ def test_condition_commutes():
             y = pyro.sample("y", dist.Normal(x + z, 1))
         return z, x, y
 
-    h_cond = condition(
-        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
-    )
+    h_cond = condition(data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])})
     h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
 
     # case 1
@@ -286,9 +255,7 @@ def test_condition_commutes():
     tr3.trace.compute_log_prob()
 
     assert set(tr1.trace.nodes) == set(tr2.trace.nodes) == set(tr3.trace.nodes)
-    assert (
-        tr1.trace.log_prob_sum() == tr2.trace.log_prob_sum() == tr3.trace.log_prob_sum()
-    )
+    assert tr1.trace.log_prob_sum() == tr2.trace.log_prob_sum() == tr3.trace.log_prob_sum()
     for name, node in tr1.trace.nodes.items():
         if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
             assert torch.allclose(node["value"], tr2.trace.nodes[name]["value"])
@@ -320,10 +287,7 @@ def test_factors_handler():
     for name in factors:
         assert name in tr.trace.nodes
         assert f"{prefix}{name}" in tr.trace.nodes
-        assert (
-            tr.trace.nodes[name]["fn"].batch_shape
-            == tr.trace.nodes[f"{prefix}{name}"]["fn"].batch_shape
-        )
+        assert tr.trace.nodes[name]["fn"].batch_shape == tr.trace.nodes[f"{prefix}{name}"]["fn"].batch_shape
         assert torch.allclose(
             tr.trace.nodes[f"{prefix}{name}"]["log_prob"],
             factors[name](tr.trace.nodes[name]["value"]),
@@ -368,13 +332,13 @@ def test_soft_interval():
     inter_neq = soft_neq(constraints.interval(0, 10), t1, t2, scale=scale)
     inter_neq_b = soft_neq(constraints.interval(0, 10), t1, t2b, scale=scale)
 
-    assert torch.all(
-        inter_eq_b < inter_eq
-    ), "soft_eq is not monotonic in the absolute distance between the two original values"
+    assert torch.all(inter_eq_b < inter_eq), (
+        "soft_eq is not monotonic in the absolute distance between the two original values"
+    )
 
-    assert torch.all(
-        inter_neq_b > inter_neq
-    ), "soft_neq is not monotonic in the absolute distance between the two original values"
+    assert torch.all(inter_neq_b > inter_neq), (
+        "soft_neq is not monotonic in the absolute distance between the two original values"
+    )
     assert (
         soft_neq(
             constraints.interval(0, 10),
@@ -394,18 +358,18 @@ def test_soft_eq_tavares_relaxation():
     # condition i: when a tends to zero, soft_eq tends to the true only for
     # true identity and to negative infinity otherwise
     support = constraints.real
-    assert (
-        soft_eq(support, torch.tensor(1.0), torch.tensor(1.001), scale=1e-10) < 1e-10
-    ), "soft_eq does not tend to negative infinity for false identities as a tends to zero"
+    assert soft_eq(support, torch.tensor(1.0), torch.tensor(1.001), scale=1e-10) < 1e-10, (
+        "soft_eq does not tend to negative infinity for false identities as a tends to zero"
+    )
 
     # condition ii: approaching true answer as scale goes to infty
     scales = [1e6, 1e10]
     for scale in scales:
         score_diff = soft_eq(support, torch.tensor(1.0), torch.tensor(2.0), scale=scale)
         score_id = soft_eq(support, torch.tensor(1.0), torch.tensor(1.0), scale=scale)
-        assert (
-            torch.abs(score_diff - score_id) < 1e-10
-        ), "soft_eq does not approach true answer as scale approaches infinity"
+        assert torch.abs(score_diff - score_id) < 1e-10, (
+            "soft_eq does not approach true answer as scale approaches infinity"
+        )
 
     # condition iii: 0 just in case true identity
     true_identity = soft_eq(support, torch.tensor(1.0), torch.tensor(1.0))
@@ -422,9 +386,7 @@ def test_soft_neq_tavares_relaxation():
 
     # condition i: when a tends to allowed minimum (1 / math.sqrt(2 * math.pi)),
     # the difference in outcomes between identity and non-identity tends to negative infinity
-    diff = soft_neq(
-        support, torch.tensor(1.0), torch.tensor(1.0), scale=min_scale + 0.0001
-    ) - soft_neq(
+    diff = soft_neq(support, torch.tensor(1.0), torch.tensor(1.0), scale=min_scale + 0.0001) - soft_neq(
         support, torch.tensor(1.0), torch.tensor(1.001), scale=min_scale + 0.0001
     )
 
@@ -434,9 +396,7 @@ def test_soft_neq_tavares_relaxation():
     # the score tends to that of identity
     x = torch.tensor(0.0)
     y = torch.arange(-100, 100, 0.1)
-    indentity_score = soft_neq(
-        support, torch.tensor(1.0), torch.tensor(1.0), scale=1e10
-    )
+    indentity_score = soft_neq(support, torch.tensor(1.0), torch.tensor(1.0), scale=1e10)
     scaled = soft_neq(support, x, y, scale=1e10)
 
     assert torch.allclose(indentity_score, scaled), "condition ii failed"
@@ -452,20 +412,13 @@ def test_soft_neq_tavares_relaxation():
     for scale in scales:
         z = torch.tensor([-1e10 * scale, 1e10 * scale])
 
-        identity_score = soft_neq(
-            support, torch.tensor(1.0), torch.tensor(1.0), scale=scale
-        )
+        identity_score = soft_neq(support, torch.tensor(1.0), torch.tensor(1.0), scale=scale)
         scaled_y = soft_neq(support, x, y, scale=scale)
         scaled_z = soft_neq(support, x, z, scale=scale)
 
-        assert torch.allclose(
-            identity_score, torch.min(scaled_y)
-        ), "condition iii failed"
+        assert torch.allclose(identity_score, torch.min(scaled_y)), "condition iii failed"
         lower = 1 + scale * 1e-3
         assert torch.all(
-            soft_neq(
-                support, torch.tensor(1.0), torch.arange(lower, 2, 0.001), scale=scale
-            )
-            > identity_score
+            soft_neq(support, torch.tensor(1.0), torch.arange(lower, 2, 0.001), scale=scale) > identity_score
         )
         assert torch.allclose(scaled_z, torch.tensor(0.0)), "condition iii failed"

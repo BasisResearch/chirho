@@ -1,5 +1,7 @@
 #!/bin/bash
 set -euxo pipefail
 
-isort --profile black chirho/ tests/
-black chirho/ tests/
+SRC="chirho/ tests/"
+
+ruff check --fix $SRC
+ruff format $SRC

@@ -58,9 +58,7 @@ test = [
   "pytest-cov",
   "pytest-xdist",
   "mypy==1.10",
-  "black",
-  "flake8",
-  "isort",
+  "ruff",
   "sphinx==7.1.2",
   "sphinxcontrib-bibtex",
   "sphinxcontrib-jquery",
@@ -77,12 +75,17 @@ dev = ["chirho[dynamical,extras,test]"]
 [tool.setuptools.packages.find]
 include = ["chirho", "chirho.*"]
 
-[tool.flake8]
-max-line-length = 120
-extend-ignore = [
-    # https://github.com/psf/black/blob/master/docs/the_black_code_style.md#slices
-    "E203"
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+  "F",     # pyflakes
+  "I",     # isort
+  "PERF",  # perflint
+  "UP",    # pyupgrade
 ]
-per-file-ignores = [
-    "chirho/reparam/__init__.py:E501"
+ignore = [
+  "UP031",   # Use format specifiers instead of percent format
+  "PERF401", # Use a list comprehension to create a transformed list
 ]

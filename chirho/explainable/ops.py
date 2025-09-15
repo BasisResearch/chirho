@@ -1,5 +1,5 @@
 import functools
-from typing import Optional, Tuple, TypeVar
+from typing import Optional, TypeVar
 
 import pyro
 
@@ -12,9 +12,7 @@ T = TypeVar("T")
 
 @pyro.poutine.runtime.effectful(type="preempt")
 @functools.partial(pyro.poutine.block, hide_types=["intervene"])
-def preempt(
-    obs: T, acts: Tuple[Intervention[T], ...], case: Optional[S] = None, **kwargs
-) -> T:
+def preempt(obs: T, acts: tuple[Intervention[T], ...], case: Optional[S] = None, **kwargs) -> T:
     """
     Effectful primitive operation for "preempting" values in a probabilistic program.
 

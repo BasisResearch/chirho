@@ -1,8 +1,9 @@
 import math
 import time
 import warnings
+from collections.abc import Container
 from functools import partial
-from typing import Any, Callable, Container, Generic, Optional, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import pytest
@@ -63,13 +64,9 @@ class OldNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
         self.num_samples = num_samples
         self.max_plate_nesting = max_plate_nesting
 
-    def forward(
-        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
-    ) -> torch.Tensor:
+    def forward(self, data: Point[T], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
         if self.max_plate_nesting is None:
-            self.max_plate_nesting = guess_max_plate_nesting(
-                self.model, self.guide, *args, **kwargs
-            )
+            self.max_plate_nesting = guess_max_plate_nesting(self.model, self.guide, *args, **kwargs)
             warnings.warn(
                 "Since max_plate_nesting is not specified, \
                 the first call to NMCLogPredictiveLikelihood will not be seeded properly. \
@@ -77,9 +74,7 @@ class OldNMCLogPredictiveLikelihood(Generic[P, T], torch.nn.Module):
             )
 
         masked_guide = pyro.poutine.mask(mask=False)(self.guide)
-        masked_model = _UnmaskNamedSites(names=set(data.keys()))(
-            condition(data=data)(self.model)
-        )
+        masked_model = _UnmaskNamedSites(names=set(data.keys()))(condition(data=data)(self.model))
         log_weights = pyro.infer.importance.vectorized_importance_weights(
             masked_model,
             masked_guide,
@@ -97,9 +92,7 @@ class SimpleMultivariateGaussianModel(pyro.nn.PyroModule):
         self.p = p
 
     def forward(self):
-        loc = pyro.sample(
-            "loc", pyro.distributions.Normal(torch.zeros(self.p), 1.0).to_event(1)
-        )
+        loc = pyro.sample("loc", pyro.distributions.Normal(torch.zeros(self.p), 1.0).to_event(1))
         cov_mat = torch.eye(self.p)
         return pyro.sample("y", pyro.distributions.MultivariateNormal(loc, cov_mat))
 
@@ -136,35 +129,24 @@ def test_empirical_fisher_vp_performance_with_likelihood(model_guide):
     guide()
 
     start_time = time.time()
-    data = pyro.infer.Predictive(
-        model, guide=guide, num_samples=num_monte_carlo, return_sites=["y"]
-    )()
+    data = pyro.infer.Predictive(model, guide=guide, num_samples=num_monte_carlo, return_sites=["y"])()
     end_time = time.time()
     print("Data generation time (s): ", end_time - start_time)
 
     log1_prob_params, func1_log_prob = make_functional_call(
         OldNMCLogPredictiveLikelihood(model, guide, max_plate_nesting=1)
     )
-    batched_func1_log_prob = torch.func.vmap(
-        func1_log_prob, in_dims=(None, 0), randomness="different"
-    )
+    batched_func1_log_prob = torch.func.vmap(func1_log_prob, in_dims=(None, 0), randomness="different")
 
     log2_prob_params, func2_log_prob = make_functional_call(
         BatchedNMCLogMarginalLikelihood(PredictiveModel(model, guide))
     )
 
-    fisher_hessian_vmapped = make_empirical_fisher_vp(
-        batched_func1_log_prob, log1_prob_params, data
-    )
+    fisher_hessian_vmapped = make_empirical_fisher_vp(batched_func1_log_prob, log1_prob_params, data)
 
-    fisher_hessian_batched = make_empirical_fisher_vp(
-        func2_log_prob, log2_prob_params, data
-    )
+    fisher_hessian_batched = make_empirical_fisher_vp(func2_log_prob, log2_prob_params, data)
 
-    v1 = {
-        k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v)
-        for k, v in log1_prob_params.items()
-    }
+    v1 = {k: torch.ones_like(v) if k != "guide.loc_a" else torch.zeros_like(v) for k, v in log1_prob_params.items()}
     v2 = {f"model.{k}": v for k, v in v1.items()}
 
     func2_log_prob(log2_prob_params, data)

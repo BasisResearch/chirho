@@ -17,9 +17,7 @@ from chirho.observational.handlers import condition
 logger = logging.getLogger(__name__)
 
 
-@pytest.mark.parametrize(
-    "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
-)
+@pytest.mark.parametrize("cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
 @pytest.mark.parametrize("x_folded", [True, False])
@@ -33,11 +31,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape, x_folde
         # y --> z
         X_base_dist = dist.Normal(0.0, 1)
         if x_folded:
-            X_dist = (
-                dist.FoldedDistribution(X_base_dist)
-                .expand(event_shape)
-                .to_event(event_dim)
-            )
+            X_dist = dist.FoldedDistribution(X_base_dist).expand(event_shape).to_event(event_dim)
         else:
             X_dist = dist.TransformedDistribution(
                 X_base_dist.expand(event_shape).to_event(event_dim),
@@ -55,11 +49,7 @@ def test_ambiguous_conditioning_transform(cf_class, cf_dim, event_shape, x_folde
             "z",
             dist.TransformedDistribution(
                 dist.Normal(0.0, 1).expand(event_shape).to_event(event_dim),
-                [
-                    dist.transforms.AffineTransform(
-                        0.3 * X + 0.7 * Y, 1.0, event_dim=event_dim
-                    )
-                ],
+                [dist.transforms.AffineTransform(0.3 * X + 0.7 * Y, 1.0, event_dim=event_dim)],
             ),
         )
         return X, Y, Z

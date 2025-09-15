@@ -1,5 +1,5 @@
 import math
-from typing import Callable, Optional, Tuple, TypedDict, TypeVar
+from typing import Callable, Optional, TypedDict, TypeVar
 
 import pyro
 import pyro.distributions as dist
@@ -48,9 +48,7 @@ class GaussianModel(PyroModule):
         self.register_buffer("cov_mat", cov_mat)
 
     def forward(self, loc):
-        pyro.sample(
-            "x", dist.MultivariateNormal(loc=loc, covariance_matrix=self.cov_mat)
-        )
+        pyro.sample("x", dist.MultivariateNormal(loc=loc, covariance_matrix=self.cov_mat))
 
 
 # Note: `gaussian_log_prob` is separate from the GaussianModel above because of upstream obstacles
@@ -58,9 +56,7 @@ class GaussianModel(PyroModule):
 # See https://github.com/BasisResearch/chirho/issues/393
 def gaussian_log_prob(params: ParamDict, data_point: Point[T], cov_mat) -> T:
     with pyro.validation_enabled(False):
-        return dist.MultivariateNormal(
-            loc=params["loc"], covariance_matrix=cov_mat
-        ).log_prob(data_point["x"])
+        return dist.MultivariateNormal(loc=params["loc"], covariance_matrix=cov_mat).log_prob(data_point["x"])
 
 
 class DataConditionedModel(PyroModule):
@@ -113,12 +109,8 @@ class HighDimLinearModel(pyro.nn.PyroModule):
         return pyro.sample("treatment_weight", dist.Normal(0.0, 1.0))
 
     def sample_covariate_loc_scale(self):
-        loc = pyro.sample(
-            "covariate_loc", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1)
-        )
-        scale = pyro.sample(
-            "covariate_scale", dist.LogNormal(0, 1).expand((self.p,)).to_event(1)
-        )
+        loc = pyro.sample("covariate_loc", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1))
+        scale = pyro.sample("covariate_scale", dist.LogNormal(0, 1).expand((self.p,)).to_event(1))
         return loc, scale
 
     def forward(self, N: int = 1):
@@ -131,17 +123,11 @@ class HighDimLinearModel(pyro.nn.PyroModule):
             X = pyro.sample("X", dist.Normal(x_loc, x_scale).to_event(1))
             A = pyro.sample(
                 "A",
-                dist.Bernoulli(
-                    logits=torch.einsum("...np,...p->...n", X, propensity_weights)
-                ),
+                dist.Bernoulli(logits=torch.einsum("...np,...p->...n", X, propensity_weights)),
             )
             return pyro.sample(
                 "Y",
-                self.link_fn(
-                    torch.einsum("...np,...p->...n", X, outcome_weights)
-                    + A * tau
-                    + intercept
-                ),
+                self.link_fn(torch.einsum("...np,...p->...n", X, outcome_weights) + A * tau + intercept),
             )
 
 
@@ -213,18 +199,12 @@ class ATEParamDict(TypedDict):
     intercept: torch.Tensor
 
 
-def closed_form_ate_correction(
-    X_test: ATETestPoint, theta: ATEParamDict
-) -> Tuple[torch.Tensor, torch.Tensor]:
+def closed_form_ate_correction(X_test: ATETestPoint, theta: ATEParamDict) -> tuple[torch.Tensor, torch.Tensor]:
     X = X_test["X"]
     A = X_test["A"]
     Y = X_test["Y"]
     pi_X = torch.sigmoid(X.mv(theta["propensity_weights"]))
-    mu_X = (
-        X.mv(theta["outcome_weights"])
-        + A * theta["treatment_weight"]
-        + theta["intercept"]
-    )
+    mu_X = X.mv(theta["outcome_weights"]) + A * theta["treatment_weight"] + theta["intercept"]
     analytic_eif_at_test_pts = (A / pi_X - (1 - A) / (1 - pi_X)) * (Y - mu_X)
     analytic_correction = analytic_eif_at_test_pts.mean()
     return analytic_correction, analytic_eif_at_test_pts

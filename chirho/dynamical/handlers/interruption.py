@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import typing
-from typing import Callable, Generic, Tuple, TypeVar, Union
+from typing import Callable, Generic, TypeVar, Union
 
 import pyro
 import pyro.contrib.autoname
@@ -67,9 +67,7 @@ class StaticEvent(Generic[T], ZeroEvent[T]):
 
     def __init__(self, time: R):
         self.time = torch.as_tensor(time)
-        super().__init__(
-            lambda time, _: cond(0.0, self.time - time, case=time < self.time)
-        )
+        super().__init__(lambda time, _: cond(0.0, self.time - time, case=time < self.time))
 
 
 def StaticInterruption(time: R):
@@ -85,9 +83,7 @@ def StaticInterruption(time: R):
     """
 
     @on(StaticEvent(time))
-    def callback(
-        dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
+    def callback(dynamics: Dynamics[T], state: State[T]) -> tuple[Dynamics[T], State[T]]:
         return dynamics, state
 
     return callback
@@ -120,9 +116,7 @@ def StaticObservation(time: R, observation: Observation[State[T]]):
     """
 
     @on(StaticEvent(time))
-    def callback(
-        dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
+    def callback(dynamics: Dynamics[T], state: State[T]) -> tuple[Dynamics[T], State[T]]:
         with pyro.contrib.autoname.scope(prefix=f"t={torch.as_tensor(time).item()}"):
             return dynamics, observe(state, observation)
 
@@ -152,9 +146,7 @@ def StaticIntervention(time: R, intervention: Intervention[State[T]]):
     """
 
     @on(StaticEvent(time))
-    def callback(
-        dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
+    def callback(dynamics: Dynamics[T], state: State[T]) -> tuple[Dynamics[T], State[T]]:
         return dynamics, intervene(state, intervention)
 
     return callback
@@ -168,17 +160,13 @@ def DynamicInterruption(event_fn: Callable[[R, State[T]], R]):
     """
 
     @on(ZeroEvent(event_fn))
-    def callback(
-        dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
+    def callback(dynamics: Dynamics[T], state: State[T]) -> tuple[Dynamics[T], State[T]]:
         return dynamics, state
 
     return callback
 
 
-def DynamicIntervention(
-    event_fn: Callable[[R, State[T]], R], intervention: Intervention[State[T]]
-):
+def DynamicIntervention(event_fn: Callable[[R, State[T]], R], intervention: Intervention[State[T]]):
     """
     This effect handler interrupts a simulation when the given dynamic event function returns 0.0, and
     applies an intervention to the state at that time. This works similarly to
@@ -195,9 +183,7 @@ def DynamicIntervention(
     """
 
     @on(ZeroEvent(event_fn))
-    def callback(
-        dynamics: Dynamics[T], state: State[T]
-    ) -> Tuple[Dynamics[T], State[T]]:
+    def callback(dynamics: Dynamics[T], state: State[T]) -> tuple[Dynamics[T], State[T]]:
         return dynamics, intervene(state, intervention)
 
     return callback

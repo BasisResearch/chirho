@@ -1,5 +1,5 @@
 import logging
-from typing import Iterable
+from collections.abc import Iterable
 
 import pyro
 import pyro.distributions as dist
@@ -48,12 +48,7 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
 
     with SingleWorldFactual():
         z_factual, x_factual, y_factual = model()
-        assert (
-            indices_of(z_factual)
-            == indices_of(x_factual)
-            == indices_of(y_factual)
-            == IndexSet()
-        )
+        assert indices_of(z_factual) == indices_of(x_factual) == indices_of(y_factual) == IndexSet()
         assert x_factual != x_cf_value
 
     with SingleWorldCounterfactual():
@@ -64,11 +59,7 @@ def test_counterfactual_handler_smoke(x_cf_value, cf_dim):
     with TwinWorldCounterfactual(cf_dim):
         z_cf_twin, x_cf_twin, y_cf_twin = model()
         assert indices_of(z_cf_twin) == IndexSet()
-        assert (
-            indices_of(x_cf_twin)
-            == indices_of(y_cf_twin)
-            == IndexSet(__fresh_split__={0, 1})
-        )
+        assert indices_of(x_cf_twin) == indices_of(y_cf_twin) == IndexSet(__fresh_split__={0, 1})
         assert gather(x_cf_twin, IndexSet(__fresh_split__={0})) != x_cf_value
         assert gather(x_cf_twin, IndexSet(__fresh_split__={1})) == x_cf_value
 
@@ -105,9 +96,7 @@ def test_multiple_interventions(x_cf_value, num_splits, cf_dim, event_shape):
     with MultiWorldCounterfactual(cf_dim):
         Z, X, Y = model()
 
-        assert indices_of(Z, event_dim=event_dim) == IndexSet(
-            Z=set(range(1 + num_splits))
-        )
+        assert indices_of(Z, event_dim=event_dim) == IndexSet(Z=set(range(1 + num_splits)))
         assert indices_of(X, event_dim=event_dim) == IndexSet(
             X=set(range(1 + num_splits)), Z=set(range(1 + num_splits))
         )
@@ -129,24 +118,16 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
         #   z
         #     \
         # x --> y
-        Z = pyro.sample(
-            "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
+        Z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
         Z = intervene(
             Z,
             torch.full(event_shape, x_cf_value - 1.0),
             event_dim=len(event_shape),
             name="Z",
         )
-        X = pyro.sample(
-            "x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
-        X = intervene(
-            X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape), name="X"
-        )
-        Y = pyro.sample(
-            "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
-        )
+        X = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+        X = intervene(X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape), name="X")
+        Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape)))
         return Z, X, Y
 
     with MultiWorldCounterfactual(cf_dim):
@@ -165,9 +146,7 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
         #   z
         #     \
         # x --> y
-        Z = pyro.sample(
-            "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
+        Z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
         Z = intervene(
             Z,
             torch.full(event_shape, x_cf_value - 1.0),
@@ -176,9 +155,7 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
         )
         X = pyro.sample(
             "x",
-            dist.Normal(Z if nested else 0.0, 1)
-            .expand(Z.shape if nested else event_shape)
-            .to_event(len(event_shape)),
+            dist.Normal(Z if nested else 0.0, 1).expand(Z.shape if nested else event_shape).to_event(len(event_shape)),
         )
         X = intervene(
             X,
@@ -186,9 +163,7 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
             event_dim=len(event_shape),
             name="X",
         )
-        Y = pyro.sample(
-            "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
-        )
+        Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape)))
         return Z, X, Y
 
     with MultiWorldCounterfactual(cf_dim):
@@ -196,9 +171,7 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
 
         assert indices_of(Z, event_dim=len(event_shape)) == IndexSet(Z={0, 1})
         assert (
-            indices_of(X, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
-            if nested
-            else IndexSet(X={0, 1})
+            indices_of(X, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1}) if nested else IndexSet(X={0, 1})
         )
         assert indices_of(Y, event_dim=len(event_shape)) == IndexSet(X={0, 1}, Z={0, 1})
 
@@ -218,9 +191,7 @@ def test_dim_allocation_failure(cf_dim):
 @pytest.mark.parametrize("dependent_intervention", [False, True])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3, None])
 @pytest.mark.parametrize("event_shape", [(), (3,), (4, 3)])
-def test_nested_interventions_same_variable(
-    cf_dim, event_shape, dependent_intervention
-):
+def test_nested_interventions_same_variable(cf_dim, event_shape, dependent_intervention):
     event_dim = len(event_shape)
     x_obs = torch.full(event_shape, 0.0)
 
@@ -285,9 +256,7 @@ def test_cf_condition_commutes():
             y = pyro.sample("y", dist.Normal(x + z, 1))
         return dict(x=x, y=y, z=z)
 
-    h_cond = condition(
-        data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])}
-    )
+    h_cond = condition(data={"x": torch.tensor([0.0, 1.0]), "y": torch.tensor([1.0, 2.0])})
     h_do = do(actions={"z": torch.tensor(0.0), "x": torch.tensor([0.3, 0.4])})
 
     # case 1
@@ -380,9 +349,7 @@ def test_smoke_cf_enumerate_hmm_elbo(
 
     if use_guide:
         guide = pyro.infer.config_enumerate(default="parallel")(
-            pyro.infer.autoguide.AutoDiscreteParallel(
-                pyro.poutine.block(expose=["x"])(condition(data={})(model))
-            )
+            pyro.infer.autoguide.AutoDiscreteParallel(pyro.poutine.block(expose=["x"])(condition(data={})(model)))
         )
         model = pyro.infer.config_enumerate(default="parallel")(model)
     else:
@@ -400,9 +367,7 @@ def test_smoke_cf_enumerate_hmm_elbo(
 @pytest.mark.parametrize("max_plate_nesting", [2, 3, float("inf")])
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
-def test_smoke_cf_enumerate_hmm_compute_marginals(
-    num_steps, use_condition, max_plate_nesting, cf_dim
-):
+def test_smoke_cf_enumerate_hmm_compute_marginals(num_steps, use_condition, max_plate_nesting, cf_dim):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
     hmm_model = HMM()
 
@@ -434,16 +399,9 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize(
     "num_steps",
-    [2, 3, 4, 10]
-    + [
-        pytest.param(
-            5, marks=pytest.mark.xfail(reason="mystery failure with 2 interventions")
-        )
-    ],
+    [2, 3, 4, 10] + [pytest.param(5, marks=pytest.mark.xfail(reason="mystery failure with 2 interventions"))],
 )
-def test_smoke_cf_enumerate_hmm_infer_discrete(
-    num_steps, use_condition, max_plate_nesting, cf_dim, num_particles
-):
+def test_smoke_cf_enumerate_hmm_infer_discrete(num_steps, use_condition, max_plate_nesting, cf_dim, num_particles):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
     hmm_model = HMM()
 
@@ -462,15 +420,11 @@ def test_smoke_cf_enumerate_hmm_infer_discrete(
         max_plate_nesting += 1 - cf_dim
 
     if num_particles > 1:
-        model = pyro.plate("particles", num_particles, dim=-1 - max_plate_nesting)(
-            model
-        )
+        model = pyro.plate("particles", num_particles, dim=-1 - max_plate_nesting)(model)
         max_plate_nesting += 1
 
     # smoke test
-    pyro.infer.infer_discrete(first_available_dim=-1 - max_plate_nesting)(
-        MultiWorldCounterfactual(cf_dim)(model)
-    )(data)
+    pyro.infer.infer_discrete(first_available_dim=-1 - max_plate_nesting)(MultiWorldCounterfactual(cf_dim)(model))(data)
 
 
 @pytest.mark.parametrize("cf_dim", [-1, -2, None])
@@ -478,9 +432,7 @@ def test_smoke_cf_enumerate_hmm_infer_discrete(
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize("num_steps", [2, 3, 4, 5])
 @pytest.mark.parametrize("Kernel", [pyro.infer.HMC, pyro.infer.NUTS])
-def test_smoke_cf_enumerate_hmm_mcmc(
-    num_steps, use_condition, max_plate_nesting, Kernel, cf_dim
-):
+def test_smoke_cf_enumerate_hmm_mcmc(num_steps, use_condition, max_plate_nesting, Kernel, cf_dim):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
     hmm_model = HMM()
 
@@ -500,9 +452,7 @@ def test_smoke_cf_enumerate_hmm_mcmc(
 
     # smoke test
     pyro.infer.MCMC(
-        Kernel(
-            MultiWorldCounterfactual(cf_dim)(model), max_plate_nesting=max_plate_nesting
-        ),
+        Kernel(MultiWorldCounterfactual(cf_dim)(model), max_plate_nesting=max_plate_nesting),
         num_samples=2,
     ).run(data)
 
@@ -529,9 +479,7 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
     @do(actions=actions)
     @condition(data=data)
     def model():
-        z = pyro.sample(
-            "z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
+        z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
         with pyro.plate("data", 2, dim=-1):
             x = pyro.sample("x", dist.Normal(z, 1).to_event(len(event_shape)))
             y = pyro.sample("y", dist.Normal(x + z, 1).to_event(len(event_shape)))
@@ -539,17 +487,13 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
 
     guide = Autoguide(model)
 
-    pyro.infer.Trace_ELBO(max_plate_nesting=1 - cf_dim).differentiable_loss(
-        model, guide
-    )
+    pyro.infer.Trace_ELBO(max_plate_nesting=1 - cf_dim).differentiable_loss(model, guide)
 
     vectorize = pyro.plate("_vectorize", num_samples, dim=cf_dim - 2)
     guide_tr = pyro.poutine.trace(vectorize(guide)).get_trace()
     expected = {
         k: v["value"]
-        for k, v in pyro.poutine.trace(pyro.poutine.replay(vectorize(model), guide_tr))
-        .get_trace()
-        .nodes.items()
+        for k, v in pyro.poutine.trace(pyro.poutine.replay(vectorize(model), guide_tr)).get_trace().nodes.items()
         if v["type"] == "sample" and not pyro.poutine.util.site_is_subsample(v)
     }
 
@@ -590,12 +534,8 @@ def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
     def cf_model(data):
         return model(data)
 
-    posterior = pyro.infer.infer_discrete(
-        first_available_dim=cf_dim - 3, temperature=0
-    )(model)
-    cf_posterior = pyro.infer.infer_discrete(
-        first_available_dim=cf_dim - 3, temperature=0
-    )(cf_model)
+    posterior = pyro.infer.infer_discrete(first_available_dim=cf_dim - 3, temperature=0)(model)
+    cf_posterior = pyro.infer.infer_discrete(first_available_dim=cf_dim - 3, temperature=0)(cf_model)
 
     posterior_mode = pyro.poutine.trace(posterior).get_trace(data)
     cf_posterior_mode = pyro.poutine.trace(cf_posterior).get_trace(data)
@@ -609,9 +549,7 @@ def test_mode_cf_enumerate_hmm_infer_discrete(num_steps, cf_dim):
             continue
 
         # modes should match in the factual world
-        cf_mode_value = cf_posterior_mode.nodes[name]["value"][
-            cf_posterior_mode.nodes[name]["mask"]
-        ]
+        cf_mode_value = cf_posterior_mode.nodes[name]["value"][cf_posterior_mode.nodes[name]["mask"]]
         mode_value = posterior_mode.nodes[name]["value"]
         assert torch.allclose(mode_value, cf_mode_value), f"failed for {name}"
 
@@ -700,9 +638,7 @@ def test_cf_inference_with_soft_conditioner():
     assert torch.allclose(
         est_u_x, torch.tensor(-0.1), atol=5 * scale
     )  # p(u_x | z=.1, x=0, y=1) is a point mass at -0.1
-    assert torch.allclose(
-        est_u_y, torch.tensor(0.9), atol=5 * scale
-    )  # p(u_y | z=.1, x=0, y=1) is a point mass at 0.9
+    assert torch.allclose(est_u_y, torch.tensor(0.9), atol=5 * scale)  # p(u_y | z=.1, x=0, y=1) is a point mass at 0.9
 
     # Compute counterfactuals
     cf_samps = pyro.infer.Predictive(model_cf, guide=guide, num_samples=100)()

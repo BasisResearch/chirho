@@ -20,9 +20,7 @@ def test_preempt_op_singleworld():
     @pyro.plate("data", size=1000, dim=-1)
     def model():
         x = pyro.sample("x", dist.Bernoulli(0.67))
-        x = pyro.deterministic(
-            "x_", split(x, (torch.tensor(0.0),), name="x", event_dim=0), event_dim=0
-        )
+        x = pyro.deterministic("x_", split(x, (torch.tensor(0.0),), name="x", event_dim=0), event_dim=0)
         y = pyro.sample("y", dist.Bernoulli(0.67))
         y_case = torch.tensor(1)
         y = pyro.deterministic(
@@ -49,9 +47,7 @@ def test_cf_handler_preemptions(cf_dim, event_shape):
     @do(actions=splits)
     @pyro.plate("data", size=1000, dim=-1)
     def model():
-        w = pyro.sample(
-            "w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape))
-        )
+        w = pyro.sample("w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
         x = pyro.sample("x", dist.Normal(w, 1).to_event(len(event_shape)))
         y = pyro.sample("y", dist.Normal(w + x, 1).to_event(len(event_shape)))
         z = pyro.sample("z", dist.Normal(x + y, 1).to_event(len(event_shape)))
@@ -63,12 +59,8 @@ def test_cf_handler_preemptions(cf_dim, event_shape):
         tr = pyro.poutine.trace(model).get_trace()
         assert all(f"__split_{k}" in tr.nodes for k in preemptions.keys())
         assert indices_of(tr.nodes["w"]["value"], event_dim=event_dim) == IndexSet()
-        assert indices_of(tr.nodes["y"]["value"], event_dim=event_dim) == IndexSet(
-            x={0, 1}
-        )
-        assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(
-            x={0, 1}
-        )
+        assert indices_of(tr.nodes["y"]["value"], event_dim=event_dim) == IndexSet(x={0, 1})
+        assert indices_of(tr.nodes["z"]["value"], event_dim=event_dim) == IndexSet(x={0, 1})
 
     for k in preemptions.keys():
         tst = tr.nodes[f"__split_{k}"]["value"]

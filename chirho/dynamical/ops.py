@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import numbers
-from typing import Callable, Mapping, Optional, Tuple, TypeVar, Union
+from collections.abc import Mapping
+from typing import Callable, TypeVar, Union
 
 import pyro
 import torch
@@ -53,9 +54,7 @@ def simulate(
 
 def on(
     predicate: Callable[[State[T]], bool],
-    callback: Optional[
-        Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
-    ] = None,
+    callback: Callable[[Dynamics[T], State[T]], tuple[Dynamics[T], State[T]]] | None = None,
 ):
     """
     Creates a context manager that, when active, interrupts the first :func:`~chirho.dynamical.ops.simulate`
@@ -94,7 +93,7 @@ def on(
     if callback is None:
 
         def _on(
-            callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]],
+            callback: Callable[[Dynamics[T], State[T]], tuple[Dynamics[T], State[T]]],
         ):
             return on(predicate, callback)
 
