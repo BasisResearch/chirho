@@ -73,9 +73,11 @@ def test_soft_conditioning_smoke_continuous_1(use_auto, scale, x_obs, y_obs, z_o
             return soft_eq(constraints.real, v1, v2, scale=scale)
 
         reparam_config = {name: KernelSoftConditionReparam(_soft_eq) for name in data}
-    with pyro.poutine.trace() as tr, pyro.poutine.reparam(
-        config=reparam_config
-    ), condition(data=data):
+    with (
+        pyro.poutine.trace() as tr,
+        pyro.poutine.reparam(config=reparam_config),
+        condition(data=data),
+    ):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
@@ -114,9 +116,11 @@ def test_soft_conditioning_smoke_discrete_1(use_auto, scale, x_obs, y_obs, z_obs
             return soft_eq(constraints.boolean, v1, v2, scale=scale)
 
         reparam_config = {name: KernelSoftConditionReparam(_soft_eq) for name in data}
-    with pyro.poutine.trace() as tr, pyro.poutine.reparam(
-        config=reparam_config
-    ), condition(data=data):
+    with (
+        pyro.poutine.trace() as tr,
+        pyro.poutine.reparam(config=reparam_config),
+        condition(data=data),
+    ):
         discrete_scm_1()
 
     tr.trace.compute_log_prob()
@@ -158,9 +162,13 @@ def test_soft_conditioning_counterfactual_continuous_1(
 
     actions = {"x": torch.tensor(0.1234)}
 
-    with pyro.poutine.trace() as tr, pyro.poutine.reparam(
-        config=reparam_config
-    ), cf_class(cf_dim), do(actions=actions), condition(data=data):
+    with (
+        pyro.poutine.trace() as tr,
+        pyro.poutine.reparam(config=reparam_config),
+        cf_class(cf_dim),
+        do(actions=actions),
+        condition(data=data),
+    ):
         continuous_scm_1()
 
     tr.trace.compute_log_prob()
