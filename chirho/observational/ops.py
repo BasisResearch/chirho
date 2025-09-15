@@ -83,8 +83,7 @@ class ExcisedNormal(TorchDistribution):
 
         all_edges: tuple[Any, ...]
 
-        #        self.loc, self.scale, *all_edges = broadcast_all(loc, scale, *lows, *highs)
-
+        # somewhat verbose to please mypy
         edges = broadcast_all(loc, scale, *lows, *highs)
         self.loc = edges[0]
         self.scale = edges[1]
@@ -171,7 +170,7 @@ class ExcisedNormal(TorchDistribution):
         return new
 
     # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc,
-    #  we can be more specific with type hints
+    #  we can be more specific with type hints here and below, hence type: ignore[override]
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
 
         shape = value.shape
