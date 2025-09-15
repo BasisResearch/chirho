@@ -79,11 +79,11 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     if interval_key == "shaped":
         for (
             lcdf
-        ) in excised_normal.lcdfs:  # these are expected to be *base* normal lcdfs
+        ) in excised_normal._lcdfs:  # these are expected to be *base* normal lcdfs
             assert torch.allclose(
                 lcdf, torch.tensor(0.1587), atol=1e-4
             )  # below mean - 1 stddev
-        for im in excised_normal.interval_masses:
+        for im in excised_normal._interval_masses:
             assert torch.allclose(
                 im, torch.tensor(0.6827), atol=1e-4
             )  # between mean - 1 stddev and mean + 1 stddev

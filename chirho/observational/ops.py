@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from numbers import Number
-from typing import Callable, Hashable, Mapping, Optional, TypeVar, Union
+from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
 
 import pyro.distributions as dist
 import torch
@@ -36,24 +36,12 @@ class ExcisedNormal(TorchDistribution):
 
     Attributes
     ----------
-    loc
+    base_mean
         Mean of the base normal distribution.
-    scale
+    base_stddev
         Standard deviation of the base normal distribution.
     intervals
         List of excised intervals as tuples of (low, high).
-    base_normal
-        Underlying normal distribution used for calculations.
-    base_uniform
-        Uniform distribution used for inverse transform sampling.
-    interval_masses
-        Probability masses of each excised interval under the base normal.
-    lcdfs
-        CDF values at the lower edges of each excised interval.
-    removed_pr_mass
-        Total probability mass removed by all intervals.
-    normalization_constant
-        Renormalization factor after removing interval probability masses.
     """
 
     arg_constraints = {"loc": constraints.real, "scale": constraints.positive}
@@ -79,31 +67,14 @@ class ExcisedNormal(TorchDistribution):
     def intervals(self):
         return self._intervals
 
-    @property
-    def base_normal(self):
-        return self._base_normal
-
-    @property
-    def self_base_uniform(self):
-        return self._base_uniform
-
-    @property
-    def interval_masses(self):
-        return self._interval_masses
-
-    @property
-    def lcdfs(self):
-        return self._lcdfs
-
-    @property
-    def removed_pr_mass(self):
-        return self._removed_pr_mass
-
-    @property
-    def normalization_constant(self):
-        return self._normalization_constant
-
-    def __init__(self, loc, scale, intervals, validate_args=None):
+    # def __init__(self, loc, scale, intervals, validate_args=None):
+    def __init__(
+        self,
+        loc: Union[float, torch.Tensor],
+        scale: Union[float, torch.Tensor],
+        intervals: list[tuple[Union[float, torch.Tensor], Union[float, torch.Tensor]]],
+        validate_args: bool | None = None,
+    ) -> None:
 
         lows, highs = zip(*intervals)  # each is a tuple of tensors/scalars
 
@@ -114,10 +85,17 @@ class ExcisedNormal(TorchDistribution):
         highs = all_edges[n:]
         self._intervals = list(zip(lows, highs))
 
+        for i in range(len(self._intervals) - 1):
+            _, high_i = self._intervals[i]
+            low_next, _ = self._intervals[i + 1]
+            if not torch.all(high_i < low_next).item():
+                raise ValueError("Intervals must be sorted and cannot overlap.")
+
         if isinstance(loc, Number) and isinstance(scale, Number):
             batch_shape = torch.Size()
         else:
             batch_shape = self.loc.size()
+
         super(ExcisedNormal, self).__init__(batch_shape, validate_args=validate_args)
 
         self._base_normal = dist.Normal(
@@ -134,8 +112,8 @@ class ExcisedNormal(TorchDistribution):
         self._removed_pr_mass = torch.zeros_like(self.loc)
 
         for low, high in self.intervals:
-            lower_cdf = self.base_normal.cdf(low)
-            upper_cdf = self.base_normal.cdf(high)
+            lower_cdf = self._base_normal.cdf(low)
+            upper_cdf = self._base_normal.cdf(high)
             interval_mass = upper_cdf - lower_cdf
             self._interval_masses.append(interval_mass)
             self._lcdfs.append(lower_cdf)
@@ -144,16 +122,15 @@ class ExcisedNormal(TorchDistribution):
         self._normalization_constant = torch.ones_like(self.loc) - self._removed_pr_mass
 
         lcdfs = torch.stack(self._lcdfs)
-        if not torch.all(lcdfs[:-1] < lcdfs[1:]).item():
-            raise ValueError("lcdfs must be strictly increasing (sorted).")
+        assert torch.all(
+            lcdfs[:-1] < lcdfs[1:]
+        ).item(), "lcdfs must be strictly increasing (sorted)."
 
-        for i in range(len(self._intervals) - 1):
-            _, high_i = self._intervals[i]
-            low_next, _ = self._intervals[i + 1]
-            if not torch.all(high_i < low_next).item():
-                raise ValueError("Intervals must not overlap.")
-
-    def expand(self, batch_shape, _instance=None):
+    def expand(  # no type hints, following supertype agreement
+        self,
+        batch_shape,
+        _instance=None,
+    ):
         new = self._get_checked_instance(ExcisedNormal, _instance)
         batch_shape = torch.Size(batch_shape)
         new.loc = self.loc.expand(batch_shape)
@@ -168,17 +145,17 @@ class ExcisedNormal(TorchDistribution):
             torch.zeros_like(new.loc), torch.ones_like(new.loc)
         )
 
-        new._interval_masses = [im.expand(batch_shape) for im in self.interval_masses]
-        new._lcdfs = [lcdf.expand(batch_shape) for lcdf in self.lcdfs]
+        new._interval_masses = [im.expand(batch_shape) for im in self._interval_masses]
+        new._lcdfs = [lcdf.expand(batch_shape) for lcdf in self._lcdfs]
 
-        new._removed_pr_mass = self.removed_pr_mass.expand(batch_shape)
-        new._normalization_constant = self.normalization_constant.expand(batch_shape)
+        new._removed_pr_mass = self._removed_pr_mass.expand(batch_shape)
+        new._normalization_constant = self._normalization_constant.expand(batch_shape)
 
         super(ExcisedNormal, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
         return new
 
-    def log_prob(self, value):
+    def log_prob(self, value: torch.Tensor) -> torch.Tensor:
 
         shape = value.shape
 
@@ -188,9 +165,9 @@ class ExcisedNormal(TorchDistribution):
             low, high = interval
             mask = mask | ((value >= low) & (value <= high))
 
-        normalization_constant_expanded = self.normalization_constant.expand(shape)
+        normalization_constant_expanded = self._normalization_constant.expand(shape)
 
-        lp = self.base_normal.log_prob(value) - torch.log(
+        lp = self._base_normal.log_prob(value) - torch.log(
             normalization_constant_expanded
         )
 
@@ -198,38 +175,38 @@ class ExcisedNormal(TorchDistribution):
             mask, torch.tensor(-float("inf"), device=self.loc.device), lp
         )
 
-    def cdf(self, value):
+    def cdf(self, value: torch.Tensor) -> torch.Tensor:
         if self._validate_args:
             self._validate_sample(value)
 
-        base_cdf = self.base_normal.cdf(value)
+        base_cdf = self._base_normal.cdf(value)
         adjusted_cdf = base_cdf.clone()
 
-        for l_cdf, mass in zip(self.lcdfs, self.interval_masses):
+        for l_cdf, mass in zip(self._lcdfs, self._interval_masses):
             adjusted_cdf = torch.where(
                 base_cdf >= l_cdf,
                 adjusted_cdf - torch.clamp(base_cdf - l_cdf, max=mass),
                 adjusted_cdf,
             )
 
-        adjusted_cdf = adjusted_cdf / self.normalization_constant
+        adjusted_cdf = adjusted_cdf / self._normalization_constant
 
         return adjusted_cdf
 
-    def icdf(self, value):
+    def icdf(self, value: torch.Tensor) -> torch.Tensor:
         if self._validate_args:
             self._validate_sample(value)
 
-        normalization_constant_expanded = self.normalization_constant.expand(
+        normalization_constant_expanded = self._normalization_constant.expand(
             value.shape
         )
 
         v = value * normalization_constant_expanded
 
-        for l_cdf, mass in zip(self.lcdfs, self.interval_masses):
+        for l_cdf, mass in zip(self._lcdfs, self._interval_masses):
             v = torch.where(v >= l_cdf, v + mass, v)
 
-        x = self.base_normal.icdf(v)
+        x = self._base_normal.icdf(v)
 
         return x
 
