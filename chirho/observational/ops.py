@@ -68,7 +68,6 @@ class ExcisedNormal(TorchDistribution):
     def intervals(self):
         return self._intervals
 
-    # def __init__(self, loc, scale, intervals, validate_args=None):
     def __init__(
         self,
         loc: Union[float, torch.Tensor],
@@ -100,12 +99,6 @@ class ExcisedNormal(TorchDistribution):
             if not torch.all(torch.as_tensor(low <= high)).item():
                 raise ValueError("Each interval must satisfy low <= high!")
 
-        for i in range(len(self._intervals) - 1):
-            _, high_i = self._intervals[i]
-            low_next, _ = self._intervals[i + 1]
-            if not torch.all(high_i < low_next).item():
-                raise ValueError("Intervals must be sorted and cannot overlap.")
-
         if isinstance(loc, Number) and isinstance(scale, Number):
             batch_shape = torch.Size()
         else:
@@ -135,11 +128,6 @@ class ExcisedNormal(TorchDistribution):
             self._removed_pr_mass += interval_mass
 
         self._normalization_constant = torch.ones_like(self.loc) - self._removed_pr_mass
-
-        lcdfs = torch.stack(self._lcdfs)
-        assert torch.all(
-            lcdfs[:-1] < lcdfs[1:]
-        ).item(), "lcdfs must be strictly increasing (sorted)."
 
     def expand(  # no type hints, following supertype agreement
         self,
@@ -283,13 +271,16 @@ class ExcisedCategorical(pyro.distributions.Categorical):
                 torch.long
             )
 
-            # add category dimension
-            low_exp = low_i[..., None]
-            high_exp = high_i[..., None]
-
             cat_idx = torch.arange(num_categories, device=logits.device).broadcast_to(
                 mask.shape
             )
+
+            if len(low_i.shape) < len(cat_idx.shape):
+                low_exp = low_i[..., None]
+                high_exp = high_i[..., None]
+            else:
+                low_exp = low_i
+                high_exp = high_i
 
             interval_mask = (cat_idx < low_exp) | (cat_idx > high_exp)
 
