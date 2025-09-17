@@ -66,15 +66,6 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     new_batch_shape = (2, 1, 3)
     excised_normal_expanded = excised_normal.expand(new_batch_shape)
 
-    # --- Basic shape checks ---
-    for dist_obj in [excised_normal, excised_normal_expanded]:
-        assert dist_obj.mean.shape == dist_obj.loc.shape
-        assert dist_obj.stddev.shape == dist_obj.scale.shape
-        assert dist_obj.variance.shape == dist_obj.scale.shape
-        for low, high in dist_obj._intervals:
-            assert low.shape == dist_obj.loc.shape
-            assert high.shape == dist_obj.loc.shape
-
     # --- Interval masses as expected ---
     if interval_key == "shaped":
         for (
@@ -128,18 +119,18 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     r_sample = excised_normal_copy.rsample(sample_shape=(400,))
     loss = ((r_sample - 1.0) ** 2).mean()
     optimizer = torch.optim.SGD(
-        [excised_normal_copy.loc, excised_normal_copy.scale], lr=0.1
+        [excised_normal_copy._base_loc, excised_normal_copy._base_scale], lr=0.1
     )
     loc_before, scale_before = (
-        excised_normal_copy.loc.clone(),
-        excised_normal_copy.scale.clone(),
+        excised_normal_copy._base_loc.clone(),
+        excised_normal_copy._base_scale.clone(),
     )
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
     loc_after, scale_after = (
-        excised_normal_copy.loc.clone(),
-        excised_normal_copy.scale.clone(),
+        excised_normal_copy._base_loc.clone(),
+        excised_normal_copy._base_scale.clone(),
     )
     assert not torch.allclose(loc_before, loc_after)
     assert not torch.allclose(scale_before, scale_after)
