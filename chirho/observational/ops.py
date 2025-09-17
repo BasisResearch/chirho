@@ -123,6 +123,9 @@ class ExcisedNormal(TorchDistribution):
             self._lcdfs.append(lower_cdf)
             self._removed_pr_mass += interval_mass
 
+        if torch.any(self._removed_pr_mass >= 1.0):
+            raise ValueError("Total probability mass in excised intervals >= 1.0!")
+
         self._normalization_constant = torch.ones_like(self.loc) - self._removed_pr_mass
 
     def expand(  # no type hints, following supertype agreement
