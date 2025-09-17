@@ -37,7 +37,7 @@ class ExcisedNormal(TorchDistribution):
     mass is renormalized so that the distribution integrates to 1.
 
     This distribution does not support standard statistical properties such as
-    `mean`, `stddev`, or `variance` directly. 
+    `mean`, `stddev`, or `variance` directly.
     Use `base_mean`, `base_stddev`, and `base_variance` to access
     the parameters of the underlying normal distribution.
 
