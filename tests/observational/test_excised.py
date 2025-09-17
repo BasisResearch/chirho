@@ -144,6 +144,20 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     assert not torch.allclose(loc_before, loc_after)
     assert not torch.allclose(scale_before, scale_after)
 
+    # --- Gradients at discontinuities are zero ---
+    test_points = []
+    for low, high in excised_normal._intervals:
+        test_points.extend([low, high])
+    test_points = torch.stack(test_points).detach().clone().requires_grad_(True)
+
+    log_probs = excised_normal.log_prob(test_points)
+    grads = torch.autograd.grad(
+        log_probs.sum(), test_points, retain_graph=True, allow_unused=True
+    )[0]
+
+    assert grads is not None
+    assert torch.allclose(grads, torch.zeros_like(grads), atol=1e-6)
+
 
 @pytest.mark.parametrize(
     "logits",
