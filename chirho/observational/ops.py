@@ -30,19 +30,15 @@ def observe(rv, obs: Optional[Observation[T]] = None, **kwargs) -> T:
 
 class ExcisedNormal(TorchDistribution):
     """
-    ExcisedNormal distribution represents a normal distribution from which specified intervals
-    have been "excised" (removed). Sampling uses inverse transform.
-    Probabilities within these intervals are set to zero, and
-    the remaining probability mass is renormalized.
+    A normal distribution with specified intervals excised (removed).
 
-    Attributes
-    ----------
-    base_mean
-        Mean of the base normal distribution.
-    base_stddev
-        Standard deviation of the base normal distribution.
-    intervals
-        List of excised intervals as tuples of (low, high).
+    Sampling is performed using inverse transform. Probabilities within
+    the excised intervals are set to zero, and the remaining probability
+    mass is renormalized.
+
+    :param base_mean: Mean of the base normal distribution.
+    :param base_stddev: Standard deviation of the base normal distribution.
+    :param intervals: List of excised intervals as tuples of ``(low, high)``.
     """
 
     arg_constraints = {"loc": constraints.real, "scale": constraints.positive}
@@ -241,6 +237,32 @@ class ExcisedNormal(TorchDistribution):
 
 
 class ExcisedCategorical(pyro.distributions.Categorical):
+    """
+    A categorical distribution with support restricted by excised intervals.
+
+    This distribution behaves like a standard
+    :class:`pyro.distributions.Categorical`, except that probability
+    mass is set to zero for categories falling inside the specified
+    ``intervals``. Each interval specifies a closed range of category
+    indices to exclude.
+
+    :param intervals: A list of intervals of the form ``(low, high)``,
+        where ``low`` and ``high`` are tensors of lower and upper bounds
+        (inclusive). All categories between ``low`` and ``high`` are
+        removed from the support.
+    :param probs: Event probabilities. Exactly one of ``probs`` or
+        ``logits`` should be specified.
+    :param logits: Event log-probabilities (unnormalized). Exactly one
+        of ``probs`` or ``logits`` should be specified.
+    :param validate_args: Whether to validate input arguments.
+
+    .. note::
+       - The constructor masks out the excised categories by filling
+         their logits with ``-inf``.
+       - Excised categories have zero probability and are never sampled.
+       - The class supports broadcasting of intervals to match batch
+         shapes during expansion.
+    """
 
     def __init__(
         self,
