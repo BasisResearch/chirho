@@ -69,7 +69,10 @@ def test_point_intervention_causes_difference(
         with solver():
             with StaticIntervention(time=intervene_time, intervention=intervene_state):
                 if intervene_time < start_time:
-                    with pytest.raises(ValueError, match="occurred before the start of the timespan"):
+                    with pytest.raises(
+                        ValueError,
+                        match="occurred before the start of the timespan",
+                    ):
                         simulate(
                             model,
                             init_state,
@@ -162,7 +165,8 @@ def test_nested_point_interventions_cause_difference(
                         )
 
                         assert check_trajectories_match_in_all_but_values(
-                            observational_dt.trajectory, intervened_dt.trajectory
+                            observational_dt.trajectory,
+                            intervened_dt.trajectory,
                         )
 
     # Don't need to flip order b/c the argument permutation will effectively do this for us.
@@ -178,7 +182,15 @@ def test_nested_point_interventions_cause_difference(
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", list(intervene_times)[1:])
-def test_twinworld_point_intervention(solver, model, init_state, start_time, end_time, intervene_state, intervene_time):
+def test_twinworld_point_intervention(
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    intervene_state,
+    intervene_time,
+):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
         times=logging_times,
@@ -211,7 +223,13 @@ def test_twinworld_point_intervention(solver, model, init_state, start_time, end
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", list(intervene_times)[1:])
 def test_multiworld_point_intervention(
-    solver, model, init_state, start_time, end_time, intervene_state, intervene_time
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    intervene_state,
+    intervene_time,
 ):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with LogTrajectory(
@@ -243,7 +261,15 @@ def test_multiworld_point_intervention(
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", list(intervene_times)[1:])
-def test_split_odeint_broadcast(solver, model, init_state, start_time, end_time, intervene_state, intervene_time):
+def test_split_odeint_broadcast(
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    intervene_state,
+    intervene_time,
+):
     with solver(), LogTrajectory(times=logging_times) as dt:
         with TwinWorldCounterfactual() as cf:
             cf_init_state = intervene(init_state_values, intervene_state, event_dim=0)
@@ -262,7 +288,15 @@ def test_split_odeint_broadcast(solver, model, init_state, start_time, end_time,
 @pytest.mark.parametrize("end_time", [end_time])
 @pytest.mark.parametrize("intervene_state", intervene_states)
 @pytest.mark.parametrize("intervene_time", list(intervene_times)[1:])
-def test_twinworld_matches_output(solver, model, init_state, start_time, end_time, intervene_state, intervene_time):
+def test_twinworld_matches_output(
+    solver,
+    model,
+    init_state,
+    start_time,
+    end_time,
+    intervene_state,
+    intervene_time,
+):
     # Simulate with the intervention and ensure that the result differs from the observational execution.
     with solver():
         with StaticIntervention(time=intervene_time, intervention=intervene_state):

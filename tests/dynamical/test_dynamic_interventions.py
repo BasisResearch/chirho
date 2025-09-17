@@ -63,7 +63,10 @@ def get_state_reached_event_f(target_state: State[torch.tensor], event_dim: int 
 )
 @pytest.mark.parametrize(
     "intervene_states",
-    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+    [
+        (intervene_state1, intervene_state2),
+        (intervene_state2, intervene_state1),
+    ],
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_nested_dynamic_intervention_causes_change(
@@ -253,7 +256,10 @@ def test_dynamic_intervention_collision(
 )
 @pytest.mark.parametrize(
     "intervene_states",
-    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+    [
+        (intervene_state1, intervene_state2),
+        (intervene_state2, intervene_state1),
+    ],
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_twinworld_dynamic_intervention(
@@ -310,7 +316,10 @@ def test_split_twinworld_dynamic_intervention(
 )
 @pytest.mark.parametrize(
     "intervene_states",
-    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+    [
+        (intervene_state1, intervene_state2),
+        (intervene_state2, intervene_state1),
+    ],
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_multiworld_dynamic_intervention(
@@ -366,7 +375,10 @@ def test_split_multiworld_dynamic_intervention(
 )
 @pytest.mark.parametrize(
     "intervene_states",
-    [(intervene_state1, intervene_state2), (intervene_state2, intervene_state1)],
+    [
+        (intervene_state1, intervene_state2),
+        (intervene_state2, intervene_state1),
+    ],
 )
 @pytest.mark.parametrize("event_fn_builder", [get_state_reached_event_f])
 def test_split_twinworld_dynamic_matches_output(
@@ -450,7 +462,12 @@ def model_with_param_in_state(X: State[torch.Tensor]):
 def test_grad_of_dynamic_intervention_event_f_params(solver, model):
     param = torch.nn.Parameter(torch.tensor(5.0))
     # Param has to be part of the state in order to take gradients with respect to it.
-    s0 = dict(x=torch.tensor(0.0), z=torch.tensor(0.0), dz=torch.tensor(0.0), param=param)
+    s0 = dict(
+        x=torch.tensor(0.0),
+        z=torch.tensor(0.0),
+        dz=torch.tensor(0.0),
+        param=param,
+    )
 
     dynamic_intervention = DynamicIntervention(
         event_fn=lambda t, s, *args: t - s["param"],

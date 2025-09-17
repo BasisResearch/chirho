@@ -48,7 +48,10 @@ class GaussianModel(PyroModule):
         self.register_buffer("cov_mat", cov_mat)
 
     def forward(self, loc):
-        pyro.sample("x", dist.MultivariateNormal(loc=loc, covariance_matrix=self.cov_mat))
+        pyro.sample(
+            "x",
+            dist.MultivariateNormal(loc=loc, covariance_matrix=self.cov_mat),
+        )
 
 
 # Note: `gaussian_log_prob` is separate from the GaussianModel above because of upstream obstacles
@@ -110,7 +113,10 @@ class HighDimLinearModel(pyro.nn.PyroModule):
 
     def sample_covariate_loc_scale(self):
         loc = pyro.sample("covariate_loc", dist.Normal(0.0, 1.0).expand((self.p,)).to_event(1))
-        scale = pyro.sample("covariate_scale", dist.LogNormal(0, 1).expand((self.p,)).to_event(1))
+        scale = pyro.sample(
+            "covariate_scale",
+            dist.LogNormal(0, 1).expand((self.p,)).to_event(1),
+        )
         return loc, scale
 
     def forward(self, N: int = 1):

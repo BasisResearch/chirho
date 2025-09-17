@@ -4,7 +4,7 @@ import heapq
 import math
 import typing
 import warnings
-from typing import Callable, Generic, TypeVar, Union
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -104,7 +104,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 if ph.priority > start_time:
                     break
 
-            next_interruption: Interruption[T] | None
+            next_interruption: Optional[Interruption[T]]
             state, start_time, next_interruption = simulate_to_interruption(
                 possible_interruptions,
                 dynamics,
@@ -161,7 +161,7 @@ def simulate_to_interruption(
     start_time: R,
     end_time: R,
     **kwargs,
-) -> tuple[State[T], R, Interruption[T] | None]:
+) -> tuple[State[T], R, Optional[Interruption[T]]]:
     """
     Simulate a dynamical system until the next interruption.
 

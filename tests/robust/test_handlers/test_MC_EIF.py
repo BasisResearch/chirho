@@ -25,7 +25,12 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-ModelTestCase = tuple[Callable[[], Callable], Callable[[Callable], Callable], set[str], Optional[int]]
+ModelTestCase = tuple[
+    Callable[[], Callable],
+    Callable[[Callable], Callable],
+    set[str],
+    Optional[int],
+]
 
 MODEL_TEST_CASES: list[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),

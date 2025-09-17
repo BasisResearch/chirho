@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Callable, Literal, Protocol, TypedDict, TypeVar
+from typing import Callable, Literal, Optional, Protocol, TypedDict, TypeVar, Union
 
 import pyro
 import pyro.distributions as dist
@@ -124,7 +124,7 @@ def _soft_neq_independent(support: constraints.independent, v1: T, v2: T, **kwar
 class _MaskedDelta(Protocol):
     base_dist: pyro.distributions.Delta
     event_dim: int
-    _mask: bool | torch.Tensor
+    _mask: Union[bool, torch.Tensor]
 
 
 class _DeterministicReparamMessage(TypedDict):
@@ -212,7 +212,7 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
             and isinstance(msg["fn"].base_dist, pyro.distributions.Delta)
         )
 
-    def configure(self, msg: dict) -> pyro.infer.reparam.reparam.Reparam | None:
+    def configure(self, msg: dict) -> Optional[pyro.infer.reparam.reparam.Reparam]:
         assert isinstance(msg["fn"], TorchDistributionMixin)
         if not self.site_is_deterministic(msg) or msg["value"] is msg["fn"].base_dist.v:
             return None

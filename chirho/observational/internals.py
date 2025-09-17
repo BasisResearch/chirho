@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Mapping
-from typing import TypeVar
+from typing import Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -23,7 +23,7 @@ T = TypeVar("T")
 @observe.register(float)
 @observe.register(bool)
 @observe.register(torch.Tensor)
-def _observe_deterministic(rv: T, obs: AtomicObservation[T] | None = None, **kwargs):
+def _observe_deterministic(rv: T, obs: Optional[AtomicObservation[T]] = None, **kwargs):
     """
     Observe a tensor in a probabilistic program.
     """
@@ -35,9 +35,9 @@ def _observe_deterministic(rv: T, obs: AtomicObservation[T] | None = None, **kwa
 @pyro.poutine.runtime.effectful(type="observe")
 def _observe_distribution(
     rv: TorchDistributionMixin,
-    obs: AtomicObservation[torch.Tensor] | None = None,
+    obs: Optional[AtomicObservation[torch.Tensor]] = None,
     *,
-    name: str | None = None,
+    name: Optional[str] = None,
     **kwargs,
 ) -> torch.Tensor:
     if name is None:
@@ -52,9 +52,9 @@ def _observe_distribution(
 @observe.register(dict)
 def _observe_dict(
     rv: Mapping[K, T],
-    obs: AtomicObservation[Mapping[K, T]] | None = None,
+    obs: Optional[AtomicObservation[Mapping[K, T]]] = None,
     *,
-    name: str | None = None,
+    name: Optional[str] = None,
     **kwargs,
 ) -> Mapping[K, T]:
     if callable(obs):

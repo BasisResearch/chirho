@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Hashable, Mapping
-from typing import Callable, TypeVar, Union
+from typing import Callable, Optional, TypeVar, Union
 
 T = TypeVar("T")
 
@@ -12,7 +12,7 @@ Intervention = Union[AtomicIntervention[T], CompoundIntervention[T]]
 
 
 @functools.singledispatch
-def intervene(obs, act: Intervention[T] | None = None, **kwargs):
+def intervene(obs, act: Optional[Intervention[T]] = None, **kwargs):
     """
     Intervene on a value in a probabilistic program.
 

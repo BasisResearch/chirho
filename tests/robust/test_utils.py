@@ -71,7 +71,11 @@ def test_smoke_pytree_generalized_manual_revjvp(batch_shape, output_shape1, outp
 @pytest.mark.parametrize("param_shape2", _shapes[1:])
 def test_pytree_generalized_manual_revjvp(batch_shape, output_shape1, output_shape2, param_shape1, param_shape2):
     broadcasted_reverse_jvp_result, (fn, params, batch_vector) = _exec_pytree_generalized_manual_revjvp(
-        batch_shape, output_shape1, output_shape2, param_shape1, param_shape2
+        batch_shape,
+        output_shape1,
+        output_shape2,
+        param_shape1,
+        param_shape2,
     )
 
     vmapped_forward_jvp_result = torch.vmap(
@@ -116,7 +120,11 @@ def test_memory_pytree_generalized_manual_revjvp():
         with_stack=False,
     ) as prof:
         broadcasted_reverse_jvp_result, _ = _exec_pytree_generalized_manual_revjvp(
-            batch_shape, output_shape1, output_shape2, params_shape1, params_shape2
+            batch_shape,
+            output_shape1,
+            output_shape2,
+            params_shape1,
+            params_shape2,
         )
 
     assert broadcasted_reverse_jvp_result["out1"].shape == batch_shape + output_shape1

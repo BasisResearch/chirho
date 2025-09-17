@@ -387,7 +387,10 @@ def test_soft_neq_tavares_relaxation():
     # condition i: when a tends to allowed minimum (1 / math.sqrt(2 * math.pi)),
     # the difference in outcomes between identity and non-identity tends to negative infinity
     diff = soft_neq(support, torch.tensor(1.0), torch.tensor(1.0), scale=min_scale + 0.0001) - soft_neq(
-        support, torch.tensor(1.0), torch.tensor(1.001), scale=min_scale + 0.0001
+        support,
+        torch.tensor(1.0),
+        torch.tensor(1.001),
+        scale=min_scale + 0.0001,
     )
 
     assert diff < -1e8, "condition i failed"
@@ -419,6 +422,12 @@ def test_soft_neq_tavares_relaxation():
         assert torch.allclose(identity_score, torch.min(scaled_y)), "condition iii failed"
         lower = 1 + scale * 1e-3
         assert torch.all(
-            soft_neq(support, torch.tensor(1.0), torch.arange(lower, 2, 0.001), scale=scale) > identity_score
+            soft_neq(
+                support,
+                torch.tensor(1.0),
+                torch.arange(lower, 2, 0.001),
+                scale=scale,
+            )
+            > identity_score
         )
         assert torch.allclose(scaled_z, torch.tensor(0.0)), "condition iii failed"

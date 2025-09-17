@@ -6,10 +6,15 @@ import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.counterfactual.handlers.counterfactual import (
+    MultiWorldCounterfactual,
+)
 from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.components import undo_split
-from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
+from chirho.explainable.handlers.explanation import (
+    SearchForExplanation,
+    SplitSubsets,
+)
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.observational.handlers.condition import condition
@@ -324,11 +329,23 @@ def test_SplitSubsets_single_layer():
             event_dim=0,
         )
 
-        int_sally_hits = gather(tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0)
+        int_sally_hits = gather(
+            tr["sally_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        )
 
-        obs_bill_hits = gather(tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {0}}), event_dim=0)
+        obs_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {0}}),
+            event_dim=0,
+        )
 
-        int_bill_hits = gather(tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0)
+        int_bill_hits = gather(
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
+        )
 
         int_bottle_shatters = gather(
             tr["bottle_shatters"]["value"],

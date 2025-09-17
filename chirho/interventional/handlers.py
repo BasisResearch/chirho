@@ -3,7 +3,7 @@ from __future__ import annotations
 import collections
 import functools
 from collections.abc import Hashable, Mapping
-from typing import Callable, Generic, TypeVar
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -23,7 +23,7 @@ T = TypeVar("T")
 @intervene.register(bool)
 @intervene.register(torch.Tensor)
 @pyro.poutine.runtime.effectful(type="intervene")
-def _intervene_atom(obs, act: AtomicIntervention[T] | None = None, *, event_dim: int = 0, **kwargs) -> T:
+def _intervene_atom(obs, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs) -> T:
     """
     Intervene on an atomic value in a probabilistic program.
     """
@@ -41,7 +41,7 @@ def _intervene_atom(obs, act: AtomicIntervention[T] | None = None, *, event_dim:
 @pyro.poutine.runtime.effectful(type="intervene")
 def _intervene_atom_distribution(
     obs: pyro.distributions.Distribution,
-    act: AtomicIntervention[pyro.distributions.Distribution] | None = None,
+    act: Optional[AtomicIntervention[pyro.distributions.Distribution]] = None,
     **kwargs,
 ) -> pyro.distributions.Distribution:
     """
@@ -60,7 +60,7 @@ def _intervene_atom_distribution(
 @intervene.register(dict)
 def _dict_intervene(
     obs: dict[K, T],
-    act: dict[K, AtomicIntervention[T]] | Callable[[dict[K, T]], dict[K, T]],
+    act: Union[dict[K, AtomicIntervention[T]], Callable[[dict[K, T]], dict[K, T]]],
     **kwargs,
 ) -> dict[K, T]:
     if callable(act):
@@ -80,7 +80,7 @@ def _dict_intervene_callable(obs: dict[K, T], act: Callable[[dict[K, T]], dict[K
 @intervene.register
 def _intervene_callable(
     obs: collections.abc.Callable,
-    act: CompoundIntervention[T] | None = None,
+    act: Optional[CompoundIntervention[T]] = None,
     **call_kwargs,
 ) -> Callable[..., T]:
     if act is None:

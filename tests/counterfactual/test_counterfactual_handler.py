@@ -101,7 +101,8 @@ def test_multiple_interventions(x_cf_value, num_splits, cf_dim, event_shape):
             X=set(range(1 + num_splits)), Z=set(range(1 + num_splits))
         )
         assert indices_of(Y, event_dim=event_dim) == union(
-            indices_of(X, event_dim=event_dim), indices_of(Z, event_dim=event_dim)
+            indices_of(X, event_dim=event_dim),
+            indices_of(Z, event_dim=event_dim),
         )
 
 
@@ -118,15 +119,26 @@ def test_multiple_interventions_unnecessary_nesting(x_cf_value, event_shape, cf_
         #   z
         #     \
         # x --> y
-        Z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+        Z = pyro.sample(
+            "z",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
         Z = intervene(
             Z,
             torch.full(event_shape, x_cf_value - 1.0),
             event_dim=len(event_shape),
             name="Z",
         )
-        X = pyro.sample("x", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
-        X = intervene(X, torch.full(event_shape, x_cf_value), event_dim=len(event_shape), name="X")
+        X = pyro.sample(
+            "x",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
+        X = intervene(
+            X,
+            torch.full(event_shape, x_cf_value),
+            event_dim=len(event_shape),
+            name="X",
+        )
         Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape)))
         return Z, X, Y
 
@@ -146,7 +158,10 @@ def test_multiple_interventions_indexset(nested, x_cf_value, event_shape, cf_dim
         #   z
         #     \
         # x --> y
-        Z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+        Z = pyro.sample(
+            "z",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
         Z = intervene(
             Z,
             torch.full(event_shape, x_cf_value - 1.0),
@@ -324,7 +339,13 @@ class HMM(pyro.nn.PyroModule):
 @pytest.mark.parametrize("Elbo", [pyro.infer.TraceEnum_ELBO, pyro.infer.TraceTMC_ELBO])
 @pytest.mark.parametrize("use_guide", [False, True])
 def test_smoke_cf_enumerate_hmm_elbo(
-    num_steps, use_condition, Elbo, use_guide, max_plate_nesting, cf_dim, num_particles
+    num_steps,
+    use_condition,
+    Elbo,
+    use_guide,
+    max_plate_nesting,
+    cf_dim,
+    num_particles,
 ):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
     hmm_model = HMM()
@@ -399,7 +420,13 @@ def test_smoke_cf_enumerate_hmm_compute_marginals(num_steps, use_condition, max_
 @pytest.mark.parametrize("use_condition", [False, True])
 @pytest.mark.parametrize(
     "num_steps",
-    [2, 3, 4, 10] + [pytest.param(5, marks=pytest.mark.xfail(reason="mystery failure with 2 interventions"))],
+    [2, 3, 4, 10]
+    + [
+        pytest.param(
+            5,
+            marks=pytest.mark.xfail(reason="mystery failure with 2 interventions"),
+        )
+    ],
 )
 def test_smoke_cf_enumerate_hmm_infer_discrete(num_steps, use_condition, max_plate_nesting, cf_dim, num_particles):
     data = dist.Categorical(torch.tensor([0.5, 0.5])).sample((num_steps,))
@@ -452,7 +479,10 @@ def test_smoke_cf_enumerate_hmm_mcmc(num_steps, use_condition, max_plate_nesting
 
     # smoke test
     pyro.infer.MCMC(
-        Kernel(MultiWorldCounterfactual(cf_dim)(model), max_plate_nesting=max_plate_nesting),
+        Kernel(
+            MultiWorldCounterfactual(cf_dim)(model),
+            max_plate_nesting=max_plate_nesting,
+        ),
         num_samples=2,
     ).run(data)
 
@@ -472,14 +502,23 @@ def test_smoke_cf_predictive_shapes(parallel, cf_dim, event_shape, Autoguide):
     pyro.clear_param_store()
     num_samples = 7
 
-    actions = {"x": torch.randn((2,) + event_shape), "z": torch.randn(event_shape)}
-    data = {"x": torch.randn((2,) + event_shape), "y": torch.randn((2,) + event_shape)}
+    actions = {
+        "x": torch.randn((2,) + event_shape),
+        "z": torch.randn(event_shape),
+    }
+    data = {
+        "x": torch.randn((2,) + event_shape),
+        "y": torch.randn((2,) + event_shape),
+    }
 
     @MultiWorldCounterfactual(cf_dim)
     @do(actions=actions)
     @condition(data=data)
     def model():
-        z = pyro.sample("z", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
+        z = pyro.sample(
+            "z",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
         with pyro.plate("data", 2, dim=-1):
             x = pyro.sample("x", dist.Normal(z, 1).to_event(len(event_shape)))
             y = pyro.sample("y", dist.Normal(x + z, 1).to_event(len(event_shape)))

@@ -85,17 +85,29 @@ def test_noop_point_interventions(solver, model, init_state, start_time, end_tim
     observational_execution_result = solver()(simulate)(model, init_state, start_time, end_time)
 
     # Test a single point intervention.
-    with pytest.warns(expected_warning=UserWarning, match="occurred after the end of the timespan"):
+    with pytest.warns(
+        expected_warning=UserWarning,
+        match="occurred after the end of the timespan",
+    ):
         with solver():
-            with StaticIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+            with StaticIntervention(
+                time=post_measurement_intervention_time,
+                intervention=intervene_state,
+            ):
                 result_single_pi = simulate(model, init_state, start_time, end_time)
 
     assert check_states_match(observational_execution_result, result_single_pi)
 
     # Test two point interventions out of scope.
-    with pytest.warns(expected_warning=UserWarning, match="occurred after the end of the timespan"):
+    with pytest.warns(
+        expected_warning=UserWarning,
+        match="occurred after the end of the timespan",
+    ):
         with solver():
-            with StaticIntervention(time=post_measurement_intervention_time, intervention=intervene_state):
+            with StaticIntervention(
+                time=post_measurement_intervention_time,
+                intervention=intervene_state,
+            ):
                 with StaticIntervention(
                     time=post_measurement_intervention_time + 1.0,
                     intervention=intervene_state,
@@ -105,7 +117,10 @@ def test_noop_point_interventions(solver, model, init_state, start_time, end_tim
     assert check_states_match(observational_execution_result, result_double_pi1)
 
     # Test with two point interventions out of scope, in a different order.
-    with pytest.warns(expected_warning=UserWarning, match="occurred after the end of the timespan"):
+    with pytest.warns(
+        expected_warning=UserWarning,
+        match="occurred after the end of the timespan",
+    ):
         with solver():
             with StaticIntervention(
                 time=post_measurement_intervention_time + 1.0,

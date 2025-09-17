@@ -277,8 +277,20 @@ def test_scatter_broadcast_new(enum_shape, plate_shape, batch_shape, event_shape
     ind1, ind2 = IndexSet(new_dim={0}), IndexSet(new_dim={1})
     result = torch.zeros(enum_shape + (2,) + batch_shape + plate_shape + event_shape)
 
-    actual = scatter(value1, ind1, result=result, event_dim=len(event_shape), name_to_dim=name_to_dim)
-    actual = scatter(value2, ind2, result=actual, event_dim=len(event_shape), name_to_dim=name_to_dim)
+    actual = scatter(
+        value1,
+        ind1,
+        result=result,
+        event_dim=len(event_shape),
+        name_to_dim=name_to_dim,
+    )
+    actual = scatter(
+        value2,
+        ind2,
+        result=actual,
+        event_dim=len(event_shape),
+        name_to_dim=name_to_dim,
+    )
 
     actual1 = gather(actual, ind1, event_dim=len(event_shape), name_to_dim=name_to_dim)
     actual2 = gather(actual, ind2, event_dim=len(event_shape), name_to_dim=name_to_dim)
@@ -360,7 +372,11 @@ def test_cond_tensor_associate(enum_shape, batch_shape, plate_shape, event_shape
         for name, dim in name_to_dim.items():
             add_indices(IndexSet(**{name: set(range(max(3, (batch_shape + plate_shape)[dim])))}))
 
-        actual_full = cond_n({ind1: value1, ind2: value2, ind3: value3}, case, event_dim=event_dim)
+        actual_full = cond_n(
+            {ind1: value1, ind2: value2, ind3: value3},
+            case,
+            event_dim=event_dim,
+        )
 
         actual_left = cond(
             cond(value1, value2, case == 1, event_dim=event_dim),

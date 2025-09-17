@@ -4,9 +4,14 @@ import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.counterfactual.handlers.counterfactual import (
+    MultiWorldCounterfactual,
+)
 from chirho.counterfactual.ops import split
-from chirho.explainable.handlers import random_intervention, sufficiency_intervention
+from chirho.explainable.handlers import (
+    random_intervention,
+    sufficiency_intervention,
+)
 from chirho.explainable.handlers.components import (  # consequent_eq_neq,
     ExtractSupports,
     consequent_eq,
@@ -86,7 +91,10 @@ def test_undo_split(num_splits):
         x_split = split(x_obs, (x_cf_1,) * num_splits, name="split1", event_dim=1)
         x_split = split(x_split, (x_cf_2,) * (num_splits + 1), name="split2", event_dim=1)
 
-        undo_split2 = undo_split(support=constraints.independent(constraints.real, 1), antecedents=["split2"])
+        undo_split2 = undo_split(
+            support=constraints.independent(constraints.real, 1),
+            antecedents=["split2"],
+        )
         x_undone = undo_split2(x_split)
 
         assert indices_of(x_split, event_dim=1) == indices_of(x_undone, event_dim=1)
@@ -124,8 +132,16 @@ def test_undo_split_parametrized(event_shape, plate_size, num_splits):
 
     @pyro.plate("data", size=plate_size, dim=-1)
     def model():
-        w = pyro.sample("w", dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)))
-        w = split(w, (replace1,) * num_splits, name="split1", event_dim=len(event_shape))
+        w = pyro.sample(
+            "w",
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)),
+        )
+        w = split(
+            w,
+            (replace1,) * num_splits,
+            name="split1",
+            event_dim=len(event_shape),
+        )
 
         w = pyro.deterministic(
             "w_preempted",
@@ -165,8 +181,16 @@ def test_undo_split_parametrized(event_shape, plate_size, num_splits):
         )
         assert w_undone_shape == desired_shape
 
-        cf_values = gather(nd["w_undone"]["value"], IndexSet(split1={1}), event_dim=len(event_shape)).squeeze()
-        observed_values = gather(nd["w_undone"]["value"], IndexSet(split1={0}), event_dim=len(event_shape)).squeeze()
+        cf_values = gather(
+            nd["w_undone"]["value"],
+            IndexSet(split1={1}),
+            event_dim=len(event_shape),
+        ).squeeze()
+        observed_values = gather(
+            nd["w_undone"]["value"],
+            IndexSet(split1={0}),
+            event_dim=len(event_shape),
+        ).squeeze()
 
         preempted_values = cf_values[case == 1.0]
         reverted_values = cf_values[case == 0.0]
@@ -195,7 +219,13 @@ def test_undo_split_with_interaction():
         x_case = torch.tensor(1)
         x_preempted = pyro.deterministic(
             "x_preempted",
-            preempt(x_undone, (torch.tensor(5.0),), x_case, name="x_preempted", event_dim=0),
+            preempt(
+                x_undone,
+                (torch.tensor(5.0),),
+                x_case,
+                name="x_preempted",
+                event_dim=0,
+            ),
             event_dim=0,
         )
 
@@ -258,7 +288,10 @@ def test_consequent_neq(plate_size, event_shape):
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-1)
     def model_cd():
-        w = pyro.sample("w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)))
+        w = pyro.sample(
+            "w",
+            dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)),
+        )
         new_w = w.clone()
         new_w[1::2] = 10
         w = split(w, (new_w,), name="split", event_dim=len(event_shape))
@@ -310,7 +343,10 @@ def test_consequent_eq(plate_size, event_shape):
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-1)
     def model_ce():
-        w = pyro.sample("w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)))
+        w = pyro.sample(
+            "w",
+            dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)),
+        )
         new_w = w.clone()
         new_w[1::2] = 10
         w = split(w, (new_w,), name="split", event_dim=len(event_shape))
@@ -357,14 +393,20 @@ def test_consequent_eq_neq(plate_size, event_shape):
     @Factors(factors=factors)
     @pyro.plate("data", size=plate_size, dim=-4)
     def model_ce():
-        w = pyro.sample("w", dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)))
+        w = pyro.sample(
+            "w",
+            dist.Normal(0, 0.1).expand(event_shape).to_event(len(event_shape)),
+        )
         consequent = pyro.deterministic("consequent", w * torch.tensor(0.1), event_dim=len(event_shape))
         assert w.shape == consequent.shape
 
     antecedents = {
         "w": (
             torch.tensor(0.1).expand(event_shape),
-            sufficiency_intervention(constraints.independent(constraints.real, len(event_shape)), ["w"]),
+            sufficiency_intervention(
+                constraints.independent(constraints.real, len(event_shape)),
+                ["w"],
+            ),
         )
     }
 

@@ -61,7 +61,12 @@ def test_batch_cg_solve(ndim: int, dtype: torch.dtype, num_particles: int):
     assert torch.all(torch.sum((actual_x - expected_x) ** 2, dim=1) < 1e-4)
 
 
-ModelTestCase = tuple[Callable[[], Callable], Callable[[Callable], Callable], set[str], Optional[int]]
+ModelTestCase = tuple[
+    Callable[[], Callable],
+    Callable[[Callable], Callable],
+    set[str],
+    Optional[int],
+]
 
 MODEL_TEST_CASES: list[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),
@@ -167,7 +172,10 @@ def test_nmc_param_influence_vmap_smoke(
             assert torch.isclose(v, torch.zeros_like(v)).all(), f"eif for {k} should be zero"
 
 
-@pytest.mark.parametrize("loc", [torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)])
+@pytest.mark.parametrize(
+    "loc",
+    [torch.zeros(2, requires_grad=True), torch.ones(2, requires_grad=True)],
+)
 @pytest.mark.parametrize(
     "cov_mat",
     [

@@ -10,7 +10,10 @@ import pytest
 import torch
 from typing_extensions import ParamSpec
 
-from chirho.indexed.handlers import DependentMaskMessenger, guess_max_plate_nesting
+from chirho.indexed.handlers import (
+    DependentMaskMessenger,
+    guess_max_plate_nesting,
+)
 from chirho.observational.handlers import condition
 from chirho.observational.handlers.predictive import PredictiveModel
 from chirho.robust.internals.linearize import make_empirical_fisher_vp
@@ -92,7 +95,10 @@ class SimpleMultivariateGaussianModel(pyro.nn.PyroModule):
         self.p = p
 
     def forward(self):
-        loc = pyro.sample("loc", pyro.distributions.Normal(torch.zeros(self.p), 1.0).to_event(1))
+        loc = pyro.sample(
+            "loc",
+            pyro.distributions.Normal(torch.zeros(self.p), 1.0).to_event(1),
+        )
         cov_mat = torch.eye(self.p)
         return pyro.sample("y", pyro.distributions.MultivariateNormal(loc, cov_mat))
 

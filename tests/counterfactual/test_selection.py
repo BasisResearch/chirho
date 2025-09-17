@@ -9,7 +9,10 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
+from chirho.counterfactual.handlers.selection import (
+    SelectCounterfactual,
+    SelectFactual,
+)
 from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
 

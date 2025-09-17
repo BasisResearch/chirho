@@ -123,7 +123,11 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes(so
     guide = run_svi_inference_torch_direct(partial(conditioned_model, solver, model), n_steps=2, verbose=False)
 
     num_samples = 100
-    pred = pyro.infer.Predictive(partial(counterf_model, solver, model), guide=guide, num_samples=num_samples)()
+    pred = pyro.infer.Predictive(
+        partial(counterf_model, solver, model),
+        guide=guide,
+        num_samples=num_samples,
+    )()
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
     assert pred["infected_passengers"].squeeze().shape == (
@@ -132,7 +136,10 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes(so
         len(flight_landing_times),
     )
     # Noise is shared between factual and counterfactual worlds.
-    assert pred["u_ip"].squeeze().shape == (num_samples, len(flight_landing_times))
+    assert pred["u_ip"].squeeze().shape == (
+        num_samples,
+        len(flight_landing_times),
+    )
 
 
 class ShallowLogSample(ShallowMessenger):

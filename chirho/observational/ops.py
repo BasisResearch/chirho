@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Hashable, Mapping
-from typing import Callable, TypeVar, Union
+from typing import Callable, Optional, TypeVar, Union
 
 T = TypeVar("T")
 
@@ -12,7 +12,7 @@ Observation = Union[AtomicObservation[T], CompoundObservation[T]]
 
 
 @functools.singledispatch
-def observe(rv, obs: Observation[T] | None = None, **kwargs) -> T:
+def observe(rv, obs: Optional[Observation[T]] = None, **kwargs) -> T:
     """
     Observe a random value in a probabilistic program.
     """
