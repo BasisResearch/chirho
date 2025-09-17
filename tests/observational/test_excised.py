@@ -1,3 +1,5 @@
+import warnings
+
 import pytest
 import torch
 
@@ -260,3 +262,54 @@ def test_excised_categorical_expand():
     samples = dist_exp.sample((5000,))
     for low, high in dist_exp._intervals:
         assert not torch.any((samples >= low.min()) & (samples <= high.max()))
+
+
+def test_excised_categorical_fallback_warning_category_indices():
+    torch.manual_seed(0)
+
+    # Batch of 3 elements, 4 categories each
+    logits = torch.tensor(
+        [
+            [0.1, 0.2, 0.3, 0.4],  # partial excision
+            [1.0, 1.0, 1.0, 1.0],  # fully excised → triggers fallback
+            [0.5, 0.5, 0.5, 0.5],  # normal case
+        ]
+    )
+
+    probs = torch.softmax(logits, dim=-1)
+
+    # Intervals are in terms of **category indices**
+    # Each tuple is (low_category, high_category)
+    intervals = [
+        (
+            torch.tensor([1, 0, 0]),  # low index for each batch element
+            torch.tensor([1, 3, 2]),  # high index for each batch element
+        )
+    ]
+
+    warnings.simplefilter("always", UserWarning)
+
+    with pytest.warns(UserWarning):
+        dist = ExcisedCategorical(intervals=intervals, logits=logits)
+
+    masked_logits = dist.logits
+
+    masked_probs = dist.probs
+
+    # Batch 1 fallback → should not be all -inf
+    assert not torch.all(masked_logits[1] == float("-inf"))
+
+    # Partial masking
+    # batch 0: category 1 excised
+    assert masked_logits[0, 1] == float("-inf")
+    # batch 2: categories 0-2 excised → only category 3 left
+    assert masked_logits[2, 0] == float("-inf")
+    assert masked_logits[2, 1] == float("-inf")
+    assert masked_logits[2, 2] == float("-inf")
+
+    # assert agreement with logits for batch 1 (no excision)
+    assert torch.allclose(probs[1], masked_probs[1])
+
+    # Sampling works
+    samples = dist.sample((5,))
+    assert samples.shape == (5, logits.size(0))
