@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from numbers import Number
 from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
 
@@ -315,22 +314,13 @@ class ExcisedCategorical(pyro.distributions.Categorical):
         masked_logits = logits.masked_fill(~mask, float("-inf"))
         all_neg_inf = torch.isneginf(masked_logits).all(dim=-1)
         num_all_neg_inf = all_neg_inf.sum().item()
-        ratio_all_neg_inf = num_all_neg_inf / all_neg_inf.numel()
+        ratio_all_neg_inf = num_all_neg_inf / all_neg_inf.numel()  # <--- define ratio
 
         if num_all_neg_inf > 0:
-            warnings.warn(
+            raise ValueError(
                 f"{num_all_neg_inf} batch elements ({ratio_all_neg_inf:.2%}) "
-                "have all logits excised (-inf); falling back to original logits for these elements.",
-                category=UserWarning,
-                stacklevel=2,
+                "have all logits excised (-inf); cannot sample from these elements."
             )
-            # Replace those rows with original logits
-            masked_logits = torch.where(
-                all_neg_inf.unsqueeze(-1), logits, masked_logits
-            )
-
-        assert not torch.isneginf(masked_logits).all().item()
-
         super().__init__(logits=masked_logits, validate_args=validate_args)
 
     def expand(self, batch_shape, _instance=None):
