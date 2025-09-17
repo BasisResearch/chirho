@@ -89,3 +89,6 @@ ignore = [
   "UP031",   # Use format specifiers instead of percent format
   "PERF401", # Use a list comprehension to create a transformed list
 ]
+
+[tool.ruff.lint.pyupgrade]
+keep-runtime-typing = true
