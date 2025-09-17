@@ -32,13 +32,19 @@ class ExcisedNormal(TorchDistribution):
     """
     A normal distribution with specified intervals excised (removed).
 
-    Sampling is performed using inverse transform. Probabilities within
-    the excised intervals are set to zero, and the remaining probability
-    mass is renormalized.
+    Sampling is performed using inverse transform sampling. Probability mass
+    within the excised intervals is set to zero, and the remaining probability
+    mass is renormalized so that the distribution integrates to 1.
 
-    :param base_mean: Mean of the base normal distribution.
-    :param base_stddev: Standard deviation of the base normal distribution.
-    :param intervals: List of excised intervals as tuples of ``(low, high)``.
+    This distribution does not support standard statistical properties such as
+    `mean`, `stddev`, or `variance` directly. 
+    Use `base_mean`, `base_stddev`, and `base_variance` to access
+    the parameters of the underlying normal distribution.
+
+    :param base_loc: Mean of the underlying normal distribution.
+    :param base_scale: Standard deviation of the underlying normal distribution.
+    :param intervals: List of intervals to excise. Each tuple is (low, high).
+    :param validate_args: Whether to validate input arguments.
     """
 
     arg_constraints = {
