@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 import collections
+import dataclasses
 import functools
-from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar, Union
+from contextlib import contextmanager
+from typing import (
+    Callable,
+    Collection,
+    Dict,
+    Generic,
+    Hashable,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 import pyro
 import torch
@@ -12,6 +25,7 @@ from chirho.interventional.ops import (
     CompoundIntervention,
     intervene,
 )
+from chirho.observational.handlers.predictive import BatchedLatents
 
 K = TypeVar("K")
 T = TypeVar("T")
@@ -64,7 +78,6 @@ def _dict_intervene(
     act: Union[Dict[K, AtomicIntervention[T]], Callable[[Dict[K, T]], Dict[K, T]]],
     **kwargs,
 ) -> Dict[K, T]:
-
     if callable(act):
         return _dict_intervene_callable(obs, act, **kwargs)
 
@@ -137,3 +150,77 @@ else:
 
     @pyro.poutine.handlers._make_handler(Interventions)
     def do(fn: Callable, actions: Mapping[Hashable, AtomicIntervention[T]]): ...
+
+
+@dataclasses.dataclass
+class _BatchedAction:
+    act: torch.Tensor
+    mask: torch.Tensor
+
+
+class _BatchedInterventions(Interventions):
+    def __init__(
+        self, actions: Mapping[Hashable, _BatchedAction], name="batched_interventions"
+    ):
+        if not actions:
+            raise ValueError("Expected a nonempty actions dict.")
+
+        batch_sizes = set([v.act.shape[0] for v in actions.values()])
+        if len(batch_sizes) != 1:
+            raise ValueError("Expected each intervention to have the same batch size.")
+
+        self.batch_size = list(batch_sizes)[0]
+
+        super().__init__(actions)
+
+    def _pyro_intervene(self, msg):
+        (obs, act) = msg["args"]
+        if not isinstance(act, _BatchedAction):
+            return
+
+        msg["value"] = torch.where(act.mask, act.act, obs)
+
+
+@contextmanager
+def batched_do(
+    interventions: (
+        Mapping[Hashable, Tuple[torch.Tensor, torch.Tensor]]
+        | Collection[Mapping[Hashable, torch.Tensor]]
+    ),
+    name="batched_interventions",
+):
+    """Perform a batch of interventions efficiently.
+
+    Batches can be specified either as:
+
+    1. A collection of individual interventions, as might be passed to `do`. The
+    actions are restricted to be tensors, however. The action tensors may be of
+    different shapes, but they will all be broadcast together.
+
+    2. A mapping from sample sites to pairs of tensors (act, mask) that specify
+    the intervention to apply for each index in the batch and whether an
+    intervention should be applied. Each act tensor should be of shape
+    (batch_size, ...) and each mask tensor should be of shape (batch_size).
+
+    .. warning:: Must be used in conjunction with :class:`~chirho.indexed.handlers.IndexPlatesMessenger` .
+    """
+    if isinstance(interventions, collections.abc.Mapping):
+        batches = {k: _BatchedAction(*v) for (k, v) in interventions.items()}
+    else:
+        vars_ = set.union(*[set(i.keys()) for i in interventions])
+        masks = {k: torch.zeros(len(interventions), dtype=torch.bool) for k in vars_}
+        acts = {k: [torch.tensor(float("nan"))] * len(interventions) for k in vars_}
+        for i, intv in enumerate(interventions):
+            for k, v in intv.items():
+                masks[k][i] = True
+                acts[k][i] = v
+
+        batched_acts = {
+            k: torch.stack(torch.broadcast_tensors(v)) for (k, v) in intv.items()
+        }
+        batches = {k: _BatchedAction(batched_acts[k], masks[k]) for k in vars_}
+
+    batched_intervene = _BatchedInterventions(batches)
+    batched_latents = BatchedLatents(batched_intervene.batch_size, name=name)
+    with batched_latents, batched_intervene:
+        yield
