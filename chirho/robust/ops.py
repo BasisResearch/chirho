@@ -1,5 +1,6 @@
 import functools
-from typing import Any, Callable, Mapping, Protocol, TypeVar
+from collections.abc import Mapping
+from typing import Any, Callable, Protocol, TypeVar
 
 import pyro
 from typing_extensions import ParamSpec
@@ -15,9 +16,7 @@ Point = Mapping[str, Observation[T]]
 
 
 class Functional(Protocol[P, S]):
-    def __call__(
-        self, __model: Callable[P, Any], *models: Callable[P, Any]
-    ) -> Callable[P, S]: ...
+    def __call__(self, __model: Callable[P, Any], *models: Callable[P, Any]) -> Callable[P, S]: ...
 
 
 def influence_fn(

@@ -1,5 +1,6 @@
 import contextlib
-from typing import Callable, Mapping, Optional, TypeVar, Union, cast
+from collections.abc import Mapping
+from typing import Callable, Optional, TypeVar, Union, cast
 
 import pyro.distributions.constraints as constraints
 import torch
@@ -41,8 +42,7 @@ def SplitSubsets(
     :param prefix: A prefix used for naming additional preemption nodes. Defaults to ``__cause_split_``.
     """
     preemptions = {
-        antecedent: undo_split(supports[antecedent], antecedents=[antecedent])
-        for antecedent in actions.keys()
+        antecedent: undo_split(supports[antecedent], antecedents=[antecedent]) for antecedent in actions.keys()
     }
 
     with do(actions=actions):
@@ -55,9 +55,7 @@ def SearchForExplanation(
     supports: Mapping[str, constraints.Constraint],
     antecedents: Mapping[str, Optional[Observation[S]]],
     consequents: Mapping[str, Optional[Observation[T]]],
-    witnesses: Optional[
-        Mapping[str, Optional[Union[Observation[S], Observation[T]]]]
-    ] = None,
+    witnesses: Optional[Mapping[str, Optional[Union[Observation[S], Observation[T]]]]] = None,
     *,
     alternatives: Optional[Mapping[str, Intervention[S]]] = None,
     factors: Optional[Mapping[str, Callable[[T], torch.Tensor]]] = None,

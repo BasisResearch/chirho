@@ -29,7 +29,6 @@ logging_times = torch.tensor([1.0, 2.0, 3.0])
 @pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("dynamics", [bayes_sir_model()])
 def test_logging(solver, dynamics):
-
     with solver():
         with LogTrajectory(times=logging_times) as dt1:
             result1 = simulate(dynamics, init_state, start_time, end_time)
@@ -51,7 +50,6 @@ def test_logging(solver, dynamics):
 @pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("dynamics", [bayes_sir_model()])
 def test_logging_with_colliding_interruption(solver, dynamics):
-
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
             simulate(dynamics, init_state, start_time, end_time)
@@ -75,15 +73,14 @@ def test_append():
     trajectory1 = dict(S=torch.tensor([1.0, 2.0, 3.0]))
     trajectory2 = dict(S=torch.tensor([4.0, 5.0, 6.0]))
     trajectory = append(trajectory1, trajectory2)
-    assert torch.allclose(
-        trajectory["S"], torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-    ), "append() failed to append a trajectory"
+    assert torch.allclose(trajectory["S"], torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])), (
+        "append() failed to append a trajectory"
+    )
 
 
 @pytest.mark.parametrize("solver", [TorchDiffEq])
 @pytest.mark.parametrize("dynamics", [lambda s: dict(X=s["X"] * (1 - s["X"]))])
 def test_start_end_time_collisions(solver, dynamics):
-
     start_time, end_time = torch.tensor(0.0), torch.tensor(3.0)
     init_state = dict(X=torch.tensor(0.5))
 
@@ -98,21 +95,14 @@ def test_start_end_time_collisions(solver, dynamics):
     assert check_states_match(log1.trajectory, log2.trajectory)
 
     assert (
-        len(log1.trajectory["X"])
-        == len(log1.times)
-        == len(log2.trajectory["X"])
-        == len(log2.times)
-        == 4
+        len(log1.trajectory["X"]) == len(log1.times) == len(log2.trajectory["X"]) == len(log2.times) == 4
     )  # previously failed bc len(X) == 3
 
 
 @pytest.mark.parametrize("solver", [TorchDiffEq])
 # These need to be the same dynamics fn but with different atemporal parameters.
-@pytest.mark.parametrize(
-    "dynamics1,dynamics2", [(bayes_sir_model(), bayes_sir_model())]
-)
+@pytest.mark.parametrize("dynamics1,dynamics2", [(bayes_sir_model(), bayes_sir_model())])
 def test_multiple_simulates(solver, dynamics1, dynamics2):
-
     with LogTrajectory(times=logging_times) as dt1:
         with solver():
             result11 = simulate(dynamics1, init_state, start_time, end_time)

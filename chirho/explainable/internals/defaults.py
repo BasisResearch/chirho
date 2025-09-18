@@ -10,9 +10,7 @@ T = TypeVar("T")
 
 
 @functools.singledispatch
-def uniform_proposal(
-    support: pyro.distributions.constraints.Constraint, **kwargs
-) -> TorchDistributionMixin:
+def uniform_proposal(support: pyro.distributions.constraints.Constraint, **kwargs) -> TorchDistributionMixin:
     """
     This function heuristically constructs a probability distribution over a specified
     support. The choice of distribution depends on the type of support provided.
@@ -55,8 +53,6 @@ def _uniform_proposal_integer(
     **kwargs,
 ) -> TorchDistributionMixin:
     if support.lower_bound != 0:
-        raise NotImplementedError(
-            "integer_interval with lower_bound > 0 not yet supported"
-        )
+        raise NotImplementedError("integer_interval with lower_bound > 0 not yet supported")
     n = support.upper_bound - support.lower_bound + 1
     return pyro.distributions.Categorical(probs=torch.ones((n,)))

@@ -64,9 +64,7 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             # LogTrajectory's simulate_point will log only timepoints that are greater than the start_time of each
             # simulate_point call, which can occur multiple times in a single simulate call when there
             # are interruptions.
-            self._trajectory: State[T] = append(
-                _unsqueeze_time_dim(initial_state), self._trajectory
-            )
+            self._trajectory: State[T] = append(_unsqueeze_time_dim(initial_state), self._trajectory)
 
         # Clear the internal trajectory so that we don't keep appending to it on subsequent simulate calls.
         self.trajectory: State[T] = self._trajectory
@@ -88,17 +86,11 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
         if not self._trajectory:  # get type right
             self._trajectory = type(initial_state)()
 
-        filtered_timespan = self.times[
-            (self.times > start_time) & (self.times <= end_time)
-        ]
-        timespan = torch.concat(
-            (start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1))
-        )
+        filtered_timespan = self.times[(self.times > start_time) & (self.times <= end_time)]
+        timespan = torch.concat((start_time.unsqueeze(-1), filtered_timespan, end_time.unsqueeze(-1)))
 
         with pyro.poutine.messenger.block_messengers(lambda m: m is self):
-            trajectory: State[T] = simulate_trajectory(
-                dynamics, initial_state, timespan, **msg["kwargs"]
-            )
+            trajectory: State[T] = simulate_trajectory(dynamics, initial_state, timespan, **msg["kwargs"])
 
         # TODO support dim != -1
         idx_name = "__time"
@@ -114,7 +106,5 @@ class LogTrajectory(Generic[T], pyro.poutine.messenger.Messenger):
             self._trajectory: State[T] = append(self._trajectory, new_part)
 
         final_idx = IndexSet(**{idx_name: {len(timespan) - 1}})
-        msg["value"] = _squeeze_time_dim(
-            gather(trajectory, final_idx, name_to_dim=name_to_dim)
-        )
+        msg["value"] = _squeeze_time_dim(gather(trajectory, final_idx, name_to_dim=name_to_dim))
         msg["done"] = True

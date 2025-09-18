@@ -16,23 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: pip cache
-        uses: actions/cache@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          path: ~/.cache/pip
-          key: lint-pip-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            lint-pip-
+          version: "latest"
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install .[test]
+        run: uv sync --group dev
 
       - name: Lint
-        run: ./scripts/lint.sh
+        run: uv run ./scripts/lint.sh

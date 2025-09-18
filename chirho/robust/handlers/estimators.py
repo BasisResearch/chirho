@@ -43,15 +43,11 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
 
         args = msg["args"]
         kwargs = {
-            k: v
-            for k, v in msg["kwargs"].items()
-            if k not in ["models", "functional", "points", "pointwise_influence"]
+            k: v for k, v in msg["kwargs"].items() if k not in ["models", "functional", "points", "pointwise_influence"]
         }
 
         if len(points) != 1:
-            raise NotImplementedError(
-                "MonteCarloInfluenceEstimator currently only supports unary functionals"
-            )
+            raise NotImplementedError("MonteCarloInfluenceEstimator currently only supports unary functionals")
 
         from chirho.robust.internals.linearize import linearize
         from chirho.robust.internals.utils import make_functional_call
@@ -59,9 +55,7 @@ class MonteCarloInfluenceEstimator(pyro.poutine.messenger.Messenger):
         if len(models) != len(points):
             raise ValueError("mismatch between number of models and points")
 
-        linearized = linearize(
-            pointwise_influence=pointwise_influence, *models, **self.linearize_kwargs
-        )
+        linearized = linearize(pointwise_influence=pointwise_influence, *models, **self.linearize_kwargs)
         target = functional(*models)
 
         # TODO check that target_params == model_params
@@ -115,9 +109,7 @@ def one_step_corrected_estimator(
             plug_in_estimate = plug_in_estimator(*args, **kwargs)
             correction = correction_estimator(*args, **kwargs)
 
-            flat_plug_in_estimate, treespec = torch.utils._pytree.tree_flatten(
-                plug_in_estimate
-            )
+            flat_plug_in_estimate, treespec = torch.utils._pytree.tree_flatten(plug_in_estimate)
             flat_correction, _ = torch.utils._pytree.tree_flatten(correction)
 
             return torch.utils._pytree.tree_unflatten(

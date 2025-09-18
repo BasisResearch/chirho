@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional, Set, TypeVar
+from typing import Any, Optional, TypeVar
 
 import pyro
 import torch
@@ -15,13 +15,13 @@ class CutModule(pyro.poutine.messenger.Messenger):
     Converts a Pyro model into a module using the "cut" operation
     """
 
-    vars: Set[str]
+    vars: set[str]
 
-    def __init__(self, vars: Set[str]):
+    def __init__(self, vars: set[str]):
         self.vars = vars
         super().__init__()
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
         # There are 4 cases to consider for a sample site:
         # 1. The site appears in self.vars and is observed
         # 2. The site appears in self.vars and is not observed
@@ -30,9 +30,9 @@ class CutModule(pyro.poutine.messenger.Messenger):
         if msg["name"] not in self.vars:
             if msg["is_observed"]:
                 # use mask to remove the contribution of this observed site to the model log-joint
-                msg["mask"] = (
-                    msg["mask"] if msg["mask"] is not None else True
-                ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
+                msg["mask"] = (msg["mask"] if msg["mask"] is not None else True) & torch.tensor(
+                    False, dtype=torch.bool
+                ).expand(msg["fn"].batch_shape)
             else:
                 pass
 
@@ -42,13 +42,13 @@ class CutModule(pyro.poutine.messenger.Messenger):
 
 
 class CutComplementModule(pyro.poutine.messenger.Messenger):
-    vars: Set[str]
+    vars: set[str]
 
-    def __init__(self, vars: Set[str]):
+    def __init__(self, vars: set[str]):
         self.vars = vars
         super().__init__()
 
-    def _pyro_sample(self, msg: Dict[str, Any]) -> None:
+    def _pyro_sample(self, msg: dict[str, Any]) -> None:
         # There are 4 cases to consider for a sample site:
         # 1. The site appears in self.vars and is observed
         # 2. The site appears in self.vars and is not observed
@@ -56,9 +56,9 @@ class CutComplementModule(pyro.poutine.messenger.Messenger):
         # 4. The site does not appear in self.vars and is not observed
         if msg["name"] in self.vars:
             # use mask to remove the contribution of this observed site to the model log-joint
-            msg["mask"] = (
-                msg["mask"] if msg["mask"] is not None else True
-            ) & torch.tensor(False, dtype=torch.bool).expand(msg["fn"].batch_shape)
+            msg["mask"] = (msg["mask"] if msg["mask"] is not None else True) & torch.tensor(
+                False, dtype=torch.bool
+            ).expand(msg["fn"].batch_shape)
 
 
 class SingleStageCut(DependentMaskMessenger):
@@ -66,10 +66,10 @@ class SingleStageCut(DependentMaskMessenger):
     Represent module and complement in a single Pyro model using plates
     """
 
-    vars: Set[str]
+    vars: set[str]
     name: str
 
-    def __init__(self, vars: Set[str], *, name: str = "__cut_plate"):
+    def __init__(self, vars: set[str], *, name: str = "__cut_plate"):
         self.vars = vars
         self.name = name
         super().__init__()
@@ -85,9 +85,7 @@ class SingleStageCut(DependentMaskMessenger):
         device: torch.device = torch.device("cpu"),
         name: Optional[str] = None,
     ) -> torch.Tensor:
-        return indexset_as_mask(
-            IndexSet(**{self.name: {0 if name in self.vars else 1}})
-        )
+        return indexset_as_mask(IndexSet(**{self.name: {0 if name in self.vars else 1}}))
 
     def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
         if pyro.poutine.util.site_is_subsample(msg):

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import functools
+from collections.abc import Hashable, Mapping
 from numbers import Number
-from typing import Any, Callable, Hashable, Mapping, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar, Union
 
 import pyro
 import pyro.distributions as dist
@@ -14,9 +15,7 @@ from torch.distributions.utils import broadcast_all, probs_to_logits
 T = TypeVar("T")
 
 AtomicObservation = Union[T, Callable[..., T]]  # TODO add support for more atomic types
-CompoundObservation = Union[
-    Mapping[Hashable, AtomicObservation[T]], Callable[..., AtomicObservation[T]]
-]
+CompoundObservation = Union[Mapping[Hashable, AtomicObservation[T]], Callable[..., AtomicObservation[T]]]
 Observation = Union[AtomicObservation[T], CompoundObservation[T]]
 
 

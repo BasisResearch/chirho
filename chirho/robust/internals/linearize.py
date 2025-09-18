@@ -207,9 +207,7 @@ def make_empirical_fisher_vp(
 
     def _empirical_fisher_vp(v: ParamDict) -> ParamDict:
         def jvp_fn(log_prob_params: ParamDict) -> torch.Tensor:
-            return torch.func.jvp(
-                bound_batched_func_log_prob, (log_prob_params,), (v,)
-            )[1]
+            return torch.func.jvp(bound_batched_func_log_prob, (log_prob_params,), (v,))[1]
 
         # Perlmutter's trick
         vjp_fn = torch.func.vjp(jvp_fn, log_prob_params)[1]
@@ -342,10 +340,8 @@ def linearize(
         parallel=True,
     )
 
-    batched_log_prob: BatchedNMCLogMarginalLikelihood[P, torch.Tensor] = (
-        BatchedNMCLogMarginalLikelihood(
-            model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
-        )
+    batched_log_prob: BatchedNMCLogMarginalLikelihood[P, torch.Tensor] = BatchedNMCLogMarginalLikelihood(
+        model, num_samples=num_samples_inner, max_plate_nesting=max_plate_nesting
     )
     log_prob_params, batched_func_log_prob = make_functional_call(batched_log_prob)
     log_prob_params_numel: int = sum(p.numel() for p in log_prob_params.values())
@@ -353,9 +349,7 @@ def linearize(
         cg_iters = log_prob_params_numel
     else:
         cg_iters = min(cg_iters, log_prob_params_numel)
-    cg_solver = functools.partial(
-        conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol
-    )
+    cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=cg_iters, residual_tol=residual_tol)
 
     def _fn(
         points: Point[T],
@@ -365,13 +359,9 @@ def linearize(
         with torch.no_grad():
             data: Point[T] = predictive(*args, **kwargs)
             data = {k: data[k] for k in points.keys()}
-        fvp = make_empirical_fisher_vp(
-            batched_func_log_prob, log_prob_params, data, *args, **kwargs
-        )
+        fvp = make_empirical_fisher_vp(batched_func_log_prob, log_prob_params, data, *args, **kwargs)
         pinned_fvp = reset_rng_state(pyro.util.get_rng_state())(fvp)
-        pinned_fvp_batched = torch.func.vmap(
-            lambda v: pinned_fvp(v), randomness="different"
-        )
+        pinned_fvp_batched = torch.func.vmap(lambda v: pinned_fvp(v), randomness="different")
 
         def bound_batched_func_log_prob(p: ParamDict) -> torch.Tensor:
             return batched_func_log_prob(p, points, *args, **kwargs)

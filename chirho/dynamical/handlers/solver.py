@@ -61,9 +61,7 @@ class TorchDiffEq(Solver[torch.Tensor]):
         dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
 
-        msg["value"] = torchdiffeq_simulate_point(
-            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
-        )
+        msg["value"] = torchdiffeq_simulate_point(dynamics, initial_state, start_time, end_time, **msg["kwargs"])
         msg["done"] = True
 
     def _pyro_simulate_trajectory(self, msg) -> None:
@@ -74,9 +72,7 @@ class TorchDiffEq(Solver[torch.Tensor]):
         dynamics, initial_state, timespan = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
 
-        msg["value"] = torchdiffeq_simulate_trajectory(
-            dynamics, initial_state, timespan, **msg["kwargs"]
-        )
+        msg["value"] = torchdiffeq_simulate_trajectory(dynamics, initial_state, timespan, **msg["kwargs"])
         msg["done"] = True
 
     def _pyro_simulate_to_interruption(self, msg) -> None:
@@ -104,7 +100,5 @@ class TorchDiffEq(Solver[torch.Tensor]):
         dynamics, initial_state, start_time, end_time = msg["args"]
         msg["kwargs"].update(self.odeint_kwargs)
 
-        torchdiffeq_check_dynamics(
-            dynamics, initial_state, start_time, end_time, **msg["kwargs"]
-        )
+        torchdiffeq_check_dynamics(dynamics, initial_state, start_time, end_time, **msg["kwargs"])
         msg["done"] = True

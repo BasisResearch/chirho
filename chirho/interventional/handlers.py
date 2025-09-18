@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import collections
 import functools
-from typing import Callable, Dict, Generic, Hashable, Mapping, Optional, TypeVar, Union
+from collections.abc import Hashable, Mapping
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -22,9 +23,7 @@ T = TypeVar("T")
 @intervene.register(bool)
 @intervene.register(torch.Tensor)
 @pyro.poutine.runtime.effectful(type="intervene")
-def _intervene_atom(
-    obs, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs
-) -> T:
+def _intervene_atom(obs, act: Optional[AtomicIntervention[T]] = None, *, event_dim: int = 0, **kwargs) -> T:
     """
     Intervene on an atomic value in a probabilistic program.
     """
@@ -60,24 +59,21 @@ def _intervene_atom_distribution(
 
 @intervene.register(dict)
 def _dict_intervene(
-    obs: Dict[K, T],
-    act: Union[Dict[K, AtomicIntervention[T]], Callable[[Dict[K, T]], Dict[K, T]]],
+    obs: dict[K, T],
+    act: Union[dict[K, AtomicIntervention[T]], Callable[[dict[K, T]], dict[K, T]]],
     **kwargs,
-) -> Dict[K, T]:
-
+) -> dict[K, T]:
     if callable(act):
         return _dict_intervene_callable(obs, act, **kwargs)
 
-    result: Dict[K, T] = {}
+    result: dict[K, T] = {}
     for k in obs.keys():
         result[k] = intervene(obs[k], act[k] if k in act else None, **kwargs)
     return result
 
 
 @pyro.poutine.runtime.effectful(type="intervene")
-def _dict_intervene_callable(
-    obs: Dict[K, T], act: Callable[[Dict[K, T]], Dict[K, T]], **kwargs
-) -> Dict[K, T]:
+def _dict_intervene_callable(obs: dict[K, T], act: Callable[[dict[K, T]], dict[K, T]], **kwargs) -> dict[K, T]:
     return act(obs)
 
 
@@ -118,9 +114,7 @@ class Interventions(Generic[T], pyro.poutine.messenger.Messenger):
         super().__init__()
 
     def _pyro_post_sample(self, msg):
-        if msg["name"] not in self.actions or msg["infer"].get(
-            "_do_not_intervene", None
-        ):
+        if msg["name"] not in self.actions or msg["infer"].get("_do_not_intervene", None):
             return
 
         msg["value"] = intervene(

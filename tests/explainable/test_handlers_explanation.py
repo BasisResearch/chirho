@@ -6,10 +6,15 @@ import pyro.distributions.constraints as constraints
 import pytest
 import torch
 
-from chirho.counterfactual.handlers.counterfactual import MultiWorldCounterfactual
+from chirho.counterfactual.handlers.counterfactual import (
+    MultiWorldCounterfactual,
+)
 from chirho.explainable.handlers import ExtractSupports
 from chirho.explainable.handlers.components import undo_split
-from chirho.explainable.handlers.explanation import SearchForExplanation, SplitSubsets
+from chirho.explainable.handlers.explanation import (
+    SearchForExplanation,
+    SplitSubsets,
+)
 from chirho.explainable.handlers.preemptions import Preemptions
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.observational.handlers.condition import condition
@@ -21,12 +26,8 @@ def stones_bayesian_model():
         prob_bill_throws = pyro.sample("prob_bill_throws", dist.Beta(1, 1))
         prob_sally_hits = pyro.sample("prob_sally_hits", dist.Beta(1, 1))
         prob_bill_hits = pyro.sample("prob_bill_hits", dist.Beta(1, 1))
-        prob_bottle_shatters_if_sally = pyro.sample(
-            "prob_bottle_shatters_if_sally", dist.Beta(1, 1)
-        )
-        prob_bottle_shatters_if_bill = pyro.sample(
-            "prob_bottle_shatters_if_bill", dist.Beta(1, 1)
-        )
+        prob_bottle_shatters_if_sally = pyro.sample("prob_bottle_shatters_if_sally", dist.Beta(1, 1))
+        prob_bottle_shatters_if_bill = pyro.sample("prob_bottle_shatters_if_bill", dist.Beta(1, 1))
 
     sally_throws = pyro.sample("sally_throws", dist.Bernoulli(prob_sally_throws))
     bill_throws = pyro.sample("bill_throws", dist.Bernoulli(prob_bill_throws))
@@ -90,9 +91,7 @@ def test_search_setup():
     ]
     observations = {k: torch.tensor(1.0) for k in observation_keys}
 
-    observations_conditioning = condition(
-        data={k: torch.as_tensor(v) for k, v in observations.items()}
-    )
+    observations_conditioning = condition(data={k: torch.as_tensor(v) for k, v in observations.items()})
 
     alternatives = {"sally_throws": 0.0}
     false_alternatives = {"sally_throws": 1.0}
@@ -111,7 +110,6 @@ def test_search_setup():
 
 
 def test_SearchForExplanation(test_search_setup):
-
     supports = test_search_setup["supports"]
     antecedents = test_search_setup["antecedents"]
     consequents = test_search_setup["consequents"]
@@ -215,13 +213,10 @@ def test_SearchForExplanation(test_search_setup):
 
 
 def test_dependent_sampling_antecedent(test_search_setup):
-
     supports = test_search_setup["supports"]
     antecedents = test_search_setup["antecedents"]
     consequents = test_search_setup["consequents"]
-    witnesses = test_search_setup[
-        "wide_witness"
-    ]  # this time we make sure `sally_throws` is in both.
+    witnesses = test_search_setup["wide_witness"]  # this time we make sure `sally_throws` is in both.
     observations_conditioning = test_search_setup["observations_conditioning"]
     alternatives = test_search_setup["alternatives"]
     observations_conditioning = test_search_setup["observations_conditioning"]
@@ -255,16 +250,10 @@ def test_dependent_sampling_antecedent(test_search_setup):
     sally_witness_preemption = tr["__cause____witness_sally_throws"]["value"]
 
     assert torch.all(sally_throws_nec[sally_antecedent_preemption == 0] == 0)
-    assert torch.all(
-        sally_throws_nec[
-            (sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)
-        ]
-        == 1
-    )
+    assert torch.all(sally_throws_nec[(sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)] == 1)
 
 
 def test_dependent_sampling_witness(test_search_setup):
-
     # make sure witness preemptions are still executed under antecedent preemptions
 
     supports = test_search_setup["supports"]
@@ -305,18 +294,8 @@ def test_dependent_sampling_witness(test_search_setup):
     sally_witness_preemption = tr["__cause____witness_sally_throws"]["value"]
 
     assert torch.all(sally_throws_nec[sally_antecedent_preemption == 0] == 1)
-    assert torch.all(
-        sally_throws_nec[
-            (sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)
-        ]
-        == 0
-    )
-    assert torch.all(
-        sally_throws_nec[
-            (sally_witness_preemption == 1) & (sally_antecedent_preemption == 0)
-        ]
-        == 1
-    )
+    assert torch.all(sally_throws_nec[(sally_witness_preemption == 1) & (sally_antecedent_preemption == 1)] == 0)
+    assert torch.all(sally_throws_nec[(sally_witness_preemption == 1) & (sally_antecedent_preemption == 0)] == 1)
 
 
 def test_SplitSubsets_single_layer():
@@ -329,9 +308,7 @@ def test_SplitSubsets_single_layer():
         "prob_bottle_shatters_if_bill": 1.0,
     }
 
-    observations_conditioning = condition(
-        data={k: torch.as_tensor(v) for k, v in observations.items()}
-    )
+    observations_conditioning = condition(data={k: torch.as_tensor(v) for k, v in observations.items()})
 
     with MultiWorldCounterfactual() as mwc:
         with SplitSubsets(
@@ -353,15 +330,21 @@ def test_SplitSubsets_single_layer():
         )
 
         int_sally_hits = gather(
-            tr["sally_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0
+            tr["sally_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
         )
 
         obs_bill_hits = gather(
-            tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {0}}), event_dim=0
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {0}}),
+            event_dim=0,
         )
 
         int_bill_hits = gather(
-            tr["bill_hits"]["value"], IndexSet(**{"sally_throws": {1}}), event_dim=0
+            tr["bill_hits"]["value"],
+            IndexSet(**{"sally_throws": {1}}),
+            event_dim=0,
         )
 
         int_bottle_shatters = gather(
@@ -378,9 +361,7 @@ def test_SplitSubsets_single_layer():
         "intervened_bottle_shatters": int_bottle_shatters.item(),
     }
 
-    assert list(outcome.values()) == [0, 0.0, 0.0, 1.0, 1.0] or list(
-        outcome.values()
-    ) == [1, 1.0, 0.0, 0.0, 1.0]
+    assert list(outcome.values()) == [0, 0.0, 0.0, 1.0, 1.0] or list(outcome.values()) == [1, 1.0, 0.0, 0.0, 1.0]
 
 
 def test_SplitSubsets_two_layers():
@@ -393,9 +374,7 @@ def test_SplitSubsets_two_layers():
         "prob_bottle_shatters_if_bill": 1.0,
     }
 
-    observations_conditioning = condition(
-        data={k: torch.as_tensor(v) for k, v in observations.items()}
-    )
+    observations_conditioning = condition(data={k: torch.as_tensor(v) for k, v in observations.items()})
 
     actions = {"sally_throws": 0.0}
 
@@ -405,12 +384,8 @@ def test_SplitSubsets_two_layers():
     }
     preemption_conditioning = condition(data=pinned_preemption_variables)
 
-    witness_preemptions = {
-        "bill_hits": undo_split(constraints.boolean, antecedents=actions.keys())
-    }
-    witness_preemptions_handler: Preemptions = Preemptions(
-        actions=witness_preemptions, prefix="witness_preempt_"
-    )
+    witness_preemptions = {"bill_hits": undo_split(constraints.boolean, antecedents=actions.keys())}
+    witness_preemptions_handler: Preemptions = Preemptions(actions=witness_preemptions, prefix="witness_preempt_")
 
     with MultiWorldCounterfactual() as mwc:
         with SplitSubsets(
@@ -447,19 +422,13 @@ def test_SplitSubsets_two_layers():
 
 
 def model_independent(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
-    Y = pyro.sample(
-        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     return {"X": X, "Y": Y}
 
 
 def model_connected(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     return {"X": X, "Y": Y}
 
@@ -495,9 +464,7 @@ def test_edge_eq_neq(model, ante_cons, event_shape):
 
     cons_values = trace.trace.nodes[consequent]["value"]
 
-    log_probs = trace.trace.nodes[f"__cause____consequent_{consequent}"][
-        "fn"
-    ].log_factor
+    log_probs = trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"].log_factor
 
     with mwc:
         nec_log_probs = gather(log_probs, IndexSet(**{antecedent: {1}}))
@@ -515,12 +482,7 @@ def test_edge_eq_neq(model, ante_cons, event_shape):
     else:
         assert suff_log_probs.sum().exp() == 1.0
 
-    assert torch.all(
-        trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"]
-        .log_factor.sum()
-        .exp()
-        == 0
-    )
+    assert torch.all(trace.trace.nodes[f"__cause____consequent_{consequent}"]["fn"].log_factor.sum().exp() == 0)
 
 
 def test_eq_neq_causal():
@@ -548,28 +510,20 @@ def test_eq_neq_causal():
 
     trace.trace.compute_log_prob()
 
-    assert torch.all(
-        trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum() == 0
-    )
+    assert torch.all(trace.trace.nodes["__cause____consequent_Y"]["fn"].log_factor.sum() == 0)
 
 
 # X -> Z, Y -> Z
 def model_three_converge(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
-    Y = pyro.sample(
-        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Z = pyro.deterministic("Z", torch.min(X, Y), event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
 
 
 # X -> Y, X -> Z
 def model_three_diverge(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", X, event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -577,9 +531,7 @@ def model_three_diverge(event_shape):
 
 # X -> Y -> Z
 def model_three_chain(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", Y, event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -587,9 +539,7 @@ def model_three_chain(event_shape):
 
 # X -> Y, X -> Z, Y -> Z
 def model_three_complete(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
     Z = pyro.deterministic("Z", torch.max(X, Y), event_dim=len(event_shape))
     return {"X": X, "Y": Y, "Z": Z}
@@ -597,27 +547,17 @@ def model_three_complete(event_shape):
 
 # X -> Y    Z
 def model_three_isolate(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     Y = pyro.deterministic("Y", X, event_dim=len(event_shape))
-    Z = pyro.sample(
-        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    Z = pyro.sample("Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     return {"X": X, "Y": Y, "Z": Z}
 
 
 # X     Y    Z
 def model_three_independent(event_shape):
-    X = pyro.sample(
-        "X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
-    Y = pyro.sample(
-        "Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
-    Z = pyro.sample(
-        "Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape))
-    )
+    X = pyro.sample("X", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    Y = pyro.sample("Y", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
+    Z = pyro.sample("Z", dist.Bernoulli(0.5).expand(event_shape).to_event(len(event_shape)))
     return {"X": X, "Y": Y, "Z": Z}
 
 
@@ -638,7 +578,7 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
     ante1, ante2, cons = ante_cons
     with ExtractSupports() as supports:
         model(event_shape)
-        for var, sup in supports.supports.items():
+        for sup in supports.supports.values():
             if isinstance(sup, constraints.independent):
                 sup.base_constraint = constraints.boolean
             else:
@@ -683,9 +623,7 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
         nec_value = gather(values, nec_worlds, event_dim=len(event_shape))
         nec_lp = gather(log_probs, nec_worlds)
 
-        if torch.equal(nec_value, fact_value) & (
-            not torch.allclose(nec_value, torch.tensor(0.0))
-        ):
+        if torch.equal(nec_value, fact_value) & (not torch.allclose(nec_value, torch.tensor(0.0))):
             assert nec_lp.exp().item() == 0.0
         elif torch.allclose(nec_value, torch.tensor(0.0)):
             assert nec_lp.exp().item() == 1.0
@@ -693,9 +631,7 @@ def test_eq_neq_three_variables(model, ante_cons, event_shape):
         suff_value = gather(values, suff_worlds, event_dim=len(event_shape))
         suff_lp = gather(log_probs, suff_worlds)
 
-        if torch.equal(suff_value, fact_value) & (
-            not torch.allclose(suff_value, torch.tensor(1.0))
-        ):
+        if torch.equal(suff_value, fact_value) & (not torch.allclose(suff_value, torch.tensor(1.0))):
             assert suff_lp.exp().item() == 0.0
         elif torch.allclose(suff_value, torch.tensor(1.0)):
             assert suff_lp.exp().item() == 1.0

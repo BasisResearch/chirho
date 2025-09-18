@@ -1,5 +1,6 @@
 import functools
-from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
+from collections.abc import Mapping
+from typing import Callable, Optional, TypeVar
 
 import pyro
 import pytest
@@ -25,11 +26,14 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-ModelTestCase = Tuple[
-    Callable[[], Callable], Callable[[Callable], Callable], Set[str], Optional[int]
+ModelTestCase = tuple[
+    Callable[[], Callable],
+    Callable[[Callable], Callable],
+    set[str],
+    Optional[int],
 ]
 
-MODEL_TEST_CASES: List[ModelTestCase] = [
+MODEL_TEST_CASES: list[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
@@ -39,8 +43,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
         1,
         marks=(
             [pytest.mark.xfail(reason="torch.func autograd doesnt work with PyroParam")]
-            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3]))
-            <= (1, 8, 6)
+            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3])) <= (1, 8, 6)
             else []
         ),
     ),
@@ -70,9 +73,7 @@ def test_estimator_smoke(
     with torch.no_grad():
         test_datum = {
             k: v[0]
-            for k, v in pyro.infer.Predictive(
-                model, num_samples=2, return_sites=obs_names, parallel=True
-            )().items()
+            for k, v in pyro.infer.Predictive(model, num_samples=2, return_sites=obs_names, parallel=True)().items()
         }
 
     estimator = estimation_method(
@@ -91,6 +92,4 @@ def test_estimator_smoke(
     for k, v in estimate_on_test.items():
         assert not torch.isnan(v).any(), f"{estimation_method} for {k} had nans"
         assert not torch.isinf(v).any(), f"{estimation_method} for {k} had infs"
-        assert not torch.isclose(
-            v, torch.zeros_like(v)
-        ).all(), f"{estimation_method} estimator for {k} was zero"
+        assert not torch.isclose(v, torch.zeros_like(v)).all(), f"{estimation_method} estimator for {k} was zero"

@@ -2,7 +2,7 @@ import collections.abc
 import dataclasses
 import functools
 import typing
-from typing import FrozenSet, Generic, Tuple, TypeVar
+from typing import Generic, TypeVar
 
 import pyro
 import torch
@@ -44,15 +44,13 @@ def _append_tensor(prev_v: torch.Tensor, curr_v: torch.Tensor) -> torch.Tensor:
 
 
 @functools.lru_cache
-def _var_order(varnames: FrozenSet[str]) -> Tuple[str, ...]:
+def _var_order(varnames: frozenset[str]) -> tuple[str, ...]:
     return tuple(sorted(varnames))
 
 
 @functools.singledispatch
 def _squeeze_time_dim(state_or_traj):
-    raise NotImplementedError(
-        f"_squeeze_time_dim not implemented for type {type(state_or_traj)}."
-    )
+    raise NotImplementedError(f"_squeeze_time_dim not implemented for type {type(state_or_traj)}.")
 
 
 @_squeeze_time_dim.register(collections.abc.Mapping)
@@ -67,9 +65,7 @@ def _squeeze_time_dim_tensor(state: torch.Tensor) -> torch.Tensor:
 
 @functools.singledispatch
 def _unsqueeze_time_dim(state_or_traj):
-    raise NotImplementedError(
-        f"_unsqueeze_time_dim not implemented for type {type(state_or_traj)}."
-    )
+    raise NotImplementedError(f"_unsqueeze_time_dim not implemented for type {type(state_or_traj)}.")
 
 
 @_unsqueeze_time_dim.register(collections.abc.Mapping)

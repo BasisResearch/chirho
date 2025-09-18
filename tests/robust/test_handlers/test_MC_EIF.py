@@ -1,6 +1,7 @@
 import functools
 import warnings
-from typing import Callable, List, Mapping, Optional, Set, Tuple, TypeVar
+from collections.abc import Mapping
+from typing import Callable, Optional, TypeVar
 
 import pyro
 import pytest
@@ -24,11 +25,14 @@ S = TypeVar("S")
 T = TypeVar("T")
 
 
-ModelTestCase = Tuple[
-    Callable[[], Callable], Callable[[Callable], Callable], Set[str], Optional[int]
+ModelTestCase = tuple[
+    Callable[[], Callable],
+    Callable[[Callable], Callable],
+    set[str],
+    Optional[int],
 ]
 
-MODEL_TEST_CASES: List[ModelTestCase] = [
+MODEL_TEST_CASES: list[ModelTestCase] = [
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, 1),
     (SimpleModel, lambda _: SimpleGuide(), {"y"}, None),
     pytest.param(
@@ -38,8 +42,7 @@ MODEL_TEST_CASES: List[ModelTestCase] = [
         1,
         marks=(
             [pytest.mark.xfail(reason="torch.func autograd doesnt work with PyroParam")]
-            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3]))
-            <= (1, 8, 6)
+            if tuple(map(int, pyro.__version__.split("+")[0].split(".")[:3])) <= (1, 8, 6)
             else []
         ),
     ),
@@ -67,9 +70,7 @@ def test_nmc_predictive_influence_smoke(
     with torch.no_grad():
         test_datum = {
             k: v[0]
-            for k, v in pyro.infer.Predictive(
-                model, num_samples=2, return_sites=obs_names, parallel=True
-            )().items()
+            for k, v in pyro.infer.Predictive(model, num_samples=2, return_sites=obs_names, parallel=True)().items()
         }
 
     predictive_eif = influence_fn(
@@ -111,9 +112,7 @@ def test_nmc_predictive_influence_vmap_smoke(
     model(), guide()  # initialize
 
     with torch.no_grad():
-        test_data = pyro.infer.Predictive(
-            model, num_samples=4, return_sites=obs_names, parallel=True
-        )()
+        test_data = pyro.infer.Predictive(model, num_samples=4, return_sites=obs_names, parallel=True)()
 
     predictive_eif = influence_fn(
         functools.partial(PredictiveFunctional, num_samples=num_predictive_samples),
@@ -138,9 +137,7 @@ def test_nmc_predictive_influence_vmap_smoke(
 def test_influence_raises_no_grad_warning_correctly():
     model = SimpleModel()
     guide = SimpleGuide()
-    predictive = pyro.infer.Predictive(
-        model, guide=guide, num_samples=10, return_sites=["y"]
-    )
+    predictive = pyro.infer.Predictive(model, guide=guide, num_samples=10, return_sites=["y"])
     points = predictive()
     influence = influence_fn(
         PredictiveFunctional,

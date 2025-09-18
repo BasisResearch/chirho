@@ -1,7 +1,7 @@
 import collections
 import math
 import typing
-from typing import Any, Callable, Generic, Optional, Tuple, TypeVar
+from typing import Any, Callable, Generic, Optional, TypeVar
 
 import pyro
 import torch
@@ -23,7 +23,7 @@ T = TypeVar("T")
 def get_importance_traces(
     model: Callable[P, Any],
     guide: Optional[Callable[P, Any]] = None,
-) -> Callable[P, Tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
+) -> Callable[P, tuple[pyro.poutine.Trace, pyro.poutine.Trace]]:
     """
     Thin functional wrapper around :func:`~pyro.infer.enum.get_importance_trace`
     that cleans up the original interface to avoid unnecessary arguments
@@ -35,9 +35,7 @@ def get_importance_traces(
         a tuple of importance traces ``(model_trace, guide_trace)``.
     """
 
-    def _fn(
-        *args: P.args, **kwargs: P.kwargs
-    ) -> Tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
+    def _fn(*args: P.args, **kwargs: P.kwargs) -> tuple[pyro.poutine.Trace, pyro.poutine.Trace]:
         if guide is not None:
             model_trace, guide_trace = pyro.infer.enum.get_importance_trace(
                 "flat", math.inf, model, guide, args, kwargs
@@ -100,15 +98,11 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
         self.model = model
         self.guide = guide
         self.num_samples = num_samples
-        self._first_available_dim = (
-            -max_plate_nesting - 1 if max_plate_nesting is not None else None
-        )
+        self._first_available_dim = -max_plate_nesting - 1 if max_plate_nesting is not None else None
         self._data_plate_name = data_plate_name
         self._mc_plate_name = mc_plate_name
 
-    def forward(
-        self, data: Point[T], *args: P.args, **kwargs: P.kwargs
-    ) -> torch.Tensor:
+    def forward(self, data: Point[T], *args: P.args, **kwargs: P.kwargs) -> torch.Tensor:
         """
         Computes the log predictive likelihood of ``data`` given ``model`` and ``guide``.
 
@@ -126,9 +120,7 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
             index_plates = get_index_plates()
 
         plate_name_to_dim = collections.OrderedDict(
-            (p, index_plates[p])
-            for p in [self._mc_plate_name, self._data_plate_name]
-            if p in index_plates
+            (p, index_plates[p]) for p in [self._mc_plate_name, self._data_plate_name] if p in index_plates
         )
         plate_frames = set(plate_name_to_dim.values())
 
@@ -155,18 +147,14 @@ class BatchedNMCLogMarginalLikelihood(Generic[P, T], torch.nn.Module):
         if self._mc_plate_name in index_plates:
             dim = plate_name_to_dim[self._mc_plate_name].dim
             assert dim is not None
-            log_weights = torch.logsumexp(
-                log_weights, dim=dim, keepdim=True
-            ) - math.log(self.num_samples)
+            log_weights = torch.logsumexp(log_weights, dim=dim, keepdim=True) - math.log(self.num_samples)
             plate_name_to_dim.pop(self._mc_plate_name)
 
         # move data plate dimension to the left
         for name in reversed(plate_name_to_dim.keys()):
             dim = plate_name_to_dim[name].dim
             assert dim is not None
-            log_weights = torch.transpose(
-                log_weights[None], -len(log_weights.shape) - 1, dim
-            )
+            log_weights = torch.transpose(log_weights[None], -len(log_weights.shape) - 1, dim)
 
         # pack log_weights by squeezing out rightmost dimensions
         for _ in range(len(log_weights.shape) - len(plate_name_to_dim)):

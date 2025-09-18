@@ -1,5 +1,5 @@
 import numbers
-from typing import Any, Dict, Optional, TypeVar, Union
+from typing import Any, Optional, TypeVar, Union
 
 import pyro
 import pyro.infer.reparam
@@ -29,13 +29,11 @@ def _gather_number(
     indexset: IndexSet,
     *,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[str, int]] = None,
+    name_to_dim: Optional[dict[str, int]] = None,
     **kwargs,
 ) -> Union[numbers.Number, torch.Tensor]:
     assert event_dim is None or event_dim == 0
-    return gather(
-        torch.as_tensor(value), indexset, event_dim=event_dim, name_to_dim=name_to_dim
-    )
+    return gather(torch.as_tensor(value), indexset, event_dim=event_dim, name_to_dim=name_to_dim)
 
 
 def _index_plate_dims() -> dict[str, int]:
@@ -52,7 +50,7 @@ def _gather_tensor(
     indexset: IndexSet,
     *,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[str, int]] = None,
+    name_to_dim: Optional[dict[str, int]] = None,
     **kwargs,
 ) -> torch.Tensor:
     if event_dim is None:
@@ -76,13 +74,8 @@ def _gather_tensor(
 
 
 @gather.register(dict)
-def _gather_dict(
-    value: Dict[K, T], indices: IndexSet, *, event_dim: int = 0, **kwargs
-) -> Dict[K, T]:
-    return {
-        k: gather(value[k], indices, event_dim=event_dim, **kwargs)
-        for k in value.keys()
-    }
+def _gather_dict(value: dict[K, T], indices: IndexSet, *, event_dim: int = 0, **kwargs) -> dict[K, T]:
+    return {k: gather(value[k], indices, event_dim=event_dim, **kwargs) for k in value.keys()}
 
 
 @scatter.register
@@ -92,7 +85,7 @@ def _scatter_number(
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[str, int]] = None,
+    name_to_dim: Optional[dict[str, int]] = None,
 ) -> Union[numbers.Number, torch.Tensor]:
     assert event_dim is None or event_dim == 0
     return scatter(
@@ -111,7 +104,7 @@ def _scatter_tensor(
     *,
     result: Optional[torch.Tensor] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[str, int]] = None,
+    name_to_dim: Optional[dict[str, int]] = None,
 ) -> torch.Tensor:
     if event_dim is None:
         event_dim = 0
@@ -120,9 +113,7 @@ def _scatter_tensor(
         name_to_dim = _index_plate_dims()
 
     value = gather(value, indexset, event_dim=event_dim, name_to_dim=name_to_dim)
-    indexset = union(
-        indexset, indices_of(value, event_dim=event_dim, name_to_dim=name_to_dim)
-    )
+    indexset = union(indexset, indices_of(value, event_dim=event_dim, name_to_dim=name_to_dim))
 
     if result is None:
         index_plates = get_index_plates()
@@ -143,9 +134,7 @@ def _scatter_tensor(
         result = value.new_zeros(result_shape)
 
     index = [
-        torch.arange(0, result.shape[i], dtype=torch.long).reshape(
-            (-1,) + (1,) * (len(result.shape) - 1 - i)
-        )
+        torch.arange(0, result.shape[i], dtype=torch.long).reshape((-1,) + (1,) * (len(result.shape) - 1 - i))
         for i in range(len(result.shape))
     ]
     for name, indices in indexset.items():
@@ -160,14 +149,13 @@ def _scatter_tensor(
 
 @scatter.register(dict)
 def _scatter_dict(
-    value: Dict[K, T],
+    value: dict[K, T],
     indexset: IndexSet,
     *,
-    result: Optional[Dict[K, Optional[T]]] = None,
+    result: Optional[dict[K, Optional[T]]] = None,
     event_dim: Optional[int] = None,
-    name_to_dim: Optional[Dict[str, int]] = None,
-) -> Dict[K, Any]:
-
+    name_to_dim: Optional[dict[str, int]] = None,
+) -> dict[K, Any]:
     if result is None:
         result = {k: None for k in value.keys()}
 
@@ -208,17 +196,11 @@ def _indices_of_tuple(value: tuple, **kwargs) -> IndexSet:
 @indices_of.register
 def _indices_of_shape(value: torch.Size, **kwargs) -> IndexSet:
     name_to_dim = (
-        kwargs["name_to_dim"]
-        if "name_to_dim" in kwargs
-        else {name: f.dim for name, f in get_index_plates().items()}
+        kwargs["name_to_dim"] if "name_to_dim" in kwargs else {name: f.dim for name, f in get_index_plates().items()}
     )
     value = value[: len(value) - kwargs.get("event_dim", 0)]
     return IndexSet(
-        **{
-            name: set(range(value[dim]))
-            for name, dim in name_to_dim.items()
-            if -dim <= len(value) and value[dim] > 1
-        }
+        **{name: set(range(value[dim])) for name, dim in name_to_dim.items() if -dim <= len(value) and value[dim] > 1}
     )
 
 
@@ -234,10 +216,8 @@ def _indices_of_distribution(value: TorchDistributionMixin, **kwargs) -> IndexSe
 
 
 @indices_of.register(dict)
-def _indices_of_state(value: Dict[K, T], *, event_dim: int = 0, **kwargs) -> IndexSet:
-    return union(
-        *(indices_of(value[k], event_dim=event_dim, **kwargs) for k in value.keys())
-    )
+def _indices_of_state(value: dict[K, T], *, event_dim: int = 0, **kwargs) -> IndexSet:
+    return union(*(indices_of(value[k], event_dim=event_dim, **kwargs) for k in value.keys()))
 
 
 @cond.register(int)
@@ -249,9 +229,7 @@ def _cond_number(
     case: Union[bool, torch.Tensor],
     **kwargs,
 ) -> torch.Tensor:
-    return cond(
-        torch.as_tensor(fst), torch.as_tensor(snd), torch.as_tensor(case), **kwargs
-    )
+    return cond(torch.as_tensor(fst), torch.as_tensor(snd), torch.as_tensor(case), **kwargs)
 
 
 @cond.register
@@ -275,9 +253,7 @@ class _LazyPlateMessenger(IndepMessenger):
 
     @property
     def frame(self) -> CondIndepStackFrame:
-        return CondIndepStackFrame(
-            name=self.name, dim=self.dim, size=self.size, counter=0
-        )
+        return CondIndepStackFrame(name=self.name, dim=self.dim, size=self.size, counter=0)
 
     def _process_message(self, msg):
         if msg["type"] not in ("sample",) or pyro.poutine.util.site_is_subsample(msg):

@@ -1,6 +1,7 @@
 import contextlib
+from collections.abc import Mapping
 from math import prod
-from typing import Callable, List, Mapping, Optional, Tuple, TypeVar
+from typing import Callable, Optional, TypeVar
 
 import pyro
 import torch
@@ -25,7 +26,7 @@ ParamDict = Mapping[str, torch.Tensor]
 
 def make_flatten_unflatten(
     v: T,
-) -> Tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
+) -> tuple[Callable[[T], torch.Tensor], Callable[[torch.Tensor], T]]:
     """
     Returns functions to flatten and unflatten an object. Used as a helper
     in :func:`chirho.robust.internals.linearize.conjugate_gradient_solve`
@@ -112,9 +113,7 @@ def pytree_generalized_manual_revjvp(
     # In order to map the param shapes together, we need to iterate through the output tree structure and map each
     #  subtree (corresponding to params) onto the params and batched_vector tree structures, which are both structured
     #  according to the parameters.
-    def recurse_to_flattened_sub_tspec(
-        pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None
-    ):
+    def recurse_to_flattened_sub_tspec(pytree: PyTree, sub_tspec: TreeSpec, tspec: Optional[TreeSpec] = None):
         # Default to passed treespec, otherwise compute here.
         _, tspec = tree_flatten(pytree) if tspec is None else (None, tspec)
 
@@ -137,23 +136,17 @@ def pytree_generalized_manual_revjvp(
                 child_flattened, _ = tree_flatten(child_pytree)
                 yield child_flattened  # ...yield the flat child for that subtree.
             else:  # otherwise, recurse to the next level.
-                yield from recurse_to_flattened_sub_tspec(
-                    child_pytree, sub_tspec, tspec=child_tspec
-                )
+                yield from recurse_to_flattened_sub_tspec(child_pytree, sub_tspec, tspec=child_tspec)
 
-    flat_out: List[PyTree] = []
+    flat_out: list[PyTree] = []
 
     # Recurse into the jacobian tree to find the subtree corresponding to the sub-jacobian for each
     #  individual output tensor in that tree.
-    for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(
-        pytree=jac, sub_tspec=param_tspec
-    ):
-        flat_sub_out: List[torch.Tensor] = []
+    for flat_jac_output_subtree in recurse_to_flattened_sub_tspec(pytree=jac, sub_tspec=param_tspec):
+        flat_sub_out: list[torch.Tensor] = []
 
         # Then map that subtree (with tree structure matching that of params) onto the params and batched_vector.
-        for i, (p, j, v) in enumerate(
-            zip(flat_params, flat_jac_output_subtree, flat_batched_vector)
-        ):
+        for i, (p, j, v) in enumerate(zip(flat_params, flat_jac_output_subtree, flat_batched_vector)):
             # Infer the parameter shapes directly from passed parameters.
             og_param_shape = p.shape
             param_shape = og_param_shape if len(og_param_shape) else (1,)
@@ -197,7 +190,7 @@ def pytree_generalized_manual_revjvp(
 
 def make_functional_call(
     mod: Callable[P, T],
-) -> Tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
+) -> tuple[ParamDict, Callable[Concatenate[ParamDict, P], T]]:
     """
     Converts a PyTorch module into a functional call for use with
     functions in :class:`torch.func`.

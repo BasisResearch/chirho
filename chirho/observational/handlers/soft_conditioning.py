@@ -37,9 +37,7 @@ def soft_eq(support: constraints.Constraint, v1: T, v2: T, **kwargs) -> torch.Te
     if not isinstance(v1, torch.Tensor) or not isinstance(v2, torch.Tensor):
         raise NotImplementedError("Soft equality is only implemented for tensors.")
     elif support.is_discrete:
-        raise NotImplementedError(
-            "Soft equality is not implemented for arbitrary discrete distributions."
-        )
+        raise NotImplementedError("Soft equality is not implemented for arbitrary discrete distributions.")
     elif support is constraints.real:  # base case
         scale = kwargs.get("scale", 0.1)
         return dist.Normal(0.0, scale).log_prob(v1 - v2)
@@ -70,9 +68,7 @@ def _soft_eq_boolean(support, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
 
 
 @soft_eq.register
-def _soft_eq_integer_interval(
-    support: constraints.integer_interval, v1: torch.Tensor, v2: torch.Tensor, **kwargs
-):
+def _soft_eq_integer_interval(support: constraints.integer_interval, v1: torch.Tensor, v2: torch.Tensor, **kwargs):
     scale = kwargs.get("scale", 0.1)
     width = support.upper_bound - support.lower_bound + 1
     return dist.Binomial(total_count=width, probs=scale).log_prob(torch.abs(v1 - v2))
@@ -167,9 +163,7 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
         self.kernel = kernel
         super().__init__()
 
-    def apply(
-        self, msg: pyro.infer.reparam.reparam.ReparamMessage
-    ) -> pyro.infer.reparam.reparam.ReparamResult:
+    def apply(self, msg: pyro.infer.reparam.reparam.ReparamMessage) -> pyro.infer.reparam.reparam.ReparamResult:
         assert isinstance(msg["fn"], TorchDistributionMixin)
         assert msg["value"] is not None
 
@@ -182,9 +176,7 @@ class KernelSoftConditionReparam(pyro.infer.reparam.reparam.Reparam):
             approx_log_prob = self.kernel(computed_value, observed_value)
             pyro.factor(f"{name}_approx_log_prob", approx_log_prob)
 
-        new_fn = pyro.distributions.Delta(observed_value, event_dim=event_dim).mask(
-            False
-        )
+        new_fn = pyro.distributions.Delta(observed_value, event_dim=event_dim).mask(False)
         return {"fn": new_fn, "value": observed_value, "is_observed": True}
 
 
@@ -232,6 +224,4 @@ class AutoSoftConditioning(pyro.infer.reparam.strategies.Strategy):
 
         return KernelSoftConditionReparam(_soft_eq)
 
-        raise NotImplementedError(
-            f"Could not reparameterize deterministic site {msg['name']}"
-        )
+        raise NotImplementedError(f"Could not reparameterize deterministic site {msg['name']}")
