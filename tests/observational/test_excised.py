@@ -7,7 +7,7 @@ from chirho.observational.ops import ExcisedCategorical, ExcisedNormal
 # needed for testing interval CDFs
 class ECDF(torch.nn.Module):
     def __init__(self, x, side="right"):
-        super(ECDF, self).__init__()
+        super().__init__()
 
         if side.lower() not in ["right", "left"]:
             msg = "side can take the values 'right' or 'left'"
@@ -68,16 +68,10 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
 
     # --- Interval masses as expected ---
     if interval_key == "shaped":
-        for (
-            lcdf
-        ) in excised_normal._lcdfs:  # these are expected to be *base* normal lcdfs
-            assert torch.allclose(
-                lcdf, torch.tensor(0.1587), atol=1e-4
-            )  # below mean - 1 stddev
+        for lcdf in excised_normal._lcdfs:  # these are expected to be *base* normal lcdfs
+            assert torch.allclose(lcdf, torch.tensor(0.1587), atol=1e-4)  # below mean - 1 stddev
         for im in excised_normal._interval_masses:
-            assert torch.allclose(
-                im, torch.tensor(0.6827), atol=1e-4
-            )  # between mean - 1 stddev and mean + 1 stddev
+            assert torch.allclose(im, torch.tensor(0.6827), atol=1e-4)  # between mean - 1 stddev and mean + 1 stddev
 
     # --- Sampling ---
     sample = excised_normal.sample(sample_shape=(400,))
@@ -118,9 +112,7 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     excised_normal_copy = ExcisedNormal(cloned_mean, cloned_stddev, new_interval)
     r_sample = excised_normal_copy.rsample(sample_shape=(400,))
     loss = ((r_sample - 1.0) ** 2).mean()
-    optimizer = torch.optim.SGD(
-        [excised_normal_copy._base_loc, excised_normal_copy._base_scale], lr=0.1
-    )
+    optimizer = torch.optim.SGD([excised_normal_copy._base_loc, excised_normal_copy._base_scale], lr=0.1)
     loc_before, scale_before = (
         excised_normal_copy._base_loc.clone(),
         excised_normal_copy._base_scale.clone(),
@@ -142,9 +134,7 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
     test_points = torch.stack(test_points).detach().clone().requires_grad_(True)
 
     log_probs = excised_normal.log_prob(test_points)
-    grads = torch.autograd.grad(
-        log_probs.sum(), test_points, retain_graph=True, allow_unused=True
-    )[0]
+    grads = torch.autograd.grad(log_probs.sum(), test_points, retain_graph=True, allow_unused=True)[0]
 
     assert grads is not None
     assert torch.allclose(grads, torch.zeros_like(grads), atol=1e-6)
@@ -156,9 +146,7 @@ def test_excised_normal_shapes_and_sampling(true_parameters, interval_key, inter
         torch.tensor([0.1, 1.0, 2.0, 3.0]),  # shape (4,)
         torch.tensor([[0.1, 1.0, 2.0, 3.0]]),  # shape (1, 4)
         torch.tensor([[0.1, 1.0, 2.0, 3.0], [0.3, 0.2, 0.1, 0.4]]),  # shape (2, 4)
-        torch.tensor(
-            [[[0.1, 1.0, 2.0, 3.0]], [[0.3, 0.2, 0.1, 0.4]]]
-        ),  # shape (2, 1, 4)
+        torch.tensor([[[0.1, 1.0, 2.0, 3.0]], [[0.3, 0.2, 0.1, 0.4]]]),  # shape (2, 1, 4)
     ],
 )
 @pytest.mark.parametrize(
@@ -189,9 +177,7 @@ def test_excised_categorical_shapes_and_probs(logits, intervals):
             assert torch.all(excised.probs[..., i] == 0.0)
 
     # --- Remaining probs renormalize ---
-    assert torch.allclose(
-        excised.probs.sum(-1), torch.tensor(1.0).expand_as(excised.probs.sum(-1))
-    )
+    assert torch.allclose(excised.probs.sum(-1), torch.tensor(1.0).expand_as(excised.probs.sum(-1)))
 
     # --- Sampling avoids excised categories ---
     samples = excised.sample((5000,))

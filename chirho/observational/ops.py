@@ -50,32 +50,24 @@ class ExcisedNormal(TorchDistribution):
         "_base_loc": constraints.real,
         "_base_scale": constraints.positive,
     }
-    support = (
-        constraints.real
-    )  # we don't want to use intervals here, they might differ between factual points
+    support = constraints.real  # we don't want to use intervals here, they might differ between factual points
     has_rsample = True
     _mean_carrier_measure = 0
 
     @property
     def mean(self):
         """Not supported for ExcisedNormal. Use self.base_mean instead."""
-        raise NotImplementedError(
-            "mean is not defined for ExcisedNormal. Use base_mean."
-        )
+        raise NotImplementedError("mean is not defined for ExcisedNormal. Use base_mean.")
 
     @property
     def stddev(self):
         """Not supported for ExcisedNormal. Use self.base_stddev instead."""
-        raise NotImplementedError(
-            "stddev is not defined for ExcisedNormal. Use base_stddev."
-        )
+        raise NotImplementedError("stddev is not defined for ExcisedNormal. Use base_stddev.")
 
     @property
     def variance(self):
         """Not supported for ExcisedNormal. Use self.base_stddev**2 instead."""
-        raise NotImplementedError(
-            "variance is not defined for ExcisedNormal. Use base_stddev**2."
-        )
+        raise NotImplementedError("variance is not defined for ExcisedNormal. Use base_stddev**2.")
 
     @property
     def base_mean(self):
@@ -100,7 +92,6 @@ class ExcisedNormal(TorchDistribution):
         intervals: list[tuple[torch.Tensor, torch.Tensor]],
         validate_args: bool | None = None,
     ) -> None:
-
         if not isinstance(intervals, list):
             raise ValueError("intervals must be a list of (low, high) tuples.")
 
@@ -131,13 +122,9 @@ class ExcisedNormal(TorchDistribution):
 
         super().__init__(batch_shape, validate_args=validate_args)
 
-        self._base_normal = dist.Normal(
-            self._base_loc, self._base_scale, validate_args=validate_args
-        )
+        self._base_normal = dist.Normal(self._base_loc, self._base_scale, validate_args=validate_args)
 
-        self._base_uniform = dist.Uniform(
-            torch.zeros_like(self._base_loc), torch.ones_like(self._base_loc)
-        )
+        self._base_uniform = dist.Uniform(torch.zeros_like(self._base_loc), torch.ones_like(self._base_loc))
 
         # these do not vary and do not depend on sample shape, can be pre-computed
         self._interval_masses = []
@@ -155,9 +142,7 @@ class ExcisedNormal(TorchDistribution):
         if torch.any(self._removed_pr_mass >= 1.0):
             raise ValueError("Total probability mass in excised intervals >= 1.0!")
 
-        self._normalization_constant = (
-            torch.ones_like(self._base_loc) - self._removed_pr_mass
-        )
+        self._normalization_constant = torch.ones_like(self._base_loc) - self._removed_pr_mass
 
     def expand(  # no type hints, following supertype agreement
         self,
@@ -169,16 +154,9 @@ class ExcisedNormal(TorchDistribution):
         new._base_loc = self._base_loc.expand(batch_shape)
         new._base_scale = self._base_scale.expand(batch_shape)
 
-        new._intervals = [
-            (low.expand(batch_shape), high.expand(batch_shape))
-            for low, high in self._intervals
-        ]
-        new._base_normal = dist.Normal(
-            new._base_loc, new._base_scale, validate_args=False
-        )
-        new._base_uniform = dist.Uniform(
-            torch.zeros_like(new._base_loc), torch.ones_like(new._base_loc)
-        )
+        new._intervals = [(low.expand(batch_shape), high.expand(batch_shape)) for low, high in self._intervals]
+        new._base_normal = dist.Normal(new._base_loc, new._base_scale, validate_args=False)
+        new._base_uniform = dist.Uniform(torch.zeros_like(new._base_loc), torch.ones_like(new._base_loc))
 
         new._interval_masses = [im.expand(batch_shape) for im in self._interval_masses]
         new._lcdfs = [lcdf.expand(batch_shape) for lcdf in self._lcdfs]
@@ -193,7 +171,6 @@ class ExcisedNormal(TorchDistribution):
     # Distribution has def log_prob(self, x: Any, *args: Any, **kwargs: Any) -> Any etc,
     #  we can be more specific with type hints here and below, hence type: ignore[override]
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-
         shape = value.shape
 
         mask = torch.zeros(shape, dtype=torch.bool, device=self._base_loc.device)
@@ -204,13 +181,9 @@ class ExcisedNormal(TorchDistribution):
 
         normalization_constant_expanded = self._normalization_constant.expand(shape)
 
-        lp = self._base_normal.log_prob(value) - torch.log(
-            normalization_constant_expanded
-        )
+        lp = self._base_normal.log_prob(value) - torch.log(normalization_constant_expanded)
 
-        return torch.where(
-            mask, torch.tensor(-float("inf"), device=self._base_loc.device), lp
-        )
+        return torch.where(mask, torch.tensor(-float("inf"), device=self._base_loc.device), lp)
 
     def cdf(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
         if self._validate_args:
@@ -234,9 +207,7 @@ class ExcisedNormal(TorchDistribution):
         if self._validate_args:
             self._validate_sample(value)
 
-        normalization_constant_expanded = self._normalization_constant.expand(
-            value.shape
-        )
+        normalization_constant_expanded = self._normalization_constant.expand(value.shape)
 
         v = value * normalization_constant_expanded
 
@@ -248,24 +219,18 @@ class ExcisedNormal(TorchDistribution):
         return x
 
     def sample(self, sample_shape=torch.Size()):
-
         with torch.no_grad():
-            uniform_sample = self._base_uniform.sample(sample_shape=sample_shape).to(
-                self._base_loc.device
-            )
+            uniform_sample = self._base_uniform.sample(sample_shape=sample_shape).to(self._base_loc.device)
             x_icdf = self.icdf(uniform_sample)
 
         return x_icdf
 
     def rsample(self, sample_shape=torch.Size()):
-
         # we do not use the reparameterization trick here, but we want gradients to flow to base_loc and base_scale
         # we also don't expect them to flow in excised intervals
         # but also we don't expect observations in excised intervals either
 
-        uniform_sample = self._base_uniform.sample(sample_shape=sample_shape).to(
-            self._base_loc.device
-        )
+        uniform_sample = self._base_uniform.sample(sample_shape=sample_shape).to(self._base_loc.device)
         uniform_sample.requires_grad_(True)
         x_icdf = self.icdf(uniform_sample)
 
@@ -307,13 +272,10 @@ class ExcisedCategorical(pyro.distributions.Categorical):
         logits: torch.Tensor | None = None,
         validate_args: bool | None = None,
     ):
-
         if probs is not None and logits is None:
             logits = probs_to_logits(probs)
         elif logits is not None and probs is not None:
-            raise ValueError(
-                "Either `probs` or `logits` should be specified, but not both."
-            )
+            raise ValueError("Either `probs` or `logits` should be specified, but not both.")
 
         assert logits is not None
 
@@ -323,15 +285,10 @@ class ExcisedCategorical(pyro.distributions.Categorical):
 
         mask = torch.ones_like(logits, dtype=torch.bool)
         for low, high in intervals:
-
             low_i = torch.clamp(torch.ceil(low), 0, num_categories - 1).to(torch.long)
-            high_i = torch.clamp(torch.floor(high), 0, num_categories - 1).to(
-                torch.long
-            )
+            high_i = torch.clamp(torch.floor(high), 0, num_categories - 1).to(torch.long)
 
-            cat_idx = torch.arange(num_categories, device=logits.device).broadcast_to(
-                mask.shape
-            )
+            cat_idx = torch.arange(num_categories, device=logits.device).broadcast_to(mask.shape)
 
             if len(low_i.shape) < len(cat_idx.shape):
                 low_exp = low_i[..., None]
@@ -359,9 +316,7 @@ class ExcisedCategorical(pyro.distributions.Categorical):
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)
 
-        new_logits = self.logits.expand(
-            list(batch_shape) + list(self.logits.shape[-1:])
-        )
+        new_logits = self.logits.expand(list(batch_shape) + list(self.logits.shape[-1:]))
 
         new_intervals = []
         for low, high in self._intervals:
