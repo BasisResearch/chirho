@@ -40,52 +40,28 @@ class ReparametrizedNormal(TorchDistribution, nn.Module):
 
     def __init__(
         self,
-        epsilon: float = 1e-6,
+        loc: torch.Tensor,
+        scale: torch.Tensor,
         output_name: str = "",
-        loc: float | torch.Tensor | None = None,
-        scale: float | torch.Tensor | None = None,
-        raw_distribution_params: torch.Tensor | None = None,
+        epsilon: float = 1e-6,
         validate_args: bool = False,
     ):
-
         nn.Module.__init__(self)
         TorchDistribution.__init__(self, validate_args=validate_args)
 
         self.output_name = output_name
 
-        if (loc is None) != (scale is None):
-            raise ValueError("Either both loc and scale must be provided, or neither.")
-        if (loc is not None or scale is not None) and raw_distribution_params is not None:
-            raise ValueError("Either loc and scale must be provided, or raw_distribution_params, not both.")
-
-        if raw_distribution_params is not None:
-            input_dim = raw_distribution_params.shape[-1]
-            self.loc_layer = nn.Linear(input_dim, 1)
-            self.scale_layer = nn.Linear(input_dim, 1)
-            self.softplus = nn.Softplus()
-
-            init_loc, init_scale = self.forward(raw_distribution_params)
-            self.loc = nn.Parameter(init_loc)
-            self.scale = nn.Parameter(init_scale)
-        else:
-            self.loc = nn.Parameter(loc)
-            self.scale = nn.Parameter(scale)
-
-        self._base = dist.Normal(self.loc, self.scale)
-
-    def forward(self, raw_params: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        loc = self.loc_layer(raw_params)
-        scale = self.softplus(self.scale_layer(raw_params) + self.epsilon)
-        return loc, scale
+        self.loc = nn.Parameter(loc)
+        self.scale = nn.Parameter(scale)
 
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        return self._base.log_prob(value)
+        return dist.Normal(self.loc, self.scale).log_prob(value)
 
     def cdf(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        return self._base.cdf(value)
+        return dist.Normal(self.loc, self.scale).cdf(value)
 
     def icdf(self, value: torch.Tensor) -> torch.Tensor:  # type: ignore[override]
-        return self._base.icdf(value)
+        return dist.Normal(self.loc, self.scale).icdf(value)
 
     def sample(self, sample_shape=torch.Size()) -> torch.Tensor:  # type: ignore[override]
         with torch.no_grad():
@@ -96,20 +72,15 @@ class ReparametrizedNormal(TorchDistribution, nn.Module):
             sample_shape = torch.Size(sample_shape)
         shape = torch.Size(sample_shape + self.batch_shape + self.event_shape)
 
-        if self.raw_distribution_params is not None:
-            loc, scale = self.forward(self.raw_distribution_params)
-        else:
-            loc, scale = self.loc, self.scale
-
         # Using reparameterization trick; mask out the noise log-likelihood,
         # which is added back later after computing `y`.
         with pyro.poutine.mask(mask=False):
             base_noise = pyro.sample(
                 f"{self.output_name}_base_noise",
-                dist.Normal(torch.zeros_like(loc.expand(shape)), torch.ones_like(loc.expand(shape))),
-            ).to(loc.device)
+                dist.Normal(torch.zeros_like(self.loc.expand(shape)), torch.ones_like(self.loc.expand(shape))),
+            ).to(self.loc.device)
 
-        transform = AffineTransform(loc=loc, scale=scale)
+        transform = AffineTransform(loc=self.loc, scale=self.scale)
         y = transform(base_noise)
 
         return y
@@ -117,8 +88,8 @@ class ReparametrizedNormal(TorchDistribution, nn.Module):
     def expand(self, batch_shape, _instance=None):  # no type hints, following supertype agreement
         new = self._get_checked_instance(ReparametrizedNormal, _instance)
         batch_shape = torch.Size(batch_shape)
-        new.loc = self.loc.expand(batch_shape)
-        new.scale = self.scale.expand(batch_shape)
+        new.loc = nn.Parameter(self.loc.expand(batch_shape).clone())
+        new.scale = nn.Parameter(self.scale.expand(batch_shape).clone())
         new.output_name = self.output_name
         super(ReparametrizedNormal, new).__init__(batch_shape, validate_args=False)
         new._validate_args = self._validate_args
