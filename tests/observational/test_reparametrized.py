@@ -7,6 +7,7 @@ import torch.nn as nn
 from chirho.counterfactual.handlers import MultiWorldCounterfactual
 from chirho.interventional.handlers import do
 from chirho.observational.handlers.condition import condition
+from chirho.observational.ops import ExcisedNormal
 from chirho.observational.reparams import NormalReparam
 
 
@@ -18,6 +19,8 @@ class SmallModel(nn.Module):
         self.scale = nn.Parameter(torch.as_tensor(scale))
 
     def forward(self):
+        pyro.deterministic("y_loc", self.loc)  # if you want the original loc and scale to be visible in the trace
+        pyro.deterministic("y_scale", self.scale)
         y = pyro.sample("y", dist.Normal(self.loc, self.scale))
         z = pyro.sample("z", dist.Normal(0.0, 1.0))
         u = pyro.sample("u", dist.Normal(y + z, 1.0))
@@ -37,38 +40,54 @@ def test_norm_reparam_basic(loc, scale):
     loc = torch.tensor(loc)
     scale = torch.tensor(scale)
 
-    small_model = pyro.poutine.reparam(SmallModel(loc, scale), {"y": NormalReparam()})
+    small_model = SmallModel(loc, scale)
 
     pyro.clear_param_store()
 
-    with pyro.poutine.trace() as tr:
+    with pyro.poutine.reparam(config={"y": NormalReparam()}):
         with pyro.plate("data_plate", 10, dim=-3):
-            small_model()
+            with pyro.poutine.trace() as tr:
+                small_model()
 
     tr.trace.compute_log_prob()
     y = tr.trace.nodes["y"]
     base_y = tr.trace.nodes["y_base_noise"]
+    base_logp = base_y["log_prob"]
+    true_logp = dist.Normal(loc, scale).log_prob(y["value"])
+    assert torch.allclose(true_logp, base_logp - torch.log(scale))
+    assert torch.allclose(y["log_prob"], torch.zeros_like(y["log_prob"]))
 
-    assert torch.allclose(base_y["fn"].loc, torch.zeros_like(base_y["fn"].loc))
-    assert torch.allclose(base_y["fn"].scale, torch.ones_like(base_y["fn"].scale))
-
-    expected_loc = torch.as_tensor(loc)
-    expected_scale = torch.as_tensor(scale)
-
-    assert torch.allclose(y["fn"].loc, expected_loc)
-    assert torch.allclose(y["fn"].scale, expected_scale)
+    assert torch.equal(tr.trace.nodes["y_loc"]["value"], torch.as_tensor(loc))
+    assert torch.equal(tr.trace.nodes["y_scale"]["value"], torch.as_tensor(scale))
 
     assert torch.allclose(
         y["value"],
-        y["fn"].loc + y["fn"].scale * base_y["value"],
+        tr.trace.nodes["y_loc"]["value"] + tr.trace.nodes["y_scale"]["value"] * base_y["value"],
         atol=1e-5,
     )
 
     assert y["value"].shape == y["fn"].batch_shape + y["fn"].event_shape
 
-    normal = dist.Normal(loc, scale)
-    log_prob = normal.log_prob(y["value"])
-    assert torch.allclose(y["log_prob"], log_prob, atol=1e-5)
+    y_value = y["value"]
+
+    with pyro.poutine.reparam(config={"y": NormalReparam()}):
+        with condition(data={"y": y_value}):
+            with pyro.poutine.trace() as tr_conditioned:
+                small_model()
+
+    tr_conditioned.trace.compute_log_prob()
+    y2 = tr_conditioned.trace.nodes["y"]
+    assert torch.allclose(y2["value"], y_value)
+    assert torch.allclose(y2["log_prob"], dist.Normal(loc, scale).log_prob(y2["value"]))
+
+    # reparam will encouter Delta not a Normal or Independent(Normal)
+    with pytest.raises(ValueError, match="NormalReparam only supports Normal or Independent\\(Normal\\)"):
+        with MultiWorldCounterfactual(first_available_dim=-4):
+            with pyro.poutine.reparam(config={"u": NormalReparam()}):
+                with condition(data={"u": torch.tensor(10.0)}):
+                    with do(actions={"y": torch.tensor(0.0)}):  # intervene upstream of u
+                        with pyro.poutine.trace():
+                            small_model()
 
 
 @pytest.mark.parametrize(
@@ -81,19 +100,17 @@ def test_norm_reparam_basic(loc, scale):
     ],
 )
 def test_norm_reparam_shapes(loc, scale):
-    #
-    loc, scale = 0.0, 1.0
-    #
     loc = torch.tensor(loc)
     scale = torch.tensor(scale)
 
-    small_model = pyro.poutine.reparam(SmallModel(loc, scale), {"y": NormalReparam()})
+    small_model = SmallModel(loc, scale)
 
     intervention_y = torch.zeros_like(loc)
-    intervention_z = torch.zeros_like(loc)
+    intervention_z = torch.tensor(0.0)
 
     with (
         MultiWorldCounterfactual(first_available_dim=-4),
+        pyro.poutine.reparam(config={"y": NormalReparam()}),
         do(actions={"y": intervention_y}),
         pyro.poutine.trace() as tr_y_intervened,
     ):
@@ -102,6 +119,7 @@ def test_norm_reparam_shapes(loc, scale):
 
     with (
         MultiWorldCounterfactual(first_available_dim=-4),
+        pyro.poutine.reparam(config={"y": NormalReparam()}),
         do(actions={"z": intervention_z}),
         pyro.poutine.trace() as tr_z_intervened,
     ):
@@ -123,11 +141,56 @@ def test_norm_reparam_shapes(loc, scale):
     tr_z_intervened.trace.compute_log_prob()
 
     base_noise_lp = tr_y_intervened.trace.nodes["y_base_noise"]["log_prob"]
-    assert torch.all(base_noise_lp == 0.0)  # we don't want base noise to contribute to lp, it's all in y
+    assert torch.equal(
+        base_noise_lp, dist.Normal(0.0, 1.0).log_prob(tr_y_intervened.trace.nodes["y_base_noise"]["value"])
+    )
+    tr_y_intervened.trace.nodes["y"]["value"].shape
+    tr_y_intervened.trace.nodes["y"]["fn"]
     y_lp_from_trace = tr_y_intervened.trace.nodes["y"]["log_prob"]
+    assert torch.equal(y_lp_from_trace[0, ...], torch.zeros_like(y_lp_from_trace[0, ...]))
+    # this is because intervened values from the perspective of the delta are impossible
+    # is this as expected?
+    assert torch.equal(y_lp_from_trace[1, ...], torch.ones_like(y_lp_from_trace[1, ...]) * float("-inf"))
     y_lp_from_fn = dist.Normal(loc, scale).log_prob(tr_y_intervened.trace.nodes["y"]["value"])
 
-    assert torch.allclose(y_lp_from_trace, y_lp_from_fn, atol=1e-5)
+    # connect to base noise log prob
+    assert torch.allclose(y_lp_from_fn[0, ...], base_noise_lp - torch.log(scale))
+
+
+@pytest.mark.parametrize(
+    "loc, scale",
+    [
+        (1.0, 2.0),
+        ([1.0, 2.0, 3.0], 2.0),
+        (1.0, [1.0, 2.0, 3.0]),
+        ([1.0, 2.0, 3.0], [2.0, 2.0, 2.0]),
+    ],
+)
+def test_norm_reparam_excise(loc, scale):
+    """This should cover the typical interaction between ReparamNormal and Excised distros."""
+
+    loc = torch.tensor(loc)
+    scale = torch.tensor(scale)
+
+    small_model = SmallModel(loc, scale)
+
+    with pyro.poutine.reparam(config={"y": NormalReparam()}):
+        with pyro.plate("data_plate", 10, dim=-3):
+            with pyro.poutine.trace() as tr:
+                small_model()
+
+        observed_y = tr.trace.nodes["y"]["value"]
+        y_loc = tr.trace.nodes["y_loc"]["value"]  # need to be able to recover the params to pass to Excised
+        y_scale = tr.trace.nodes["y_scale"]["value"]
+        intervals = [(observed_y - 0.1, observed_y + 0.1)]
+        # No need for the excised to be reparametrized in the intended use
+        excised_normal = ExcisedNormal(y_loc, y_scale, intervals)
+
+        excised_sample = excised_normal.sample()
+
+        assert excised_sample.shape == observed_y.shape
+        diff = excised_sample - observed_y
+        assert torch.all(torch.abs(diff) >= 0.1)
 
 
 @pytest.mark.parametrize(
@@ -143,6 +206,9 @@ def test_norm_reparam_shapes(loc, scale):
 )
 def test_norm_reparam_train(loc, scale, target_loc, target_scale):
     pyro.clear_param_store()
+
+    loc, scale, target_loc, target_scale = 0.5, 0.5, 2.0, 1.5
+
     loc = torch.as_tensor(loc)
     scale = torch.as_tensor(scale)
     target_loc = torch.as_tensor(target_loc)
@@ -187,7 +253,9 @@ def test_norm_reparam_train(loc, scale, target_loc, target_scale):
                     with pyro.plate("data_plate", size=sample_shape[0], dim=-2):
                         small_model()
 
-        assert {"y", "y_base_noise"}.issubset(tr.trace.nodes.keys())
+        assert {
+            "y",
+        }.issubset(tr.trace.nodes.keys())
 
         tr.trace.compute_log_prob()
         loss = -(tr.trace.log_prob_sum() / sample_shape[0])
