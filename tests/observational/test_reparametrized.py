@@ -4,10 +4,10 @@ import pytest
 import torch
 import torch.nn as nn
 
-from chirho.observational.distributions import ReparametrizedNormal
+from chirho.counterfactual.handlers import MultiWorldCounterfactual
+from chirho.interventional.handlers import do
 from chirho.observational.handlers.condition import condition
 from chirho.observational.reparams import NormalReparam
-
 
 
 class SmallModel(nn.Module):
@@ -19,32 +19,31 @@ class SmallModel(nn.Module):
 
     def forward(self):
         y = pyro.sample("y", dist.Normal(self.loc, self.scale))
-        return y
-
-
+        z = pyro.sample("z", dist.Normal(0.0, 1.0))
+        u = pyro.sample("u", dist.Normal(y + z, 1.0))
+        return u
 
 
 @pytest.mark.parametrize(
     "loc, scale",
     [
-        (1.0, 2.0),                     # scalar
-        ([1.0, 2.0, 3.0], 2.0),         # vector loc, scalar scale
-        (1.0, [1.0, 2.0, 3.0]),         # scalar loc, vector scale
+        (1.0, 2.0),  # scalar
+        ([1.0, 2.0, 3.0], 2.0),  # vector loc, scalar scale
+        (1.0, [1.0, 2.0, 3.0]),  # scalar loc, vector scale
         ([1.0, 2.0, 3.0], [2.0, 2.0, 2.0]),  # matching shapes
     ],
 )
 def test_norm_reparam_basic(loc, scale):
-
     loc = torch.tensor(loc)
     scale = torch.tensor(scale)
 
-    small_model = SmallModel(loc, scale)
+    small_model = pyro.poutine.reparam(SmallModel(loc, scale), {"y": NormalReparam()})
 
     pyro.clear_param_store()
-    with pyro.poutine.reparam(config={"y": NormalReparam()}):
-        with pyro.poutine.trace() as tr:
-            with pyro.plate("data_plate", 10, dim=-3):
-                small_model()
+
+    with pyro.poutine.trace() as tr:
+        with pyro.plate("data_plate", 10, dim=-3):
+            small_model()
 
     tr.trace.compute_log_prob()
     y = tr.trace.nodes["y"]
@@ -72,6 +71,63 @@ def test_norm_reparam_basic(loc, scale):
     assert torch.allclose(y["log_prob"], log_prob, atol=1e-5)
 
 
+@pytest.mark.parametrize(
+    "loc, scale",
+    [
+        (1.0, 2.0),
+        ([1.0, 2.0, 3.0], 2.0),
+        (1.0, [1.0, 2.0, 3.0]),
+        ([1.0, 2.0, 3.0], [2.0, 2.0, 2.0]),
+    ],
+)
+def test_norm_reparam_shapes(loc, scale):
+    #
+    loc, scale = 0.0, 1.0
+    #
+    loc = torch.tensor(loc)
+    scale = torch.tensor(scale)
+
+    small_model = pyro.poutine.reparam(SmallModel(loc, scale), {"y": NormalReparam()})
+
+    intervention_y = torch.zeros_like(loc)
+    intervention_z = torch.zeros_like(loc)
+
+    with (
+        MultiWorldCounterfactual(first_available_dim=-4),
+        do(actions={"y": intervention_y}),
+        pyro.poutine.trace() as tr_y_intervened,
+    ):
+        with pyro.plate("data_plate", 10, dim=-3):
+            small_model()
+
+    with (
+        MultiWorldCounterfactual(first_available_dim=-4),
+        do(actions={"z": intervention_z}),
+        pyro.poutine.trace() as tr_z_intervened,
+    ):
+        with pyro.plate("data_plate", 10, dim=-3):
+            small_model()
+
+    assert len(tr_y_intervened.trace.nodes["y"]["value"].shape) == 4
+    assert len(tr_z_intervened.trace.nodes["z"]["value"].shape) == 4
+    assert len(tr_y_intervened.trace.nodes["u"]["value"] == 4)
+    assert len(tr_z_intervened.trace.nodes["u"]["value"] == 4)
+    assert torch.all(tr_z_intervened.trace.nodes["z"]["value"][1, :, :] == 0)
+    assert torch.all(tr_y_intervened.trace.nodes["y"]["value"][1, :, :] == 0)
+
+    assert len(tr_y_intervened.trace.nodes["y_base_noise"]["value"].shape) == 3
+    assert len(tr_z_intervened.trace.nodes["y_base_noise"]["value"].shape) == 3
+    assert len(tr_z_intervened.trace.nodes["y"]["value"].shape) == 3
+
+    tr_y_intervened.trace.compute_log_prob()
+    tr_z_intervened.trace.compute_log_prob()
+
+    base_noise_lp = tr_y_intervened.trace.nodes["y_base_noise"]["log_prob"]
+    assert torch.all(base_noise_lp == 0.0)  # we don't want base noise to contribute to lp, it's all in y
+    y_lp_from_trace = tr_y_intervened.trace.nodes["y"]["log_prob"]
+    y_lp_from_fn = dist.Normal(loc, scale).log_prob(tr_y_intervened.trace.nodes["y"]["value"])
+
+    assert torch.allclose(y_lp_from_trace, y_lp_from_fn, atol=1e-5)
 
 
 @pytest.mark.parametrize(
@@ -111,7 +167,7 @@ def test_norm_reparam_train(loc, scale, target_loc, target_scale):
 
     with pyro.plate("data_plate", size=sample_shape[0], dim=-2):
         untrained_sample = small_model()
-    
+
     training_data = training_data.broadcast_to(untrained_sample.shape)
 
     # --- Sanity: not yet trained ---
@@ -141,16 +197,3 @@ def test_norm_reparam_train(loc, scale, target_loc, target_scale):
     # --- Convergence checks ---
     assert torch.allclose(small_model.loc, target_loc, atol=0.1)
     assert torch.allclose(small_model.scale, target_scale, atol=0.1)
-
-
-
-
-  
-
-
-
-
-
-
-
-

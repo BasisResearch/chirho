@@ -1,13 +1,14 @@
-
-import torch
-from pyro.infer.reparam.reparam import Reparam
 import pyro
 import pyro.distributions as dist
+import torch
 from pyro.distributions.transforms import AffineTransform
+from pyro.infer.reparam.reparam import Reparam
+
 
 class NormalReparam(Reparam):
-
-    def __init__(self,):
+    def __init__(
+        self,
+    ):
         super().__init__()
 
     def apply(self, msg):
@@ -37,6 +38,5 @@ class NormalReparam(Reparam):
         else:
             transform = AffineTransform(loc, scale, event_dim=event_dim)
             new_value = transform(base_noise)
-        
-        
+
         return {"fn": fn, "value": new_value, "is_observed": is_observed}
