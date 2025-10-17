@@ -10,22 +10,75 @@ EXOGENATE_META_KEY = "exogenate_meta"
 #  because transforms handle that internally when calling icdf on them.
 
 
+class _NonInvertibleTransformError(Exception):
+    """Raised when transforms cannot be inverted analytically."""
+    pass
+
+
+def _invert_transforms_to_noise(value, transforms):
+    """
+    Apply inverse transforms in reverse order to recover noise.
+    
+    Raises _NonInvertibleTransformError if any transform is not bijective.
+    """
+    recovered = value
+    for transform in reversed(transforms):
+        try:
+            recovered = transform.inv(recovered)
+        except (NotImplementedError, RuntimeError) as e:
+            # TODO not sure if all valid torch transforms are invertible, but keeping as a conceptual hook for surjective transforms.
+            raise _NonInvertibleTransformError(
+                f"Transform {type(transform).__name__} is not invertible: {e}"
+            ) from e
+    return recovered
+
+
 class ExogenateNoiseMessenger(Messenger):
+
+    def _sample_noise_observed(self, name, current_dist, obs_value, transforms, original_fn):
+        """Sample noise for an observed site by inverting transforms. This is effectively closed form posterior inference on the noise.
+        """
+        try:
+            # Compute implied noise by inverting transforms
+            u_implied = _invert_transforms_to_noise(obs_value, transforms)
+        except _NonInvertibleTransformError:
+            # TODO: Think about whether the base distribution should function as a prior on exogenous noise
+            #  under soft conditioning when the inverse map isn't defined analytically. 
+            #  For non-invertible transforms, we can't analytically compute the noise,
+            #   so users must rely on soft conditioning at the Delta level for inference to work properly. We would
+            #   want to observe the delta site in that case.
+            raise NotImplementedError(
+                f"Cannot exogenate observed site '{name}': transforms are not bijective. "
+            )
+        
+        # Sample noise at implied value, but mask its log_prob contribution
+        # The noise still appears in the trace and propagates to counterfactual worlds,
+        # but doesn't add prior probability to the model
+        with pyro.poutine.mask(mask=False):
+            u = pyro.sample(f"{name}_u", current_dist, obs=u_implied)  # TODO make _u suffix passable to the handler.
+        
+        # Replace the masked noise prior contribution with the original distribution's log_prob
+        original_log_prob = original_fn.log_prob(obs_value)
+        pyro.factor(f"{name}_log_prob", original_log_prob)
+
+        return u
+
+    def _sample_noise_unobserved(self, name, current_dist):
+        """Sample noise for an unobserved site."""
+        return pyro.sample(f"{name}_u", current_dist)  # TODO make _u suffix passable to the handler.
+
+    # (folded into _pyro_sample)
 
     def _pyro_sample(self, msg: dict) -> None:
         exogenate_meta = msg.get("infer", {}).get(EXOGENATE_META_KEY, None)
         if exogenate_meta is None or "base_dist_predicate" not in exogenate_meta:
             return
         
-        # TODO Bail if observed for now. I think in most cases though where we would want to observe an exogenated site and do inference wrt
-        #  the noise, we would want to observe a subset of the worlds after exogenation happens? In that case it might be useful, if possible,
-        #  to push back through inverse transforms and the cdf to get to the noise space? More to think about here...also look at soft conditioning.
-        if msg.get("is_observed", False):
-            raise NotImplementedError("Exogenation of observed sites is not supported.")
-        
         base_dist_predicate = exogenate_meta["base_dist_predicate"]
         original_fn = msg["fn"]
         name = msg["name"]
+        is_observed = msg.get("is_observed", False)
+        obs_value = msg.get("obs", None) if is_observed else None
         
         # Handle Independent wrapper
         current_dist = original_fn
@@ -58,19 +111,23 @@ class ExogenateNoiseMessenger(Messenger):
                 f"LogNormal implementation for an example of how define a distribution who's base is a Pyro distribution."
             )
         
-        # Sample noise from the base distribution
-        u = pyro.sample(f"{name}_u", current_dist)  # TODO make _u suffix passable to the handler.
+        # Sample noise (method differs for observed vs unobserved)
+        if is_observed:
+            u = self._sample_noise_observed(name, current_dist, obs_value, transforms, original_fn)
+        else:
+            u = self._sample_noise_unobserved(name, current_dist)
         
-        # Apply transforms to push noise back to original space
+        # Apply forward transforms to push noise back to original space
+        # TODO if available, use the observed value to avoid numerical issues with inverese transforms?
         x = u
         for transform in transforms:
             x = transform(x)
         
-        # Create a new Delta sample site that interventions can target
-        # Store original_fn but omit base_dist_predicate key to prevent re-triggering
+        # Create Delta sample site that interventions can target
         delta_infer = {EXOGENATE_META_KEY: {"original_fn": original_fn}}
         msg["value"] = pyro.sample(name, dist.Delta(x, event_dim=event_dim), infer=delta_infer)
-        # Stop so that everything else looks at the new sample site instead.
+        
+        # Stop so that everything else looks at the new sample site instead
         msg["stop"] = True
 
 

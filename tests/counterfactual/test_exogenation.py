@@ -13,6 +13,7 @@ from chirho.counterfactual.handlers.exogenation import (
     sample_exogenated,
 )
 from chirho.interventional.handlers import do
+from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
 
@@ -263,11 +264,66 @@ def test_exogenate_multiworld_counterfactual(distribution, base_dist_predicate):
     )
 
 
+def test_observe_downstream_and_intervene_upstream_shared_noise():
+    """Observe y and intervene on upstream x; ensure implied noise is shared across worlds.
+
+    Model: x ~ Normal(0,1); y = transform(x, u) with base noise u ~ Normal(0,1) (via exogenation).
+    We observe y=y_obs in factual world, reconstruct u via inverse transforms, and then under
+    counterfactual intervention x=x_cf the counterfactual y_cf should be computed using the same u.
+    """
+
+    # Distribution for y|x: Transformed(Normal(0,1) -> Affine(loc=x) -> Exp)
+    base_dist_predicate = lambda d: isinstance(d, dist.Normal)
+    def y_dist_given(x):
+        return dist.TransformedDistribution(
+            dist.Normal(0.0, 1.0),
+            [AffineTransform(loc=x, scale=1.0), ExpTransform()],
+        )
+
+    # observed y and counterfactual x
+    y_factual = torch.tensor(3.0)
+    x_cf = torch.tensor(0.7)
+
+    def model():
+        x = pyro.sample("x", dist.Normal(0.0, 1.0))
+        y = sample_exogenated("y", y_dist_given(x), base_dist_predicate)  #, obs=y_factual)
+        return x, y
+
+    with MultiWorldCounterfactual(first_available_dim=-2):
+        # Observe downstream y and factual x; intervene upstream on x for CF world
+        with do(actions={"x": x_cf}):
+            with pyro.poutine.trace() as tr:
+                with ExogenateNoiseMessenger():
+                    model()
+
+    # Check presence of sites
+    assert "y_u" in tr.trace.nodes and "y" in tr.trace.nodes and "x" in tr.trace.nodes
+
+    # Extract value
+    x_value = tr.trace.nodes["x"]["value"]
+    y_u_value = tr.trace.nodes["y_u"]["value"]
+    y_value = tr.trace.nodes["y"]["value"]
+
+    # y should have two worlds (factual, counterfactual)
+    assert y_value.shape[0] == 2
+
+    # Noise should be shared (no world dimension)
+    assert y_u_value.shape == y_value[0].shape
+
+    # Validate inverse relationship for factual world: y_obs = exp(x_factual + y_u)
+    # So y_u should equal log(y_obs) - x_factual
+    expected_u = torch.log(y_factual) - x_factual
+    assert torch.allclose(y_u_value, expected_u, atol=1e-5)
+
+    # Counterfactual world should use same u but with x_cf: y_cf = exp(x_cf + u)
+    y_cf_expected = torch.exp(x_cf + y_u_value)
+    y_factual, y_counterfactual = y_value[0], y_value[1]
+    assert torch.allclose(y_factual, y_factual, atol=1e-5)
+    assert torch.allclose(y_counterfactual, y_cf_expected, atol=1e-5)
+
+
 if __name__ == "__main__":
     # Run specific tests for debugging
     print("Running test_exogenate_multiworld_counterfactual...")
-    test_exogenate_multiworld_counterfactual(
-        dist.Normal(torch.zeros(6), torch.ones(6)),
-        lambda d: isinstance(d, dist.Normal)
-    )
+    test_observe_downstream_and_intervene_upstream_shared_noise()
     print("\n✅ Test passed!")
