@@ -27,6 +27,10 @@ def observe(rv, obs: Optional[Observation[T]] = None, **kwargs) -> T:
     raise NotImplementedError(f"observe not implemented for type {type(rv)}")
 
 
+class ExcisionError(ValueError):
+    pass
+
+
 class ExcisedNormal(TorchDistribution):
     """
     A normal distribution with specified intervals excised (removed).
@@ -140,7 +144,7 @@ class ExcisedNormal(TorchDistribution):
             self._removed_pr_mass += interval_mass
 
         if torch.any(self._removed_pr_mass >= 1.0):
-            raise ValueError("Total probability mass in excised intervals >= 1.0!")
+            raise ExcisionError("Total probability mass in excised intervals >= 1.0!")
 
         self._normalization_constant = torch.ones_like(self._base_loc) - self._removed_pr_mass
 
@@ -307,7 +311,7 @@ class ExcisedCategorical(pyro.distributions.Categorical):
         ratio_all_neg_inf = num_all_neg_inf / all_neg_inf.numel()  # <--- define ratio
 
         if num_all_neg_inf > 0:
-            raise ValueError(
+            raise ExcisionError(
                 f"{num_all_neg_inf} batch elements ({ratio_all_neg_inf:.2%}) "
                 "have all logits excised (-inf); cannot sample from these elements."
             )
