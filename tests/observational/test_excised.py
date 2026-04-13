@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from chirho.observational.ops import ExcisedCategorical, ExcisedNormal
+from chirho.observational.ops import ExcisedCategorical, ExcisedNormal, ExcisionError
 
 
 # needed for testing interval CDFs
@@ -260,6 +260,6 @@ def test_excised_categorical_all_excised_error_category_indices():
         )
     ]
 
-    # Expect ValueError because second batch element is fully excised
-    with pytest.raises(ValueError, match="have all logits excised"):
+    # Expect error because second batch element is fully excised
+    with pytest.raises(ExcisionError):
         ExcisedCategorical(intervals=intervals, logits=logits)
