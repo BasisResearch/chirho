@@ -9,7 +9,10 @@ from chirho.counterfactual.handlers import (
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
 )
-from chirho.counterfactual.handlers.selection import SelectCounterfactual, SelectFactual
+from chirho.counterfactual.handlers.selection import (
+    SelectCounterfactual,
+    SelectFactual,
+)
 from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
 
@@ -23,9 +26,7 @@ x_cf_values = [-1.0, 0.0, 2.0, 2.5]
 @pytest.mark.parametrize("x_cf_value", x_cf_values)
 @pytest.mark.parametrize("event_shape", [(), (4,), (4, 3)])
 @pytest.mark.parametrize("cf_dim", [-1, -2, -3])
-@pytest.mark.parametrize(
-    "cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual]
-)
+@pytest.mark.parametrize("cf_class", [MultiWorldCounterfactual, TwinWorldCounterfactual])
 def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
     def model():
         #   z
@@ -33,10 +34,7 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
         # x --> y
         Z = pyro.sample(
             "z",
-            dist.Normal(0, 1)
-            .expand(event_shape)
-            .to_event(len(event_shape))
-            .mask(False),
+            dist.Normal(0, 1).expand(event_shape).to_event(len(event_shape)).mask(False),
         )
         X = pyro.sample(
             "x",
@@ -45,9 +43,7 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
             .to_event(len(event_shape))
             .mask(nested),
         )
-        Y = pyro.sample(
-            "y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape))
-        )
+        Y = pyro.sample("y", dist.Normal(0.8 * X + 0.3 * Z, 1).to_event(len(event_shape)))
         return Z, X, Y
 
     observations = {
@@ -82,11 +78,7 @@ def test_selection_log_prob(nested, x_cf_value, event_shape, cf_dim, cf_class):
         fact_tr = pyro.poutine.trace(queried_model).get_trace()
         fact_log_prob = fact_tr.log_prob_sum()
 
-    assert (
-        set(full_tr.nodes.keys())
-        == set(fact_tr.nodes.keys())
-        == set(cf_tr.nodes.keys())
-    )
+    assert set(full_tr.nodes.keys()) == set(fact_tr.nodes.keys()) == set(cf_tr.nodes.keys())
 
     for name in observations.keys():
         assert full_tr.nodes[name]["value"].shape == cf_tr.nodes[name]["value"].shape

@@ -1,4 +1,5 @@
-from typing import Mapping, TypeVar
+from collections.abc import Mapping
+from typing import TypeVar
 
 import pyro
 import torch
@@ -14,17 +15,13 @@ ATempParams = Mapping[str, T]
 
 
 # SIR dynamics written as a pure function of state and parameters.
-def pure_sir_dynamics(
-    state: State[torch.Tensor], atemp_params: ATempParams[torch.Tensor]
-) -> State[torch.Tensor]:
+def pure_sir_dynamics(state: State[torch.Tensor], atemp_params: ATempParams[torch.Tensor]) -> State[torch.Tensor]:
     beta = atemp_params["beta"]
     gamma = atemp_params["gamma"]
 
     dX: State[torch.Tensor] = dict()
 
-    beta = beta * (
-        1.0 + 0.1 * torch.sin(0.1 * state["t"])
-    )  # beta oscilates slowly in time.
+    beta = beta * (1.0 + 0.1 * torch.sin(0.1 * state["t"]))  # beta oscilates slowly in time.
 
     dX["S"] = -beta * state["S"] * state["I"]  # noqa
     dX["I"] = beta * state["S"] * state["I"] - gamma * state["I"]  # noqa
@@ -49,12 +46,9 @@ class SIRObservationMixin:
 
 class SIRReparamObservationMixin(SIRObservationMixin):
     def observation(self, X: State[torch.Tensor]):
-
         # A flight arrives in a country that tests all arrivals for a disease. The number of people infected on the
         #  plane is a noisy function of the number of infected people in the country of origin at that time.
-        u_ip = pyro.sample(
-            "u_ip", Normal(7.0, 2.0).expand(X["I"].shape[-1:]).to_event(1)
-        )
+        u_ip = pyro.sample("u_ip", Normal(7.0, 2.0).expand(X["I"].shape[-1:]).to_event(1))
         pyro.deterministic("infected_passengers", X["I"] + u_ip, event_dim=1)
 
 
@@ -108,15 +102,13 @@ def check_states_match(state1: State[torch.Tensor], state2: State[torch.Tensor])
     return True
 
 
-def check_trajectories_match_in_all_but_values(
-    traj1: State[torch.Tensor], traj2: State[torch.Tensor]
-):
+def check_trajectories_match_in_all_but_values(traj1: State[torch.Tensor], traj2: State[torch.Tensor]):
     assert check_keys_match(traj1, traj2)
 
     for k in traj1.keys():
-        assert not torch.allclose(
-            traj2[k], traj1[k], atol=1e-6, rtol=1e-3
-        ), f"Trajectories are identical in state trajectory of variable {k}, but should differ."
+        assert not torch.allclose(traj2[k], traj1[k], atol=1e-6, rtol=1e-3), (
+            f"Trajectories are identical in state trajectory of variable {k}, but should differ."
+        )
 
     return True
 

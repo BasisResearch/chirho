@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import Tuple, TypeVar
+from typing import TypeVar
 
 import pyro
 
@@ -14,7 +14,7 @@ T = TypeVar("T")
 
 @pyro.poutine.runtime.effectful(type="split")
 @functools.partial(pyro.poutine.block, hide_types=["intervene"])
-def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
+def split(obs: T, acts: tuple[Intervention[T], ...], **kwargs) -> T:
     """
     Effectful primitive operation for "splitting" a combination of observational and interventional values in a
     probabilistic program into counterfactual worlds.
@@ -39,8 +39,6 @@ def split(obs: T, acts: Tuple[Intervention[T], ...], **kwargs) -> T:
     act_values = {obs_idx: gather(obs, obs_idx, **kwargs)}
     for i, act in enumerate(acts):
         act_idx = IndexSet(**{name: {i + 1}})
-        act_values[act_idx] = gather(
-            intervene(act_values[obs_idx], act, **kwargs), act_idx, **kwargs
-        )
+        act_values[act_idx] = gather(intervene(act_values[obs_idx], act, **kwargs), act_idx, **kwargs)
 
     return scatter_n(act_values, event_dim=kwargs.get("event_dim", 0))

@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any
 
 import pyro
 
@@ -9,7 +9,7 @@ class SpecifiedConditioningInferDict(pyro.poutine.runtime.InferDict):
     _specified_conditioning: bool
 
 
-def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
+def site_is_ambiguous(msg: dict[str, Any]) -> bool:
     """
     Helper function used with :func:`observe` to determine
     whether a site is observed or ambiguous.
@@ -21,9 +21,9 @@ def site_is_ambiguous(msg: Dict[str, Any]) -> bool:
     rv, obs = msg["args"][:2]
     value_indices = indices_of(obs, event_dim=len(rv.event_shape))
     dist_indices = indices_of(rv)
-    return (
-        bool(union(value_indices, dist_indices)) and value_indices != dist_indices
-    ) or not msg["infer"].get("_specified_conditioning", True)
+    return (bool(union(value_indices, dist_indices)) and value_indices != dist_indices) or not msg["infer"].get(
+        "_specified_conditioning", True
+    )
 
 
 def no_ambiguity(msg: pyro.poutine.messenger.Message) -> SpecifiedConditioningInferDict:

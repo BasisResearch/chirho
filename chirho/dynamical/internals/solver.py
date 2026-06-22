@@ -4,7 +4,7 @@ import heapq
 import math
 import typing
 import warnings
-from typing import Callable, Generic, List, Optional, Tuple, TypeVar, Union
+from typing import Callable, Generic, Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -19,12 +19,12 @@ T = TypeVar("T")
 
 class Interruption(Generic[T], ShallowMessenger):
     predicate: Callable[[State[T]], bool]
-    callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]]
+    callback: Callable[[Dynamics[T], State[T]], tuple[Dynamics[T], State[T]]]
 
     def __init__(
         self,
         predicate: Callable[[State[T]], bool],
-        callback: Callable[[Dynamics[T], State[T]], Tuple[Dynamics[T], State[T]]],
+        callback: Callable[[Dynamics[T], State[T]], tuple[Dynamics[T], State[T]]],
     ):
         self.predicate = predicate
         self.callback = callback
@@ -37,7 +37,7 @@ class Interruption(Generic[T], ShallowMessenger):
 
 
 @pyro.poutine.runtime.effectful(type="get_new_interruptions")
-def get_new_interruptions() -> List[Interruption]:
+def get_new_interruptions() -> list[Interruption]:
     """
     Install the active interruptions into the context.
     """
@@ -73,12 +73,10 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
             check_dynamics(dynamics, state, start_time, end_time, **msg["kwargs"])
 
         # local state
-        all_interruptions: List[Prioritized[Interruption[T]]] = []
+        all_interruptions: list[Prioritized[Interruption[T]]] = []
         heapq.heappush(
             all_interruptions,
-            self._prioritize_interruption(
-                on(StaticEvent(end_time), lambda d, s: (d, s))
-            ),
+            self._prioritize_interruption(on(StaticEvent(end_time), lambda d, s: (d, s))),
         )
 
         while start_time < end_time:
@@ -90,10 +88,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                         "This interruption will have no effect.",
                         UserWarning,
                     )
-                elif (
-                    isinstance(h.predicate, StaticEvent)
-                    and h.predicate.time < start_time
-                ):
+                elif isinstance(h.predicate, StaticEvent) and h.predicate.time < start_time:
                     raise ValueError(
                         f"{Interruption.__name__} {h} with time {h.predicate.time} "
                         f"occurred before the start of the timespan ({start_time}, {end_time})."
@@ -102,7 +97,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
                 else:
                     heapq.heappush(all_interruptions, self._prioritize_interruption(h))
 
-            possible_interruptions: List[Interruption[T]] = []
+            possible_interruptions: list[Interruption[T]] = []
             while all_interruptions:
                 ph: Prioritized[Interruption[T]] = heapq.heappop(all_interruptions)
                 possible_interruptions.append(ph.item)
@@ -125,9 +120,7 @@ class Solver(Generic[T], pyro.poutine.messenger.Messenger):
 
                 for h in possible_interruptions:
                     if h is not next_interruption:
-                        heapq.heappush(
-                            all_interruptions, self._prioritize_interruption(h)
-                        )
+                        heapq.heappush(all_interruptions, self._prioritize_interruption(h))
 
         msg["value"] = state
         msg["done"] = True
@@ -162,13 +155,13 @@ def simulate_trajectory(
 
 @pyro.poutine.runtime.effectful(type="simulate_to_interruption")
 def simulate_to_interruption(
-    interruption_stack: List[Interruption[T]],
+    interruption_stack: list[Interruption[T]],
     dynamics: Dynamics[T],
     start_state: State[T],
     start_time: R,
     end_time: R,
     **kwargs,
-) -> Tuple[State[T], R, Optional[Interruption[T]]]:
+) -> tuple[State[T], R, Optional[Interruption[T]]]:
     """
     Simulate a dynamical system until the next interruption.
 

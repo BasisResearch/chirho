@@ -28,15 +28,11 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     model = SimpleModel()
     guide = SimpleGuide()
     model(), guide()  # initialize
-    log_prob = BatchedNMCLogMarginalLikelihood(
-        PredictiveModel(model, guide), num_samples=100
-    )
+    log_prob = BatchedNMCLogMarginalLikelihood(PredictiveModel(model, guide), num_samples=100)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
     func_log_prob = reset_rng_state(pyro.util.get_rng_state())(func_log_prob)
 
-    predictive = pyro.infer.Predictive(
-        model, guide=guide, num_samples=1000, parallel=True, return_sites=["y"]
-    )
+    predictive = pyro.infer.Predictive(model, guide=guide, num_samples=1000, parallel=True, return_sites=["y"])
     predictive_params, func_predictive = make_functional_call(predictive)
 
     cg_solver = functools.partial(conjugate_gradient_solve, cg_iters=2)
@@ -44,16 +40,10 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
     with torch.no_grad():
         data = func_predictive(predictive_params)
 
-    fvp = torch.func.vmap(
-        make_empirical_fisher_vp(func_log_prob, log_prob_params, data)
-    )
+    fvp = torch.func.vmap(make_empirical_fisher_vp(func_log_prob, log_prob_params, data))
 
     v = {
-        k: (
-            torch.ones_like(v).unsqueeze(0)
-            if k != "model.guide.loc_a"
-            else torch.zeros_like(v).unsqueeze(0)
-        )
+        k: (torch.ones_like(v).unsqueeze(0) if k != "model.guide.loc_a" else torch.zeros_like(v).unsqueeze(0))
         for k, v in log_prob_params.items()
     }
 
@@ -67,28 +57,20 @@ def test_empirical_fisher_vp_nmclikelihood_cg_composition():
 
     if solve_one["model.guide.loc_a"].abs().max() > 1e6:
         warnings.warn(
-            "solve_one['guide.loc_a'] is large (max entry={}).".format(
-                solve_one["model.guide.loc_a"].abs().max()
-            )
+            "solve_one['guide.loc_a'] is large (max entry={}).".format(solve_one["model.guide.loc_a"].abs().max())
         )
 
     if solve_one["model.guide.loc_b"].abs().max() > 1e6:
         warnings.warn(
-            "solve_one['guide.loc_b'] is large (max entry={}).".format(
-                solve_one["model.guide.loc_b"].abs().max()
-            )
+            "solve_one['guide.loc_b'] is large (max entry={}).".format(solve_one["model.guide.loc_b"].abs().max())
         )
 
     assert torch.allclose(
         solve_one["model.guide.loc_a"],
         torch.zeros_like(log_prob_params["model.guide.loc_a"]),
     )
-    assert torch.allclose(
-        solve_one["model.guide.loc_a"], solve_two["model.guide.loc_a"]
-    )
-    assert torch.allclose(
-        solve_one["model.guide.loc_b"], solve_two["model.guide.loc_b"]
-    )
+    assert torch.allclose(solve_one["model.guide.loc_a"], solve_two["model.guide.loc_a"])
+    assert torch.allclose(solve_one["model.guide.loc_b"], solve_two["model.guide.loc_b"])
 
 
 link_functions = [
@@ -105,9 +87,7 @@ def test_nmc_likelihood_seeded(link_fn):
     guide = SimpleGuide()
     model(), guide()  # initialize
 
-    log_prob = BatchedNMCLogMarginalLikelihood(
-        PredictiveModel(model, guide), num_samples=3, max_plate_nesting=3
-    )
+    log_prob = BatchedNMCLogMarginalLikelihood(PredictiveModel(model, guide), num_samples=3, max_plate_nesting=3)
     log_prob_params, func_log_prob = make_functional_call(log_prob)
 
     func_log_prob = reset_rng_state(pyro.util.get_rng_state())(func_log_prob)
@@ -125,10 +105,7 @@ def test_nmc_likelihood_seeded(link_fn):
 
     v = {k: torch.ones_like(v) for k, v in log_prob_params.items()}
 
-    assert (
-        fvp(v)["model.guide.loc_a"].abs().max()
-        + fvp(v)["model.guide.loc_b"].abs().max()
-    ) > 0
+    assert (fvp(v)["model.guide.loc_a"].abs().max() + fvp(v)["model.guide.loc_b"].abs().max()) > 0
 
     # Check if fvp agrees across multiple calls of same `fvp` object
     assert torch.allclose(fvp(v)["model.guide.loc_a"], fvp(v)["model.guide.loc_a"])
@@ -145,9 +122,7 @@ def test_batched_observations(pad_dim: int):
 
     model(), guide()  # initialize
 
-    predictive = pyro.infer.Predictive(
-        model, num_samples=num_particles_obs, return_sites=["y"]
-    )
+    predictive = pyro.infer.Predictive(model, num_samples=num_particles_obs, return_sites=["y"])
 
     test_data = predictive()
 
@@ -159,21 +134,13 @@ def test_batched_observations(pad_dim: int):
         tr.trace.compute_log_prob()
 
         for name, node in tr.trace.nodes.items():
-            if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(
-                node
-            ):
+            if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
                 if name in test_data:
                     assert obs_plate_name in indices_of(node["log_prob"], event_dim=0)
-                    assert obs_plate_name in indices_of(
-                        node["value"], event_dim=len(node["fn"].event_shape)
-                    )
+                    assert obs_plate_name in indices_of(node["value"], event_dim=len(node["fn"].event_shape))
                 else:
-                    assert obs_plate_name not in indices_of(
-                        node["log_prob"], event_dim=0
-                    )
-                    assert obs_plate_name not in indices_of(
-                        node["value"], event_dim=len(node["fn"].event_shape)
-                    )
+                    assert obs_plate_name not in indices_of(node["log_prob"], event_dim=0)
+                    assert obs_plate_name not in indices_of(node["value"], event_dim=len(node["fn"].event_shape))
 
 
 @pytest.mark.parametrize("pad_dim", [0, 1, 2])
@@ -188,41 +155,25 @@ def test_batched_latents_observations(pad_dim: int):
 
     model(), guide()  # initialize
 
-    predictive = pyro.infer.Predictive(
-        model, num_samples=num_particles_obs, return_sites=["y"]
-    )
+    predictive = pyro.infer.Predictive(model, num_samples=num_particles_obs, return_sites=["y"])
 
     test_data = predictive()
 
     with IndexPlatesMessenger(first_available_dim=-max_plate_nesting - 1):
         with pyro.poutine.trace() as tr:
-            with BatchedLatents(
-                num_particles=num_particles_latent, name=latent_plate_name
-            ):
+            with BatchedLatents(num_particles=num_particles_latent, name=latent_plate_name):
                 with BatchedObservations(test_data, name=obs_plate_name):
                     model()
 
         tr.trace.compute_log_prob()
 
         for name, node in tr.trace.nodes.items():
-            if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(
-                node
-            ):
+            if node["type"] == "sample" and not pyro.poutine.util.site_is_subsample(node):
                 if name in test_data:
                     assert obs_plate_name in indices_of(node["log_prob"], event_dim=0)
-                    assert obs_plate_name in indices_of(
-                        node["value"], event_dim=len(node["fn"].event_shape)
-                    )
-                    assert latent_plate_name in indices_of(
-                        node["log_prob"], event_dim=0
-                    )
-                    assert latent_plate_name not in indices_of(
-                        node["value"], event_dim=len(node["fn"].event_shape)
-                    )
+                    assert obs_plate_name in indices_of(node["value"], event_dim=len(node["fn"].event_shape))
+                    assert latent_plate_name in indices_of(node["log_prob"], event_dim=0)
+                    assert latent_plate_name not in indices_of(node["value"], event_dim=len(node["fn"].event_shape))
                 else:
-                    assert latent_plate_name in indices_of(
-                        node["log_prob"], event_dim=0
-                    )
-                    assert latent_plate_name in indices_of(
-                        node["value"], event_dim=len(node["fn"].event_shape)
-                    )
+                    assert latent_plate_name in indices_of(node["log_prob"], event_dim=0)
+                    assert latent_plate_name in indices_of(node["value"], event_dim=len(node["fn"].event_shape))

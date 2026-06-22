@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable, Generic, Mapping, TypeVar, Union
+from collections.abc import Mapping
+from typing import Callable, Generic, TypeVar, Union
 
 import pyro
 import torch
@@ -71,16 +72,11 @@ class Observations(Generic[T], ObserveNameMessenger):
         super().__init__()
 
     def _pyro_sample(self, msg):
-        if pyro.poutine.util.site_is_subsample(msg) or pyro.poutine.util.site_is_factor(
-            msg
-        ):
+        if pyro.poutine.util.site_is_subsample(msg) or pyro.poutine.util.site_is_factor(msg):
             return
 
         if msg["name"] not in self.data or msg["infer"].get("_do_not_observe", None):
-            if (
-                "_markov_scope" in msg["infer"]
-                and getattr(self, "_current_site", None) is not None
-            ):
+            if "_markov_scope" in msg["infer"] and getattr(self, "_current_site", None) is not None:
                 msg["infer"]["_markov_scope"].pop(self._current_site, None)
             return
 
@@ -97,15 +93,12 @@ class Observations(Generic[T], ObserveNameMessenger):
 
         with pyro.poutine.infer_config(
             config_fn=lambda msg_: {
-                "_do_not_observe": msg["name"] == msg_["name"]
-                or msg_["infer"].get("_do_not_observe", False)
+                "_do_not_observe": msg["name"] == msg_["name"] or msg_["infer"].get("_do_not_observe", False)
             }
         ):
             try:
                 self._current_site = msg["name"]
-                msg["value"] = observe(
-                    msg["fn"], self.data[msg["name"]], name=msg["name"], **msg["kwargs"]
-                )
+                msg["value"] = observe(msg["fn"], self.data[msg["name"]], name=msg["name"], **msg["kwargs"])
             finally:
                 self._current_site = None
 

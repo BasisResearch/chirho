@@ -1,4 +1,5 @@
-from typing import Any, Callable, Generic, Mapping, Optional, TypeVar, cast
+from collections.abc import Mapping
+from typing import Any, Callable, Generic, Optional, TypeVar, cast
 
 import pyro
 import torch
@@ -90,11 +91,7 @@ class BatchedObservations(Generic[T], Observations[T]):
         super()._pyro_observe(msg)
         if msg["kwargs"]["name"] in self.data:
             rv, obs = msg["args"]
-            event_dim = (
-                len(rv.event_shape)
-                if hasattr(rv, "event_shape")
-                else msg["kwargs"].get("event_dim", 0)
-            )
+            event_dim = len(rv.event_shape) if hasattr(rv, "event_shape") else msg["kwargs"].get("event_dim", 0)
             batch_obs = unbind_leftmost_dim(obs, self.name, event_dim=event_dim)
             msg["args"] = (rv, batch_obs)
 
@@ -139,24 +136,16 @@ class PredictiveModel(Generic[P, T], torch.nn.Module):
         :return: Sample from the posterior predictive distribution.
         :rtype: T
         """
-        with pyro.poutine.infer_config(
-            config_fn=lambda msg: _predictive_site_config(False)
-        ):
+        with pyro.poutine.infer_config(config_fn=lambda msg: _predictive_site_config(False)):
             with pyro.poutine.trace() as guide_tr:
                 if self.guide is not None:
                     self.guide(*args, **kwargs)
 
         block_guide_sample_sites = pyro.poutine.block(
-            hide=[
-                name
-                for name, node in guide_tr.trace.nodes.items()
-                if node["type"] == "sample"
-            ]
+            hide=[name for name, node in guide_tr.trace.nodes.items() if node["type"] == "sample"]
         )
 
-        with pyro.poutine.infer_config(
-            config_fn=lambda msg: _predictive_site_config(True)
-        ):
+        with pyro.poutine.infer_config(config_fn=lambda msg: _predictive_site_config(True)):
             with block_guide_sample_sites:
                 with pyro.poutine.replay(trace=guide_tr.trace):
                     return self.model(*args, **kwargs)
@@ -196,9 +185,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
         super().__init__()
         self.model = model
         self.num_samples = num_samples
-        self._first_available_dim = (
-            -max_plate_nesting - 1 if max_plate_nesting is not None else None
-        )
+        self._first_available_dim = -max_plate_nesting - 1 if max_plate_nesting is not None else None
         self._mc_plate_name = name
 
     def forward(self, *args: P.args, **kwargs: P.kwargs) -> Point[T]:
@@ -213,9 +200,7 @@ class PredictiveFunctional(Generic[P, T], torch.nn.Module):
                 with BatchedLatents(self.num_samples, name=self._mc_plate_name):
                     with pyro.poutine.infer_config(
                         config_fn=lambda msg: _predictive_site_config(
-                            cast(dict, msg.get("infer", {})).get(
-                                "_model_predictive_site", False
-                            )
+                            cast(dict, msg.get("infer", {})).get("_model_predictive_site", False)
                         )
                     ):
                         self.model(*args, **kwargs)

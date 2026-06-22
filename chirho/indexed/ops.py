@@ -1,6 +1,7 @@
 import functools
 import operator
-from typing import Dict, Iterable, List, Optional, Set, Tuple, TypeVar, Union
+from collections.abc import Iterable
+from typing import Optional, TypeVar, Union
 
 import pyro
 import torch
@@ -8,7 +9,7 @@ import torch
 T = TypeVar("T")
 
 
-class IndexSet(Dict[str, Set[int]]):
+class IndexSet(dict[str, set[int]]):
     """
     :class:`IndexSet` s represent the support of an indexed value, primarily
     those created using :func:`intervene` and :class:`MultiWorldCounterfactual`
@@ -45,13 +46,7 @@ class IndexSet(Dict[str, Set[int]]):
     """
 
     def __init__(self, **mapping: Union[int, Iterable[int]]):
-        super().__init__(
-            **{
-                k: {vs} if isinstance(vs, int) else set(vs)
-                for k, vs in mapping.items()
-                if vs
-            }
-        )
+        super().__init__(**{k: {vs} if isinstance(vs, int) else set(vs) for k, vs in mapping.items() if vs})
 
     def __repr__(self):
         return f"{type(self).__name__}({super().__repr__()})"
@@ -85,10 +80,7 @@ def union(*indexsets: IndexSet) -> IndexSet:
             union(a, union(a, b)) == union(a, b)
     """
     return IndexSet(
-        **{
-            k: set.union(*[vs[k] for vs in indexsets if k in vs])
-            for k in set.union(*(set(vs) for vs in indexsets))
-        }
+        **{k: set.union(*[vs[k] for vs in indexsets if k in vs]) for k in set.union(*(set(vs) for vs in indexsets))}
     )
 
 
@@ -219,9 +211,7 @@ def gather(value, indexset: IndexSet, **kwargs):
 
 
 @functools.singledispatch
-def scatter(
-    value, indexset: Optional[IndexSet] = None, *, result: Optional[T] = None, **kwargs
-):
+def scatter(value, indexset: Optional[IndexSet] = None, *, result: Optional[T] = None, **kwargs):
     """
     Assigns entries from an indexed value to entries in a larger indexed value.
     :func:`scatter` is primarily used internally in :class:`MultiWorldCounterfactual`
@@ -249,7 +239,7 @@ def scatter(
 
 
 @pyro.poutine.runtime.effectful(type="scatter_n")
-def scatter_n(values: Dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
+def scatter_n(values: dict[IndexSet, T], *, result: Optional[T] = None, **kwargs):
     """
     Scatters a dictionary of disjoint masked values into a single value
     using repeated calls to :func:``scatter``.
@@ -296,15 +286,13 @@ def cond(fst, snd, case: Optional[T] = None, **kwargs):
 
 
 @pyro.poutine.runtime.effectful(type="cond_n")
-def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
+def cond_n(values: dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs):
     assert len(values) > 0
     assert all(isinstance(k, IndexSet) for k in values.keys())
     result: Optional[T] = None
     for indices, value in values.items():
         tst = torch.as_tensor(
-            functools.reduce(
-                operator.or_, [case == index for index in next(iter(indices.values()))]
-            ),
+            functools.reduce(operator.or_, [case == index for index in next(iter(indices.values()))]),
             dtype=torch.bool,
         )
         result = cond(result if result is not None else value, value, tst, **kwargs)
@@ -312,7 +300,7 @@ def cond_n(values: Dict[IndexSet, T], case: Union[bool, torch.Tensor], **kwargs)
 
 
 @pyro.poutine.runtime.effectful(type="get_index_plates")
-def get_index_plates() -> Dict[str, pyro.poutine.indep_messenger.CondIndepStackFrame]:
+def get_index_plates() -> dict[str, pyro.poutine.indep_messenger.CondIndepStackFrame]:
     return {}
 
 
@@ -320,7 +308,7 @@ def indexset_as_mask(
     indexset: IndexSet,
     *,
     event_dim: int = 0,
-    name_to_dim_size: Optional[Dict[str, Tuple[int, int]]] = None,
+    name_to_dim_size: Optional[dict[str, tuple[int, int]]] = None,
     device: torch.device = torch.device("cpu"),
 ) -> torch.Tensor:
     """
@@ -333,7 +321,7 @@ def indexset_as_mask(
             name_to_dim_size[name] = (f.dim, f.size)
 
     batch_shape = [1] * -min([dim for dim, _ in name_to_dim_size.values()], default=0)
-    inds: List[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
+    inds: list[Union[slice, torch.Tensor]] = [slice(None)] * len(batch_shape)
     for name, values in indexset.items():
         dim, size = name_to_dim_size[name]
         inds[dim] = torch.tensor(list(sorted(values)), dtype=torch.long)

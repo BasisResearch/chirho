@@ -25,7 +25,6 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
     """
 
     def _pyro_post_sample(self, msg: pyro.poutine.messenger.Message) -> None:
-
         # expand latent values to include all index plates
         if not msg["is_observed"] and not pyro.poutine.util.site_is_subsample(msg):
             assert isinstance(msg["fn"], TorchDistributionMixin)
@@ -59,9 +58,7 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
 
     @_dispatched_observe.register(dist.FoldedDistribution)
     @_dispatched_observe.register(dist.Distribution)
-    def _observe_dist(
-        self, rv: TorchDistributionMixin, obs: torch.Tensor, name: str
-    ) -> torch.Tensor:
+    def _observe_dist(self, rv: TorchDistributionMixin, obs: torch.Tensor, name: str) -> torch.Tensor:
         with pyro.poutine.infer_config(config_fn=no_ambiguity):
             with SelectFactual():
                 fv = pyro.sample(name + "_factual", rv, obs=obs)
@@ -71,21 +68,13 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
 
             event_dim = len(rv.event_shape)
             fw_indices = get_factual_indices()
-            new_value: torch.Tensor = scatter(
-                fv, fw_indices, result=cv.clone(), event_dim=event_dim
-            )
+            new_value: torch.Tensor = scatter(fv, fw_indices, result=cv.clone(), event_dim=event_dim)
             new_rv = dist.Delta(new_value, event_dim=event_dim).mask(False)
             return pyro.sample(name, new_rv, obs=new_value)
 
     @_dispatched_observe.register
-    def _observe_tfmdist(
-        self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str
-    ) -> torch.Tensor:
-        tfm = (
-            rv.transforms[-1]
-            if len(rv.transforms) == 1
-            else dist.transforms.ComposeTransformModule(rv.transforms)
-        )
+    def _observe_tfmdist(self, rv: dist.TransformedDistribution, value: torch.Tensor, name: str) -> torch.Tensor:
+        tfm = rv.transforms[-1] if len(rv.transforms) == 1 else dist.transforms.ComposeTransformModule(rv.transforms)
         noise_dist = rv.base_dist
         noise_event_dim = len(noise_dist.event_shape)
         obs_event_dim = len(rv.event_shape)
@@ -94,15 +83,11 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
         with SelectFactual(), pyro.poutine.infer_config(config_fn=no_ambiguity):
             new_base_dist = dist.Delta(value, event_dim=obs_event_dim).mask(False)
             new_noise_dist = dist.TransformedDistribution(new_base_dist, tfm.inv)
-            obs_noise = pyro.sample(
-                name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value)
-            )
+            obs_noise = pyro.sample(name + "_noise_likelihood", new_noise_dist, obs=tfm.inv(value))
 
         # depends on strategy and indices of noise_dist
         fw = get_factual_indices()
-        obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(
-            obs_noise.shape
-        )
+        obs_noise = gather(obs_noise, fw, event_dim=noise_event_dim).expand(obs_noise.shape)
         # obs_noise = pyro.sample(name + "_noise_prior", noise_dist, obs=obs_noise)
         obs_noise = observe(noise_dist, obs_noise, name=name + "_noise_prior")
 
@@ -113,8 +98,6 @@ class FactualConditioningMessenger(pyro.poutine.messenger.Messenger):
             cf_obs_value = pyro.sample(name + "_cf_obs", cf_obs_dist)
 
         # merge
-        new_value = scatter(
-            value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim
-        )
+        new_value = scatter(value, fw, result=cf_obs_value.clone(), event_dim=obs_event_dim)
         new_fn = dist.Delta(new_value, event_dim=obs_event_dim).mask(False)
         return pyro.sample(name, new_fn, obs=new_value)

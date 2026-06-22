@@ -1,4 +1,5 @@
-from typing import Callable, Iterable, MutableMapping, Optional, TypeVar
+from collections.abc import Iterable, MutableMapping
+from typing import Callable, Optional, TypeVar
 
 import pyro
 import pyro.distributions.constraints as constraints
@@ -40,13 +41,8 @@ def sufficiency_intervention(
     """
 
     def _sufficiency_intervention(value: T) -> T:
-
         indices = IndexSet(
-            **{
-                name: sufficiency_world
-                for name, ind in get_factual_indices().items()
-                if name in antecedents
-            }
+            **{name: sufficiency_world for name, ind in get_factual_indices().items() if name in antecedents}
         )
 
         sufficiency_value = gather(
@@ -84,7 +80,6 @@ def random_intervention(
     """
 
     def _random_intervention(value: torch.Tensor) -> torch.Tensor:
-
         event_shape = value.shape[len(value.shape) - support.event_dim :]  # type: ignore
 
         proposal_dist = uniform_proposal(support, event_shape=event_shape)
@@ -93,9 +88,7 @@ def random_intervention(
     return _random_intervention
 
 
-def undo_split(
-    support: constraints.Constraint, antecedents: Iterable[str] = []
-) -> Callable[[T], T]:
+def undo_split(support: constraints.Constraint, antecedents: Iterable[str] = []) -> Callable[[T], T]:
     """
     A helper function that undoes an upstream :func:`~chirho.counterfactual.ops.split` operation,
     meant to be used to create arguments to pass to :func:`~chirho.interventional.ops.intervene` ,
@@ -110,11 +103,7 @@ def undo_split(
     """
 
     def _undo_split(value: T) -> T:
-        antecedents_ = {
-            a: v
-            for a, v in indices_of(value, event_dim=support.event_dim).items()
-            if a in antecedents
-        }
+        antecedents_ = {a: v for a, v in indices_of(value, event_dim=support.event_dim).items() if a in antecedents}
 
         factual_value = gather(
             value,
@@ -130,12 +119,7 @@ def undo_split(
             else:
                 temp_index_keys = []
                 for i in index_keys:
-                    temp_index_keys.extend(
-                        [
-                            dict(tuple(dict(i).items()) + tuple({a: {value}}.items()))
-                            for value in v
-                        ]
-                    )
+                    temp_index_keys.extend([dict(tuple(dict(i).items()) + tuple({a: {value}}.items())) for value in v])
                 index_keys = temp_index_keys
         index_keys = index_keys if index_keys != [] else [{}]
 
@@ -165,13 +149,7 @@ def consequent_eq(
     """
 
     def _consequent_eq(consequent: T) -> torch.Tensor:
-        indices = IndexSet(
-            **{
-                name: ind
-                for name, ind in get_factual_indices().items()
-                if name in antecedents
-            }
-        )
+        indices = IndexSet(**{name: ind for name, ind in get_factual_indices().items() if name in antecedents})
         eq = soft_eq(
             support,
             consequent,
@@ -201,13 +179,7 @@ def consequent_neq(
     """
 
     def _consequent_neq(consequent: T) -> torch.Tensor:
-        indices = IndexSet(
-            **{
-                name: ind
-                for name, ind in get_factual_indices().items()
-                if name in antecedents
-            }
-        )
+        indices = IndexSet(**{name: ind for name, ind in get_factual_indices().items() if name in antecedents})
         diff = soft_neq(
             support,
             consequent,
@@ -256,12 +228,8 @@ def consequent_eq_neq(
             }
         )
 
-        necessity_value = gather(
-            consequent, necessity_indices, event_dim=support.event_dim
-        )
-        sufficiency_value = gather(
-            consequent, sufficiency_indices, event_dim=support.event_dim
-        )
+        necessity_value = gather(consequent, necessity_indices, event_dim=support.event_dim)
+        sufficiency_value = gather(consequent, sufficiency_indices, event_dim=support.event_dim)
 
         necessity_log_probs = (
             soft_neq(
@@ -329,7 +297,7 @@ class ExtractSupports(pyro.poutine.messenger.Messenger):
     supports: MutableMapping[str, pyro.distributions.constraints.Constraint]
 
     def __init__(self):
-        super(ExtractSupports, self).__init__()
+        super().__init__()
 
         self.supports = {}
 

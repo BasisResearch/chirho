@@ -7,7 +7,11 @@ import torch
 from pyro.infer.autoguide import AutoMultivariateNormal
 
 from chirho.indexed.handlers import IndexPlatesMessenger
-from chirho.robust.handlers.cut import CutComplementModule, CutModule, SingleStageCut
+from chirho.robust.handlers.cut import (
+    CutComplementModule,
+    CutModule,
+    SingleStageCut,
+)
 
 pyro.settings.set(module_local_params=True)
 
@@ -82,9 +86,7 @@ def test_cut_module_raises_assertion_error():
     module_two = CutComplementModule(module_one_vars)(conditioned_model)
     try:
         pyro.infer.infer_discrete(module_two, first_available_dim=-2)
-        assert (
-            False
-        ), "AssertionError should have been raised since module_one is not conditioned on"
+        assert False, "AssertionError should have been raised since module_one is not conditioned on"
     except AssertionError:
         print("AssertionError raised as expected")
 
@@ -119,9 +121,7 @@ def test_cut_module_discrete():
         module_one_samples.append(tr.trace.nodes["eta"]["value"].item())
 
     rand_error_tol = 3 * 0.5 / math.sqrt(1000)
-    assert (
-        torch.abs(torch.tensor(module_one_samples).mean() - 0.8).item() < rand_error_tol
-    )
+    assert torch.abs(torch.tensor(module_one_samples).mean() - 0.8).item() < rand_error_tol
 
     # Module 2 check (eta = 1)
     module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(1.0)})
@@ -132,9 +132,7 @@ def test_cut_module_discrete():
             module_two_post()
         module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
 
-    assert (
-        torch.abs(torch.tensor(module_two_samples).mean() - 0.8).item() < rand_error_tol
-    )
+    assert torch.abs(torch.tensor(module_two_samples).mean() - 0.8).item() < rand_error_tol
 
     # Module 2 check (eta = 0)
     module_two_cond = pyro.condition(module_two, data={"eta": torch.tensor(0.0)})
@@ -145,9 +143,7 @@ def test_cut_module_discrete():
             module_two_post()
         module_two_samples.append(tr.trace.nodes["theta"]["value"].item())
 
-    assert (
-        torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
-    )
+    assert torch.abs(torch.tensor(module_two_samples).mean() - 0.5).item() < rand_error_tol
 
 
 def test_correctly_duplicates_module_one_vars():

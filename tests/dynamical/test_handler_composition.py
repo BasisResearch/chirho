@@ -49,9 +49,7 @@ superspreader_time = 0.1
 # We want to know how many people passengers would have bene infected at the
 #  time of landing had the super-spreader event not occurred.
 
-flight_landing_times = torch.tensor(
-    [landing_time, landing_time + 1e-2, landing_time + 2e-2]
-)
+flight_landing_times = torch.tensor([landing_time, landing_time + 1e-2, landing_time + 2e-2])
 flight_landing_data = {k: torch.tensor([v] * 3) for (k, v) in landing_data.items()}
 reparam_config = AutoSoftConditioning(scale=0.01)
 
@@ -81,16 +79,12 @@ def conditioned_model(*args, **kwargs):
     #       return simulate(...)
     # It simply blocks the intervention, twin world, and reparameterization handlers, as those need to be removed from
     #  the factual conditional world.
-    with pyro.poutine.messenger.block_messengers(
-        lambda m: m in (reparam, twin_world, intervention)
-    ):
+    with pyro.poutine.messenger.block_messengers(lambda m: m in (reparam, twin_world, intervention)):
         return counterf_model(*args, **kwargs)
 
 
 # A reparameterized observation function of various flight arrivals.
-class UnifiedFixtureDynamicsReparam(
-    UnifiedFixtureDynamicsBase, SIRReparamObservationMixin
-):
+class UnifiedFixtureDynamicsReparam(UnifiedFixtureDynamicsBase, SIRReparamObservationMixin):
     pass
 
 
@@ -124,17 +118,15 @@ def test_shape_twincounterfactual_observation_intervention_commutes(solver, mode
     "model",
     [UnifiedFixtureDynamicsReparam(beta=torch.tensor(0.5), gamma=torch.tensor(0.7))],
 )
-def test_smoke_inference_twincounterfactual_observation_intervention_commutes(
-    solver, model
-):
+def test_smoke_inference_twincounterfactual_observation_intervention_commutes(solver, model):
     # Run inference on factual model.
-    guide = run_svi_inference_torch_direct(
-        partial(conditioned_model, solver, model), n_steps=2, verbose=False
-    )
+    guide = run_svi_inference_torch_direct(partial(conditioned_model, solver, model), n_steps=2, verbose=False)
 
     num_samples = 100
     pred = pyro.infer.Predictive(
-        partial(counterf_model, solver, model), guide=guide, num_samples=num_samples
+        partial(counterf_model, solver, model),
+        guide=guide,
+        num_samples=num_samples,
     )()
     num_worlds = 2
     # infected passengers is going to differ depending on which of two worlds
@@ -144,7 +136,10 @@ def test_smoke_inference_twincounterfactual_observation_intervention_commutes(
         len(flight_landing_times),
     )
     # Noise is shared between factual and counterfactual worlds.
-    assert pred["u_ip"].squeeze().shape == (num_samples, len(flight_landing_times))
+    assert pred["u_ip"].squeeze().shape == (
+        num_samples,
+        len(flight_landing_times),
+    )
 
 
 class ShallowLogSample(ShallowMessenger):

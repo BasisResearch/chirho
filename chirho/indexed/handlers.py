@@ -1,6 +1,6 @@
 import collections
 import functools
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 import pyro
 import torch
@@ -18,7 +18,7 @@ P = ParamSpec("P")
 
 
 class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
-    plates: Dict[str, pyro.poutine.indep_messenger.IndepMessenger]
+    plates: dict[str, pyro.poutine.indep_messenger.IndepMessenger]
     first_available_dim: int
 
     def __init__(self, first_available_dim: Optional[int] = None):
@@ -78,7 +78,7 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 )
             else:
                 raise e
-        stack: List[pyro.poutine.messenger.Messenger] = pyro.poutine.runtime._PYRO_STACK
+        stack: list[pyro.poutine.messenger.Messenger] = pyro.poutine.runtime._PYRO_STACK
         stack.pop(stack.index(plate))
         stack.insert(stack.index(self) + len(self.plates) + 1, plate)
         return plate
@@ -101,15 +101,11 @@ class IndexPlatesMessenger(pyro.poutine.messenger.Messenger):
                 )
                 self.first_available_dim -= 1
             else:
-                assert (
-                    0
-                    <= min(indices)
-                    <= len(indices) - 1
-                    <= max(indices)
-                    < self.plates[name].size
-                ), f"cannot add {name}={indices} to {self.plates[name].size}"
+                assert 0 <= min(indices) <= len(indices) - 1 <= max(indices) < self.plates[name].size, (
+                    f"cannot add {name}={indices} to {self.plates[name].size}"
+                )
 
-    def _pyro_scatter_n(self, msg: Dict[str, Any]) -> None:
+    def _pyro_scatter_n(self, msg: dict[str, Any]) -> None:
         add_indices(union(*msg["args"][0].keys()))
         msg["stop"] = True
 
@@ -140,17 +136,13 @@ class DependentMaskMessenger(pyro.poutine.messenger.Messenger):
         msg["mask"] = mask if msg["mask"] is None else msg["mask"] & mask
 
         # expand distribution to make sure two copies of a variable are sampled
-        msg["fn"] = msg["fn"].expand(
-            torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape)
-        )
+        msg["fn"] = msg["fn"].expand(torch.broadcast_shapes(msg["fn"].batch_shape, mask.shape))
 
 
 @pyro.poutine.block()
 @pyro.validation_enabled(False)
 @torch.no_grad()
-def guess_max_plate_nesting(
-    model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs
-) -> int:
+def guess_max_plate_nesting(model: Callable[P, Any], guide: Callable[P, Any], *args: P.args, **kwargs: P.kwargs) -> int:
     """
     Guesses the maximum plate nesting level by running `pyro.infer.Trace_ELBO`
 

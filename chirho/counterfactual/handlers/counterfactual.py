@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, TypeVar
+from typing import Any, TypeVar
 
 import pyro
 
@@ -27,7 +27,7 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
     """
 
     @staticmethod
-    def _pyro_intervene(msg: Dict[str, Any]) -> None:
+    def _pyro_intervene(msg: dict[str, Any]) -> None:
         msg["stop"] = True
         if msg["args"][1] is not None:
             obs, acts = msg["args"][0], msg["args"][1]
@@ -37,7 +37,7 @@ class BaseCounterfactualMessenger(FactualConditioningMessenger):
             msg["done"] = True
 
     @staticmethod
-    def _pyro_preempt(msg: Dict[str, Any]) -> None:
+    def _pyro_preempt(msg: dict[str, Any]) -> None:
         if msg["kwargs"].get("name", None) is None:
             msg["kwargs"]["name"] = msg["name"]
 
@@ -66,7 +66,7 @@ class SingleWorldCounterfactual(BaseCounterfactualMessenger):
     """
 
     @pyro.poutine.block(hide_types=["intervene"])
-    def _pyro_split(self, msg: Dict[str, Any]) -> None:
+    def _pyro_split(self, msg: dict[str, Any]) -> None:
         obs, acts = msg["args"]
         msg["value"] = intervene(obs, acts[-1], **msg["kwargs"])
         msg["done"] = True
@@ -95,7 +95,7 @@ class SingleWorldFactual(BaseCounterfactualMessenger):
     """
 
     @staticmethod
-    def _pyro_split(msg: Dict[str, Any]) -> None:
+    def _pyro_split(msg: dict[str, Any]) -> None:
         obs, _ = msg["args"]
         msg["value"] = obs
         msg["done"] = True
@@ -142,7 +142,7 @@ class MultiWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger
     fresh_prefix: str = "__fresh_split__"
 
     @classmethod
-    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+    def _pyro_split(cls, msg: dict[str, Any]) -> None:
         if msg["name"] is None:
             index_plates = get_index_plates()
             name, fresh_suffix = cls.fresh_prefix, len(index_plates)
@@ -193,5 +193,5 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     fresh_prefix: str = "__fresh_split__"
 
     @classmethod
-    def _pyro_split(cls, msg: Dict[str, Any]) -> None:
+    def _pyro_split(cls, msg: dict[str, Any]) -> None:
         msg["kwargs"]["name"] = msg["name"] = cls.fresh_prefix

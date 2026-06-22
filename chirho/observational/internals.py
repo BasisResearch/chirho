@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import functools
-from typing import Mapping, Optional, TypeVar
+from collections.abc import Mapping
+from typing import Optional, TypeVar
 
 import pyro
 import pyro.distributions
@@ -26,9 +27,7 @@ def _observe_deterministic(rv: T, obs: Optional[AtomicObservation[T]] = None, **
     """
     Observe a tensor in a probabilistic program.
     """
-    rv_dist = pyro.distributions.Delta(
-        torch.as_tensor(rv), event_dim=kwargs.pop("event_dim", 0)
-    )
+    rv_dist = pyro.distributions.Delta(torch.as_tensor(rv), event_dim=kwargs.pop("event_dim", 0))
     return observe(rv_dist, obs, **kwargs)
 
 
@@ -101,9 +100,7 @@ def unbind_leftmost_dim(v, name: str, size: int = 1, **kwargs):
 
 
 @unbind_leftmost_dim.register
-def _unbind_leftmost_dim_tensor(
-    v: torch.Tensor, name: str, size: int = 1, *, event_dim: int = 0
-) -> torch.Tensor:
+def _unbind_leftmost_dim_tensor(v: torch.Tensor, name: str, size: int = 1, *, event_dim: int = 0) -> torch.Tensor:
     size = max(size, v.shape[0])
     v = v.expand((size,) + v.shape[1:])
 
@@ -151,9 +148,7 @@ def bind_leftmost_dim(v, name: str, **kwargs):
 
 
 @bind_leftmost_dim.register
-def _bind_leftmost_dim_tensor(
-    v: torch.Tensor, name: str, *, event_dim: int = 0, **kwargs
-) -> torch.Tensor:
+def _bind_leftmost_dim_tensor(v: torch.Tensor, name: str, *, event_dim: int = 0, **kwargs) -> torch.Tensor:
     if name not in indices_of(v, event_dim=event_dim):
         return v
 
