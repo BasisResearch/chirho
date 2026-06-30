@@ -8,15 +8,13 @@ import pytest
 import torch
 
 from chirho.counterfactual.handlers import (
+    BatchedWorldCounterfactual,
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
+    batched_do,
 )
 from chirho.indexed.ops import IndexSet, gather, indices_of
-from chirho.interventional.handlers import (
-    BatchedWorldCounterfactual,
-    batched_do,
-    do,
-)
+from chirho.interventional.handlers import do
 from chirho.observational.handlers import condition
 
 logger = logging.getLogger(__name__)
@@ -84,8 +82,7 @@ def test_matches_mwc_single_site(event_shape, first_available_dim):
 
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
 def test_multiple_interventions_stay_on_single_axis(event_shape):
-    # The defining property: interventions on *different* sites share one axis
-    # (linear), rather than forming the Cartesian product MWC would build.
+    # The defining property: interventions on *different* sites share one axis.
     event_dim = len(event_shape)
     za = torch.full(event_shape, 3.0)
     xb = torch.full(event_shape, -2.0)
@@ -139,6 +136,23 @@ def test_dim_allocation_failure():
 
     # A leftmost-enough dimension succeeds.
     with BatchedWorldCounterfactual([{"x": torch.tensor(1.0)}], first_available_dim=-2):
+        x = model()
+        assert indices_of(x)["batched_interventions"] == {0, 1}
+
+
+def test_batched_do_first_available_dim():
+    # batched_do must forward first_available_dim so users of the context-manager
+    # form can resolve plate conflicts without switching to the class directly.
+    def model():
+        with pyro.plate("data", 3, dim=-1):
+            x = pyro.sample("x", dist.Normal(0.0, 1.0))
+            return x
+
+    with pytest.raises(ValueError, match=".*unable to allocate an index plate.*"):
+        with batched_do([{"x": torch.tensor(1.0)}], first_available_dim=-1):
+            model()
+
+    with batched_do([{"x": torch.tensor(1.0)}], first_available_dim=-2):
         x = model()
         assert indices_of(x)["batched_interventions"] == {0, 1}
 
@@ -206,8 +220,7 @@ def test_factual_world_present_and_optional():
 
 @pytest.mark.parametrize("event_shape", [(4,), (4, 3)], ids=str)
 def test_event_dim_collection_form(event_shape):
-    # Non-trivial event dimensions, collection form: gather isolates and there
-    # is no spurious duplicate batch axis (memory stays linear).
+    # Non-trivial event dimensions.
     event_dim = len(event_shape)
     batch_size = 3
     axis_size = batch_size + 1
@@ -216,7 +229,7 @@ def test_event_dim_collection_form(event_shape):
     with batched_do(interventions):
         z, _, _ = scm(event_shape)()
         assert indices_of(z, event_dim=event_dim)["batched_interventions"] == set(range(axis_size))
-        # No spurious duplicate batch axis: memory is linear in the batch size.
+        # No spurious duplicate batch axis.
         assert z.numel() == axis_size * math.prod(event_shape)
         for i in range(batch_size):
             zi = gather(z, IndexSet(batched_interventions={i + 1}), event_dim=event_dim)
@@ -265,11 +278,7 @@ def test_aligned_multisite_interventions():
 
     with batched_do(scenarios):
         _, x, y = scm()()
-        assert (
-            indices_of(x)
-            == indices_of(y)
-            == IndexSet(batched_interventions={0, 1, 2, 3})
-        )
+        assert indices_of(x) == indices_of(y) == IndexSet(batched_interventions={0, 1, 2, 3})
         for i in range(3):
             assert gather(x, IndexSet(batched_interventions={i + 1})).reshape(()) == xs[i]
             assert gather(y, IndexSet(batched_interventions={i + 1})).reshape(()) == ys[i]
@@ -277,8 +286,7 @@ def test_aligned_multisite_interventions():
 
 def test_matches_mwc_multisite_leaf():
     # Multi-site equivalence to MWC: interventions on two terminal (leaf) sites
-    # share one axis and match the corresponding MWC cells exactly. (Sample-path
-    # equality holds because no sampled site is batched downstream.)
+    # share one axis and match the corresponding MWC cells exactly.
     def model():
         z = pyro.sample("z", dist.Normal(0.0, 1.0))
         x = pyro.sample("x", dist.Normal(z, 1.0))
@@ -309,10 +317,7 @@ def test_matches_mwc_multisite_leaf():
             1: IndexSet(y1={1}, y2={0}),
             2: IndexSet(y1={0}, y2={1}),
         }
-        mwc = {
-            i: torch.stack([gather(y1, c).reshape(()), gather(y2, c).reshape(())])
-            for i, c in cells.items()
-        }
+        mwc = {i: torch.stack([gather(y1, c).reshape(()), gather(y2, c).reshape(())]) for i, c in cells.items()}
 
     for i in range(3):
         assert torch.allclose(batched[i], mwc[i])
@@ -351,10 +356,7 @@ def test_independent_noise_event_dim(event_shape):
     with batched_do(interventions, shared_noise=False):
         z, _, _ = scm(event_shape)()
         assert indices_of(z, event_dim=event_dim)["batched_interventions"] == {0, 1, 2}
-        worlds = [
-            gather(z, IndexSet(batched_interventions={i}), event_dim=event_dim)
-            for i in range(3)
-        ]
+        worlds = [gather(z, IndexSet(batched_interventions={i}), event_dim=event_dim) for i in range(3)]
         assert not torch.allclose(worlds[0].reshape(-1), worlds[1].reshape(-1))
 
 
@@ -399,11 +401,15 @@ def test_errors():
         with batched_do(mismatched):
             pass
 
+    # act and mask with different leading dimensions within the same site.
+    with pytest.raises(ValueError, match="same leading dimension"):
+        with batched_do({"z": (torch.tensor([1.0, 2.0]), torch.tensor([True]))}):
+            pass
+
 
 def test_batched_evaluates_model_once():
-    # Substantiates the "faster than an explicit loop" goal deterministically:
-    # the batched handler evaluates the model body a single time (vectorized over
-    # the batch axis), whereas an explicit loop evaluates it once per scenario.
+    # The batched handler evaluates the model body a single time (vectorized over
+    # the batch axis).
     n = 5
     interventions = [{"x": torch.tensor(float(i))} for i in range(n)]
 
@@ -428,10 +434,40 @@ def test_batched_evaluates_model_once():
     assert calls == 1  # batched: a single vectorized evaluation
 
 
+def test_composition_with_plain_do():
+    # A plain do() inside batched_do applies its action uniformly to all worlds
+    # (factual + every scenario). The _BatchedInterventions handler returns early
+    # for non-_BatchedAction interventions, so the plain do falls through to the
+    # standard Interventions handler and broadcasts across the existing batch axis.
+    #
+    # Setup: batched_do intervenes on z (two scenarios: z=100, z=200); plain do
+    # fixes x=0.0 for all worlds. Model: z -> x -> y, z -> y, y = 0.8x + 0.3z.
+    z_vals = [torch.tensor(100.0), torch.tensor(200.0)]
+    x_fixed = torch.tensor(0.0)
+
+    pyro.set_rng_seed(0)
+    with batched_do([{"z": z_vals[0]}, {"z": z_vals[1]}]):
+        with do(actions={"x": x_fixed}):
+            z, x, y = scm()()
+
+        def world(v, i):
+            return gather(v, IndexSet(batched_interventions={i})).reshape(())
+
+        # z has the batched structure
+        assert world(z, 1) == 100.0
+        assert world(z, 2) == 200.0
+        assert world(z, 0) != 100.0 and world(z, 0) != 200.0
+
+        # x is fixed to 0.0 in every world
+        for i in range(3):
+            assert world(x, i) == 0.0
+
+        # y ~ Normal(0.3 * z, 1) since x=0; worlds differ only through z
+        assert world(y, 2) > world(y, 1)  # z=200 vs z=100, gap >> 1-sigma noise
+
+
 # ---------------------------------------------------------------------------
 # Benchmarks: run locally to verify the memory/speed claims; skipped in CI
-# (wall-clock and large allocations are too environment-sensitive there), as in
-# tests/robust/test_performance.py.
 # ---------------------------------------------------------------------------
 
 
