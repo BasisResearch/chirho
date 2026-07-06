@@ -8,10 +8,11 @@ import pytest
 import torch
 
 from chirho.counterfactual.handlers import (
+    BatchedAction,
     BatchedWorldCounterfactual,
     MultiWorldCounterfactual,
     TwinWorldCounterfactual,
-    batched_do,
+    batch_scenarios,
 )
 from chirho.indexed.ops import IndexSet, gather, indices_of
 from chirho.interventional.handlers import do
@@ -45,30 +46,31 @@ def scm(event_shape=()):
 def test_smoke(first_available_dim):
     # Analogous to test_counterfactual_handler_smoke: factual world plus the
     # requested intervention scenarios, addressable by index.
-    interventions = [{"x": torch.tensor(10.0)}, {"x": torch.tensor(-10.0)}]
-    with BatchedWorldCounterfactual(interventions, first_available_dim=first_available_dim):
-        z, x, y = scm()()
-        # z is upstream of the intervened x; with shared noise it stays scalar.
-        assert indices_of(z) == IndexSet()
-        assert indices_of(x) == indices_of(y) == IndexSet(batched_interventions={0, 1, 2})
-        assert gather(x, IndexSet(batched_interventions={0})).reshape(()) != 10.0
-        assert gather(x, IndexSet(batched_interventions={1})).reshape(()) == 10.0
-        assert gather(x, IndexSet(batched_interventions={2})).reshape(()) == -10.0
+    with BatchedWorldCounterfactual(first_available_dim=first_available_dim):
+        with do(actions=batch_scenarios({"x": torch.tensor(10.0)}, {"x": torch.tensor(-10.0)})):
+            z, x, y = scm()()
+            assert indices_of(z) == IndexSet()
+            assert indices_of(x) == indices_of(y) == IndexSet(batched_interventions={0, 1, 2})
+            assert gather(x, IndexSet(batched_interventions={0})).reshape(()) != 10.0
+            assert gather(x, IndexSet(batched_interventions={1})).reshape(()) == 10.0
+            assert gather(x, IndexSet(batched_interventions={2})).reshape(()) == -10.0
 
 
 @pytest.mark.parametrize("first_available_dim", FIRST_AVAILABLE_DIMS)
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
 def test_matches_mwc_single_site(event_shape, first_available_dim):
-    # With shared noise (the default) each batched world is exactly the
-    # corresponding gathered slice of MultiWorldCounterfactual, including with
-    # non-trivial event dimensions.
+    # With shared noise each batched world is exactly the corresponding gathered
+    # slice of MultiWorldCounterfactual, including with non-trivial event dims.
     event_dim = len(event_shape)
     acts = (torch.full(event_shape, 3.0), torch.full(event_shape, -2.0))
 
     pyro.set_rng_seed(0)
-    with BatchedWorldCounterfactual([{"x": acts[0]}, {"x": acts[1]}], first_available_dim=first_available_dim):
-        vb = scm(event_shape)()
-        batched = [[gather(v, IndexSet(batched_interventions={i}), event_dim=event_dim) for v in vb] for i in range(3)]
+    with BatchedWorldCounterfactual(first_available_dim=first_available_dim):
+        with do(actions=batch_scenarios({"x": acts[0]}, {"x": acts[1]})):
+            vb = scm(event_shape)()
+            batched = [
+                [gather(v, IndexSet(batched_interventions={i}), event_dim=event_dim) for v in vb] for i in range(3)
+            ]
 
     pyro.set_rng_seed(0)
     with MultiWorldCounterfactual(first_available_dim), do(actions={"x": acts}):
@@ -87,74 +89,59 @@ def test_multiple_interventions_stay_on_single_axis(event_shape):
     za = torch.full(event_shape, 3.0)
     xb = torch.full(event_shape, -2.0)
 
-    with BatchedWorldCounterfactual([{"z": za}, {"x": xb}]):
-        z, x, y = scm(event_shape)()
-        assert indices_of(y, event_dim=event_dim) == IndexSet(batched_interventions={0, 1, 2})
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios({"z": za}, {"x": xb})):
+            _, _, y = scm(event_shape)()
+            assert indices_of(y, event_dim=event_dim) == IndexSet(batched_interventions={0, 1, 2})
 
     with MultiWorldCounterfactual(), do(actions={"z": (za,), "x": (xb,)}):
-        z, x, y = scm(event_shape)()
+        _, _, y = scm(event_shape)()
         # MWC fans the same interventions out across two separate axes.
         assert set(indices_of(y, event_dim=event_dim)) == {"x", "z"}
 
 
 @pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
 def test_conditioning_applies_to_factual_world(event_shape):
-    # Analogous to the counterfactual conditioning tests: observed data is
-    # applied only to the factual world (index 0); intervened scenarios keep
-    # their counterfactual values.
+    # Observed data is applied only to the factual world (index 0); intervened
+    # scenarios keep their counterfactual values.
     event_dim = len(event_shape)
     y_obs = torch.full(event_shape, 5.0)
     data = {"y": y_obs}
-    interventions = [
-        {"x": torch.full(event_shape, 10.0)},
-        {"x": torch.full(event_shape, -10.0)},
-    ]
 
-    with BatchedWorldCounterfactual(interventions), condition(data=data):
-        _, _, y = scm(event_shape)()
-        factual = gather(y, IndexSet(batched_interventions={0}), event_dim=event_dim)
-        assert torch.allclose(factual.reshape(-1), y_obs.reshape(-1))
+    with BatchedWorldCounterfactual(), condition(data=data):
+        with do(
+            actions=batch_scenarios(
+                {"x": torch.full(event_shape, 10.0)},
+                {"x": torch.full(event_shape, -10.0)},
+            )
+        ):
+            _, _, y = scm(event_shape)()
+            factual = gather(y, IndexSet(batched_interventions={0}), event_dim=event_dim)
+            assert torch.allclose(factual.reshape(-1), y_obs.reshape(-1))
 
-        s0 = gather(y, IndexSet(batched_interventions={1}), event_dim=event_dim)
-        s1 = gather(y, IndexSet(batched_interventions={2}), event_dim=event_dim)
-        assert (s0 > 5.0).all()  # y ~ Normal(0.8 * 10 + ..., 1)
-        assert (s1 < 5.0).all()  # y ~ Normal(0.8 * -10 + ..., 1)
+            s0 = gather(y, IndexSet(batched_interventions={1}), event_dim=event_dim)
+            s1 = gather(y, IndexSet(batched_interventions={2}), event_dim=event_dim)
+            assert (s0 > 5.0).all()  # y ~ Normal(0.8 * 10 + ..., 1)
+            assert (s1 < 5.0).all()  # y ~ Normal(0.8 * -10 + ..., 1)
 
 
 def test_dim_allocation_failure():
-    # Analogous to test_dim_allocation_failure: an index plate that collides
-    # with a model plate raises an informative error, which a different
-    # first_available_dim resolves.
+    # An index plate that collides with a model plate raises an informative error;
+    # a different first_available_dim resolves it.
     def model():
         with pyro.plate("data", 3, dim=-1):
             x = pyro.sample("x", dist.Normal(0.0, 1.0))
             return x
 
     with pytest.raises(ValueError, match=".*unable to allocate an index plate.*"):
-        with BatchedWorldCounterfactual([{"x": torch.tensor(1.0)}], first_available_dim=-1):
-            model()
+        with BatchedWorldCounterfactual(first_available_dim=-1):
+            with do(actions={"x": BatchedAction(act=torch.tensor([1.0]))}):
+                model()
 
-    # A leftmost-enough dimension succeeds.
-    with BatchedWorldCounterfactual([{"x": torch.tensor(1.0)}], first_available_dim=-2):
-        x = model()
-        assert indices_of(x)["batched_interventions"] == {0, 1}
-
-
-def test_batched_do_first_available_dim():
-    # batched_do must forward first_available_dim so users of the context-manager
-    # form can resolve plate conflicts without switching to the class directly.
-    def model():
-        with pyro.plate("data", 3, dim=-1):
-            x = pyro.sample("x", dist.Normal(0.0, 1.0))
-            return x
-
-    with pytest.raises(ValueError, match=".*unable to allocate an index plate.*"):
-        with batched_do([{"x": torch.tensor(1.0)}], first_available_dim=-1):
-            model()
-
-    with batched_do([{"x": torch.tensor(1.0)}], first_available_dim=-2):
-        x = model()
-        assert indices_of(x)["batched_interventions"] == {0, 1}
+    with BatchedWorldCounterfactual(first_available_dim=-2):
+        with do(actions={"x": BatchedAction(act=torch.tensor([1.0]))}):
+            x = model()
+            assert indices_of(x)["batched_interventions"] == {0, 1}
 
 
 # ---------------------------------------------------------------------------
@@ -162,131 +149,178 @@ def test_batched_do_first_available_dim():
 # ---------------------------------------------------------------------------
 
 
-def test_mapping_act_mask_form():
-    # The (act, mask) mapping form, with per-scenario masks; a False mask falls
-    # back to the (propagated) factual value.
-    interventions = {
-        "y": (torch.tensor([1.0, 300.0, 0.0]), torch.tensor([True, True, False])),
-        "z": (torch.tensor([100.0, 0.0, 200.0]), torch.tensor([True, False, True])),
+def test_dense_sweep_no_mask():
+    # BatchedAction without a mask: every scenario intervenes on the site.
+    z_vals = torch.linspace(-3.0, 3.0, 5)  # shape (5,)
+
+    with BatchedWorldCounterfactual():
+        with do(actions={"z": BatchedAction(act=z_vals)}):
+            z, x, y = scm()()
+            # world 0: factual; worlds 1-5: z fixed at each value.
+            assert indices_of(z) == IndexSet(batched_interventions={0, 1, 2, 3, 4, 5})
+            for i, val in enumerate(z_vals):
+                zi = gather(z, IndexSet(batched_interventions={i + 1})).reshape(())
+                assert zi == val
+
+
+def test_explicit_mask():
+    # BatchedAction with explicit mask: only scenarios where mask=True intervene;
+    # others pass through the factual (propagated) value.
+    actions = {
+        "z": BatchedAction(
+            act=torch.tensor([1.0, 2.0, 0.0]),
+            mask=torch.tensor([True, True, False]),
+        ),
+        "x": BatchedAction(
+            act=torch.tensor([0.0, 3.0, 3.0]),
+            mask=torch.tensor([False, True, True]),
+        ),
     }
-    with batched_do(interventions):
-        z, _, y = scm()()
-        # index 0 is factual; scenarios occupy 1..3.
-        assert indices_of(z)["batched_interventions"] == set(range(4))
-        for i in range(1, 4):
-            zi = gather(z, IndexSet(batched_interventions={i})).reshape(())
-            yi = gather(y, IndexSet(batched_interventions={i})).reshape(())
-            assert (zi >= 100.0) or (yi >= 100.0)
+
+    with BatchedWorldCounterfactual():
+        with do(actions=actions):
+            z, x, y = scm()()
+            # world 0: factual
+            assert indices_of(z) == IndexSet(batched_interventions={0, 1, 2, 3})
+            assert gather(z, IndexSet(batched_interventions={1})).reshape(()) == 1.0
+            assert gather(z, IndexSet(batched_interventions={2})).reshape(()) == 2.0
+            # world 3: z mask=False → factual z draw (not 0.0)
+            z3 = gather(z, IndexSet(batched_interventions={3})).reshape(())
+            assert z3 != 0.0 and z3 != 1.0 and z3 != 2.0
+            # world 1: x mask=False → x propagated from z=1
+            x1 = gather(x, IndexSet(batched_interventions={1})).reshape(())
+            assert x1 != 3.0
+            assert gather(x, IndexSet(batched_interventions={2})).reshape(()) == 3.0
+            assert gather(x, IndexSet(batched_interventions={3})).reshape(()) == 3.0
+
+
+def test_batch_scenarios_convenience():
+    # batch_scenarios infers masks from key presence; same result as building
+    # BatchedAction manually.
+    manual = {
+        "z": BatchedAction(
+            act=torch.stack(torch.broadcast_tensors(torch.tensor(1.0), torch.tensor(0.0), torch.tensor(2.0))),
+            mask=torch.tensor([True, False, True]),
+        ),
+        "x": BatchedAction(
+            act=torch.stack(torch.broadcast_tensors(torch.tensor(0.0), torch.tensor(3.0), torch.tensor(3.0))),
+            mask=torch.tensor([False, True, True]),
+        ),
+    }
+    auto = batch_scenarios(
+        {"z": torch.tensor(1.0)},
+        {"x": torch.tensor(3.0)},
+        {"z": torch.tensor(2.0), "x": torch.tensor(3.0)},
+    )
+
+    assert set(auto.keys()) == {"z", "x"}
+    for site in ("z", "x"):
+        assert torch.equal(auto[site].act, manual[site].act)
+        assert torch.equal(auto[site].mask, manual[site].mask)
 
 
 def test_gather_isolates_scenarios_and_propagates():
-    # Collection-of-dicts form. scenario i lives at index i + 1.
-    interventions = [
-        {"z": torch.tensor(100.0)},
-        {"y": torch.tensor(300.0)},
-        {"z": torch.tensor(200.0), "y": torch.tensor(0.0)},
-    ]
-    with batched_do(interventions):
-        z, _, y = scm()()
+    # Scenario i lives at index i+1; non-intervened sites propagate upstream
+    # interventions rather than reverting to the global factual.
+    with BatchedWorldCounterfactual():
+        with do(
+            actions=batch_scenarios(
+                {"z": torch.tensor(100.0)},
+                {"y": torch.tensor(300.0)},
+                {"z": torch.tensor(200.0), "y": torch.tensor(0.0)},
+            )
+        ):
+            z, _, y = scm()()
 
-        def world(v, i):
-            return gather(v, IndexSet(batched_interventions={i})).reshape(())
+            def world(v, i):
+                return gather(v, IndexSet(batched_interventions={i})).reshape(())
 
-        assert world(z, 1) == 100.0
-        assert world(z, 3) == 200.0
-        assert world(y, 2) == 300.0
-        assert world(y, 3) == 0.0
-        # scenario 0 intervenes only on z; y must reflect the intervened z
-        # downstream rather than being reset to the factual value.
-        assert world(y, 1) > 10.0
+            assert world(z, 1) == 100.0
+            assert world(z, 3) == 200.0
+            assert world(y, 2) == 300.0
+            assert world(y, 3) == 0.0
+            # scenario 0 intervenes only on z; y must reflect the intervened z downstream.
+            assert world(y, 1) > 10.0
 
 
-def test_factual_world_present_and_optional():
-    interventions = [{"z": torch.tensor(100.0)}, {"z": torch.tensor(200.0)}]
-
-    # Exercise the handler class directly (no enclosing IndexPlatesMessenger).
-    with BatchedWorldCounterfactual(interventions):
-        z, _, _ = scm()()
-        assert indices_of(z)["batched_interventions"] == set(range(3))  # factual + 2
-        factual = gather(z, IndexSet(batched_interventions={0})).reshape(())
-        assert factual != 100.0 and factual != 200.0
-
-    # factual=False drops the factual world; the axis holds only the scenarios.
-    with batched_do(interventions, factual=False):
-        z, _, _ = scm()()
-        assert indices_of(z)["batched_interventions"] == set(range(2))
-        assert gather(z, IndexSet(batched_interventions={0})).reshape(()) == 100.0
+def test_factual_world_present():
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios({"z": torch.tensor(100.0)}, {"z": torch.tensor(200.0)})):
+            z, _, _ = scm()()
+            assert indices_of(z)["batched_interventions"] == set(range(3))  # factual + 2
+            factual = gather(z, IndexSet(batched_interventions={0})).reshape(())
+            assert factual != 100.0 and factual != 200.0
 
 
 @pytest.mark.parametrize("event_shape", [(4,), (4, 3)], ids=str)
-def test_event_dim_collection_form(event_shape):
-    # Non-trivial event dimensions.
+def test_event_dim(event_shape):
+    # Non-trivial event dimensions with batch_scenarios.
     event_dim = len(event_shape)
     batch_size = 3
-    axis_size = batch_size + 1
 
-    interventions = [{"z": torch.full(event_shape, float(10 * (i + 1)))} for i in range(batch_size)]
-    with batched_do(interventions):
-        z, _, _ = scm(event_shape)()
-        assert indices_of(z, event_dim=event_dim)["batched_interventions"] == set(range(axis_size))
-        # No spurious duplicate batch axis.
-        assert z.numel() == axis_size * math.prod(event_shape)
-        for i in range(batch_size):
-            zi = gather(z, IndexSet(batched_interventions={i + 1}), event_dim=event_dim)
-            assert torch.allclose(zi.reshape(-1), torch.full(event_shape, 10.0 * (i + 1)).reshape(-1))
+    with BatchedWorldCounterfactual():
+        with do(
+            actions=batch_scenarios(*[{"z": torch.full(event_shape, float(10 * (i + 1)))} for i in range(batch_size)])
+        ):
+            z, _, _ = scm(event_shape)()
+            assert indices_of(z, event_dim=event_dim)["batched_interventions"] == set(range(batch_size + 1))
+            assert z.numel() == (batch_size + 1) * math.prod(event_shape)
+            for i in range(batch_size):
+                zi = gather(z, IndexSet(batched_interventions={i + 1}), event_dim=event_dim)
+                assert torch.allclose(zi.reshape(-1), torch.full(event_shape, 10.0 * (i + 1)).reshape(-1))
 
 
 @pytest.mark.parametrize("event_shape", [(4,), (4, 3)], ids=str)
-def test_event_dim_mapping_form(event_shape):
-    # Non-trivial event dimensions, (act, mask) form with heterogeneous masks.
+def test_event_dim_explicit_mask(event_shape):
+    # BatchedAction with explicit mask and non-trivial event dims.
     event_dim = len(event_shape)
     act = torch.stack([torch.full(event_shape, 10.0), torch.full(event_shape, 20.0)])
     mask = torch.tensor([True, False])
 
-    with batched_do({"z": (act, mask)}):
-        z, _, _ = scm(event_shape)()
-        # factual(0) + 2 scenarios
-        assert indices_of(z, event_dim=event_dim)["batched_interventions"] == {0, 1, 2}
-        s1 = gather(z, IndexSet(batched_interventions={1}), event_dim=event_dim)
-        assert torch.allclose(s1.reshape(-1), torch.full(event_shape, 10.0).reshape(-1))
-        # scenario 2 has mask False -> factual (not 20.0).
-        s2 = gather(z, IndexSet(batched_interventions={2}), event_dim=event_dim)
-        assert not torch.allclose(s2.reshape(-1), torch.full(event_shape, 20.0).reshape(-1))
+    with BatchedWorldCounterfactual():
+        with do(actions={"z": BatchedAction(act=act, mask=mask)}):
+            z, _, _ = scm(event_shape)()
+            assert indices_of(z, event_dim=event_dim)["batched_interventions"] == {0, 1, 2}
+            s1 = gather(z, IndexSet(batched_interventions={1}), event_dim=event_dim)
+            assert torch.allclose(s1.reshape(-1), torch.full(event_shape, 10.0).reshape(-1))
+            # scenario 2 has mask False → factual (not 20.0).
+            s2 = gather(z, IndexSet(batched_interventions={2}), event_dim=event_dim)
+            assert not torch.allclose(s2.reshape(-1), torch.full(event_shape, 20.0).reshape(-1))
 
 
-def test_collection_form_broadcasts_mixed_shapes():
-    # The collection form broadcasts action tensors of different shapes together.
+def test_broadcasts_mixed_shapes():
+    # batch_scenarios broadcasts action tensors of different shapes together.
     event_shape = (4,)
-    interventions = [
-        {"z": torch.tensor(7.0)},  # scalar, broadcast over the event shape
-        {"z": torch.full(event_shape, 9.0)},  # full vector
-    ]
-    with batched_do(interventions):
-        z, _, _ = scm(event_shape)()
-        s1 = gather(z, IndexSet(batched_interventions={1}), event_dim=1)
-        s2 = gather(z, IndexSet(batched_interventions={2}), event_dim=1)
-        assert torch.allclose(s1.reshape(-1), torch.full(event_shape, 7.0))
-        assert torch.allclose(s2.reshape(-1), torch.full(event_shape, 9.0))
+    with BatchedWorldCounterfactual():
+        with do(
+            actions=batch_scenarios(
+                {"z": torch.tensor(7.0)},  # scalar, broadcast over event_shape
+                {"z": torch.full(event_shape, 9.0)},
+            )
+        ):
+            z, _, _ = scm(event_shape)()
+            s1 = gather(z, IndexSet(batched_interventions={1}), event_dim=1)
+            s2 = gather(z, IndexSet(batched_interventions={2}), event_dim=1)
+            assert torch.allclose(s1.reshape(-1), torch.full(event_shape, 7.0))
+            assert torch.allclose(s2.reshape(-1), torch.full(event_shape, 9.0))
 
 
 def test_aligned_multisite_interventions():
-    # Intervening on two sites with aligned tuples yields N *zipped* worlds (not a
-    # cross product): world i sets both sites to their i-th values.
+    # Two sites with aligned values yield N zipped worlds (not a cross product).
     xs = [torch.tensor(v) for v in (10.0, 20.0, 30.0)]
     ys = [torch.tensor(v) for v in (-1.0, -2.0, -3.0)]
-    scenarios = [{"x": xs[i], "y": ys[i]} for i in range(3)]
 
-    with batched_do(scenarios):
-        _, x, y = scm()()
-        assert indices_of(x) == indices_of(y) == IndexSet(batched_interventions={0, 1, 2, 3})
-        for i in range(3):
-            assert gather(x, IndexSet(batched_interventions={i + 1})).reshape(()) == xs[i]
-            assert gather(y, IndexSet(batched_interventions={i + 1})).reshape(()) == ys[i]
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios(*[{"x": xs[i], "y": ys[i]} for i in range(3)])):
+            _, x, y = scm()()
+            assert indices_of(x) == indices_of(y) == IndexSet(batched_interventions={0, 1, 2, 3})
+            for i in range(3):
+                assert gather(x, IndexSet(batched_interventions={i + 1})).reshape(()) == xs[i]
+                assert gather(y, IndexSet(batched_interventions={i + 1})).reshape(()) == ys[i]
 
 
 def test_matches_mwc_multisite_leaf():
-    # Multi-site equivalence to MWC: interventions on two terminal (leaf) sites
-    # share one axis and match the corresponding MWC cells exactly.
+    # Multi-site equivalence to MWC: leaf-site interventions match MWC cells exactly.
     def model():
         z = pyro.sample("z", dist.Normal(0.0, 1.0))
         x = pyro.sample("x", dist.Normal(z, 1.0))
@@ -297,17 +331,18 @@ def test_matches_mwc_multisite_leaf():
     a, b = torch.tensor(50.0), torch.tensor(-40.0)
 
     pyro.set_rng_seed(0)
-    with batched_do([{"y1": a}, {"y2": b}]):
-        y1, y2 = model()
-        batched = {
-            i: torch.stack(
-                [
-                    gather(y1, IndexSet(batched_interventions={i})).reshape(()),
-                    gather(y2, IndexSet(batched_interventions={i})).reshape(()),
-                ]
-            )
-            for i in range(3)
-        }
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios({"y1": a}, {"y2": b})):
+            y1, y2 = model()
+            batched = {
+                i: torch.stack(
+                    [
+                        gather(y1, IndexSet(batched_interventions={i})).reshape(()),
+                        gather(y2, IndexSet(batched_interventions={i})).reshape(()),
+                    ]
+                )
+                for i in range(3)
+            }
 
     pyro.set_rng_seed(0)
     with MultiWorldCounterfactual(), do(actions={"y1": (a,), "y2": (b,)}):
@@ -324,46 +359,17 @@ def test_matches_mwc_multisite_leaf():
 
 
 def test_handler_usable_as_decorator():
-    # Citizen parity with MWC/TWC: usable as a decorator, not only a context
-    # manager.
+    # BWC is usable as a decorator — do() wraps the model inside BWC's scope.
     n = 3
-    interventions = [{"x": torch.tensor(float(i))} for i in range(n)]
-    decorated = BatchedWorldCounterfactual(interventions)(scm())
+    acts = torch.tensor([float(i) for i in range(n)])
+    decorated = BatchedWorldCounterfactual()(do(actions={"x": BatchedAction(act=acts)})(scm()))
     _, x, _ = decorated()
     assert x.numel() == n + 1  # factual + N scenarios on the batch axis
 
 
-def test_independent_noise_mode():
-    # shared_noise=False batches every latent independently, so an upstream
-    # latent (z) untouched by any intervention differs across worlds.
-    interventions = [{"x": torch.tensor(10.0)}, {"x": torch.tensor(-10.0)}]
-    with batched_do(interventions, shared_noise=False):
-        z, _, _ = scm()()
-        worlds = [gather(z, IndexSet(batched_interventions={i})).reshape(()) for i in range(3)]
-        assert not torch.allclose(worlds[0], worlds[1])
-        assert not torch.allclose(worlds[1], worlds[2])
-
-
-@pytest.mark.parametrize("event_shape", [(4,), (4, 3)], ids=str)
-def test_independent_noise_event_dim(event_shape):
-    # shared_noise=False with non-trivial event dims: BatchedLatents places the
-    # named axis on every latent (incl. upstream z) and gives independent draws.
-    event_dim = len(event_shape)
-    interventions = [
-        {"x": torch.full(event_shape, 10.0)},
-        {"x": torch.full(event_shape, -10.0)},
-    ]
-    with batched_do(interventions, shared_noise=False):
-        z, _, _ = scm(event_shape)()
-        assert indices_of(z, event_dim=event_dim)["batched_interventions"] == {0, 1, 2}
-        worlds = [gather(z, IndexSet(batched_interventions={i}), event_dim=event_dim) for i in range(3)]
-        assert not torch.allclose(worlds[0].reshape(-1), worlds[1].reshape(-1))
-
-
 @pytest.mark.parametrize("num_sites", [2, 4, 6])
 def test_linear_memory_vs_mwc_cross_product(num_sites):
-    # MWC represents the cross product (2 ** num_sites worlds); the batched
-    # handler keeps a single axis whose size is independent of num_sites.
+    # MWC represents the cross product (2**num_sites worlds); BWC keeps one axis.
     def chain_model():
         prev = pyro.sample("s0", dist.Normal(0.0, 1.0))
         for i in range(1, num_sites):
@@ -375,44 +381,66 @@ def test_linear_memory_vs_mwc_cross_product(num_sites):
     with MultiWorldCounterfactual(), do(actions={s: torch.tensor(float(i)) for i, s in enumerate(sites)}):
         last_mwc = chain_model()
 
-    interventions = [{sites[i]: torch.tensor(float(i))} for i in range(num_sites)]
-    with batched_do(interventions):
-        last_batched = chain_model()
-        n_axes = len(indices_of(last_batched))
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios(*[{sites[i]: torch.tensor(float(i))} for i in range(num_sites)])):
+            last_batched = chain_model()
+            n_axes = len(indices_of(last_batched))
 
-    # MWC: one axis per intervened site (Cartesian product).
     assert last_mwc.numel() == 2**num_sites
-    # batched: a single shared axis regardless of the number of sites.
     assert n_axes == 1
     assert last_batched.numel() == num_sites + 1  # factual + scenarios
 
 
-def test_errors():
-    # Empty actions and mismatched batch sizes are rejected.
-    with pytest.raises(ValueError, match="nonempty"):
-        with batched_do({}):
-            pass
+def test_pci_like_pattern():
+    # PCI evaluates N (sufficiency, necessity) pairs in one pass. Masks and values
+    # are pre-sampled tensors; the 2N scenarios are assembled with torch.cat.
+    N = 4
+    sites = ["z", "x"]
 
-    mismatched = {
-        "z": (torch.tensor([1.0, 2.0]), torch.tensor([True, True])),
-        "x": (torch.tensor([1.0, 2.0, 3.0]), torch.tensor([True, True, True])),
+    masks = {
+        "z": torch.tensor([True, False, True, False]),
+        "x": torch.tensor([False, True, True, False]),
     }
-    with pytest.raises(ValueError, match="same batch size"):
-        with batched_do(mismatched):
-            pass
+    suff_vals = {"z": torch.full((N,), 5.0), "x": torch.full((N,), 5.0)}
+    nec_vals = {"z": torch.full((N,), -5.0), "x": torch.full((N,), -5.0)}
 
-    # act and mask with different leading dimensions within the same site.
+    actions = {
+        site: BatchedAction(
+            act=torch.cat([suff_vals[site], nec_vals[site]]),
+            mask=torch.cat([masks[site], masks[site]]),
+        )
+        for site in sites
+    }
+
+    with BatchedWorldCounterfactual():
+        with do(actions=actions):
+            z, x, y = scm()()
+
+            # world 0: factual; worlds 1..N: sufficiency; worlds N+1..2N: necessity.
+            assert indices_of(y) == IndexSet(batched_interventions=set(range(2 * N + 1)))
+
+            suff_y = [gather(y, IndexSet(batched_interventions={i})).reshape(()) for i in range(1, N + 1)]
+            nec_y = [gather(y, IndexSet(batched_interventions={i})).reshape(()) for i in range(N + 1, 2 * N + 1)]
+
+            # Sufficiency and necessity worlds are distinct (large intervention gap of 10).
+            for i in range(N):
+                assert suff_y[i] != nec_y[i] or (not masks["z"][i] and not masks["x"][i])
+
+
+def test_errors():
+    # BatchedAction validates act/mask shape consistency.
     with pytest.raises(ValueError, match="same leading dimension"):
-        with batched_do({"z": (torch.tensor([1.0, 2.0]), torch.tensor([True]))}):
-            pass
+        BatchedAction(act=torch.tensor([1.0, 2.0]), mask=torch.tensor([True]))
+
+    # batch_scenarios requires at least one dict.
+    with pytest.raises(ValueError, match="at least one"):
+        batch_scenarios()
 
 
 def test_batched_evaluates_model_once():
-    # The batched handler evaluates the model body a single time (vectorized over
-    # the batch axis).
+    # One vectorized forward pass regardless of batch size.
     n = 5
-    interventions = [{"x": torch.tensor(float(i))} for i in range(n)]
-
+    acts = torch.tensor([float(i) for i in range(n)])
     calls = 0
 
     def model():
@@ -423,47 +451,57 @@ def test_batched_evaluates_model_once():
         return pyro.sample("y", dist.Normal(x, 1.0))
 
     calls = 0
-    for intervention in interventions:
-        with do(actions=intervention):
+    for i in range(n):
+        with do(actions={"x": torch.tensor(float(i))}):
             model()
-    assert calls == n  # explicit loop: one evaluation per scenario
+    assert calls == n  # explicit loop: one call per scenario
 
     calls = 0
-    with batched_do(interventions):
-        model()
-    assert calls == 1  # batched: a single vectorized evaluation
+    with BatchedWorldCounterfactual():
+        with do(actions={"x": BatchedAction(act=acts)}):
+            model()
+    assert calls == 1  # batched: single vectorized call
 
 
 def test_composition_with_plain_do():
-    # A plain do() inside batched_do applies its action uniformly to all worlds
-    # (factual + every scenario). The _BatchedInterventions handler returns early
-    # for non-_BatchedAction interventions, so the plain do falls through to the
-    # standard Interventions handler and broadcasts across the existing batch axis.
-    #
-    # Setup: batched_do intervenes on z (two scenarios: z=100, z=200); plain do
-    # fixes x=0.0 for all worlds. Model: z -> x -> y, z -> y, y = 0.8x + 0.3z.
+    # A plain do() inside BWC applies its action uniformly to all worlds.
+    # The plain do falls through BWC's _pyro_split (wrong type) to the standard
+    # Interventions handler, which broadcasts across the existing batch axis.
     z_vals = [torch.tensor(100.0), torch.tensor(200.0)]
     x_fixed = torch.tensor(0.0)
 
-    pyro.set_rng_seed(0)
-    with batched_do([{"z": z_vals[0]}, {"z": z_vals[1]}]):
-        with do(actions={"x": x_fixed}):
-            z, x, y = scm()()
+    with BatchedWorldCounterfactual():
+        with do(actions=batch_scenarios({"z": z_vals[0]}, {"z": z_vals[1]})):
+            with do(actions={"x": x_fixed}):
+                z, x, y = scm()()
 
-        def world(v, i):
-            return gather(v, IndexSet(batched_interventions={i})).reshape(())
+                def world(v, i):
+                    return gather(v, IndexSet(batched_interventions={i})).reshape(())
 
-        # z has the batched structure
-        assert world(z, 1) == 100.0
-        assert world(z, 2) == 200.0
-        assert world(z, 0) != 100.0 and world(z, 0) != 200.0
+                assert world(z, 1) == 100.0
+                assert world(z, 2) == 200.0
+                assert world(z, 0) != 100.0 and world(z, 0) != 200.0
 
-        # x is fixed to 0.0 in every world
-        for i in range(3):
-            assert world(x, i) == 0.0
+                for i in range(3):
+                    assert world(x, i) == 0.0
 
-        # y ~ Normal(0.3 * z, 1) since x=0; worlds differ only through z
-        assert world(y, 2) > world(y, 1)  # z=200 vs z=100, gap >> 1-sigma noise
+                assert world(y, 2) > world(y, 1)  # z=200 vs z=100, gap >> 1-sigma noise
+
+
+def test_composition_bwc_mwc_raises():
+    # Nesting BWC inside another IndexPlatesMessenger subclass (MWC) is a known
+    # limitation: both try to enter a Pyro plate with the same name.
+    # This is the same pre-existing issue as nesting MWC + TwinWorldCounterfactual.
+    with pytest.raises(ValueError, match="duplicate plate"):
+        with MultiWorldCounterfactual():
+            with BatchedWorldCounterfactual():
+                with do(
+                    actions={
+                        "z": (torch.tensor(50.0),),
+                        "x": BatchedAction(act=torch.tensor([10.0, 20.0])),
+                    }
+                ):
+                    scm()()
 
 
 # ---------------------------------------------------------------------------
@@ -473,14 +511,12 @@ def test_composition_with_plain_do():
 
 @pytest.mark.skip(reason="benchmark, timing-sensitive; run locally")
 def test_benchmark_batched_vs_alternatives():
-    # Evaluate N single-site alternatives four ways. The batched handler runs one
-    # vectorized forward pass; the loops run N; MWC vectorizes too but carries
-    # more per-site machinery (split/scatter + factual conditioning). Measured
+    # Evaluate N single-site alternatives four ways. Measured
     # (single thread, N=300, event_size=300):
     #   batched ~1.6 ms | loop+do ~30 ms (~19x) | loop+TWC ~128 ms (~80x) | MWC ~19 ms (~12x)
     torch.set_num_threads(1)
     event_size, n = 300, 300
-    acts = [torch.full((event_size,), float(i)) for i in range(n)]
+    acts = torch.stack([torch.full((event_size,), float(i)) for i in range(n)])  # (N, event_size)
 
     def model():
         z = pyro.sample("z", dist.Normal(torch.zeros(event_size), 1.0).to_event(1))
@@ -488,16 +524,17 @@ def test_benchmark_batched_vs_alternatives():
         return pyro.sample("y", dist.Normal(0.5 * x, 1.0).to_event(1))
 
     def run_batched():
-        with batched_do([{"x": a} for a in acts]):
-            return model()
+        with BatchedWorldCounterfactual():
+            with do(actions={"x": BatchedAction(act=acts)}):
+                return model()
 
     def run_loop_do():
-        return [(do(actions={"x": a})(model))() for a in acts]
+        return [(do(actions={"x": acts[i]})(model))() for i in range(n)]
 
     def run_loop_twc():
         out = []
-        for a in acts:
-            with TwinWorldCounterfactual(), do(actions={"x": a}):
+        for i in range(n):
+            with TwinWorldCounterfactual(), do(actions={"x": acts[i]}):
                 out.append(model())
         return out
 
@@ -530,10 +567,8 @@ def test_benchmark_batched_vs_alternatives():
 
 @pytest.mark.skip(reason="benchmark, large allocations; run locally")
 def test_benchmark_batched_memory_vs_mwc():
-    # Measures the actual bytes of the represented worlds as the number of
-    # intervened sites K grows: MWC is the Cartesian product (2 ** K worlds),
-    # the batched handler is a single axis (K + 1 worlds). The ratio therefore
-    # blows up as 2 ** K / (K + 1). Measured (float64) bytes:
+    # Measures output tensor bytes as K (intervened sites) grows.
+    # MWC is 2^K worlds; BWC is K+1. Measured (float64) bytes:
     #   K=2  -> MWC 16   vs batched 12   (~1x)
     #   K=4  -> MWC 64   vs batched 20   (~3x)
     #   K=8  -> MWC 1024 vs batched 36   (~28x)
@@ -551,8 +586,9 @@ def test_benchmark_batched_memory_vs_mwc():
         sites = [f"s{i}" for i in range(k)]
         with MultiWorldCounterfactual(), do(actions={s: torch.tensor(float(i)) for i, s in enumerate(sites)}):
             mwc_bytes = bytes_of(chain_model(k))
-        with batched_do([{sites[i]: torch.tensor(float(i))} for i in range(k)]):
-            batched_bytes = bytes_of(chain_model(k))
+        with BatchedWorldCounterfactual():
+            with do(actions=batch_scenarios(*[{sites[i]: torch.tensor(float(i))} for i in range(k)])):
+                batched_bytes = bytes_of(chain_model(k))
         logger.info(
             "K=%d  MWC=%d bytes (2^K worlds)  batched=%d bytes (K+1 worlds)  ratio=%.0fx",
             k,

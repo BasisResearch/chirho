@@ -1,9 +1,9 @@
 from .counterfactual import (  # noqa: F401
-    BatchedInterventions,
+    BatchedAction,
     BatchedWorldCounterfactual,
     MultiWorldCounterfactual,
     SingleWorldCounterfactual,
     SingleWorldFactual,
     TwinWorldCounterfactual,
-    batched_do,
+    batch_scenarios,
 )
