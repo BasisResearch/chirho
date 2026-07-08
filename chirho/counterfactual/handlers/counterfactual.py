@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, TypeVar
+import dataclasses
+from collections.abc import Hashable, Mapping
+from typing import Any, Optional, TypeVar
 
 import pyro
+import torch
 
 from chirho.counterfactual.handlers.ambiguity import FactualConditioningMessenger
 from chirho.counterfactual.ops import split
 from chirho.indexed.handlers import IndexPlatesMessenger
 from chirho.indexed.ops import get_index_plates
 from chirho.interventional.ops import intervene
+from chirho.observational.internals import unbind_leftmost_dim
 
 T = TypeVar("T")
 
@@ -195,3 +199,179 @@ class TwinWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger)
     @classmethod
     def _pyro_split(cls, msg: dict[str, Any]) -> None:
         msg["kwargs"]["name"] = msg["name"] = cls.fresh_prefix
+
+
+_DEFAULT_BATCH_NAME = "batched_interventions"
+
+
+@dataclasses.dataclass
+class BatchedAction:
+    """Per-site batched intervention for use with :class:`BatchedWorldCounterfactual`.
+
+    :param act: Shape ``(N, *event_shape)``. Intervention value for each scenario.
+    :param mask: Shape ``(N,)`` bool. Which scenarios intervene on this site.
+        Defaults to all-True.
+
+    Slots where ``mask`` is ``False`` are never read by ``torch.where``; their
+    values are irrelevant placeholders. All ``BatchedAction`` objects in a single
+    run must share the same leading size N.
+    """
+
+    act: torch.Tensor
+    mask: torch.Tensor
+
+    def __init__(self, act: torch.Tensor, mask: torch.Tensor | None = None):
+        self.act = act
+        if mask is None:
+            self.mask = torch.ones(self.act.shape[0], dtype=torch.bool)
+        else:
+            if self.act.shape[0] != mask.shape[0]:
+                raise ValueError(
+                    f"act and mask must have the same leading dimension, "
+                    f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={mask.shape[0]}."
+                )
+            self.mask = mask
+
+    @property
+    def batch_size(self) -> int:
+        return self.act.shape[0]
+
+
+def _prepend_factual_world(action: BatchedAction) -> BatchedAction:
+    """Prepend a factual world at index 0 (mask=False, so obs passes through unchanged)."""
+    assert action.mask is not None
+    return BatchedAction(
+        torch.cat([torch.zeros_like(action.act[:1]), action.act], dim=0),
+        torch.cat([torch.zeros_like(action.mask[:1]), action.mask], dim=0),
+    )
+
+
+def batch_scenarios(*dicts: Mapping[Hashable, torch.Tensor]) -> dict[Hashable, BatchedAction]:
+    """Convert per-scenario ``{site: tensor}`` dicts to a ``{site: BatchedAction}`` mapping.
+
+    Masks are inferred from key presence. Action tensors of different shapes are broadcast
+    before stacking, so a scalar intervention broadcasts to match a vector one.
+
+    :param dicts: One dict per scenario mapping site names to intervention tensors.
+    :returns: ``{site: BatchedAction}`` suitable for passing to
+        :func:`~chirho.interventional.handlers.do`.
+
+    Example::
+
+        actions = batch_scenarios(
+            {"z": torch.tensor(1.0)},                        # scenario 0: z only
+            {"z": torch.tensor(2.0), "x": torch.tensor(3.0)},  # scenario 1: z and x
+            {"x": torch.tensor(3.0)},                        # scenario 2: x only
+        )
+        with BatchedWorldCounterfactual():
+            with do(actions=actions):
+                model()
+    """
+    if not dicts:
+        raise ValueError("batch_scenarios requires at least one scenario dict.")
+    sites: set[Hashable] = set().union(*(d.keys() for d in dicts))
+    result: dict[Hashable, BatchedAction] = {}
+    for site in sites:
+        raw: list[Optional[torch.Tensor]] = [d.get(site) for d in dicts]  # type: ignore[arg-type]
+        masks = torch.tensor([v is not None for v in raw])
+        real = next(v for v in raw if v is not None)
+        filled = [torch.zeros((), dtype=real.dtype) if v is None else v for v in raw]  # type: ignore[union-attr]
+        stacked = torch.stack(list(torch.broadcast_tensors(*filled)))
+        result[site] = BatchedAction(act=stacked, mask=masks)
+    return result
+
+
+class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
+    """Evaluate N heterogeneous intervention scenarios on a single shared index-plate axis.
+
+    Memory is linear in N (vs :class:`MultiWorldCounterfactual`'s exponential in sites).
+    Index 0 is the factual world; indices ``1..N`` are the scenarios.  Results are read with
+    ``gather(value, IndexSet(batched_interventions={k}), event_dim=...)``.
+
+    Interventions are passed via :func:`~chirho.interventional.handlers.do` using
+    :class:`BatchedAction` values.  The four main usage patterns:
+
+    **1. Sweep one site over N values** (no mask needed)::
+
+        z_vals = torch.linspace(-3.0, 3.0, 5)  # shape (5,)
+        with BatchedWorldCounterfactual():
+            with do(actions={"z": BatchedAction(act=z_vals)}):
+                z, x, y = model()
+        # world 0: factual; worlds 1-5: z fixed at each value
+
+    **2. Heterogeneous per-site masks** (each scenario intervenes on a different subset)::
+
+        actions = {
+            "z": BatchedAction(act=torch.tensor([1., 2., 0.]), mask=torch.tensor([True, True, False])),
+            "x": BatchedAction(act=torch.tensor([0., 3., 3.]), mask=torch.tensor([False, True, True])),
+        }
+        with BatchedWorldCounterfactual():
+            with do(actions=actions):
+                z, x, y = model()
+        # 3 scenarios share one axis instead of MWC's 2x2 cross-product
+
+    **3. Scenario dicts via** :func:`batch_scenarios` (masks inferred from key presence)::
+
+        with BatchedWorldCounterfactual():
+            with do(actions=batch_scenarios(
+                {"z": torch.tensor(1.)},
+                {"z": torch.tensor(2.), "x": torch.tensor(3.)},
+                {"x": torch.tensor(3.)},
+            )):
+                z, x, y = model()
+
+    **4. PCI — pre-sampled masks and values** (sufficiency + necessity in one pass)::
+
+        N = 4
+        actions = {
+            site: BatchedAction(
+                act=torch.cat([suff_vals[site], nec_vals[site]]),
+                mask=torch.cat([masks[site], masks[site]]),
+            )
+            for site in sites
+        }
+        with BatchedWorldCounterfactual():
+            with do(actions=actions):
+                z, x, y = model()
+        # world 0: factual; worlds 1..N: sufficiency; worlds N+1..2N: necessity
+
+    .. note::
+        Nesting inside another :class:`~chirho.indexed.handlers.IndexPlatesMessenger`
+        subclass (e.g. :class:`MultiWorldCounterfactual`) is not currently supported
+        and raises ``ValueError`` — the same pre-existing limitation as nesting MWC
+        inside :class:`TwinWorldCounterfactual`.
+
+    :param first_available_dim: Leftmost dimension available for index plates.
+    """
+
+    @staticmethod
+    def _pyro_intervene(msg: dict[str, Any]) -> None:
+        # Only convert BatchedAction interventions to split.  Plain tensors and
+        # tuples are returned as-is (the default _intervene_atom body runs) so
+        # that a vanilla do() inside BatchedWorldCounterfactual broadcasts its
+        # value across the existing batched_interventions axis rather than
+        # creating a new per-site plate.
+        if isinstance(msg["args"][1], BatchedAction):
+            BaseCounterfactualMessenger._pyro_intervene(msg)
+
+    def _pyro_split(self, msg: dict[str, Any]) -> None:
+        obs, acts = msg["args"]
+        if not (len(acts) == 1 and isinstance(acts[0], BatchedAction)):
+            return
+
+        action = acts[0]
+        event_dim = msg["kwargs"].get("event_dim", 0)
+
+        full_action = _prepend_factual_world(action)
+        batch_size = full_action.batch_size
+
+        act_value = unbind_leftmost_dim(full_action.act, _DEFAULT_BATCH_NAME, size=batch_size, event_dim=event_dim)
+        mask = unbind_leftmost_dim(
+            full_action.mask.reshape(full_action.mask.shape + (1,) * event_dim),
+            _DEFAULT_BATCH_NAME,
+            size=batch_size,
+            event_dim=event_dim,
+        )
+        msg["value"] = torch.where(mask, act_value, obs)
+        msg["done"] = True
+        msg["stop"] = True

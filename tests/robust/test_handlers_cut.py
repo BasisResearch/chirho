@@ -207,9 +207,12 @@ def analytical_linear_gaussian_cut_posterior(data):
         1 / SIGMA_ONE**2 * data["w"].sum() / (1 + NUM_SAMPS_MODULE_ONE / SIGMA_ONE**2),
         scale=post_sd_mod_one,
     )
-    post_mean_mod_two = lambda eta: (  # noqa
-        (data["z"] - ETA_COEF * eta).sum() / SIGMA_TWO**2
-    ) * (1 / (1 + NUM_SAMPS_MODULE_TWO / SIGMA_TWO**2))
+    post_mean_mod_two = lambda eta: (
+        (  # noqa
+            (data["z"] - ETA_COEF * eta).sum() / SIGMA_TWO**2
+        )
+        * (1 / (1 + NUM_SAMPS_MODULE_TWO / SIGMA_TWO**2))
+    )
     post_sd_mod_two = math.sqrt((1 + NUM_SAMPS_MODULE_TWO / SIGMA_TWO**2) ** (-1))
 
     pr_theta_cut_cond_eta = lambda eta: dist.Normal(  # noqa

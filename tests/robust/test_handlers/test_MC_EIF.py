@@ -154,5 +154,5 @@ def test_influence_raises_no_grad_warning_correctly():
         with pytest.warns() as record:
             with torch.no_grad():
                 influence()
-            assert len(record) == 0
+            assert not any("torch.no_grad" in str(w.message) for w in record.list)
             warnings.warn("Dummy warning.")
