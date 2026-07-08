@@ -218,16 +218,19 @@ class BatchedAction:
     """
 
     act: torch.Tensor
-    mask: Optional[torch.Tensor] = None
+    mask: torch.Tensor
 
-    def __post_init__(self) -> None:
-        if self.mask is None:
+    def __init__(self, act: torch.Tensor, mask: torch.Tensor | None = None):
+        self.act = act
+        if mask is None:
             self.mask = torch.ones(self.act.shape[0], dtype=torch.bool)
-        if self.act.shape[0] != self.mask.shape[0]:
-            raise ValueError(
-                f"act and mask must have the same leading dimension, "
-                f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={self.mask.shape[0]}."
-            )
+        else:
+            if self.act.shape[0] != mask.shape[0]:
+                raise ValueError(
+                    f"act and mask must have the same leading dimension, "
+                    f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={mask.shape[0]}."
+                )
+            self.mask = mask
 
     @property
     def batch_size(self) -> int:
@@ -364,7 +367,7 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
 
         act_value = unbind_leftmost_dim(full_action.act, _DEFAULT_BATCH_NAME, size=batch_size, event_dim=event_dim)
         mask = unbind_leftmost_dim(
-            full_action.mask.reshape(full_action.mask.shape + (1,) * event_dim),  # type: ignore[union-attr]
+            full_action.mask.reshape(full_action.mask.shape + (1,) * event_dim),
             _DEFAULT_BATCH_NAME,
             size=batch_size,
             event_dim=event_dim,
