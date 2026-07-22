@@ -209,28 +209,51 @@ class BatchedAction:
     """Per-site batched intervention for use with :class:`BatchedWorldCounterfactual`.
 
     :param act: Shape ``(N, *event_shape)``. Intervention value for each scenario.
-    :param mask: Shape ``(N,)`` bool. Which scenarios intervene on this site.
-        Defaults to all-True.
+    :param mask: Shape ``(N,)``, bool or floating point. Which scenarios intervene on
+        this site. Defaults to all-True.
+    :param validate_args: If True, check that a floating point ``mask`` lies in ``[0, 1]``.
 
-    Slots where ``mask`` is ``False`` are never read by ``torch.where``; their
-    values are irrelevant placeholders. All ``BatchedAction`` objects in a single
-    run must share the same leading size N.
+    A bool ``mask`` gates. ``torch.where`` never reads slots where it is ``False``,
+    so their ``act`` values are irrelevant placeholders.
+
+    A floating point ``mask`` ``w`` blends, ``w * act + (1 - w) * obs``, and passes
+    gradient to both ``act`` and ``w``. Autograd rejects ``requires_grad`` on bool, so
+    a floating point dtype is the only way to learn a mask. Values of exactly 0 or 1
+    match the bool path bit for bit; that is the intended use, typically via a
+    straight-through estimator. Intermediate values give a soft intervention, and
+    identification results that assume atomic interventions no longer hold. Values
+    outside ``[0, 1]`` extrapolate. The blend multiplies both branches instead of
+    picking one, so it requires a floating point site and finite ``act`` and ``obs``.
+    Integer masks raise.
+
+    All ``BatchedAction`` objects in a single run must share the same leading size N.
     """
 
     act: torch.Tensor
     mask: torch.Tensor
 
-    def __init__(self, act: torch.Tensor, mask: torch.Tensor | None = None):
+    def __init__(
+        self,
+        act: torch.Tensor,
+        mask: torch.Tensor | None = None,
+        *,
+        validate_args: bool = False,
+    ):
         self.act = act
         if mask is None:
             self.mask = torch.ones(self.act.shape[0], dtype=torch.bool)
-        else:
-            if self.act.shape[0] != mask.shape[0]:
-                raise ValueError(
-                    f"act and mask must have the same leading dimension, "
-                    f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={mask.shape[0]}."
-                )
-            self.mask = mask
+            return
+
+        if self.act.shape[0] != mask.shape[0]:
+            raise ValueError(
+                f"act and mask must have the same leading dimension, "
+                f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={mask.shape[0]}."
+            )
+        if mask.dtype is not torch.bool and not mask.is_floating_point():
+            raise ValueError(f"mask must be bool or floating point, got dtype {mask.dtype}.")
+        if validate_args and mask.is_floating_point() and not ((mask >= 0.0) & (mask <= 1.0)).all():
+            raise ValueError("floating point mask must lie in [0, 1].")
+        self.mask = mask
 
     @property
     def batch_size(self) -> int:
@@ -289,7 +312,7 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
     ``gather(value, IndexSet(batched_interventions={k}), event_dim=...)``.
 
     Interventions are passed via :func:`~chirho.interventional.handlers.do` using
-    :class:`BatchedAction` values.  The four main usage patterns:
+    :class:`BatchedAction` values.  The five main usage patterns:
 
     **1. Sweep one site over N values** (no mask needed)::
 
@@ -335,6 +358,15 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
                 z, x, y = model()
         # world 0: factual; worlds 1..N: sufficiency; worlds N+1..2N: necessity
 
+    **5. Learned selection** (float mask, differentiable in both ``act`` and ``mask``)::
+
+        w = torch.sigmoid(logits)             # requires_grad, shape (N,)
+        w = (w > 0.5).to(w) - w.detach() + w  # straight-through: k-hot forward, soft gradient
+        with BatchedWorldCounterfactual():
+            with do(actions={"z": BatchedAction(act=z_vals, mask=w)}):
+                z, x, y = model()
+        loss(y).backward()                    # logits.grad is populated
+
     .. note::
         Nesting inside another :class:`~chirho.indexed.handlers.IndexPlatesMessenger`
         subclass (e.g. :class:`MultiWorldCounterfactual`) is not currently supported
@@ -372,6 +404,16 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
             size=batch_size,
             event_dim=event_dim,
         )
-        msg["value"] = torch.where(mask, act_value, obs)
+        if mask.dtype is torch.bool:
+            msg["value"] = torch.where(mask, act_value, obs)
+        else:
+            if not obs.is_floating_point():
+                raise ValueError(
+                    f"a floating point BatchedAction.mask blends against the site value, which "
+                    f"requires a floating point site, but {msg['kwargs'].get('name')!r} has dtype "
+                    f"{obs.dtype}. Use a bool mask for discrete sites."
+                )
+            w = mask.to(obs.dtype)
+            msg["value"] = w * act_value + (1 - w) * obs
         msg["done"] = True
         msg["stop"] = True
