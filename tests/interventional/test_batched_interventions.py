@@ -309,7 +309,7 @@ def test_event_dim_explicit_mask(event_shape, mask_dtype):
     mask = torch.tensor([True, False])
 
     with BatchedWorldCounterfactual():
-        with do(actions={"z": BatchedAction(act=act, mask=mask)}):
+        with do(actions={"z": BatchedAction(act=act, mask=mask, event_dim=event_dim)}):
             z, _, _ = scm(event_shape)()
             assert indices_of(z, event_dim=event_dim)["batched_interventions"] == {0, 1, 2}
             s1 = gather(z, IndexSet(batched_interventions={1}), event_dim=event_dim)
@@ -459,8 +459,112 @@ def test_pci_like_pattern(mask_dtype):
 
 
 def test_rejects_mismatched_act_and_mask_shapes():
-    with pytest.raises(ValueError, match="same leading dimension"):
+    with pytest.raises(ValueError, match="last dimension"):
         BatchedAction(act=torch.tensor([1.0, 2.0]), mask=torch.tensor([True]))
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+def test_default_mask_inherits_device(event_shape):
+    act = torch.ones(3, *event_shape, device="meta")
+    ba = BatchedAction(act=act)
+    assert ba.mask.device.type == "meta"
+
+
+MASK_BATCH_SHAPES = [(), (3,), (3, 2)]
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("mask_batch_shape", MASK_BATCH_SHAPES, ids=str)
+def test_mask_batch_shapes_accepted(mask_batch_shape, event_shape):
+    # mask is (*batch, N); act is (*batch, N, *event_shape); N is always at -(event_dim+1).
+    N = 3
+    event_dim = len(event_shape)
+    act = torch.ones(N, *event_shape)
+    mask = torch.ones(*mask_batch_shape, N, dtype=torch.bool)
+    ba = BatchedAction(act=act, mask=mask, event_dim=event_dim)
+    assert ba.mask.shape == torch.Size([*mask_batch_shape, N])
+    assert ba.batch_size == N
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("mask_batch_shape", MASK_BATCH_SHAPES, ids=str)
+def test_mask_batch_shapes_forward(mask_batch_shape, event_shape):
+    # Masks with upstream batch dims run without error and produce the expected worlds.
+    N = 2
+    event_dim = len(event_shape)
+    act = torch.stack([torch.full(event_shape, 10.0), torch.full(event_shape, -10.0)])
+    mask = torch.ones(*mask_batch_shape, N, dtype=torch.bool)
+
+    with BatchedWorldCounterfactual():
+        with do(actions={"z": BatchedAction(act=act, mask=mask, event_dim=event_dim)}):
+            z, x, y = scm(event_shape)()
+            assert indices_of(z, event_dim=event_dim) == IndexSet(batched_interventions={0, 1, 2})
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("mask_batch_shape", MASK_BATCH_SHAPES, ids=str)
+def test_float_mask_batch_shape_differentiable(mask_batch_shape, event_shape):
+    # Gradients flow through float masks with upstream batch dims and non-trivial event shapes.
+    N = 2
+    event_dim = len(event_shape)
+    act = torch.stack([torch.full(event_shape, 5.0), torch.full(event_shape, 10.0)]).requires_grad_(True)
+    logits = torch.zeros(*mask_batch_shape, N, requires_grad=True)
+
+    with _run({"z": BatchedAction(act=act, mask=torch.sigmoid(logits), event_dim=event_dim)}) as (z, _, _):
+        gather(z, IndexSet(batched_interventions={1, 2}), event_dim=event_dim).sum().backward()
+
+    assert logits.grad is not None and logits.grad.shape == logits.shape
+    assert act.grad is not None
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+def test_batch_mask_value_correctness(event_shape):
+    # Row 0 is active in world 1 only; row 1 is active in world 2 only.
+    B = 2
+    event_dim = len(event_shape)
+    act = torch.stack([torch.full(event_shape, 10.0), torch.full(event_shape, -10.0)])
+    mask = torch.tensor([[True, False], [False, True]])  # (B, N)
+
+    pyro.set_rng_seed(0)
+    with BatchedWorldCounterfactual():
+        with do(actions={"z": BatchedAction(act=act, mask=mask, event_dim=event_dim)}):
+            z, _, _ = scm(event_shape)()
+            obs = gather(z, IndexSet(batched_interventions={0}), event_dim=event_dim)
+            world1 = gather(z, IndexSet(batched_interventions={1}), event_dim=event_dim)
+            world2 = gather(z, IndexSet(batched_interventions={2}), event_dim=event_dim)
+
+    obs = obs.reshape(B, *event_shape)
+    world1 = world1.reshape(B, *event_shape)
+    world2 = world2.reshape(B, *event_shape)
+    assert torch.allclose(world1[0], torch.full(event_shape, 10.0))
+    assert torch.allclose(world1[1], obs[1])
+    assert torch.allclose(world2[0], obs[0])
+    assert torch.allclose(world2[1], torch.full(event_shape, -10.0))
+
+
+@pytest.mark.parametrize("event_shape", EVENT_SHAPES, ids=str)
+@pytest.mark.parametrize("mask_batch_shape", MASK_BATCH_SHAPES, ids=str)
+def test_batch_mask_gradient_correctness(mask_batch_shape, event_shape):
+    # d(value[*b,k]) / d(logit[*b,k]) = sigmoid'(0) * sum_e(act[k,e] - obs[*b,e]).
+    # At logits=0: sigmoid'(0) = 0.25.
+    N = 2
+    event_dim = len(event_shape)
+    prod_event = math.prod(event_shape) if event_shape else 1
+    act = torch.stack([torch.full(event_shape, 10.0), torch.full(event_shape, -10.0)])
+    logits = torch.zeros(*mask_batch_shape, N, requires_grad=True)
+
+    pyro.set_rng_seed(0)
+    with BatchedWorldCounterfactual():
+        with do(actions={"z": BatchedAction(act=act, mask=torch.sigmoid(logits), event_dim=event_dim)}):
+            z, _, _ = scm(event_shape)()
+            obs = gather(z, IndexSet(batched_interventions={0}), event_dim=event_dim).detach()
+            gather(z, IndexSet(batched_interventions={1, 2}), event_dim=event_dim).sum().backward()
+
+    batch_dims = len(mask_batch_shape)
+    obs_flat = obs.reshape(*mask_batch_shape, prod_event)  # (*batch, prod_event)
+    act_exp = act.reshape((1,) * batch_dims + (N, prod_event))  # (1,...,1, N, prod_event)
+    expected = 0.25 * (act_exp - obs_flat.unsqueeze(-2)).sum(-1)  # (*batch, N)
+    assert torch.allclose(logits.grad, expected, atol=1e-6)
 
 
 def test_rejects_empty_batch_scenarios():
@@ -502,14 +606,6 @@ def test_rejects_integer_mask_dtype():
         BatchedAction(act=torch.tensor([1.0, 2.0]), mask=torch.tensor([1, 0]))
 
 
-def test_float_mask_range_check_is_opt_in():
-    out_of_range = torch.tensor([1.7, 0.0])
-    BatchedAction(act=torch.tensor([1.0, 2.0]), mask=out_of_range)  # extrapolation is legal
-    BatchedAction(act=torch.tensor([1.0, 2.0]), mask=torch.tensor([1.0, 0.0]), validate_args=True)
-    with pytest.raises(ValueError, match=r"\[0, 1\]"):
-        BatchedAction(act=torch.tensor([1.0, 2.0]), mask=out_of_range, validate_args=True)
-
-
 def test_float_mask_requires_floating_point_site():
     # torch.where handles a discrete site; the blend would silently promote it.
     def model():
@@ -527,17 +623,17 @@ def test_float_mask_requires_floating_point_site():
 def _multisite_case():
     acts = {"z": torch.tensor([1.0, 2.0, 0.0]), "x": torch.tensor([0.0, 3.0, 3.0])}
     bools = {"z": [True, True, False], "x": [False, True, True]}
-    return scm(), {s: (acts[s], torch.tensor(bools[s])) for s in acts}
+    return scm(), {s: (acts[s], torch.tensor(bools[s]), 0) for s in acts}
 
 
 def _event_dim_case(event_shape):
     act = torch.stack([torch.full(event_shape, 10.0), torch.full(event_shape, 20.0)])
-    return scm(event_shape), {"z": (act, torch.tensor([True, False]))}
+    return scm(event_shape), {"z": (act, torch.tensor([True, False]), len(event_shape))}
 
 
 def _broadcast_case():
     act = torch.stack(torch.broadcast_tensors(torch.tensor(1.0), torch.full((4,), 2.0)))
-    return scm((4,)), {"z": (act, torch.tensor([True, False]))}
+    return scm((4,)), {"z": (act, torch.tensor([True, False]), 1)}
 
 
 EQUIVALENCE_CASES = {
@@ -545,8 +641,8 @@ EQUIVALENCE_CASES = {
     "event_dim_1": lambda: _event_dim_case((4,)),
     "event_dim_2": lambda: _event_dim_case((4, 3)),
     "broadcast": _broadcast_case,
-    "all_selected": lambda: (scm(), {"z": (torch.tensor([1.0, 2.0]), torch.tensor([True, True]))}),
-    "none_selected": lambda: (scm(), {"z": (torch.tensor([1.0, 2.0]), torch.tensor([False, False]))}),
+    "all_selected": lambda: (scm(), {"z": (torch.tensor([1.0, 2.0]), torch.tensor([True, True]), 0)}),
+    "none_selected": lambda: (scm(), {"z": (torch.tensor([1.0, 2.0]), torch.tensor([False, False]), 0)}),
 }
 
 
@@ -559,7 +655,7 @@ def test_float_mask_bit_identical_to_bool_mask(case, float_dtype):
     model, spec = EQUIVALENCE_CASES[case]()
 
     def run(dtype):
-        actions = {s: BatchedAction(act=a, mask=m.to(dtype)) for s, (a, m) in spec.items()}
+        actions = {s: BatchedAction(act=a, mask=m.to(dtype), event_dim=ed) for s, (a, m, ed) in spec.items()}
         with _run(actions, model=model) as values:
             return [v.clone() for v in values]
 

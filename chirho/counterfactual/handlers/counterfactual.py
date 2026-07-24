@@ -206,78 +206,74 @@ _DEFAULT_BATCH_NAME = "batched_interventions"
 
 @dataclasses.dataclass
 class BatchedAction:
-    """Per-site batched intervention for use with :class:`BatchedWorldCounterfactual`.
+    """Per-site batched intervention for :class:`BatchedWorldCounterfactual`.
 
-    :param act: Shape ``(N, *event_shape)``. Intervention value for each scenario.
-    :param mask: Shape ``(N,)``, bool or floating point. Which scenarios intervene on
-        this site. Defaults to all-True.
-    :param validate_args: If True, check that a floating point ``mask`` lies in ``[0, 1]``.
+    :param act: Intervention values, shape ``(*batch, N, *event_shape)``.
+        ``N = act.shape[-(event_dim + 1)]``.
+    :param mask: Shape ``(*batch, N)``, bool or float. Selects which scenarios
+        intervene on this site. Defaults to all-True.
+    :param event_dim: Event dimensions trailing N in ``act``. Default 0.
 
-    A bool ``mask`` gates. ``torch.where`` never reads slots where it is ``False``,
-    so their ``act`` values are irrelevant placeholders.
+    A bool mask gates: ``False`` slots return the factual value, their ``act``
+    entries ignored.
 
-    A floating point ``mask`` ``w`` blends, ``w * act + (1 - w) * obs``, and passes
-    gradient to both ``act`` and ``w``. Autograd rejects ``requires_grad`` on bool, so
-    a floating point dtype is the only way to learn a mask. Values of exactly 0 or 1
-    match the bool path bit for bit; that is the intended use, typically via a
-    straight-through estimator. Intermediate values give a soft intervention, and
-    identification results that assume atomic interventions no longer hold. Values
-    outside ``[0, 1]`` extrapolate. The blend multiplies both branches instead of
-    picking one, so it requires a floating point site and finite ``act`` and ``obs``.
-    Integer masks raise.
+    A float mask ``w`` blends: ``w * act + (1 - w) * obs``, with gradient flowing
+    to both ``act`` and ``w``. Values 0 and 1 are bit-identical to the bool gate.
+    The intended pattern is a straight-through estimator: a hard 0/1 mask on the
+    forward pass with gradient flowing back through the soft branch to upstream
+    log-probabilities. Intermediate values give a soft blend; identification results
+    assuming atomic interventions no longer hold. Integer masks raise.
 
-    All ``BatchedAction`` objects in a single run must share the same leading size N.
+    All :class:`BatchedAction` objects in a single run must share the same N.
     """
 
     act: torch.Tensor
     mask: torch.Tensor
+    event_dim: int
 
     def __init__(
         self,
         act: torch.Tensor,
         mask: torch.Tensor | None = None,
         *,
-        validate_args: bool = False,
+        event_dim: int = 0,
     ):
         self.act = act
+        self.event_dim = event_dim
+
+        n = act.shape[-(event_dim + 1)]
         if mask is None:
-            self.mask = torch.ones(self.act.shape[0], dtype=torch.bool)
+            batch_shape = act.shape[: act.ndim - event_dim - 1]
+            self.mask = act.new_ones(batch_shape + (n,), dtype=torch.bool)
             return
 
-        if self.act.shape[0] != mask.shape[0]:
-            raise ValueError(
-                f"act and mask must have the same leading dimension, "
-                f"got act.shape[0]={self.act.shape[0]} and mask.shape[0]={mask.shape[0]}."
-            )
+        if mask.shape[-1] != n:
+            raise ValueError(f"mask's last dimension must match N={n}, got mask.shape[-1]={mask.shape[-1]}.")
         if mask.dtype is not torch.bool and not mask.is_floating_point():
             raise ValueError(f"mask must be bool or floating point, got dtype {mask.dtype}.")
-        if validate_args and mask.is_floating_point() and not ((mask >= 0.0) & (mask <= 1.0)).all():
-            raise ValueError("floating point mask must lie in [0, 1].")
         self.mask = mask
 
     @property
     def batch_size(self) -> int:
-        return self.act.shape[0]
+        return self.act.shape[-(self.event_dim + 1)]
 
 
 def _prepend_factual_world(action: BatchedAction) -> BatchedAction:
     """Prepend a factual world at index 0 (mask=False, so obs passes through unchanged)."""
-    assert action.mask is not None
-    return BatchedAction(
-        torch.cat([torch.zeros_like(action.act[:1]), action.act], dim=0),
-        torch.cat([torch.zeros_like(action.mask[:1]), action.mask], dim=0),
-    )
+    n_axis = action.act.ndim - action.event_dim - 1
+    zero_act = torch.zeros_like(torch.narrow(action.act, n_axis, 0, 1))
+    new_act = torch.cat([zero_act, action.act], dim=n_axis)
+    new_mask = torch.cat([torch.zeros_like(action.mask[..., :1]), action.mask], dim=-1)
+    return BatchedAction(act=new_act, mask=new_mask, event_dim=action.event_dim)
 
 
 def batch_scenarios(*dicts: Mapping[Hashable, torch.Tensor]) -> dict[Hashable, BatchedAction]:
-    """Convert per-scenario ``{site: tensor}`` dicts to a ``{site: BatchedAction}`` mapping.
+    """Convert per-scenario ``{site: tensor}`` dicts into a ``{site: BatchedAction}`` mapping.
 
-    Masks are inferred from key presence. Action tensors of different shapes are broadcast
-    before stacking, so a scalar intervention broadcasts to match a vector one.
+    Infers masks from key presence. Broadcasts and stacks action tensors of differing shapes.
 
-    :param dicts: One dict per scenario mapping site names to intervention tensors.
-    :returns: ``{site: BatchedAction}`` suitable for passing to
-        :func:`~chirho.interventional.handlers.do`.
+    :param dicts: One dict per scenario, mapping site names to intervention tensors.
+    :returns: ``{site: BatchedAction}`` for use with :func:`~chirho.interventional.handlers.do`.
 
     Example::
 
@@ -299,20 +295,20 @@ def batch_scenarios(*dicts: Mapping[Hashable, torch.Tensor]) -> dict[Hashable, B
         masks = torch.tensor([v is not None for v in raw])
         real = next(v for v in raw if v is not None)
         filled = [torch.zeros((), dtype=real.dtype) if v is None else v for v in raw]  # type: ignore[union-attr]
-        stacked = torch.stack(list(torch.broadcast_tensors(*filled)))
-        result[site] = BatchedAction(act=stacked, mask=masks)
+        broadcasted = list(torch.broadcast_tensors(*filled))
+        stacked = torch.stack(broadcasted)
+        result[site] = BatchedAction(act=stacked, mask=masks, event_dim=broadcasted[0].ndim)
     return result
 
 
 class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMessenger):
-    """Evaluate N heterogeneous intervention scenarios on a single shared index-plate axis.
+    """Run N intervention scenarios in one vectorized pass on a single shared index-plate axis.
 
-    Memory is linear in N (vs :class:`MultiWorldCounterfactual`'s exponential in sites).
-    Index 0 is the factual world; indices ``1..N`` are the scenarios.  Results are read with
+    Index 0 is the factual world; indices ``1..N`` are the scenarios. Read results with
     ``gather(value, IndexSet(batched_interventions={k}), event_dim=...)``.
 
-    Interventions are passed via :func:`~chirho.interventional.handlers.do` using
-    :class:`BatchedAction` values.  The five main usage patterns:
+    Pass interventions via :func:`~chirho.interventional.handlers.do` using
+    :class:`BatchedAction` values. Five usage patterns:
 
     **1. Sweep one site over N values** (no mask needed)::
 
@@ -331,7 +327,7 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
         with BatchedWorldCounterfactual():
             with do(actions=actions):
                 z, x, y = model()
-        # 3 scenarios share one axis instead of MWC's 2x2 cross-product
+        # 3 scenarios on one axis
 
     **3. Scenario dicts via** :func:`batch_scenarios` (masks inferred from key presence)::
 
@@ -358,10 +354,10 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
                 z, x, y = model()
         # world 0: factual; worlds 1..N: sufficiency; worlds N+1..2N: necessity
 
-    **5. Learned selection** (float mask, differentiable in both ``act`` and ``mask``)::
+    **5. Learned selection** (differentiable float mask via straight-through estimator)::
 
-        w = torch.sigmoid(logits)             # requires_grad, shape (N,)
-        w = (w > 0.5).to(w) - w.detach() + w  # straight-through: k-hot forward, soft gradient
+        w = torch.sigmoid(logits)              # shape (N,), requires_grad
+        w = (w > 0.5).to(w) - w.detach() + w  # 0/1 forward, soft gradient
         with BatchedWorldCounterfactual():
             with do(actions={"z": BatchedAction(act=z_vals, mask=w)}):
                 z, x, y = model()
@@ -369,20 +365,14 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
 
     .. note::
         Nesting inside another :class:`~chirho.indexed.handlers.IndexPlatesMessenger`
-        subclass (e.g. :class:`MultiWorldCounterfactual`) is not currently supported
-        and raises ``ValueError`` — the same pre-existing limitation as nesting MWC
-        inside :class:`TwinWorldCounterfactual`.
+        subclass raises ``ValueError``.
 
     :param first_available_dim: Leftmost dimension available for index plates.
     """
 
     @staticmethod
     def _pyro_intervene(msg: dict[str, Any]) -> None:
-        # Only convert BatchedAction interventions to split.  Plain tensors and
-        # tuples are returned as-is (the default _intervene_atom body runs) so
-        # that a vanilla do() inside BatchedWorldCounterfactual broadcasts its
-        # value across the existing batched_interventions axis rather than
-        # creating a new per-site plate.
+        # Plain tensors/tuples fall through to the default handler and broadcast uniformly.
         if isinstance(msg["args"][1], BatchedAction):
             BaseCounterfactualMessenger._pyro_intervene(msg)
 
@@ -392,14 +382,16 @@ class BatchedWorldCounterfactual(IndexPlatesMessenger, BaseCounterfactualMesseng
             return
 
         action = acts[0]
-        event_dim = msg["kwargs"].get("event_dim", 0)
+        event_dim = action.event_dim
 
         full_action = _prepend_factual_world(action)
         batch_size = full_action.batch_size
 
-        act_value = unbind_leftmost_dim(full_action.act, _DEFAULT_BATCH_NAME, size=batch_size, event_dim=event_dim)
+        act_t = full_action.act.movedim(full_action.act.ndim - event_dim - 1, 0)  # (N+1, *batch, *event_shape)
+        act_value = unbind_leftmost_dim(act_t, _DEFAULT_BATCH_NAME, size=batch_size, event_dim=event_dim)
+        mask_t = full_action.mask.movedim(-1, 0)  # (*batch, N+1) -> (N+1, *batch)
         mask = unbind_leftmost_dim(
-            full_action.mask.reshape(full_action.mask.shape + (1,) * event_dim),
+            mask_t.reshape(mask_t.shape + (1,) * event_dim),
             _DEFAULT_BATCH_NAME,
             size=batch_size,
             event_dim=event_dim,
